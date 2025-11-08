@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { dashboardAPI, authAPI } from '@/lib/api';
+import AppHeader from '@/components/AppHeader';
 import type { DashboardStats } from '@/types';
 import {
   LineChart,
@@ -69,41 +70,13 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-bold text-indigo-600">Tamil Proofreading</h1>
-              </div>
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                <Link href="/dashboard" className="border-indigo-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                  Dashboard
-                </Link>
-                <Link href="/submit" className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                  Submit Text
-                </Link>
-                {user?.role === 'admin' && (
-                  <Link href="/admin" className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Admin Panel
-                  </Link>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center">
-              <span className="text-sm text-gray-700 mr-4">{user?.email}</span>
-              <button
-                onClick={handleLogout}
-                className="text-sm text-gray-500 hover:text-gray-700"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <AppHeader
+        showAdmin={user?.role === 'admin'}
+        userEmail={user?.email}
+        onLogout={handleLogout}
+      />
 
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h2>
 
@@ -229,7 +202,9 @@ export default function DashboardPage() {
                   {stats?.recent_submissions.map((submission) => (
                     <tr key={submission.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {submission.id}
+                        <Link href={`/submissions/${submission.id}`} className="text-indigo-600 hover:text-indigo-800 underline">
+                          {submission.id}
+                        </Link>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {submission.word_count}

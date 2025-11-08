@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { submissionAPI, paymentAPI } from '@/lib/api';
+import { submissionAPI, authAPI } from '@/lib/api';
+import AppHeader from '@/components/AppHeader';
 import type { Submission, Suggestion } from '@/types';
 
 export default function SubmitPage() {
@@ -12,8 +13,23 @@ export default function SubmitPage() {
   const [loading, setLoading] = useState(false);
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [error, setError] = useState('');
-  const [paymentRequired, setPaymentRequired] = useState(false);
-  const [paymentData, setPaymentData] = useState<any>(null);
+  const [userEmail, setUserEmail] = useState('');
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [includeAlternatives, setIncludeAlternatives] = useState(false);
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const user = await authAPI.getCurrentUser();
+        setUserEmail(user.email);
+        setShowAdmin(user.role === 'admin');
+      } catch (err) {
+        router.push('/login');
+      }
+    };
+
+    init();
+  }, [router]);
 
   useEffect(() => {
     // Simple word count (in production, use Tamil NLP)
@@ -25,25 +41,15 @@ export default function SubmitPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    setPaymentRequired(false);
 
     try {
-      const result = await submissionAPI.submitText(text);
+      const result = await submissionAPI.submitText(text, includeAlternatives);
       setSubmission(result);
-      
-      // Check if payment is required
-      if (result.status === 'pending' && (result as any).payment_required) {
-        setPaymentRequired(true);
-        setPaymentData((result as any));
+      if (result?.id) {
+        pollSubmission(result.id);
       }
     } catch (err: any) {
-      if (err.response?.status === 402) {
-        // Payment required
-        setPaymentRequired(true);
-        setPaymentData(err.response.data);
-      } else {
-        setError(err.response?.data?.error || 'Submission failed');
-      }
+      setError(err.response?.data?.error || 'Submission failed');
     } finally {
       setLoading(false);
     }
@@ -58,6 +64,11 @@ export default function SubmitPage() {
       };
       reader.readAsText(file);
     }
+  };
+
+  const handleLogout = () => {
+    authAPI.logout();
+    router.push('/login');
   };
 
   const pollSubmission = async (id: number) => {
@@ -84,10 +95,10 @@ export default function SubmitPage() {
   };
 
   useEffect(() => {
-    if (submission && submission.status === 'processing') {
+    if (submission && submission.status !== 'completed' && submission.status !== 'failed') {
       pollSubmission(submission.id);
     }
-  }, [submission?.id]);
+  }, [submission?.status, submission?.id]);
 
   let suggestions: Suggestion[] = [];
   try {
@@ -98,9 +109,19 @@ export default function SubmitPage() {
     // Ignore parse errors
   }
 
+  let alternatives: string[] = [];
+  try {
+    if (submission?.alternatives) {
+      alternatives = JSON.parse(submission.alternatives);
+    }
+  } catch (e) {
+    // Ignore parse errors
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-50">
+      <AppHeader showAdmin={showAdmin} userEmail={userEmail} onLogout={handleLogout} />
+      <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Submit Text for Proofreading</h1>
 
         {error && (
@@ -109,21 +130,7 @@ export default function SubmitPage() {
           </div>
         )}
 
-        {paymentRequired && (
-          <div className="mb-4 rounded-md bg-yellow-50 p-4">
-            <div className="text-sm text-yellow-800">
-              Payment required: ₹{paymentData?.cost} for {paymentData?.word_count} words
-            </div>
-            <button
-              onClick={() => router.push(`/payment?amount=${paymentData?.cost}&word_count=${paymentData?.word_count}`)}
-              className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-            >
-              Proceed to Payment
-            </button>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
           <div className="bg-white shadow rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Input Text</h2>
             <div className="mb-4">
@@ -141,10 +148,19 @@ export default function SubmitPage() {
               className="w-full h-96 p-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
               dir="rtl"
             />
-            <div className="mt-4 flex justify-between items-center">
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <span className="text-sm text-gray-600">
                 Word count: <strong>{wordCount}</strong>
               </span>
+              <label className="inline-flex items-center text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 text-indigo-600 border-gray-300 rounded mr-2"
+                  checked={includeAlternatives}
+                  onChange={(event) => setIncludeAlternatives(event.target.checked)}
+                />
+                Request alternative sentences
+              </label>
               <button
                 onClick={handleSubmit}
                 disabled={loading || !text.trim()}
@@ -189,6 +205,18 @@ export default function SubmitPage() {
                                 <strong>{suggestion.original}</strong> → {suggestion.corrected}
                               </p>
                               <p className="text-xs text-gray-600 mt-1">{suggestion.reason}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {alternatives.length > 0 && (
+                      <div className="mb-4">
+                        <h3 className="font-semibold mb-2">Alternative Sentences:</h3>
+                        <ul className="space-y-2">
+                          {alternatives.map((alt, idx) => (
+                            <li key={idx} className="p-3 bg-blue-50 rounded-md text-sm text-gray-700 whitespace-pre-wrap">
+                              {alt}
                             </li>
                           ))}
                         </ul>

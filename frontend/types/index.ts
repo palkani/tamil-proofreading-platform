@@ -27,6 +27,8 @@ export interface Submission {
   model_used: ModelType;
   status: SubmissionStatus;
   suggestions?: string;
+  alternatives?: string;
+  include_alternatives?: boolean;
   error?: string;
   processing_time?: number;
   cost: number;

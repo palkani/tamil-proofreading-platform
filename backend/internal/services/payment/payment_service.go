@@ -4,7 +4,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/rand"
 	"time"
@@ -106,7 +105,7 @@ func (s *PaymentService) VerifyStripeWebhook(payload []byte, signature string, s
 	if err != nil {
 		return nil, err
 	}
-	return event, nil
+	return &event, nil
 }
 
 // VerifyRazorpayWebhook verifies Razorpay webhook signature

@@ -31,6 +31,8 @@ type Submission struct {
 	ModelUsed         ModelType        `gorm:"not null" json:"model_used"`
 	Status            SubmissionStatus `gorm:"default:'pending'" json:"status"`
 	Suggestions       string           `gorm:"type:jsonb" json:"suggestions,omitempty"` // JSON array of suggestions
+	Alternatives      string           `gorm:"type:jsonb" json:"alternatives,omitempty"`
+	IncludeAlternatives bool           `gorm:"default:false" json:"include_alternatives"`
 	Error             string           `gorm:"type:text" json:"error,omitempty"`
 	ProcessingTime    *float64         `json:"processing_time,omitempty"`
 	Cost              float64          `gorm:"default:0" json:"cost"`

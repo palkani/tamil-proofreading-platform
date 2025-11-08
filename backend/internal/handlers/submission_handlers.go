@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,35 +18,40 @@ import (
 )
 
 type SubmitTextRequest struct {
-	Text string `json:"text" binding:"required"`
+	Text                string `json:"text" binding:"required"`
+	IncludeAlternatives bool   `json:"include_alternatives"`
 }
 
 // SubmitText handles text submission for proofreading
 func (h *Handlers) SubmitText(c *gin.Context) {
+	// Get user ID from context
 	userID, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - please login"})
 		return
 	}
 
+	// Validate request
 	var req SubmitTextRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request",
+			"details": err.Error(),
+		})
 		return
 	}
 
-	// Sanitize input
+	// Sanitize and validate input
 	req.Text = strings.TrimSpace(req.Text)
-	if len(req.Text) > 100000 { // Limit text size to 100KB
+	if req.Text == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Text cannot be empty"})
+		return
+	}
+
+	if len(req.Text) > 100000 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Text is too long (max 100KB)"})
 		return
 	}
-
-	// Validate Tamil text (allow mixed content)
-	// if !h.nlpService.IsTamilText(req.Text) {
-	// 	c.JSON(http.StatusBadRequest, gin.H{"error": "Text must contain Tamil characters"})
-	// 	return
-	// }
 
 	// Count words
 	wordCount := h.nlpService.CountWords(req.Text)
@@ -56,92 +63,130 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	// Determine model to use
 	modelType := h.selectModel(wordCount)
 
-	// Check if user has sufficient subscription or needs to pay
-	hasActiveSubscription, subscriptionPlan, err := h.paymentService.CheckSubscriptionStatus(userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check subscription"})
-		return
+	// Create submission record with pending status first
+	submission := &models.Submission{
+		UserID:              userID,
+		OriginalText:        req.Text,
+		WordCount:           wordCount,
+		ModelUsed:           modelType,
+		Status:              models.StatusPending,
+		Cost:                0,
+		Suggestions:         "[]",
+		Alternatives:        "[]",
+		IncludeAlternatives: req.IncludeAlternatives,
 	}
 
-	// Calculate cost
-	cost := h.paymentService.CalculateCost(wordCount, modelType)
-
-	// Check subscription limits
-	if !hasActiveSubscription || !h.checkSubscriptionLimits(subscriptionPlan, wordCount, modelType) {
-		// User needs to pay
-		c.JSON(http.StatusPaymentRequired, gin.H{
-			"error":        "Payment required",
-			"cost":         cost,
-			"word_count":   wordCount,
-			"model_type":   modelType,
-			"payment_required": true,
+	// Save submission to database
+	if err := h.db.Create(submission).Error; err != nil {
+		log.Printf("Error creating submission: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create submission",
+			"details": err.Error(),
 		})
 		return
 	}
 
-	// Create submission record
-	submission := &models.Submission{
-		UserID:       userID,
-		OriginalText: req.Text,
-		WordCount:    wordCount,
-		ModelUsed:    modelType,
-		Status:       models.StatusProcessing,
-		Cost:         cost,
-	}
-
-	if err := h.db.Create(submission).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create submission"})
+	// Verify submission was created
+	if submission.ID == 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to create submission - no ID returned",
+		})
 		return
 	}
 
-	// Process text asynchronously (in production, use a job queue)
-	go h.processSubmission(c.Request.Context(), submission.ID, req.Text, wordCount, modelType)
+	// Start proofreading process immediately in background
+	go h.processSubmission(context.Background(), submission.ID, req.Text, wordCount, modelType, req.IncludeAlternatives)
 
-	// Record usage
-	usage := &models.Usage{
-		UserID:       userID,
-		WordCount:    wordCount,
-		ModelUsed:    modelType,
-		SubmissionID: &submission.ID,
-		Date:         time.Now(),
-	}
-	h.db.Create(usage)
+	// Record usage asynchronously (non-blocking)
+	go func() {
+		usage := &models.Usage{
+			UserID:       userID,
+			WordCount:    wordCount,
+			ModelUsed:    modelType,
+			SubmissionID: &submission.ID,
+			Date:         time.Now(),
+		}
+		if err := h.db.Create(usage).Error; err != nil {
+			log.Printf("Error creating usage record: %v", err)
+			// Don't fail submission if usage tracking fails
+		}
+	}()
 
+	// Return success response immediately with the created submission record
 	c.JSON(http.StatusAccepted, gin.H{
-		"submission_id": submission.ID,
-		"status":        submission.Status,
-		"word_count":    wordCount,
-		"model_type":    modelType,
-		"message":       "Submission received, processing...",
+		"submission": submission,
+		"message":    "Submission received, proofreading started...",
 	})
 }
 
-func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, text string, wordCount int, modelType models.ModelType) {
-	// Update submission status
-	h.db.Model(&models.Submission{}).Where("id = ?", submissionID).Update("status", models.StatusProcessing)
+// processSubmission processes the text submission asynchronously
+func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, text string, wordCount int, modelType models.ModelType, includeAlternatives bool) {
+	log.Printf("Starting proofreading for submission ID: %d", submissionID)
 
-	// Process with LLM
-	result, err := h.llmService.ProofreadText(ctx, text, wordCount)
-	if err != nil {
-		h.db.Model(&models.Submission{}).Where("id = ?", submissionID).Updates(map[string]interface{}{
-			"status": models.StatusFailed,
-			"error":  err.Error(),
-		})
+	// Update status to processing
+	if err := h.db.Model(&models.Submission{}).
+		Where("id = ?", submissionID).
+		Update("status", models.StatusProcessing).Error; err != nil {
+		log.Printf("Error updating submission status to processing: %v", err)
 		return
 	}
 
-	// Serialize suggestions
-	suggestionsJSON, _ := json.Marshal(result.Suggestions)
+	// Process with LLM service
+	result, err := h.llmService.ProofreadText(ctx, text, wordCount, includeAlternatives)
+	if err != nil {
+		log.Printf("Error processing submission %d: %v", submissionID, err)
+
+		// Update submission with error
+		if updateErr := h.db.Model(&models.Submission{}).
+			Where("id = ?", submissionID).
+			Updates(map[string]interface{}{
+				"status": models.StatusFailed,
+				"error":  err.Error(),
+			}).Error; updateErr != nil {
+			log.Printf("Error updating submission with error status: %v", updateErr)
+		}
+		return
+	}
+
+	// Serialize suggestions to JSON
+	suggestionsJSON := "[]"
+	if len(result.Suggestions) > 0 {
+		if suggestionsBytes, marshalErr := json.Marshal(result.Suggestions); marshalErr != nil {
+			log.Printf("Error marshaling suggestions: %v", marshalErr)
+		} else {
+			suggestionsJSON = string(suggestionsBytes)
+		}
+	}
+
+	alternativesJSON := "[]"
+	if len(result.Alternatives) > 0 {
+		if alternativesBytes, marshalErr := json.Marshal(result.Alternatives); marshalErr != nil {
+			log.Printf("Error marshaling alternatives: %v", marshalErr)
+		} else {
+			alternativesJSON = string(alternativesBytes)
+		}
+	}
 
 	// Update submission with results
-	h.db.Model(&models.Submission{}).Where("id = ?", submissionID).Updates(map[string]interface{}{
+	updates := map[string]interface{}{
 		"status":          models.StatusCompleted,
 		"proofread_text":  result.CorrectedText,
-		"suggestions":     string(suggestionsJSON),
+		"suggestions":     suggestionsJSON,
+		"alternatives":    alternativesJSON,
 		"processing_time": result.ProcessingTime,
-	})
+	}
+
+	if err := h.db.Model(&models.Submission{}).
+		Where("id = ?", submissionID).
+		Updates(updates).Error; err != nil {
+		log.Printf("Error updating submission with results: %v", err)
+		return
+	}
+
+	log.Printf("Successfully completed proofreading for submission ID: %d", submissionID)
 }
 
+// selectModel determines which model to use based on word count
 func (h *Handlers) selectModel(wordCount int) models.ModelType {
 	if wordCount < 500 {
 		return models.ModelA
@@ -149,6 +194,7 @@ func (h *Handlers) selectModel(wordCount int) models.ModelType {
 	return models.ModelB
 }
 
+// checkSubscriptionLimits checks if user's subscription allows the submission
 func (h *Handlers) checkSubscriptionLimits(plan *models.SubscriptionPlan, wordCount int, modelType models.ModelType) bool {
 	// Get user's current usage for the month
 	var user models.User
@@ -192,15 +238,28 @@ func (h *Handlers) GetSubmissions(c *gin.Context) {
 	}
 
 	var submissions []models.Submission
-	limit := c.DefaultQuery("limit", "10")
-	offset := c.DefaultQuery("offset", "0")
+	limitStr := c.DefaultQuery("limit", "10")
+	offsetStr := c.DefaultQuery("offset", "0")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil {
+		limit = 10
+	}
+
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil {
+		offset = 0
+	}
 
 	if err := h.db.Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
 		Find(&submissions).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch submissions"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to fetch submissions",
+			"details": err.Error(),
+		})
 		return
 	}
 
@@ -215,18 +274,26 @@ func (h *Handlers) GetSubmission(c *gin.Context) {
 		return
 	}
 
-	submissionID := c.Param("id")
-	var submission models.Submission
+	submissionIDStr := c.Param("id")
+	submissionID, err := strconv.ParseUint(submissionIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid submission ID"})
+		return
+	}
 
-	if err := h.db.Where("id = ? AND user_id = ?", submissionID, userID).First(&submission).Error; err != nil {
+	var submission models.Submission
+	if err := h.db.Where("id = ? AND user_id = ?", submissionID, userID).
+		First(&submission).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Submission not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch submission"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to fetch submission",
+			"details": err.Error(),
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"submission": submission})
 }
-

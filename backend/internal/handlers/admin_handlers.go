@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"time"
 
-	"tamil-proofreading-platform/backend/internal/middleware"
 	"tamil-proofreading-platform/backend/internal/models"
 
 	"github.com/gin-gonic/gin"

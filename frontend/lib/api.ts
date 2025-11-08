@@ -31,9 +31,12 @@ export const authAPI = {
 
 // Submission API
 export const submissionAPI = {
-  submitText: async (text: string): Promise<Submission> => {
-    const response = await apiClient.post('/submit', { text });
-    return response.data;
+  submitText: async (text: string, includeAlternatives = false): Promise<Submission> => {
+    const response = await apiClient.post('/submit', { text, include_alternatives: includeAlternatives });
+    if (response.data?.submission) {
+      return response.data.submission as Submission;
+    }
+    return response.data as Submission;
   },
 
   getSubmissions: async (limit = 10, offset = 0): Promise<{ submissions: Submission[] }> => {

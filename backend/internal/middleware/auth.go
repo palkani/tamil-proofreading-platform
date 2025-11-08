@@ -36,9 +36,9 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 		}
 
 		tokenString := parts[1]
-		claims := &Claims{}
-
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		
+		// Parse token with MapClaims since auth service uses MapClaims
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return []byte(jwtSecret), nil
 		})
 
@@ -48,10 +48,37 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 			return
 		}
 
+		// Extract claims from token
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+			c.Abort()
+			return
+		}
+
+		// Extract user_id (handle both float64 and uint types)
+		var userID uint
+		if uid, ok := claims["user_id"].(float64); ok {
+			userID = uint(uid)
+		} else if uid, ok := claims["user_id"].(uint); ok {
+			userID = uid
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user ID in token"})
+			c.Abort()
+			return
+		}
+
+		// Extract email
+		email, _ := claims["email"].(string)
+		
+		// Extract role
+		roleStr, _ := claims["role"].(string)
+		role := models.UserRole(roleStr)
+
 		// Set user info in context
-		c.Set("user_id", claims.UserID)
-		c.Set("user_email", claims.Email)
-		c.Set("user_role", claims.Role)
+		c.Set("user_id", userID)
+		c.Set("user_email", email)
+		c.Set("user_role", role)
 
 		c.Next()
 	}
