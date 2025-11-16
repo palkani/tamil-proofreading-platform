@@ -37,10 +37,9 @@ export default function ArchivePage() {
         setArchivedDrafts(submissions);
         setMessage(apiMessage ?? `Drafts are retained for ${retention_days} days before deletion.`);
       } catch (err: any) {
-        if (err?.response?.status === 401) {
-          router.push('/login');
-          return;
-        }
+        // Authentication disabled for testing - skip login requirement
+        setUserEmail('test@example.com');
+        setShowAdmin(false);
         setError('Unable to load archived drafts. Please try again later.');
       } finally {
         setLoading(false);

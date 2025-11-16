@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "go-1.21", "web", "python-3.12", "bash"]
+modules = ["nodejs-20", "go-1.21", "web", "python-3.12", "bash", "postgresql-16"]
 [agent]
 expertMode = true
 
@@ -37,3 +37,12 @@ externalPort = 80
 [[ports]]
 localPort = 8080
 externalPort = 8080
+
+[[ports]]
+localPort = 45521
+externalPort = 3000
+
+[deployment]
+deploymentTarget = "vm"
+run = ["bash", "-c", "export FRONTEND_URL=https://${REPLIT_DOMAINS} && ./server & cd frontend && npm run start"]
+build = ["bash", "-c", "cd backend && go build -o ../server cmd/server/main.go && cd ../frontend && npm run build"]

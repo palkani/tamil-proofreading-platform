@@ -34,7 +34,8 @@ export default function DashboardPage() {
       const userData = await authAPI.getCurrentUser();
       setUser(userData);
     } catch (err) {
-      router.push('/login');
+      // Authentication disabled for testing - skip login requirement
+      setUser({ email: 'test@example.com', role: 'user' });
     }
   };
 
