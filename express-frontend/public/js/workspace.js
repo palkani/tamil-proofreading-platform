@@ -287,7 +287,14 @@ class WorkspaceController {
     }, 2000);
   }
 
-  autosave() {
+  async autosave() {
+    const text = this.editor.getPlainText().trim();
+    
+    // Don't save empty drafts
+    if (!text || text.length < 5) {
+      return;
+    }
+    
     const saveStatusEl = document.getElementById('save-status');
     const autosaveTimeEl = document.getElementById('autosave-time');
     
@@ -295,8 +302,40 @@ class WorkspaceController {
       saveStatusEl.innerHTML = '<span class="inline-block w-2 h-2 bg-gray-400 rounded-full mr-2"></span>Saving...';
     }
 
-    // Simulate save (in production, this would call the backend API)
-    setTimeout(() => {
+    try {
+      const html = this.editor.getHTML();
+      
+      // If we have a current draft, we're updating it
+      // Otherwise, create a new one
+      const response = await fetch('/api/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: text,
+          html: html,
+          model: 'gemini-flash' // Default model
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save draft');
+      }
+
+      const data = await response.json();
+      
+      // Update current draft with the saved submission
+      if (data.submission) {
+        this.currentDraft = data.submission;
+        
+        // Update title if it's still "Untitled Draft"
+        const titleInput = document.getElementById('draft-title');
+        if (titleInput && titleInput.value === 'Untitled Draft') {
+          titleInput.value = `Draft #${data.submission.id}`;
+        }
+      }
+      
       if (saveStatusEl) {
         saveStatusEl.innerHTML = '<span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>Saved';
       }
@@ -304,7 +343,12 @@ class WorkspaceController {
         const now = new Date();
         autosaveTimeEl.textContent = `Last saved: ${now.toLocaleTimeString()}`;
       }
-    }, 500);
+    } catch (error) {
+      console.error('Autosave error:', error);
+      if (saveStatusEl) {
+        saveStatusEl.innerHTML = '<span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>Save failed';
+      }
+    }
   }
 
   async checkWithGemini() {

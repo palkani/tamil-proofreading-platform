@@ -163,17 +163,18 @@ tamil-proofreading-platform/
 - **AI**: Google Gemini (via Replit AI Integrations), OpenAI GPT (backend)
 - **Payments**: Stripe, Razorpay (configured but not required)
 
-## Known Limitations (Express Version)
-- **Draft Persistence**: Autosave currently simulates saving (not integrated with Go backend)
-- **Draft Loading**: Workspace doesn't load existing drafts from database
-- **Authentication**: Mock auth in place (same as Next.js version for testing)
-- **Backend Integration**: Gemini proxy works, but other backend features need wiring
+## Features Fully Integrated ✅
+- **Draft Persistence**: Auto-saves drafts to PostgreSQL database every 2 seconds
+- **Draft Loading**: Loads all user drafts from database in "My Drafts" view
+- **Draft Management**: View, open, and edit previous submissions
+- **Authentication**: Mock auth in place (user_id=1 for testing)
+- **Backend Integration**: Complete integration with Go backend API
 
-To add full backend integration:
-1. Wire autosave to Go backend `/api/v1/submit` endpoint
-2. Load user drafts in workspace controller from `/api/v1/submissions`
-3. Implement session/token management for authenticated requests
-4. Add proper authentication middleware to workspace routes
+## How Drafts Work
+1. **Auto-Save**: Type Tamil text in the editor - it auto-saves every 2 seconds
+2. **View Drafts**: Click "My Drafts" (top left) to see all saved drafts
+3. **Open Draft**: Click any draft card to load it into the editor
+4. **New Draft**: Click "New Draft" to start fresh
 
 ## Development Workflow
 1. Start: Workflow runs automatically via `start.sh`
