@@ -1,0 +1,49 @@
+<%- include('../partials/header') %>
+
+<div class="min-h-screen bg-gray-50">
+  <!-- Header Navigation -->
+  <%- include('../partials/nav', { active: 'account', user: user }) %>
+
+  <main class="mx-auto w-full max-w-4xl px-6 pb-20 pt-8 sm:px-12">
+    <header class="mb-10 space-y-3">
+      <p class="text-sm font-semibold text-blue-600 uppercase tracking-wider">Account Center</p>
+      <h1 class="text-4xl font-bold tracking-tight text-gray-900">Manage your profile</h1>
+      <p class="text-base text-gray-600">
+        Update your personal details and keep your Proof Tamil account secure.
+      </p>
+    </header>
+
+    <section class="rounded-3xl border border-gray-200 bg-white shadow-xl p-8 space-y-8">
+      <form id="account-form" class="space-y-6">
+        <div>
+          <label for="name" class="text-sm font-semibold text-gray-700 block mb-2">
+            Display name
+          </label>
+          <input id="name" name="name" type="text" value="<%= user.name || 'Test User' %>" class="input-field" placeholder="Your name" />
+        </div>
+
+        <div>
+          <label for="email" class="text-sm font-semibold text-gray-700 block mb-2">
+            Email
+          </label>
+          <input id="email" type="email" value="<%= user.email %>" disabled class="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm bg-gray-50 text-gray-500 cursor-not-allowed" />
+        </div>
+
+        <div class="flex flex-wrap gap-3">
+          <button type="submit" id="save-btn" class="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all disabled:opacity-60 disabled:hover:scale-100">
+            Save changes
+          </button>
+          <button type="button" id="change-password-btn" class="inline-flex items-center justify-center rounded-full border border-gray-200 px-6 py-3 text-sm font-semibold text-blue-600 hover:border-blue-600 hover:bg-blue-50 transition-all">
+            Change password
+          </button>
+        </div>
+      </form>
+
+      <div id="success-message" class="hidden rounded-2xl border border-blue-500/20 bg-blue-50 px-4 py-3 text-sm text-blue-700"></div>
+    </section>
+  </main>
+</div>
+
+<script src="/js/account.js"></script>
+
+<%- include('../partials/footer') %>

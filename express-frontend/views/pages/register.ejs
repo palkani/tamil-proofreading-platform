@@ -1,0 +1,102 @@
+<%- include('../partials/header') %>
+
+<div class="min-h-screen bg-gray-50 text-gray-900">
+  <div class="absolute top-6 left-6 flex items-center gap-3">
+    <a href="/" class="flex items-center gap-2">
+      <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">PT</div>
+      <span class="text-lg font-semibold">ProofTamil</span>
+    </a>
+  </div>
+
+  <div class="min-h-screen flex items-center justify-center px-4 py-16">
+    <div class="w-full max-w-5xl bg-white shadow-2xl rounded-3xl overflow-hidden grid md:grid-cols-[1.15fr,1fr]">
+      <!-- Left side - Benefits -->
+      <div class="hidden md:flex flex-col justify-between bg-gray-900 text-white p-10">
+        <div class="space-y-6">
+          <p class="uppercase tracking-wider text-sm text-gray-400">Free Tamil Writer</p>
+          <h2 class="text-4xl font-bold leading-tight">
+            Create a ProofTamil account in seconds.
+          </h2>
+          <p class="text-sm text-gray-300 leading-relaxed">
+            ProofTamil offers AI-powered proofreading, real-time Tamil typing, and deep writing analytics. Join thousands of creators crafting flawless Tamil content.
+          </p>
+        </div>
+
+        <ul class="space-y-4 text-sm text-gray-300">
+          <li class="flex items-start gap-3">
+            <span class="mt-1 h-2 w-2 rounded-full bg-white"></span>
+            Instant Tamil transliteration and autocomplete as you type.
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="mt-1 h-2 w-2 rounded-full bg-white"></span>
+            AI proofreading with grammar, style, and sentence alternatives.
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="mt-1 h-2 w-2 rounded-full bg-white"></span>
+            Share drafts, revisit history, and collaborate securely.
+          </li>
+        </ul>
+      </div>
+
+      <!-- Right side - Form -->
+      <div class="p-8 sm:p-10 space-y-8">
+        <header class="space-y-2">
+          <h1 class="text-3xl font-bold">Sign up for ProofTamil</h1>
+          <p class="text-sm text-gray-600">
+            Choose email or continue with Google. It takes less than a minute.
+          </p>
+        </header>
+
+        <div id="error-message" class="hidden rounded-xl border border-red-500/40 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+
+        <div class="space-y-4">
+          <button id="google-signup-btn" type="button" class="w-full flex items-center justify-center gap-3 rounded-full border border-gray-300 bg-white px-4 py-3 font-semibold text-gray-900 shadow-sm transition hover:bg-gray-50">
+            <svg class="h-5 w-5" viewBox="0 0 24 24">
+              <path fill="#EA4335" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
+            </svg>
+            Continue with Google
+          </button>
+          <div class="flex items-center gap-3 text-xs uppercase tracking-wider text-gray-500">
+            <span class="h-px flex-1 bg-gray-300" />
+            Or use email
+            <span class="h-px flex-1 bg-gray-300" />
+          </div>
+        </div>
+
+        <form id="register-form" class="space-y-5">
+          <div class="space-y-2">
+            <label for="name" class="text-sm font-semibold">Full name</label>
+            <input id="name" name="name" type="text" required class="input-field" placeholder="e.g. Kavya Raman" />
+          </div>
+
+          <div class="space-y-2">
+            <label for="email" class="text-sm font-semibold">Email address</label>
+            <input id="email" name="email" type="email" required class="input-field" placeholder="you@example.com" />
+          </div>
+
+          <div class="space-y-2">
+            <label for="password" class="text-sm font-semibold">Password</label>
+            <input id="password" name="password" type="password" required minlength="6" class="input-field" placeholder="Minimum 6 characters" />
+          </div>
+
+          <button type="submit" id="submit-btn" class="w-full rounded-full bg-gray-900 py-3 font-semibold text-white shadow-lg transition hover:bg-gray-800 disabled:opacity-50">
+            Create free account
+          </button>
+        </form>
+
+        <p class="text-xs text-gray-600">
+          By signing up you agree to receive product updates from ProofTamil. You can unsubscribe anytime.
+        </p>
+
+        <div class="text-sm text-gray-700">
+          Already have an account? 
+          <a href="/" class="font-semibold text-gray-900 underline decoration-gray-400 underline-offset-4">Sign in</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/register.js"></script>
+
+<%- include('../partials/footer') %>

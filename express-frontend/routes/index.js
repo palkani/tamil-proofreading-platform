@@ -1,11 +1,50 @@
 const express = require('express');
 const router = express.Router();
 
+// Mock user for testing (same as backend)
+const mockUser = {
+  id: 1,
+  email: 'test@example.com',
+  name: 'Test User',
+  role: 'user'
+};
+
 // Login page (home page)
 router.get('/', (req, res) => {
   res.render('pages/login', { 
     title: 'Tamil AI Proofreading Platform',
     error: req.query.error || null
+  });
+});
+
+// Register page
+router.get('/register', (req, res) => {
+  res.render('pages/register', { 
+    title: 'Register - ProofTamil'
+  });
+});
+
+// Dashboard page
+router.get('/dashboard', (req, res) => {
+  res.render('pages/dashboard', { 
+    title: 'Dashboard - ProofTamil',
+    user: mockUser
+  });
+});
+
+// Account page
+router.get('/account', (req, res) => {
+  res.render('pages/account', { 
+    title: 'Account Settings - ProofTamil',
+    user: mockUser
+  });
+});
+
+// Archive page
+router.get('/archive', (req, res) => {
+  res.render('pages/archive', { 
+    title: 'Archive - ProofTamil',
+    user: mockUser
   });
 });
 

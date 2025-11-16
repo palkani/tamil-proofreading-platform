@@ -1,0 +1,45 @@
+<%- include('../partials/header') %>
+
+<div class="min-h-screen bg-gray-50">
+  <!-- Header Navigation -->
+  <%- include('../partials/nav', { active: 'archive', user: user }) %>
+
+  <main class="mx-auto w-full max-w-5xl px-4 pb-16 pt-8 sm:px-8">
+    <div class="flex flex-col gap-6">
+      <header class="flex flex-col gap-2">
+        <h1 class="text-4xl font-bold tracking-tight text-gray-900">Archive</h1>
+        <p class="text-sm text-gray-600">
+          Drafts moved to archive remain here for 15 days before being permanently deleted.
+        </p>
+      </header>
+
+      <div id="error-message" class="hidden rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+
+      <section class="rounded-3xl border border-gray-200 bg-white px-6 py-6 shadow-sm">
+        <header class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900">Archived drafts</h2>
+            <p id="archive-summary" class="text-xs text-gray-500">Loading archived drafts...</p>
+          </div>
+          <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Retained 15 days
+          </span>
+        </header>
+
+        <div id="loading" class="mt-8 flex min-h-[160px] items-center justify-center text-sm text-gray-600">
+          <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+        </div>
+
+        <div id="empty-state" class="hidden mt-8 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-center text-sm text-gray-600">
+          No drafts in archive. When you archive a draft, it will appear here for 15 days before it is deleted.
+        </div>
+
+        <div id="archived-drafts" class="hidden mt-6 space-y-4"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script src="/js/archive.js"></script>
+
+<%- include('../partials/footer') %>
