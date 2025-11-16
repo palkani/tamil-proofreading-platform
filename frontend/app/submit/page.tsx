@@ -12,6 +12,7 @@ import { convertEnglishToTamil } from '@/utils/transliterate';
 import { analyzeContextSpelling, getContextWindow } from '@/utils/contextSpelling';
 import { analyzeGrammar, getGrammarRuleExplanation } from '@/utils/tamilGrammar';
 import { analyzeClarityStyle, getClarityStyleExplanation } from '@/utils/clarityStyle';
+import { checkGrammarSegment, AISuggestion as GeminiSuggestion } from '@/utils/geminiTamilChecker';
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 
@@ -275,6 +276,7 @@ export default function SubmitPage() {
   const isApplyingAllRef = useRef(false);
   const isInitializingRef = useRef(false);
   const analysisTimeoutRef = useRef<number | null>(null);
+  const [geminiLoading, setGeminiLoading] = useState(false);
 
   // Memoized word count - lightweight computation
   const wordCount = useMemo(() => {
@@ -905,6 +907,63 @@ export default function SubmitPage() {
     router.push('/');
   }, [router]);
 
+  const handleCheckWithGemini = useCallback(async () => {
+    if (!text.trim() || geminiLoading) return;
+    
+    setGeminiLoading(true);
+    setError('');
+    
+    try {
+      const geminiResults = await checkGrammarSegment(text, 2000);
+      
+      const geminiSuggestions: AssistantSuggestion[] = geminiResults.map((result, index) => ({
+        id: `gemini-${result.id}-${index}`,
+        title: result.title,
+        description: result.description,
+        type: result.type as AssistantSuggestion['type'],
+        preview: result.original && result.suggestion 
+          ? `${result.original} → ${result.suggestion}` 
+          : result.suggestion || result.original,
+        sourceText: result.original,
+        range: result.position,
+        onApply: result.suggestion && result.original ? () => {
+          let nextContent = text;
+          
+          if (result.position && result.position.start >= 0 && result.position.end > result.position.start) {
+            nextContent = text.substring(0, result.position.start) + result.suggestion + text.substring(result.position.end);
+          } else {
+            const match = findNearestOccurrence(text, result.original, null);
+            if (match) {
+              nextContent = text.substring(0, match.position) + result.suggestion + text.substring(match.position + result.original.length);
+            } else {
+              nextContent = text.replace(result.original, result.suggestion);
+            }
+          }
+          
+          if (nextContent !== text) {
+            setText(nextContent);
+            setEditorHTML(plainTextToHtml(nextContent));
+          }
+        } : undefined,
+        onIgnore: () => {
+          setDeepSuggestions((prev) => prev.filter((s) => s.id !== `gemini-${result.id}-${index}`));
+        },
+      }));
+      
+      setDeepSuggestions(geminiSuggestions);
+      
+      if (geminiSuggestions.length === 0) {
+        setInfoMessage('Gemini AI found no issues in your Tamil text. Great work!');
+        setTimeout(() => setInfoMessage(''), 3000);
+      }
+    } catch (err) {
+      console.error('Gemini AI error:', err);
+      setError('Failed to analyze text with Gemini AI. Please try again.');
+    } finally {
+      setGeminiLoading(false);
+    }
+  }, [text, geminiLoading]);
+
   const handleAcceptAll = useCallback(() => {
     if (!submission || submission.status !== 'completed') return;
 
@@ -1175,7 +1234,26 @@ export default function SubmitPage() {
                         />
                       ) : null}
                     </div>
-                    <div className="mt-6">
+                    <div className="mt-6 space-y-4">
+                      <button
+                        onClick={handleCheckWithGemini}
+                        disabled={!text.trim() || geminiLoading || wordCount === 0}
+                        className="w-full rounded-2xl bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] px-6 py-4 text-base font-semibold text-white shadow-lg hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200 flex items-center justify-center gap-3"
+                      >
+                        {geminiLoading ? (
+                          <>
+                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                            Analyzing with Gemini AI...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                            </svg>
+                            Check with Gemini AI
+                          </>
+                        )}
+                      </button>
                       <div className="rounded-3xl border border-[#EEF2FF] bg-[#FAFBFF] px-5 py-4 shadow-inner shadow-white">
                         <p className="text-xs font-semibold uppercase tracking-wide text-[#A0AEC0]">Word count</p>
                         <p className="text-3xl font-bold text-[#4F46E5]">{wordCount}</p>
@@ -1197,6 +1275,7 @@ export default function SubmitPage() {
                       realtimeSuggestions={realtimeSuggestions}
                       deepSuggestions={deepSuggestions}
                       loadingRealtime={realtimeLoading}
+                      loadingDeep={geminiLoading}
                       onAcceptAll={handleAcceptAll}
                     />
                   </div>
