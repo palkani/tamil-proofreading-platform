@@ -22,9 +22,10 @@ router.post('/gemini/analyze', async (req, res) => {
     }
 
     const response = await axios.post(
-      `${baseUrl}/models/gemini-2.0-flash-exp:generateContent`,
+      `${baseUrl}/models/gemini-2.5-flash:generateContent`,
       {
         contents: [{
+          role: "user",
           parts: [{
             text: `You are a Tamil language expert. Analyze the following Tamil text for grammar, spelling, style, and clarity issues. Return a JSON array of suggestions.
 
