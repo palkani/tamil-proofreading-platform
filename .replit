@@ -39,10 +39,6 @@ externalPort = 80
 localPort = 8080
 externalPort = 8080
 
-[[ports]]
-localPort = 43303
-externalPort = 3000
-
 [deployment]
 deploymentTarget = "vm"
 run = ["bash", "-c", "export FRONTEND_URL=https://${REPLIT_DOMAINS} && ./server & cd frontend && npm run start"]
