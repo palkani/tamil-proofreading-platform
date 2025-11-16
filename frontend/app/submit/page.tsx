@@ -511,6 +511,7 @@ export default function SubmitPage() {
                       text.slice(issue.endIndex);
                     setText(corrected);
                     setEditorHTML(plainTextToHtml(corrected));
+                    setHandledSuggestionIds(prev => [...prev, `context-spelling-${issue.startIndex}-${index}`]);
                   },
                 });
               }
@@ -542,6 +543,7 @@ export default function SubmitPage() {
                       text.slice(issue.position.end);
                     setText(corrected);
                     setEditorHTML(plainTextToHtml(corrected));
+                    setHandledSuggestionIds(prev => [...prev, `grammar-${issue.type}-${issue.position.start}-${index}`]);
                   } : undefined,
                 });
               }
@@ -927,6 +929,7 @@ export default function SubmitPage() {
         sourceText: result.original,
         range: result.position,
         onApply: result.suggestion && result.original ? () => {
+          const suggestionId = `gemini-${result.id}-${index}`;
           let nextContent = text;
           
           if (result.position && result.position.start >= 0 && result.position.end > result.position.start) {
@@ -944,6 +947,8 @@ export default function SubmitPage() {
             setText(nextContent);
             setEditorHTML(plainTextToHtml(nextContent));
           }
+          setHandledSuggestionIds((prev) => (prev.includes(suggestionId) ? prev : [...prev, suggestionId]));
+          setDeepSuggestions((prev) => prev.filter((s) => s.id !== suggestionId));
         } : undefined,
         onIgnore: () => {
           setDeepSuggestions((prev) => prev.filter((s) => s.id !== `gemini-${result.id}-${index}`));
@@ -1199,42 +1204,29 @@ export default function SubmitPage() {
           <main className="w-full flex-1 overflow-hidden px-6 pb-8 sm:px-12">
             <div className="mx-auto flex h-full max-w-7xl flex-col gap-8">
               <div className="grid h-full gap-8 items-stretch auto-rows-[minmax(0,1fr)] xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
-                <section className="flex h-full flex-col overflow-hidden rounded-[28px] border border-[#EEF2FF] bg-white shadow-[0_20px_60px_rgba(79,70,229,0.08)]">
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#EFF2F6] px-10 py-6">
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={() => setMode('list')}
-                        className="inline-flex items-center gap-2 rounded-xl border-2 border-[#E2E8F0] bg-white px-4 py-2 text-sm font-medium text-[#475569] shadow-sm hover:bg-[#F8FAFC] hover:border-[#4F46E5] hover:text-[#4F46E5] transition-all duration-200"
-                        title="View all drafts"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                        </svg>
-                        My Drafts
-                      </button>
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.5em] text-[#A0AEC0]">Editor</p>
-                        <h2 className="text-3xl font-bold text-[#0F172A]">Focus writing mode</h2>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-[#475569]">
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-white px-3 py-1.5 shadow-sm">
-                        <svg className="h-4 w-4 text-[#0EA5E9]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" />
-                          <circle cx="12" cy="12" r="9" />
-                        </svg>
-                        Autosave on
-                      </div>
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-white px-3 py-1.5 shadow-sm">
-                        <svg className="h-4 w-4 text-[#10B981]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5v14" />
-                        </svg>
-                        Tamil + English input
-                      </div>
+                <section className="flex h-full flex-col overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-sm">
+                  <div className="flex items-center justify-between gap-4 border-b border-[#E2E8F0] px-6 py-4">
+                    <button
+                      onClick={() => setMode('list')}
+                      className="inline-flex items-center gap-2 text-sm font-medium text-[#64748B] hover:text-[#4F46E5] transition-colors"
+                      title="View all drafts"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                      </svg>
+                      Back to Drafts
+                    </button>
+                    <h1 className="text-lg font-semibold text-[#1E293B] flex-1 text-center">
+                      {submission?.name || 'Untitled draft'}
+                    </h1>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-[#10B981] font-medium">
+                        ● Saved just now
+                      </span>
                     </div>
                   </div>
-                  <div className="flex flex-1 min-h-0 flex-col overflow-hidden px-10 py-6">
-                    <div className="flex-1 min-h-[500px] overflow-hidden">
+                  <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+                    <div className="flex-1 min-h-[500px] overflow-auto px-8 py-6">
                       {mode === 'editor' ? (
                         <RichTextEditor
                           key={`editor-${submission?.id || 'new'}`}
@@ -1246,52 +1238,40 @@ export default function SubmitPage() {
                         />
                       ) : null}
                     </div>
-                    <div className="mt-6 space-y-4">
-                      <button
-                        onClick={handleCheckWithGemini}
-                        disabled={!text.trim() || geminiLoading || wordCount === 0}
-                        className="w-full rounded-2xl bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] px-6 py-4 text-base font-semibold text-white shadow-lg hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200 flex items-center justify-center gap-3"
-                      >
-                        {geminiLoading ? (
-                          <>
-                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                            Analyzing with Gemini AI...
-                          </>
-                        ) : (
-                          <>
-                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                            </svg>
-                            Check with Gemini AI
-                          </>
-                        )}
-                      </button>
-                      <div className="rounded-3xl border border-[#EEF2FF] bg-[#FAFBFF] px-5 py-4 shadow-inner shadow-white">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-[#A0AEC0]">Word count</p>
-                        <p className="text-3xl font-bold text-[#4F46E5]">{wordCount}</p>
+                    <div className="border-t border-[#E2E8F0] px-8 py-3 bg-[#F8FAFC]">
+                      <div className="flex items-center justify-between text-sm text-[#64748B]">
+                        <span>{wordCount} words • {handledSuggestionIds.length} accepted</span>
+                        <button
+                          onClick={handleCheckWithGemini}
+                          disabled={!text.trim() || geminiLoading || wordCount === 0}
+                          className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white hover:bg-[#4338CA] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {geminiLoading ? (
+                            <>
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                              </svg>
+                              Check Grammar
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
                   </div>
                 </section>
 
-                <section className="flex h-full w-full flex-col overflow-hidden rounded-[28px] border border-[#EEF2FF] bg-white shadow-[0_15px_50px_rgba(79,70,229,0.1)]">
-                  <div className="border-b border-[#EFF2F6] px-8 py-6">
-                    <p className="text-xs font-semibold uppercase tracking-[0.5em] text-[#A0AEC0]">Assistant</p>
-                    <h2 className="text-2xl font-bold text-[#0F172A]">AI suggestions</h2>
-                    <p className="text-sm text-[#475569]">
-                      Real-time suggestions appear as you type. Deep analysis suggestions appear after submission.
-                    </p>
-                  </div>
-                  <div className="flex-1 overflow-y-auto px-8 py-6">
-                    <AssistantPanel
-                      realtimeSuggestions={realtimeSuggestions}
-                      deepSuggestions={deepSuggestions}
-                      loadingRealtime={realtimeLoading}
-                      loadingDeep={geminiLoading}
-                      onAcceptAll={handleAcceptAll}
-                    />
-                  </div>
-                </section>
+                <AssistantPanel
+                  realtimeSuggestions={realtimeSuggestions}
+                  deepSuggestions={deepSuggestions}
+                  loadingRealtime={realtimeLoading}
+                  loadingDeep={geminiLoading}
+                  onAcceptAll={handleAcceptAll}
+                />
               </div>
             </div>
           </main>
