@@ -40,6 +40,9 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
   - Rich text editor with Tamil autocomplete
   - Gemini AI grammar checking via server-side proxy
   - Suggestion application and tracking
+  - **Drafts List View**: Click "My Drafts" to see all previously edited submissions
+  - **Draft Loading**: Click any draft to open it in the editor
+  - **Draft Management**: Create new drafts, view submission history
   - User navigation between all pages
   - Clean, professional design with Tailwind CSS
 
