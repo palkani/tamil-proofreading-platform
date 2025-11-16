@@ -47,22 +47,35 @@ ${text}
 
 Check EACH WORD carefully. If a word looks unusual, missing proper endings, or grammatically questionable, FLAG IT.
 
+**IMPORTANT: Provide all "title" and "description" fields in TAMIL language, not English.**
+
 Return valid JSON array (no markdown):
 [
   {
     "id": "err-1",
     "type": "grammar",
-    "title": "Grammar/spelling issue",
-    "description": "Explanation of the error",
+    "title": "தமிழில் பிழையின் தலைப்பு",
+    "description": "தமிழில் பிழையின் விரிவான விளக்கம்",
     "original": "the error word",
     "suggestion": "correct word",
     "position": {"start": 0, "end": 5}
   }
 ]
 
+Example for "அளியுங்கள":
+{
+  "id": "err-1",
+  "type": "grammar",
+  "title": "தவறான வினை முற்று வடிவம்",
+  "description": "'அளியுங்கள' என்ற சொல் தவறான கட்டளை வடிவம். இதில் இறுதி எழுத்தில் புள்ளி (ள்) இல்லை அல்லது தவறான முடிவு உள்ளது. மரியாதையான கட்டளை வடிவம் 'அளியுங்கள்' ஆக இருக்க வேண்டும். 'கொடுங்கள்' அல்லது 'தாருங்கள்' என்பவை மிகவும் இயல்பான மாற்று வார்த்தைகள்.",
+  "original": "அளியுங்கள",
+  "suggestion": "கொடுங்கள்",
+  "position": {"start": 33, "end": 42}
+}
+
 If genuinely NO errors: []
 
-BE STRICT - flag anything questionable.`
+BE STRICT - flag anything questionable. ALWAYS write title and description in TAMIL.`
           }]
         }],
         generationConfig: {
