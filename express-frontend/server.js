@@ -4,7 +4,7 @@ const cookieParser = require('cookie-parser');
 const session = require('express-session');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = 5000; // Express frontend always runs on 5000
 
 // View engine setup
 app.set('view engine', 'ejs');
