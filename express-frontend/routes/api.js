@@ -27,29 +27,46 @@ router.post('/gemini/analyze', async (req, res) => {
         contents: [{
           role: "user",
           parts: [{
-            text: `You are a Tamil language expert. Analyze the following Tamil text for grammar, spelling, style, and clarity issues. Return a JSON array of suggestions.
+            text: `You are a strict Tamil language expert. Analyze Tamil text for grammar errors, misspellings, and invalid word forms. Be VERY STRICT - flag any word that seems incorrect or unusual.
 
-Tamil text to analyze:
+CRITICAL: Flag words that are missing proper endings or have incorrect inflections.
+
+Common Tamil Grammar Issues to Check:
+1. Missing puḷḷi (புள்ளி) at word endings - e.g., "அளியுங்கள" should be "அளியுங்கள்" or better yet "கொடுங்கள்"
+2. Incorrect verb conjugations
+3. Wrong honorific forms
+4. Spelling variations and mistakes
+
+SPECIFIC EXAMPLES OF ERRORS YOU MUST FLAG:
+- "அளியுங்கள" → Suggest: "கொடுங்கள்" or "தாருங்கள்" or "அளியுங்கள்" (Reason: Missing final character or uncommon form)
+- "வாங்க" → Suggest: "வாருங்கள்" (Reason: Too informal, use respectful form)
+- "பன்ன" → Suggest: "செய்ய" (Reason: Colloquial, use proper form)
+
+Text to analyze:
 ${text}
 
-Return ONLY valid JSON in this exact format (no markdown, no explanation):
+Check EACH WORD carefully. If a word looks unusual, missing proper endings, or grammatically questionable, FLAG IT.
+
+Return valid JSON array (no markdown):
 [
   {
-    "id": "unique-id",
-    "type": "grammar|spelling|style|clarity",
-    "title": "Brief issue title",
-    "description": "Detailed explanation",
-    "original": "original text segment",
-    "suggestion": "corrected text",
-    "position": {"start": 0, "end": 10}
+    "id": "err-1",
+    "type": "grammar",
+    "title": "Grammar/spelling issue",
+    "description": "Explanation of the error",
+    "original": "the error word",
+    "suggestion": "correct word",
+    "position": {"start": 0, "end": 5}
   }
 ]
 
-If no issues found, return: []`
+If genuinely NO errors: []
+
+BE STRICT - flag anything questionable.`
           }]
         }],
         generationConfig: {
-          temperature: 0.3,
+          temperature: 0.05,
           maxOutputTokens: 2048
         }
       },
