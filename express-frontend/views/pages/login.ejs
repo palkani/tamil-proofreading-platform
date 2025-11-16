@@ -1,0 +1,40 @@
+<%- include('../partials/header') %>
+
+<div class="min-h-screen flex items-center justify-center p-4">
+  <div class="max-w-md w-full">
+    <div class="card p-8">
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Tamil AI Proofreading</h1>
+        <p class="text-gray-600">Enhance your Tamil writing with AI-powered suggestions</p>
+      </div>
+
+      <% if (error) { %>
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+          <%= error %>
+        </div>
+      <% } %>
+
+      <div class="space-y-4">
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+          <p class="text-sm text-blue-800 mb-3">
+            🔓 Authentication disabled for testing
+          </p>
+          <a href="/workspace" class="btn-primary inline-block w-full text-center">
+            Go to Workspace
+          </a>
+        </div>
+
+        <div class="text-center text-sm text-gray-500 pt-4 border-t border-gray-200">
+          <p>Logged in as: <strong>test@example.com</strong></p>
+          <p class="mt-1 text-xs">⚠️ Production requires authentication</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 text-center text-sm text-gray-500">
+      <p>Powered by AI • Tamil Language Processing</p>
+    </div>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

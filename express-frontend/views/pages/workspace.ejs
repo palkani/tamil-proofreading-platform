@@ -1,0 +1,151 @@
+<%- include('../partials/header') %>
+
+<div class="min-h-screen flex flex-col">
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 px-6 py-3">
+    <div class="flex items-center justify-between">
+      <!-- Left: Back to Drafts -->
+      <div>
+        <a href="/workspace?mode=list" class="text-gray-600 hover:text-gray-900 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+          <span class="font-medium">My Drafts</span>
+        </a>
+      </div>
+
+      <!-- Center: Editable Title -->
+      <div class="flex-1 max-w-md mx-8">
+        <input 
+          type="text" 
+          id="draft-title"
+          class="w-full text-lg font-semibold text-center border-0 border-b-2 border-transparent hover:border-gray-300 focus:border-blue-500 focus:ring-0 outline-none px-4 py-1 transition-colors"
+          value="Untitled Draft"
+          placeholder="Draft title..."
+        />
+      </div>
+
+      <!-- Right: Save Status & Actions -->
+      <div class="flex items-center gap-4">
+        <span id="save-status" class="text-sm text-gray-500">
+          <span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+          Saved
+        </span>
+        <button id="logout-btn" class="text-gray-600 hover:text-gray-900">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Left: Editor Panel -->
+    <div class="flex-1 flex flex-col bg-slate-50 border-r border-gray-200">
+      <!-- Toolbar -->
+      <div class="bg-white border-b border-gray-200 px-6 py-3">
+        <div class="flex items-center gap-2">
+          <button class="editor-btn" data-command="bold" title="Bold">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"/>
+            </svg>
+          </button>
+          <button class="editor-btn" data-command="italic" title="Italic">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4h4M8 20h8M14 4L10 20"/>
+            </svg>
+          </button>
+          <div class="w-px h-6 bg-gray-300 mx-1"></div>
+          <button class="editor-btn" data-command="insertUnorderedList" title="Bullet List">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+          <button class="editor-btn" data-command="insertOrderedList" title="Numbered List">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Editor -->
+      <div class="flex-1 overflow-auto px-6 py-4">
+        <div 
+          id="editor" 
+          class="editor-content bg-white rounded-xl shadow-sm border border-gray-200 min-h-[500px] p-6 tamil-text text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          contenteditable="true"
+          spellcheck="false"
+          placeholder="தமிழில் எழுதத் தொடங்குங்கள்..."
+        ></div>
+      </div>
+
+      <!-- Actions Bar -->
+      <div class="bg-white border-t border-gray-200 px-6 py-4">
+        <div class="flex items-center justify-between">
+          <button id="check-gemini-btn" class="btn-primary flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+            </svg>
+            Check with Gemini AI
+          </button>
+          <button id="submit-proofreading-btn" class="btn-secondary">
+            Submit for Proofreading
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: AI Assistant Panel -->
+    <div class="w-96 bg-white flex flex-col">
+      <!-- Panel Header -->
+      <div class="px-6 py-4 border-b border-gray-200">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-lg font-semibold text-gray-900">AI Assistant</h3>
+          <button id="accept-all-btn" class="text-sm text-blue-600 hover:text-blue-700 font-medium hidden">
+            Accept All
+          </button>
+        </div>
+        <p id="suggestions-summary" class="text-sm text-gray-500">
+          No suggestions yet
+        </p>
+      </div>
+
+      <!-- Suggestions List -->
+      <div id="suggestions-container" class="flex-1 overflow-auto px-6 py-4 space-y-6">
+        <div class="text-center text-gray-400 py-12">
+          <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+          </svg>
+          <p class="text-sm">Type or paste Tamil text in the editor</p>
+          <p class="text-xs mt-2">Click "Check with Gemini AI" for suggestions</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer Status Bar -->
+  <footer class="bg-slate-50 border-t border-gray-200 px-6 py-3">
+    <div class="flex items-center justify-between text-sm text-gray-600">
+      <div class="flex items-center gap-6">
+        <span id="word-count">Words: 0</span>
+        <span id="accepted-count">Accepted: 0</span>
+      </div>
+      <span id="autosave-time" class="text-xs text-gray-400">
+        Last saved: Never
+      </span>
+    </div>
+  </footer>
+</div>
+
+<!-- Include Tamil utilities and editor scripts -->
+<script src="/js/tamilDictionary.js"></script>
+<script src="/js/tamilUtils.js"></script>
+<script src="/js/editor.js"></script>
+<script src="/js/suggestions.js"></script>
+<script src="/js/workspace.js"></script>
+
+<%- include('../partials/footer') %>
