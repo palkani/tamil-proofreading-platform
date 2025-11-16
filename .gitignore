@@ -22,6 +22,8 @@ out/
 *.test
 *.out
 go.work
+server
+backend/main
 
 # IDE
 .vscode/
