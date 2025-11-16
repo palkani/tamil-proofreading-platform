@@ -5,7 +5,16 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
 
 ## Recent Changes (November 16, 2025)
 
-### Latest Updates: Next.js to Express Conversion ✅
+### Latest Updates: Reliable Tamil AI Grammar Checking ✅
+- **Fixed AI Reliability**: Implemented sentence-level chunking (<=120 chars) for consistent error detection
+- **System Instructions**: Separated prompt instructions from text analysis using `systemInstruction`
+- **JSON Output Mode**: Enforced `responseMimeType: "application/json"` for structured responses
+- **Maximum Accuracy**: Set `temperature: 0` and `topP: 0.1` for deterministic results
+- **Tamil Explanations**: All error titles and descriptions provided in Tamil language
+- **Verified Working**: Successfully detects errors like "அளியுங்கள" and "பதிவபுதுப்பித்தல்" in real-world text
+- **Paste Support**: Fixed paste events to trigger auto-analysis after 1-second debounce
+
+### Previous Updates: Next.js to Express Conversion ✅
 - **Frontend Framework Change**: Converted from Next.js 16 (React) to Express 4.18 + EJS templates
 - **Essential Pages Converted** (All Working):
   - ✅ **Homepage** (`/`) - Beautiful landing page with gradient branding, hero section, and features

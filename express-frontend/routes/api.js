@@ -4,7 +4,35 @@ const axios = require('axios');
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080/api/v1';
 
-// Proxy to Gemini AI integration
+// Helper function to split text into manageable chunks for better accuracy
+function splitIntoSentences(text) {
+  // Split by common Tamil and English sentence delimiters
+  const sentences = text.split(/([.!?।]\s*)/g);
+  const chunks = [];
+  let current = '';
+  let globalOffset = 0;
+  
+  for (const part of sentences) {
+    if (current.length + part.length <= 120) {
+      current += part;
+    } else {
+      if (current.trim()) {
+        chunks.push({ text: current.trim(), offset: globalOffset });
+        globalOffset += current.length;
+      }
+      current = part;
+    }
+  }
+  
+  if (current.trim()) {
+    chunks.push({ text: current.trim(), offset: globalOffset });
+  }
+  
+  // If no chunks created (no delimiters), return the whole text
+  return chunks.length > 0 ? chunks : [{ text: text.trim(), offset: 0 }];
+}
+
+// Proxy to Gemini AI integration with improved accuracy via chunking
 router.post('/gemini/analyze', async (req, res) => {
   try {
     const { text } = req.body;
@@ -21,92 +49,98 @@ router.post('/gemini/analyze', async (req, res) => {
       return res.status(500).json({ error: 'Gemini AI not configured' });
     }
 
-    const response = await axios.post(
-      `${baseUrl}/models/gemini-2.5-flash:generateContent`,
-      {
-        contents: [{
-          role: "user",
-          parts: [{
-            text: `You are a strict Tamil language expert. Analyze Tamil text for grammar errors, misspellings, and invalid word forms. Be VERY STRICT - flag any word that seems incorrect or unusual.
-
-CRITICAL: Flag words that are missing proper endings or have incorrect inflections.
-
-Common Tamil Grammar Issues to Check:
-1. Missing puḷḷi (புள்ளி) at word endings - e.g., "அளியுங்கள" should be "அளியுங்கள்" or better yet "கொடுங்கள்"
-2. Incorrect verb conjugations
-3. Wrong honorific forms
-4. Spelling variations and mistakes
-
-SPECIFIC EXAMPLES OF ERRORS YOU MUST FLAG:
-- "அளியுங்கள" → Suggest: "கொடுங்கள்" or "தாருங்கள்" or "அளியுங்கள்" (Reason: Missing final character or uncommon form)
-- "வாங்க" → Suggest: "வாருங்கள்" (Reason: Too informal, use respectful form)
-- "பன்ன" → Suggest: "செய்ய" (Reason: Colloquial, use proper form)
-
-Text to analyze:
-${text}
-
-Check EACH WORD carefully. If a word looks unusual, missing proper endings, or grammatically questionable, FLAG IT.
-
-**IMPORTANT: Provide all "title" and "description" fields in TAMIL language, not English.**
-
-Return valid JSON array (no markdown):
-[
-  {
-    "id": "err-1",
-    "type": "grammar",
-    "title": "தமிழில் பிழையின் தலைப்பு",
-    "description": "தமிழில் பிழையின் விரிவான விளக்கம்",
-    "original": "the error word",
-    "suggestion": "correct word",
-    "position": {"start": 0, "end": 5}
-  }
-]
-
-Example for "அளியுங்கள":
-{
-  "id": "err-1",
-  "type": "grammar",
-  "title": "தவறான வினை முற்று வடிவம்",
-  "description": "'அளியுங்கள' என்ற சொல் தவறான கட்டளை வடிவம். இதில் இறுதி எழுத்தில் புள்ளி (ள்) இல்லை அல்லது தவறான முடிவு உள்ளது. மரியாதையான கட்டளை வடிவம் 'அளியுங்கள்' ஆக இருக்க வேண்டும். 'கொடுங்கள்' அல்லது 'தாருங்கள்' என்பவை மிகவும் இயல்பான மாற்று வார்த்தைகள்.",
-  "original": "அளியுங்கள",
-  "suggestion": "கொடுங்கள்",
-  "position": {"start": 33, "end": 42}
-}
-
-If genuinely NO errors: []
-
-BE STRICT - flag anything questionable. ALWAYS write title and description in TAMIL.`
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.05,
-          maxOutputTokens: 2048
-        }
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
-        }
-      }
-    );
-
-    const aiText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    // Split into chunks to improve detection accuracy
+    const chunks = splitIntoSentences(text);
+    const allSuggestions = [];
     
-    let suggestions = [];
-    try {
-      const cleaned = aiText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      suggestions = JSON.parse(cleaned);
+    for (const chunk of chunks) {
+      const response = await axios.post(
+        `${baseUrl}/models/gemini-2.5-flash:generateContent`,
+        {
+          systemInstruction: {
+            parts: [{
+              text: `You are a strict Tamil language expert. Analyze Tamil text for grammar errors, misspellings, and invalid word forms.
+
+CRITICAL TAMIL GRAMMAR RULES:
+1. Missing puḷḷi (புள்ளி) at word endings - "அளியுங்கள" → "கொடுங்கள்" or "அளியுங்கள்"
+2. Incorrect sandhi (புணர்ச்சி) - "பதிவபுதுப்பித்தல்" → "பதிவுப் புதுப்பித்தல்"
+3. Wrong verb conjugations and honorific forms
+4. Spelling errors and colloquial forms
+
+EXAMPLES YOU MUST FLAG:
+- "அளியுங்கள" → "கொடுங்கள்" (missing புள்ளி or informal)
+- "பதிவபுதுப்பித்தல்" → "பதிவுப் புதுப்பித்தல்" (wrong sandhi)
+- "வாங்க" → "வாருங்கள்" (too informal)
+
+BE VERY STRICT. Flag ANY questionable word.
+Provide title and description in TAMIL language only.`
+            }]
+          },
+          contents: [{
+            role: "user",
+            parts: [{
+              text: `Analyze this Tamil text word-by-word and flag ALL grammar errors:\n\n${chunk.text}`
+            }]
+          }],
+          generationConfig: {
+            temperature: 0,
+            topP: 0.1,
+            maxOutputTokens: 2048,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  type: { type: "string" },
+                  title: { type: "string" },
+                  description: { type: "string" },
+                  original: { type: "string" },
+                  suggestion: { type: "string" },
+                  position: {
+                    type: "object",
+                    properties: {
+                      start: { type: "integer" },
+                      end: { type: "integer" }
+                    }
+                  }
+                },
+                required: ["id", "type", "title", "description", "original", "suggestion"]
+              }
+            }
+          }
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey
+          }
+        }
+      );
+
+      const aiText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
       
-      if (!Array.isArray(suggestions)) {
-        suggestions = [];
+      try {
+        const chunkSuggestions = JSON.parse(aiText);
+        
+        if (Array.isArray(chunkSuggestions)) {
+          // Adjust offsets to global text positions
+          chunkSuggestions.forEach(sugg => {
+            if (sugg.position) {
+              sugg.position.start += chunk.offset;
+              sugg.position.end += chunk.offset;
+            }
+            sugg.id = `${sugg.id}-chunk${chunk.offset}`;
+            allSuggestions.push(sugg);
+          });
+        }
+      } catch (parseErr) {
+        console.error('Failed to parse chunk response:', aiText, parseErr);
       }
-    } catch (parseErr) {
-      console.error('Failed to parse Gemini response:', parseErr);
-      suggestions = [];
     }
 
-    res.json({ suggestions });
+    res.json({ suggestions: allSuggestions });
   } catch (error) {
     console.error('Gemini API error:', error.response?.data || error.message);
     res.status(500).json({ 
