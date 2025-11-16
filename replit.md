@@ -8,12 +8,13 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
 ### Latest Updates: Next.js to Express Conversion ✅
 - **Frontend Framework Change**: Converted from Next.js 16 (React) to Express 4.18 + EJS templates
 - **Essential Pages Converted** (All Working):
-  - ✅ Login (`/`) - Authentication page with email/password form
-  - ✅ Register (`/register`) - Sign-up page with Google OAuth option
-  - ✅ Workspace (`/workspace`) - Tamil editor with AI proofreading
-  - ✅ Dashboard (`/dashboard`) - User overview with recent submissions
-  - ✅ Account (`/account`) - Profile and settings management
-  - ✅ Archive (`/archive`) - Archived/deleted submissions (15-day retention)
+  - ✅ **Homepage** (`/`) - Beautiful landing page with gradient branding, hero section, and features
+  - ✅ **Login** (`/login`) - Authentication page with email/password form
+  - ✅ **Register** (`/register`) - Sign-up page with Google OAuth option
+  - ✅ **Workspace** (`/workspace`) - Tamil editor with AI proofreading
+  - ✅ **Dashboard** (`/dashboard`) - User overview with recent submissions
+  - ✅ **Account** (`/account`) - Profile and settings management
+  - ✅ **Archive** (`/archive`) - Archived/deleted submissions (15-day retention)
 - **Vanilla JavaScript Implementation**: 
   - TamilEditor class with contenteditable and autocomplete
   - SuggestionsPanel class with type-based grouping
@@ -98,6 +99,7 @@ tamil-proofreading-platform/
 │   │   └── api.js        # API proxy to backend
 │   ├── views/
 │   │   ├── pages/        # EJS page templates
+│   │   │   ├── home.ejs       # Landing page
 │   │   │   ├── login.ejs
 │   │   │   ├── register.ejs
 │   │   │   ├── workspace.ejs

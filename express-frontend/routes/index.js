@@ -9,10 +9,18 @@ const mockUser = {
   role: 'user'
 };
 
-// Login page (home page)
+// Homepage
 router.get('/', (req, res) => {
+  res.render('pages/home', { 
+    title: 'ProofTamil - AI-Powered Tamil Proofreading Studio',
+    user: mockUser // Show logged-in state for testing
+  });
+});
+
+// Login page
+router.get('/login', (req, res) => {
   res.render('pages/login', { 
-    title: 'Tamil AI Proofreading Platform',
+    title: 'Sign In - ProofTamil',
     error: req.query.error || null
   });
 });

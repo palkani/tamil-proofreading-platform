@@ -1,0 +1,157 @@
+<%- include('../partials/header') %>
+
+<style>
+  @keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .animate-fade-in {
+    animation: fade-in 1s ease-in-out;
+  }
+  
+  .animate-slide-up {
+    animation: slide-up 1s ease-in-out;
+  }
+  
+  .gradient-text-purple {
+    background: linear-gradient(135deg, #4F46E5 0%, #6366F1 30%, #8B5CF6 60%, #6366F1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    background-size: 200% auto;
+    animation: gradient-shift 5s ease infinite;
+    filter: drop-shadow(0 4px 16px rgba(79, 70, 229, 0.4));
+  }
+  
+  .gradient-text-cyan {
+    background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 30%, #10B981 60%, #14B8A6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    background-size: 200% auto;
+    animation: gradient-shift 5s ease infinite 0.7s;
+    filter: drop-shadow(0 4px 16px rgba(14, 165, 233, 0.4));
+  }
+</style>
+
+<div class="min-h-screen bg-gray-50 text-gray-900">
+  <!-- Optional Header for logged-in users -->
+  <% if (user) { %>
+    <%- include('../partials/nav', { active: 'home', user: user }) %>
+  <% } %>
+
+  <!-- Hero Section -->
+  <div class="relative max-w-7xl mx-auto px-6 sm:px-12 lg:px-16 pt-32 pb-24 lg:pt-40 lg:pb-32">
+    <div class="text-center space-y-8">
+      <!-- Logo -->
+      <div class="flex justify-center animate-fade-in">
+        <div class="relative">
+          <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-3xl blur-2xl opacity-20 animate-pulse"></div>
+          <div class="relative bg-white rounded-3xl p-4 shadow-xl">
+            <div class="w-36 h-36 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-6xl font-bold">
+              PT
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Main Title -->
+      <div class="space-y-6 animate-slide-up">
+        <h1 class="text-7xl sm:text-8xl lg:text-9xl font-extrabold tracking-tight leading-none">
+          <div class="flex items-center justify-center gap-4 sm:gap-5 lg:gap-6">
+            <span class="gradient-text-purple font-black" style="letter-spacing: -0.03em; font-weight: 900; line-height: 1;">Proof</span>
+            <span class="gradient-text-cyan font-black" style="letter-spacing: -0.03em; font-weight: 900; line-height: 1;">Tamil</span>
+          </div>
+          <span class="text-gray-600 text-4xl sm:text-5xl lg:text-6xl font-bold uppercase mt-3 inline-block" style="letter-spacing: 0.15em; font-weight: 700;">
+            Studio
+          </span>
+        </h1>
+        
+        <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 max-w-5xl mx-auto leading-tight">
+          From Thought to Text — Where AI Meets Tamil Brilliance
+        </h2>
+        
+        <p class="text-xl sm:text-2xl lg:text-3xl text-gray-600 font-semibold max-w-4xl mx-auto leading-relaxed">
+          AI-powered Tamil proofreading, typing assistance, and free Tamil writer tools to sharpen every sentence.
+        </p>
+        
+        <p class="text-base sm:text-lg text-gray-500 max-w-3xl mx-auto leading-relaxed">
+          Proof Tamil combines instant Tamil typing support, grammar checking, transliteration, and professional proofreading workflows so creators can publish flawless Tamil content faster.
+        </p>
+      </div>
+      
+      <!-- CTA Buttons -->
+      <div class="flex justify-center gap-4 pt-4 animate-fade-in">
+        <% if (user) { %>
+          <a href="/workspace" class="group relative px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-xl shadow-blue-600/30 hover:shadow-2xl hover:shadow-blue-600/40 font-semibold text-sm uppercase tracking-wider hover:scale-105 transition-all duration-300 overflow-hidden">
+            <span class="relative z-10">Open Workspace</span>
+            <div class="absolute inset-0 bg-gradient-to-r from-indigo-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          </a>
+          <a href="/dashboard" class="px-8 py-4 bg-white border-2 border-gray-200 text-blue-600 rounded-full shadow-lg hover:shadow-xl font-semibold text-sm uppercase tracking-wider hover:scale-105 hover:border-blue-600 transition-all duration-300">
+            View Dashboard
+          </a>
+        <% } else { %>
+          <a href="/login" class="group relative px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-xl shadow-blue-600/30 hover:shadow-2xl hover:shadow-blue-600/40 font-semibold text-sm uppercase tracking-wider hover:scale-105 transition-all duration-300 overflow-hidden">
+            <span class="relative z-10">Sign In</span>
+            <div class="absolute inset-0 bg-gradient-to-r from-indigo-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          </a>
+          <a href="/register" class="px-8 py-4 bg-white border-2 border-gray-200 text-blue-600 rounded-full shadow-lg hover:shadow-xl font-semibold text-sm uppercase tracking-wider hover:scale-105 hover:border-blue-600 transition-all duration-300">
+            Sign Up
+          </a>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Features Grid -->
+    <div class="mt-32 grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div class="group bg-white rounded-3xl border border-gray-200 p-8 text-left space-y-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600/10 to-cyan-500/10 mb-2 text-2xl">
+          ✨
+        </div>
+        <h3 class="text-xl font-bold text-gray-900 leading-tight">
+          AI-Powered Proofreading
+        </h3>
+        <p class="text-gray-600 text-sm leading-relaxed">
+          Advanced Tamil-aware language models for grammar, spelling, and style corrections in seconds.
+        </p>
+      </div>
+
+      <div class="group bg-white rounded-3xl border border-gray-200 p-8 text-left space-y-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1" style="animation-delay: 100ms">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600/10 to-cyan-500/10 mb-2 text-2xl">
+          ⌨️
+        </div>
+        <h3 class="text-xl font-bold text-gray-900 leading-tight">
+          Realtime Tamil Typing
+        </h3>
+        <p class="text-gray-600 text-sm leading-relaxed">
+          Phonetic transliteration, auto-complete, and keyboard shortcuts tuned for fast Tamil typing.
+        </p>
+      </div>
+
+      <div class="group bg-white rounded-3xl border border-gray-200 p-8 text-left space-y-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1" style="animation-delay: 200ms">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600/10 to-cyan-500/10 mb-2 text-2xl">
+          📝
+        </div>
+        <h3 class="text-xl font-bold text-gray-900 leading-tight">
+          Free Tamil Writer Workspace
+        </h3>
+        <p class="text-gray-600 text-sm leading-relaxed">
+          Draft, compare revisions, and export high-quality Tamil articles, blog posts, and scripts for free.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>
