@@ -21,10 +21,6 @@ class WorkspaceController {
   }
 
   init() {
-    // Check URL for mode parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    const mode = urlParams.get('mode');
-    
     // Initialize editor
     const editorElement = document.getElementById('editor');
     if (editorElement) {
@@ -49,12 +45,8 @@ class WorkspaceController {
     this.updateWordCount();
     this.updateAcceptedCount();
     
-    // Load drafts and set initial mode
-    if (mode === 'list') {
-      this.showDraftsList();
-    } else {
-      this.showEditor();
-    }
+    // Start in editor mode
+    this.showEditor();
   }
 
   setupEventListeners() {
@@ -98,6 +90,12 @@ class WorkspaceController {
     const createFirstDraftBtn = document.getElementById('create-first-draft-btn');
     if (createFirstDraftBtn) {
       createFirstDraftBtn.addEventListener('click', () => this.createNewDraft());
+    }
+
+    // Show Drafts button
+    const showDraftsBtn = document.getElementById('show-drafts-btn');
+    if (showDraftsBtn) {
+      showDraftsBtn.addEventListener('click', () => this.showDraftsList());
     }
   }
 
@@ -655,10 +653,12 @@ class WorkspaceController {
       // Switch to editor view
       this.showEditor();
       
-      // Update URL without page reload
-      window.history.pushState({}, '', '/workspace');
-      
       this.showNotification('Draft loaded successfully', 'success');
+      
+      // Automatically trigger AI analysis for the loaded draft
+      setTimeout(() => {
+        this.autoAnalyze();
+      }, 500);
     } catch (error) {
       console.error('Error loading draft:', error);
       this.showNotification('Failed to load draft', 'error');
