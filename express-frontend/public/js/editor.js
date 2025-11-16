@@ -32,6 +32,8 @@ class TamilEditor {
       e.preventDefault();
       const text = e.clipboardData.getData('text/plain');
       document.execCommand('insertText', false, text);
+      // Explicitly trigger content change for paste events
+      this.onContentChange();
     });
   }
 
