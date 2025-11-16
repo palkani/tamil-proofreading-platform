@@ -5,25 +5,27 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
 
 ## Recent Changes (November 16, 2025)
 
-### Latest Updates: Professional Workspace Redesign ✅
-- **Clean Three-Region Header**: Back to drafts navigation | Editable draft title | Save status indicators
-- **Simplified Editor Toolbar**: One-row compact design with essential formatting tools (Bold, Italic, Lists)
-- **Professional AI Assistant Panel**: 
-  - Grouped suggestions by type (Grammar, Style, Clarity, Alternative)
-  - Summary header with Accept All button showing total suggestions count
-  - Structured suggestion cards displaying Original text → Suggested text with detailed reasoning
-  - Apply/Ignore actions with intelligent tracking
-- **Footer Status Bar**: Live word count and accepted suggestions counter with autosave timestamp
-- **Visual Polish**: Clean neutral colors (#F8FAFC, #E2E8F0), 16-20px border radii, minimal shadows
-- **Functional Improvements**:
-  - All suggestion types properly update accepted counter on application
-  - Context spelling, grammar, deep, alternative, and Gemini suggestions all tracked
-  - Suggestions properly grouped and categorized by type
-  - SuggestionCard correctly distinguishes original from suggested text
+### Latest Updates: Next.js to Express Conversion ✅
+- **Frontend Framework Change**: Converted from Next.js 16 (React) to Express 4.18 + EJS templates
+- **Vanilla JavaScript Implementation**: 
+  - TamilEditor class with contenteditable and autocomplete
+  - SuggestionsPanel class with type-based grouping
+  - WorkspaceController coordinating all features
+  - Complete Tamil utilities ported for browser use (220+ word dictionary)
+- **UI Preserved**: 
+  - Clean three-region header with navigation and title editing
+  - Simplified toolbar with formatting controls
+  - Professional AI Assistant panel with suggestion cards
+  - Footer status bar with word count and accepted suggestions counter
+- **All Features Working**:
+  - Rich text editor with Tamil autocomplete
+  - Gemini AI grammar checking via server-side proxy
+  - Suggestion application and tracking
+  - Clean, professional design with Tailwind CSS
 
-### Vercel to Replit Migration Completed ✅
+### Vercel to Replit Migration + Express Conversion ✅
 - **Backend**: Go 1.24 server running on port 8080
-- **Frontend**: Next.js 16 running on port 5000  
+- **Frontend**: Express 4.18 + EJS running on port 5000 (converted from Next.js)  
 - **Database**: PostgreSQL (Replit-hosted Neon database)
 - **Workflow**: Configured to run both services concurrently via `start.sh`
 - **Status**: Fully functional and accessible
@@ -78,11 +80,15 @@ tamil-proofreading-platform/
 │   │   ├── middleware/     # CORS, auth, security
 │   │   ├── models/         # Database models (GORM)
 │   │   └── services/       # Business logic (LLM, payment, NLP)
-├── frontend/               # Next.js app (port 5000)
-│   ├── app/               # App router pages
-│   ├── components/        # React components
-│   ├── lib/              # API clients and utilities
-│   └── utils/            # Tamil text processing utilities
+├── express-frontend/       # Express + EJS app (port 5000) **ACTIVE**
+│   ├── server.js          # Express server entry point
+│   ├── routes/            # Express routes (index, workspace, API proxy)
+│   ├── views/             # EJS templates (pages, partials)
+│   ├── public/
+│   │   ├── css/          # Tailwind CSS (compiled)
+│   │   └── js/           # Client-side JavaScript modules
+│   └── package.json      # Dependencies
+├── frontend/              # Next.js app (DEPRECATED - use express-frontend)
 └── start.sh              # Startup script for both services
 ```
 
@@ -110,9 +116,21 @@ tamil-proofreading-platform/
 
 ## Tech Stack
 - **Backend**: Go 1.24, Gin, GORM, PostgreSQL
-- **Frontend**: Next.js 16 (Turbopack), React 19, TypeScript, Tailwind CSS
-- **AI**: OpenAI GPT (with fallback to Google Gemini)
+- **Frontend**: Express 4.18, EJS Templates, Vanilla JavaScript, Tailwind CSS
+- **AI**: Google Gemini (via Replit AI Integrations), OpenAI GPT (backend)
 - **Payments**: Stripe, Razorpay (configured but not required)
+
+## Known Limitations (Express Version)
+- **Draft Persistence**: Autosave currently simulates saving (not integrated with Go backend)
+- **Draft Loading**: Workspace doesn't load existing drafts from database
+- **Authentication**: Mock auth in place (same as Next.js version for testing)
+- **Backend Integration**: Gemini proxy works, but other backend features need wiring
+
+To add full backend integration:
+1. Wire autosave to Go backend `/api/v1/submit` endpoint
+2. Load user drafts in workspace controller from `/api/v1/submissions`
+3. Implement session/token management for authenticated requests
+4. Add proper authentication middleware to workspace routes
 
 ## Development Workflow
 1. Start: Workflow runs automatically via `start.sh`
