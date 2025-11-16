@@ -54,9 +54,11 @@ export default function SubmissionDetailPage() {
     init();
   }, [submissionId, router]);
 
-  const handleLogout = () => {
-    authAPI.logout();
-    router.push('/login');
+  const handleLogout = async () => {
+    await authAPI.logout();
+    setUserEmail('');
+    setShowAdmin(false);
+    router.push('/');
   };
 
   const suggestions: Suggestion[] = useMemo(() => {

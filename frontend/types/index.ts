@@ -21,7 +21,9 @@ export interface User {
 export interface Submission {
   id: number;
   user_id: number;
+  name?: string;
   original_text: string;
+  original_html?: string;
   proofread_text?: string;
   word_count: number;
   model_used: ModelType;
@@ -32,6 +34,8 @@ export interface Submission {
   error?: string;
   processing_time?: number;
   cost: number;
+  archived?: boolean;
+  archived_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -89,5 +93,14 @@ export interface DashboardStats {
     plan: SubscriptionPlan;
     subscription_end?: string;
   };
+}
+
+export interface ContactMessage {
+  id: number;
+  user_id: number;
+  name: string;
+  email: string;
+  message: string;
+  created_at: string;
 }
 

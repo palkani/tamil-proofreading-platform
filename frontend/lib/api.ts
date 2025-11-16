@@ -1,20 +1,28 @@
 import apiClient from './api-client';
-import type { User, Submission, Payment, Usage, DashboardStats } from '@/types';
+import type { User, Submission, Payment, Usage, DashboardStats, ContactMessage } from '@/types';
 
 // Auth API
 export const authAPI = {
   register: async (email: string, password: string, name: string) => {
     const response = await apiClient.post('/auth/register', { email, password, name });
-    if (response.data.token) {
-      localStorage.setItem('token', response.data.token);
+    if (response.data.access_token) {
+      localStorage.setItem('token', response.data.access_token);
     }
     return response.data;
   },
 
   login: async (email: string, password: string) => {
     const response = await apiClient.post('/auth/login', { email, password });
-    if (response.data.token) {
-      localStorage.setItem('token', response.data.token);
+    if (response.data.access_token) {
+      localStorage.setItem('token', response.data.access_token);
+    }
+    return response.data;
+  },
+
+  socialLogin: async (provider: 'google' | 'facebook', token: string) => {
+    const response = await apiClient.post('/auth/social', { provider, token });
+    if (response.data.access_token) {
+      localStorage.setItem('token', response.data.access_token);
     }
     return response.data;
   },
@@ -24,15 +32,33 @@ export const authAPI = {
     return response.data.user;
   },
 
-  logout: () => {
-    localStorage.removeItem('token');
+  logout: async () => {
+    try {
+      await apiClient.post('/auth/logout', {});
+    } catch (err) {
+      // Ignore logout network errors to allow client-side cleanup
+    } finally {
+      localStorage.removeItem('token');
+    }
+  },
+
+  refresh: async () => {
+    const response = await apiClient.post('/auth/refresh', {});
+    if (response.data.access_token) {
+      localStorage.setItem('token', response.data.access_token);
+    }
+    return response.data;
+  },
+
+  serverLogout: async () => {
+    await authAPI.logout();
   },
 };
 
 // Submission API
 export const submissionAPI = {
-  submitText: async (text: string, includeAlternatives = false): Promise<Submission> => {
-    const response = await apiClient.post('/submit', { text, include_alternatives: includeAlternatives });
+  submitText: async (payload: { text: string; html?: string }): Promise<Submission> => {
+    const response = await apiClient.post('/submit', payload);
     if (response.data?.submission) {
       return response.data.submission as Submission;
     }
@@ -49,6 +75,29 @@ export const submissionAPI = {
   getSubmission: async (id: number): Promise<Submission> => {
     const response = await apiClient.get(`/submissions/${id}`);
     return response.data.submission;
+  },
+
+  archiveSubmission: async (id: number): Promise<{ status: string; archived_at: string; retention_in: number }> => {
+    const response = await apiClient.delete(`/submissions/${id}`);
+    return response.data;
+  },
+
+  getArchivedSubmissions: async (): Promise<{ submissions: Submission[]; retention_days: number; message: string }> => {
+    const response = await apiClient.get('/archive');
+    return response.data;
+  },
+};
+
+// Contact API
+export const contactAPI = {
+  sendMessage: async (payload: { name: string; email: string; message: string }): Promise<{ status: string }> => {
+    const response = await apiClient.post('/contact', payload);
+    return response.data;
+  },
+
+  getMessages: async (): Promise<{ messages: ContactMessage[] }> => {
+    const response = await apiClient.get('/admin/contact');
+    return response.data;
   },
 };
 

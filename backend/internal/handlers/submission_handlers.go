@@ -4,22 +4,52 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"html"
+	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"tamil-proofreading-platform/backend/internal/middleware"
 	"tamil-proofreading-platform/backend/internal/models"
+	"tamil-proofreading-platform/backend/internal/util/auditlog"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
 type SubmitTextRequest struct {
-	Text                string `json:"text" binding:"required"`
+	Text                string `json:"text"`
+	HTML                string `json:"html"`
 	IncludeAlternatives bool   `json:"include_alternatives"`
+	SaveDraft           *bool  `json:"save_draft"`
+}
+
+var htmlTagRegex = regexp.MustCompile("<[^>]+>")
+var scriptTagRegex = regexp.MustCompile(`(?is)<script.*?>.*?</script>`)
+var eventAttrRegex = regexp.MustCompile(`(?i)\s+on[a-z]+\s*=\s*(".*?"|'.*?')`)
+var javascriptProtoRegex = regexp.MustCompile(`(?i)javascript:`)
+
+func stripHTML(input string) string {
+	if strings.TrimSpace(input) == "" {
+		return ""
+	}
+	noTags := htmlTagRegex.ReplaceAllString(input, " ")
+	collapsed := strings.Join(strings.Fields(noTags), " ")
+	return html.UnescapeString(collapsed)
+}
+
+func sanitizeHTML(input string) string {
+	if strings.TrimSpace(input) == "" {
+		return ""
+	}
+	safe := scriptTagRegex.ReplaceAllString(input, "")
+	safe = eventAttrRegex.ReplaceAllString(safe, "")
+	safe = javascriptProtoRegex.ReplaceAllString(safe, "")
+	return safe
 }
 
 // SubmitText handles text submission for proofreading
@@ -29,6 +59,11 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - please login"})
 		return
+	}
+
+	requestID := middleware.GetRequestID(c)
+	if requestID == "" {
+		requestID = strconv.FormatInt(time.Now().UnixNano(), 36)
 	}
 
 	// Validate request
@@ -43,6 +78,12 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 
 	// Sanitize and validate input
 	req.Text = strings.TrimSpace(req.Text)
+	req.HTML = sanitizeHTML(strings.TrimSpace(req.HTML))
+
+	if req.Text == "" && req.HTML != "" {
+		req.Text = stripHTML(req.HTML)
+	}
+
 	if req.Text == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Text cannot be empty"})
 		return
@@ -60,6 +101,29 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		return
 	}
 
+	saveDraft := true
+	if req.SaveDraft != nil {
+		saveDraft = *req.SaveDraft
+	}
+
+	if !saveDraft {
+		result, err := h.llmService.ProofreadText(c.Request.Context(), req.Text, wordCount, req.IncludeAlternatives, requestID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "request_id": requestID})
+			return
+		}
+		auditlog.Info(c, "submission.inline_completed", map[string]any{
+			"request_id": requestID,
+			"word_count": wordCount,
+		})
+		c.JSON(http.StatusOK, gin.H{
+			"request_id": requestID,
+			"result":     result,
+			"message":    "Proofreading completed",
+		})
+		return
+	}
+
 	// Determine model to use
 	modelType := h.selectModel(wordCount)
 
@@ -67,6 +131,8 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	submission := &models.Submission{
 		UserID:              userID,
 		OriginalText:        req.Text,
+		OriginalHTML:        req.HTML,
+		RequestID:           requestID,
 		WordCount:           wordCount,
 		ModelUsed:           modelType,
 		Status:              models.StatusPending,
@@ -94,8 +160,14 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		return
 	}
 
+	auditlog.Info(c, "submission.enqueued", map[string]any{
+		"submission_id": submission.ID,
+		"request_id":    requestID,
+		"word_count":    wordCount,
+	})
+
 	// Start proofreading process immediately in background
-	go h.processSubmission(context.Background(), submission.ID, req.Text, wordCount, modelType, req.IncludeAlternatives)
+	go h.processSubmission(context.Background(), submission.ID, requestID, req.Text, wordCount, modelType, req.IncludeAlternatives)
 
 	// Record usage asynchronously (non-blocking)
 	go func() {
@@ -116,12 +188,19 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{
 		"submission": submission,
 		"message":    "Submission received, proofreading started...",
+		"request_id": requestID,
 	})
 }
 
 // processSubmission processes the text submission asynchronously
-func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, text string, wordCount int, modelType models.ModelType, includeAlternatives bool) {
-	log.Printf("Starting proofreading for submission ID: %d", submissionID)
+func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, requestID, text string, wordCount int, modelType models.ModelType, includeAlternatives bool) {
+	log.Printf("Starting proofreading for submission ID: %d (request_id=%s)", submissionID, requestID)
+	auditlog.LogStandalone(auditlog.LevelInfo, "submission.processing_started", requestID, map[string]any{
+		"submission_id": submissionID,
+		"word_count":    wordCount,
+		"model":         modelType,
+	})
+	defer h.streamHub.close(submissionID)
 
 	// Update status to processing
 	if err := h.db.Model(&models.Submission{}).
@@ -131,10 +210,19 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, tex
 		return
 	}
 
+	h.streamHub.broadcast(submissionID, submissionEvent{
+		Event: "status",
+		Data:  gin.H{"status": models.StatusProcessing},
+	})
+
 	// Process with LLM service
-	result, err := h.llmService.ProofreadText(ctx, text, wordCount, includeAlternatives)
+	result, err := h.llmService.ProofreadText(ctx, text, wordCount, includeAlternatives, requestID)
 	if err != nil {
-		log.Printf("Error processing submission %d: %v", submissionID, err)
+		log.Printf("Error processing submission %d (request_id=%s): %v", submissionID, requestID, err)
+		auditlog.LogStandalone(auditlog.LevelWarn, "submission.processing_failed", requestID, map[string]any{
+			"submission_id": submissionID,
+			"error":         err.Error(),
+		})
 
 		// Update submission with error
 		if updateErr := h.db.Model(&models.Submission{}).
@@ -145,6 +233,19 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, tex
 			}).Error; updateErr != nil {
 			log.Printf("Error updating submission with error status: %v", updateErr)
 		}
+
+		h.streamHub.broadcast(submissionID, submissionEvent{
+			Event: "status",
+			Data:  gin.H{"status": models.StatusFailed, "request_id": requestID},
+		})
+		h.streamHub.broadcast(submissionID, submissionEvent{
+			Event: "failure",
+			Data:  gin.H{"message": err.Error(), "request_id": requestID},
+		})
+		h.streamHub.broadcast(submissionID, submissionEvent{
+			Event: "end",
+			Data:  gin.H{"status": models.StatusFailed, "request_id": requestID},
+		})
 		return
 	}
 
@@ -183,7 +284,29 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, tex
 		return
 	}
 
-	log.Printf("Successfully completed proofreading for submission ID: %d", submissionID)
+	var updated models.Submission
+	if err := h.db.First(&updated, submissionID).Error; err != nil {
+		log.Printf("Error loading updated submission %d: %v", submissionID, err)
+	} else {
+		h.streamHub.broadcast(submissionID, submissionEvent{
+			Event: "status",
+			Data:  gin.H{"status": models.StatusCompleted, "request_id": requestID},
+		})
+		h.streamHub.broadcast(submissionID, submissionEvent{
+			Event: "result",
+			Data:  gin.H{"submission": updated, "request_id": requestID},
+		})
+	}
+
+	h.streamHub.broadcast(submissionID, submissionEvent{
+		Event: "end",
+		Data:  gin.H{"status": models.StatusCompleted, "request_id": requestID},
+	})
+
+	log.Printf("Successfully completed proofreading for submission ID: %d (request_id=%s)", submissionID, requestID)
+	auditlog.LogStandalone(auditlog.LevelInfo, "submission.processing_completed", requestID, map[string]any{
+		"submission_id": submissionID,
+	})
 }
 
 // selectModel determines which model to use based on word count
@@ -252,6 +375,7 @@ func (h *Handlers) GetSubmissions(c *gin.Context) {
 	}
 
 	if err := h.db.Where("user_id = ?", userID).
+		Where("archived = ?", false).
 		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
@@ -296,4 +420,163 @@ func (h *Handlers) GetSubmission(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"submission": submission})
+}
+
+// ArchiveSubmission marks a submission as archived for 15 days before deletion
+func (h *Handlers) ArchiveSubmission(c *gin.Context) {
+	userID, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	submissionIDStr := c.Param("id")
+	submissionID, err := strconv.ParseUint(submissionIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid submission ID"})
+		return
+	}
+
+	var submission models.Submission
+	if err := h.db.Where("id = ? AND user_id = ?", submissionID, userID).First(&submission).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Submission not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to locate submission"})
+		return
+	}
+
+	if submission.Archived {
+		c.JSON(http.StatusOK, gin.H{
+			"status":      "already_archived",
+			"archived_at": submission.ArchivedAt,
+		})
+		return
+	}
+
+	now := time.Now()
+	if err := h.db.Model(&models.Submission{}).
+		Where("id = ?", submission.ID).
+		Updates(map[string]interface{}{
+			"archived":    true,
+			"archived_at": now,
+		}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to archive submission"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":       "archived",
+		"archived_at":  now,
+		"retention_in": 15,
+	})
+}
+
+// GetArchivedSubmissions returns archived submissions still within retention window
+func (h *Handlers) GetArchivedSubmissions(c *gin.Context) {
+	userID, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	if err := h.cleanupArchivedSubmissions(); err != nil {
+		log.Printf("archive cleanup error: %v", err)
+	}
+
+	var submissions []models.Submission
+	if err := h.db.Where("user_id = ? AND archived = ?", userID, true).
+		Order("archived_at DESC").
+		Find(&submissions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to fetch archived drafts",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"submissions":    submissions,
+		"retention_days": 15,
+		"message":        "Drafts stay here for 15 days before permanent deletion.",
+	})
+}
+
+// StreamSubmission streams submission updates using Server-Sent Events
+func (h *Handlers) StreamSubmission(c *gin.Context) {
+	userID, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	submissionIDStr := c.Param("id")
+	submissionIDUint64, err := strconv.ParseUint(submissionIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid submission ID"})
+		return
+	}
+	submissionID := uint(submissionIDUint64)
+
+	var submission models.Submission
+	if err := h.db.Where("id = ? AND user_id = ?", submissionID, userID).First(&submission).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Submission not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch submission"})
+		return
+	}
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Streaming unsupported"})
+		return
+	}
+
+	listener, unsubscribe := h.streamHub.register(submissionID)
+	defer unsubscribe()
+
+	// Send initial snapshot
+	payload := gin.H{"status": submission.Status, "request_id": submission.RequestID}
+	c.SSEvent("status", payload)
+	if submission.Status == models.StatusCompleted {
+		c.SSEvent("result", gin.H{"submission": submission, "request_id": submission.RequestID})
+		c.SSEvent("end", gin.H{"status": submission.Status, "request_id": submission.RequestID})
+		flusher.Flush()
+		return
+	}
+
+	if submission.Status == models.StatusFailed {
+		c.SSEvent("failure", gin.H{"message": submission.Error, "request_id": submission.RequestID})
+		c.SSEvent("end", gin.H{"status": submission.Status, "request_id": submission.RequestID})
+		flusher.Flush()
+		return
+	}
+
+	flusher.Flush()
+
+	c.Stream(func(w io.Writer) bool {
+		select {
+		case <-c.Request.Context().Done():
+			return false
+		case event, ok := <-listener:
+			if !ok {
+				return false
+			}
+			c.SSEvent(event.Event, event.Data)
+			flusher.Flush()
+			return true
+		case <-time.After(25 * time.Second):
+			c.SSEvent("ping", gin.H{"time": time.Now().Unix(), "request_id": submission.RequestID})
+			flusher.Flush()
+			return true
+		}
+	})
 }

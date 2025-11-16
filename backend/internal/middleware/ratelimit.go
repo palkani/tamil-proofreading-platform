@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -80,8 +81,12 @@ func RateLimitMiddleware(limit int, window time.Duration) gin.HandlerFunc {
 	limiter := NewRateLimiter(limit, window)
 
 	return func(c *gin.Context) {
-		// Use IP address as key
 		key := c.ClientIP()
+		if userID, exists := c.Get("user_id"); exists {
+			if id, ok := userID.(uint); ok && id > 0 {
+				key = key + ":" + strconv.FormatUint(uint64(id), 10)
+			}
+		}
 
 		if !limiter.Allow(key) {
 			c.JSON(http.StatusTooManyRequests, gin.H{
@@ -94,4 +99,3 @@ func RateLimitMiddleware(limit int, window time.Duration) gin.HandlerFunc {
 		c.Next()
 	}
 }
-

@@ -31,6 +31,8 @@ func main() {
 		&models.Submission{},
 		&models.Payment{},
 		&models.Usage{},
+		&models.RefreshToken{},
+		&models.ContactMessage{},
 	)
 	if err != nil {
 		log.Fatal("Failed to migrate database:", err)
@@ -42,20 +44,28 @@ func main() {
 	// Setup router
 	router := gin.Default()
 
+	// Request tracing and security headers
+	router.Use(middleware.RequestID())
+	router.Use(middleware.SecurityHeaders())
+
 	// CORS middleware
 	router.Use(middleware.CORS(cfg.FrontendURL))
-	
+
 	// Rate limiting middleware
 	router.Use(middleware.RateLimitMiddleware(100, 60*time.Second)) // 100 requests per minute
-	
+	router.Use(middleware.SecurityMonitoring(5, 5*time.Minute))
+
 	// Input sanitization
 	router.Use(middleware.SanitizeInput())
+	router.Use(middleware.BodySizeLimit(10 * 1024 * 1024)) // 10 MB max payload
 
 	// Public routes
 	api := router.Group("/api/v1")
 	{
 		api.POST("/auth/register", h.Register)
 		api.POST("/auth/login", h.Login)
+		api.POST("/auth/logout", h.Logout)
+		api.POST("/auth/refresh", h.RefreshAccessToken)
 		api.POST("/auth/otp/send", h.SendOTP)
 		api.POST("/auth/otp/verify", h.VerifyOTP)
 		api.POST("/auth/social", h.SocialLogin)
@@ -69,6 +79,10 @@ func main() {
 		protected.POST("/submit", h.SubmitText)
 		protected.GET("/submissions", h.GetSubmissions)
 		protected.GET("/submissions/:id", h.GetSubmission)
+		protected.DELETE("/submissions/:id", h.ArchiveSubmission)
+		protected.GET("/stream/submissions/:id", h.StreamSubmission)
+		protected.GET("/archive", h.GetArchivedSubmissions)
+		protected.POST("/contact", h.SubmitContactMessage)
 		protected.POST("/payments/create", h.CreatePayment)
 		protected.POST("/payments/verify", h.VerifyPayment)
 		protected.GET("/payments", h.GetPayments)
@@ -86,6 +100,7 @@ func main() {
 		admin.GET("/payments", h.AdminGetPayments)
 		admin.GET("/analytics", h.AdminGetAnalytics)
 		admin.GET("/model-logs", h.AdminGetModelLogs)
+		admin.GET("/contact", h.AdminListContactMessages)
 	}
 
 	// Webhook routes (no auth required, verified by signature)
@@ -102,4 +117,3 @@ func main() {
 		log.Fatal("Failed to start server:", err)
 	}
 }
-

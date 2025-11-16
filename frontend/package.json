@@ -12,6 +12,10 @@
     "@hookform/resolvers": "^5.2.2",
     "@stripe/react-stripe-js": "^5.3.0",
     "@stripe/stripe-js": "^8.3.0",
+    "@tiptap/extension-text-align": "^3.10.4",
+    "@tiptap/react": "^3.10.4",
+    "@tiptap/starter-kit": "^3.10.4",
+    "@tiptap/suggestion": "^3.10.4",
     "axios": "^1.13.2",
     "diff-match-patch": "^1.0.5",
     "next": "16.0.1",
@@ -24,6 +28,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/diff-match-patch": "^1.0.36",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

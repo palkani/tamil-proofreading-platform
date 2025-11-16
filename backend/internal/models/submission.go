@@ -23,24 +23,37 @@ const (
 )
 
 type Submission struct {
-	ID                uint             `gorm:"primaryKey" json:"id"`
-	UserID            uint             `gorm:"not null;index" json:"user_id"`
-	OriginalText      string           `gorm:"type:text;not null" json:"original_text"`
-	ProofreadText     string           `gorm:"type:text" json:"proofread_text,omitempty"`
-	WordCount         int              `gorm:"not null" json:"word_count"`
-	ModelUsed         ModelType        `gorm:"not null" json:"model_used"`
-	Status            SubmissionStatus `gorm:"default:'pending'" json:"status"`
-	Suggestions       string           `gorm:"type:jsonb" json:"suggestions,omitempty"` // JSON array of suggestions
-	Alternatives      string           `gorm:"type:jsonb" json:"alternatives,omitempty"`
-	IncludeAlternatives bool           `gorm:"default:false" json:"include_alternatives"`
-	Error             string           `gorm:"type:text" json:"error,omitempty"`
-	ProcessingTime    *float64         `json:"processing_time,omitempty"`
-	Cost              float64          `gorm:"default:0" json:"cost"`
-	CreatedAt         time.Time        `json:"created_at"`
-	UpdatedAt         time.Time        `json:"updated_at"`
-	DeletedAt         gorm.DeletedAt   `gorm:"index" json:"-"`
-	
+	ID                  uint             `gorm:"primaryKey" json:"id"`
+	UserID              uint             `gorm:"not null;index" json:"user_id"`
+	OriginalText        string           `gorm:"type:text;not null" json:"original_text"`
+	OriginalHTML        string           `gorm:"type:text" json:"original_html,omitempty"`
+	RequestID           string           `gorm:"size:64;index" json:"request_id,omitempty"`
+	ProofreadText       string           `gorm:"type:text" json:"proofread_text,omitempty"`
+	WordCount           int              `gorm:"not null" json:"word_count"`
+	ModelUsed           ModelType        `gorm:"not null" json:"model_used"`
+	Status              SubmissionStatus `gorm:"default:'pending'" json:"status"`
+	Suggestions         string           `gorm:"type:jsonb" json:"suggestions,omitempty"` // JSON array of suggestions
+	Alternatives        string           `gorm:"type:jsonb" json:"alternatives,omitempty"`
+	IncludeAlternatives bool             `gorm:"default:false" json:"include_alternatives"`
+	Error               string           `gorm:"type:text" json:"error,omitempty"`
+	ProcessingTime      *float64         `json:"processing_time,omitempty"`
+	Cost                float64          `gorm:"default:0" json:"cost"`
+	Archived            bool             `gorm:"default:false" json:"archived"`
+	ArchivedAt          *time.Time       `json:"archived_at,omitempty"`
+	CreatedAt           time.Time        `json:"created_at"`
+	UpdatedAt           time.Time        `json:"updated_at"`
+	DeletedAt           gorm.DeletedAt   `gorm:"index" json:"-"`
+
 	// Relationships
-	User              User             `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	User User `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
+type ContactMessage struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"index" json:"user_id"`
+	Name      string    `gorm:"size:120;not null" json:"name"`
+	Email     string    `gorm:"size:160;not null" json:"email"`
+	Message   string    `gorm:"type:text;not null" json:"message"`
+	CreatedAt time.Time `json:"created_at"`
+	User      User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}

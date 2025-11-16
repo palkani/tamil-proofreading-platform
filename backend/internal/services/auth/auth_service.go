@@ -1,7 +1,13 @@
 package auth
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"tamil-proofreading-platform/backend/internal/models"
@@ -11,15 +17,36 @@ import (
 	"gorm.io/gorm"
 )
 
-type AuthService struct {
-	db        *gorm.DB
-	jwtSecret string
+type SessionMetadata struct {
+	UserAgent string
+	IPAddress string
 }
 
-func NewAuthService(db *gorm.DB, jwtSecret string) *AuthService {
+type TokenPair struct {
+	AccessToken      string
+	RefreshToken     string
+	AccessExpiresAt  time.Time
+	RefreshExpiresAt time.Time
+}
+
+type AuthService struct {
+	db              *gorm.DB
+	jwtSecret       string
+	refreshSecret   string
+	accessTokenTTL  time.Duration
+	refreshTokenTTL time.Duration
+}
+
+func NewAuthService(db *gorm.DB, jwtSecret, refreshSecret string, accessTokenTTL, refreshTokenTTL time.Duration) *AuthService {
+	if refreshSecret == "" {
+		refreshSecret = jwtSecret
+	}
 	return &AuthService{
-		db:        db,
-		jwtSecret: jwtSecret,
+		db:              db,
+		jwtSecret:       jwtSecret,
+		refreshSecret:   refreshSecret,
+		accessTokenTTL:  accessTokenTTL,
+		refreshTokenTTL: refreshTokenTTL,
 	}
 }
 
@@ -35,37 +62,20 @@ func (s *AuthService) CheckPassword(password, hash string) bool {
 	return err == nil
 }
 
-// GenerateToken generates a JWT token for a user
-func (s *AuthService) GenerateToken(user *models.User) (string, error) {
-	claims := jwt.MapClaims{
-		"user_id": user.ID,
-		"email":   user.Email,
-		"role":    user.Role,
-		"exp":     time.Now().Add(time.Hour * 24 * 7).Unix(), // 7 days
-		"iat":     time.Now().Unix(),
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(s.jwtSecret))
-}
-
 // Register creates a new user
 func (s *AuthService) Register(email, password, name string) (*models.User, error) {
-	// Check if user exists
 	var existingUser models.User
 	if err := s.db.Where("email = ?", email).First(&existingUser).Error; err == nil {
 		return nil, errors.New("user already exists")
 	}
 
-	// Hash password
 	hashedPassword, err := s.HashPassword(password)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create user
 	user := &models.User{
-		Email:        email,
+		Email:        strings.ToLower(email),
 		PasswordHash: hashedPassword,
 		Name:         name,
 		Role:         models.RoleWriter,
@@ -80,30 +90,274 @@ func (s *AuthService) Register(email, password, name string) (*models.User, erro
 	return user, nil
 }
 
-// Login authenticates a user
-func (s *AuthService) Login(email, password string) (*models.User, string, error) {
+// Login authenticates a user credentials and returns the user if valid.
+func (s *AuthService) Login(email, password string) (*models.User, error) {
 	var user models.User
-	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
+	if err := s.db.Where("email = ?", strings.ToLower(email)).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, "", errors.New("invalid credentials")
+			return nil, errors.New("invalid credentials")
 		}
-		return nil, "", err
+		return nil, err
 	}
 
 	if !user.IsActive {
-		return nil, "", errors.New("account is inactive")
+		return nil, errors.New("account is inactive")
 	}
 
 	if !s.CheckPassword(password, user.PasswordHash) {
-		return nil, "", errors.New("invalid credentials")
+		return nil, errors.New("invalid credentials")
 	}
 
-	token, err := s.GenerateToken(&user)
+	return &user, nil
+}
+
+func (s *AuthService) GenerateAccessToken(user *models.User) (string, time.Time, error) {
+	expiresAt := time.Now().Add(s.accessTokenTTL)
+	jti, err := s.generateTokenID()
 	if err != nil {
-		return nil, "", err
+		return "", time.Time{}, err
+	}
+	claims := jwt.MapClaims{
+		"user_id": user.ID,
+		"email":   user.Email,
+		"role":    user.Role,
+		"exp":     expiresAt.Unix(),
+		"iat":     time.Now().Unix(),
+		"jti":     jti,
 	}
 
-	return &user, token, nil
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(s.jwtSecret))
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return signed, expiresAt, nil
+}
+
+func (s *AuthService) IssueSession(user *models.User, meta SessionMetadata) (*TokenPair, error) {
+	accessToken, accessExpiry, err := s.GenerateAccessToken(user)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshToken, refreshRecord, err := s.createRefreshToken(s.db, user.ID, meta)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TokenPair{
+		AccessToken:      accessToken,
+		RefreshToken:     refreshToken,
+		AccessExpiresAt:  accessExpiry,
+		RefreshExpiresAt: refreshRecord.ExpiresAt,
+	}, nil
+}
+
+func (s *AuthService) RefreshSession(rawToken string, meta SessionMetadata) (*TokenPair, *models.User, error) {
+	tokenRecord, err := s.validateRefreshToken(rawToken)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var user models.User
+	if err := s.db.First(&user, tokenRecord.UserID).Error; err != nil {
+		return nil, nil, err
+	}
+	if !user.IsActive {
+		return nil, nil, errors.New("account is inactive")
+	}
+
+	accessToken, accessExpiry, err := s.GenerateAccessToken(&user)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	newRefreshRaw, newRefreshRecord, err := s.rotateRefreshToken(tokenRecord, meta)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &TokenPair{
+		AccessToken:      accessToken,
+		RefreshToken:     newRefreshRaw,
+		AccessExpiresAt:  accessExpiry,
+		RefreshExpiresAt: newRefreshRecord.ExpiresAt,
+	}, &user, nil
+}
+
+func (s *AuthService) RevokeRefreshToken(rawToken string) error {
+	hash := s.hashRefreshToken(rawToken)
+	if hash == "" {
+		return errors.New("invalid refresh token")
+	}
+
+	now := time.Now()
+	return s.db.Model(&models.RefreshToken{}).
+		Where("token_hash = ? AND revoked_at IS NULL", hash).
+		Update("revoked_at", now).Error
+}
+
+func (s *AuthService) createRefreshToken(db *gorm.DB, userID uint, meta SessionMetadata) (string, *models.RefreshToken, error) {
+	raw, err := s.generateRefreshTokenString()
+	if err != nil {
+		return "", nil, err
+	}
+
+	record := &models.RefreshToken{
+		UserID:    userID,
+		TokenHash: s.hashRefreshToken(raw),
+		UserAgent: truncate(meta.UserAgent, 255),
+		IPAddress: truncate(meta.IPAddress, 64),
+		ExpiresAt: time.Now().Add(s.refreshTokenTTL),
+	}
+
+	if err := db.Create(record).Error; err != nil {
+		return "", nil, err
+	}
+
+	return raw, record, nil
+}
+
+func (s *AuthService) rotateRefreshToken(existing *models.RefreshToken, meta SessionMetadata) (string, *models.RefreshToken, error) {
+	var (
+		newRaw string
+		newRec *models.RefreshToken
+	)
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
+		if err := tx.Model(&models.RefreshToken{}).
+			Where("id = ? AND revoked_at IS NULL", existing.ID).
+			Update("revoked_at", now).Error; err != nil {
+			return err
+		}
+
+		var err error
+		newRaw, newRec, err = s.createRefreshToken(tx, existing.UserID, meta)
+		return err
+	})
+
+	if err != nil {
+		return "", nil, err
+	}
+
+	return newRaw, newRec, nil
+}
+
+func (s *AuthService) validateRefreshToken(rawToken string) (*models.RefreshToken, error) {
+	if strings.TrimSpace(rawToken) == "" {
+		return nil, errors.New("missing refresh token")
+	}
+
+	hash := s.hashRefreshToken(rawToken)
+	if hash == "" {
+		return nil, errors.New("invalid refresh token")
+	}
+
+	var token models.RefreshToken
+	if err := s.db.Where("token_hash = ?", hash).First(&token).Error; err != nil {
+		return nil, errors.New("refresh token not found")
+	}
+
+	if token.RevokedAt != nil {
+		return nil, errors.New("refresh token revoked")
+	}
+
+	if time.Now().After(token.ExpiresAt) {
+		_ = s.RevokeRefreshToken(rawToken)
+		return nil, errors.New("refresh token expired")
+	}
+
+	return &token, nil
+}
+
+func (s *AuthService) generateRefreshTokenString() (string, error) {
+	buf := make([]byte, 48)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("failed generating refresh token: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func (s *AuthService) hashRefreshToken(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(s.refreshSecret + raw))
+	return hex.EncodeToString(sum[:])
+}
+
+func (s *AuthService) generateTokenID() (string, error) {
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("failed generating token id: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func (s *AuthService) generateRandomPassword() (string, error) {
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func (s *AuthService) EnsureOAuthUser(email, name string) (*models.User, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return nil, errors.New("email required")
+	}
+
+	var user models.User
+	err := s.db.Where("email = ?", email).First(&user).Error
+	if err == nil {
+		return &user, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	randomPassword, err := s.generateRandomPassword()
+	if err != nil {
+		return nil, err
+	}
+
+	hashed, err := s.HashPassword(randomPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	displayName := strings.TrimSpace(name)
+	if displayName == "" {
+		if parts := strings.Split(email, "@"); len(parts) > 0 {
+			displayName = parts[0]
+		} else {
+			displayName = "ProofTamil User"
+		}
+	}
+
+	newUser := &models.User{
+		Email:        email,
+		PasswordHash: hashed,
+		Name:         displayName,
+		Role:         models.RoleWriter,
+		Subscription: models.PlanFree,
+		IsActive:     true,
+	}
+
+	if err := s.db.Create(newUser).Error; err != nil {
+		return nil, err
+	}
+
+	return newUser, nil
+}
+
+func truncate(value string, max int) string {
+	if len(value) <= max {
+		return value
+	}
+	return value[:max]
 }
 
 // GetUserByID retrieves a user by ID
@@ -118,7 +372,7 @@ func (s *AuthService) GetUserByID(id uint) (*models.User, error) {
 // GetUserByEmail retrieves a user by email
 func (s *AuthService) GetUserByEmail(email string) (*models.User, error) {
 	var user models.User
-	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
+	if err := s.db.Where("email = ?", strings.ToLower(email)).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
@@ -148,4 +402,3 @@ func (s *AuthService) VerifyToken(tokenString string) (jwt.MapClaims, error) {
 
 	return nil, errors.New("invalid token")
 }
-
