@@ -7,20 +7,30 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
 
 ### Latest Updates: Next.js to Express Conversion ✅
 - **Frontend Framework Change**: Converted from Next.js 16 (React) to Express 4.18 + EJS templates
+- **Essential Pages Converted** (All Working):
+  - ✅ Login (`/`) - Authentication page with email/password form
+  - ✅ Register (`/register`) - Sign-up page with Google OAuth option
+  - ✅ Workspace (`/workspace`) - Tamil editor with AI proofreading
+  - ✅ Dashboard (`/dashboard`) - User overview with recent submissions
+  - ✅ Account (`/account`) - Profile and settings management
+  - ✅ Archive (`/archive`) - Archived/deleted submissions (15-day retention)
 - **Vanilla JavaScript Implementation**: 
   - TamilEditor class with contenteditable and autocomplete
   - SuggestionsPanel class with type-based grouping
   - WorkspaceController coordinating all features
   - Complete Tamil utilities ported for browser use (220+ word dictionary)
+  - Dashboard, Account, and Archive page controllers
 - **UI Preserved**: 
-  - Clean three-region header with navigation and title editing
-  - Simplified toolbar with formatting controls
-  - Professional AI Assistant panel with suggestion cards
+  - Clean navigation bar with ProofTamil branding
+  - Unified header across all authenticated pages
+  - Simplified toolbar with formatting controls (workspace)
+  - Professional AI Assistant panel with suggestion cards (workspace)
   - Footer status bar with word count and accepted suggestions counter
 - **All Features Working**:
   - Rich text editor with Tamil autocomplete
   - Gemini AI grammar checking via server-side proxy
   - Suggestion application and tracking
+  - User navigation between all pages
   - Clean, professional design with Tailwind CSS
 
 ### Vercel to Replit Migration + Express Conversion ✅
@@ -82,11 +92,30 @@ tamil-proofreading-platform/
 │   │   └── services/       # Business logic (LLM, payment, NLP)
 ├── express-frontend/       # Express + EJS app (port 5000) **ACTIVE**
 │   ├── server.js          # Express server entry point
-│   ├── routes/            # Express routes (index, workspace, API proxy)
-│   ├── views/             # EJS templates (pages, partials)
+│   ├── routes/
+│   │   ├── index.js      # Main routes (login, register, dashboard, account, archive)
+│   │   ├── workspace.js  # Workspace routes
+│   │   └── api.js        # API proxy to backend
+│   ├── views/
+│   │   ├── pages/        # EJS page templates
+│   │   │   ├── login.ejs
+│   │   │   ├── register.ejs
+│   │   │   ├── workspace.ejs
+│   │   │   ├── dashboard.ejs
+│   │   │   ├── account.ejs
+│   │   │   └── archive.ejs
+│   │   └── partials/     # Reusable EJS components (header, footer, nav)
 │   ├── public/
 │   │   ├── css/          # Tailwind CSS (compiled)
 │   │   └── js/           # Client-side JavaScript modules
+│   │       ├── workspace.js      # Workspace controller
+│   │       ├── editor.js         # Tamil editor
+│   │       ├── suggestions.js    # Suggestions panel
+│   │       ├── tamilDictionary.js # Tamil word dictionary
+│   │       ├── dashboard.js      # Dashboard controller
+│   │       ├── account.js        # Account page controller
+│   │       ├── archive.js        # Archive page controller
+│   │       └── register.js       # Register page controller
 │   └── package.json      # Dependencies
 ├── frontend/              # Next.js app (DEPRECATED - use express-frontend)
 └── start.sh              # Startup script for both services
