@@ -5,6 +5,13 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
 
 ## Recent Changes (November 16, 2025)
 
+### Latest Updates: Enhanced Workspace Editor ✅
+- **Editor-First Layout**: Workspace page now shows rich text editor immediately on load
+- **Improved UX**: Removed empty drafts list barrier - users can start typing right away
+- **Optimal Display**: Editor has 500px minimum height for comfortable 100+ word display
+- **Easy Navigation**: Added "My Drafts" button to access saved drafts without losing editor access
+- **Complete Features**: Full Tamil text editor with autocomplete, Gemini AI grammar checking, and AI suggestions panel
+
 ### Vercel to Replit Migration Completed ✅
 - **Backend**: Go 1.24 server running on port 8080
 - **Frontend**: Next.js 16 running on port 5000  

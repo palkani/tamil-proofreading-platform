@@ -269,7 +269,7 @@ export default function SubmitPage() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const pollingRef = useRef<number | null>(null);
   const [recentSubmissions, setRecentSubmissions] = useState<Submission[]>([]);
-  const [mode, setMode] = useState<'list' | 'editor'>('list');
+  const [mode, setMode] = useState<'list' | 'editor'>('editor');
   const [infoMessage, setInfoMessage] = useState('');
   const [archivingId, setArchivingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1201,9 +1201,21 @@ export default function SubmitPage() {
               <div className="grid h-full gap-8 items-stretch auto-rows-[minmax(0,1fr)] xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
                 <section className="flex h-full flex-col overflow-hidden rounded-[28px] border border-[#EEF2FF] bg-white shadow-[0_20px_60px_rgba(79,70,229,0.08)]">
                   <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#EFF2F6] px-10 py-6">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.5em] text-[#A0AEC0]">Editor</p>
-                      <h2 className="text-3xl font-bold text-[#0F172A]">Focus writing mode</h2>
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => setMode('list')}
+                        className="inline-flex items-center gap-2 rounded-xl border-2 border-[#E2E8F0] bg-white px-4 py-2 text-sm font-medium text-[#475569] shadow-sm hover:bg-[#F8FAFC] hover:border-[#4F46E5] hover:text-[#4F46E5] transition-all duration-200"
+                        title="View all drafts"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                        </svg>
+                        My Drafts
+                      </button>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.5em] text-[#A0AEC0]">Editor</p>
+                        <h2 className="text-3xl font-bold text-[#0F172A]">Focus writing mode</h2>
+                      </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 text-sm text-[#475569]">
                       <div className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-white px-3 py-1.5 shadow-sm">
@@ -1222,7 +1234,7 @@ export default function SubmitPage() {
                     </div>
                   </div>
                   <div className="flex flex-1 min-h-0 flex-col overflow-hidden px-10 py-6">
-                    <div className="flex-1 min-h-0 overflow-hidden">
+                    <div className="flex-1 min-h-[500px] overflow-hidden">
                       {mode === 'editor' ? (
                         <RichTextEditor
                           key={`editor-${submission?.id || 'new'}`}
