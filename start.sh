@@ -15,9 +15,9 @@ BACKEND_PID=$!
 echo "Waiting for backend to start..."
 sleep 3
 
-echo "Starting frontend on port 5000..."
-cd frontend
-npm run dev &
+echo "Starting Express frontend on port 5000..."
+cd express-frontend
+npm start &
 FRONTEND_PID=$!
 
 wait $BACKEND_PID $FRONTEND_PID
