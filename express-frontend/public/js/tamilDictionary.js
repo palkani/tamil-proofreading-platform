@@ -46,5 +46,5 @@ const tamilDictionary = [
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = tamil Dictionary;
+  module.exports = tamilDictionary;
 }
