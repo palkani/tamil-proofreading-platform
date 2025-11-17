@@ -126,51 +126,87 @@ class TamilEditor {
   }
 
   insertSuggestion(partialWord, fullWord) {
+    console.log('Inserting suggestion:', { partialWord, fullWord });
+    
     const selection = window.getSelection();
-    if (!selection.rangeCount) return;
+    if (!selection.rangeCount) {
+      console.error('No selection range');
+      return;
+    }
 
-    const range = selection.getRangeAt(0);
-    let textNode = range.startContainer;
-    
-    // If we're in an element node, get the text node
-    if (textNode.nodeType === Node.ELEMENT_NODE) {
-      // Create a text node if needed
-      if (!textNode.firstChild || textNode.firstChild.nodeType !== Node.TEXT_NODE) {
-        const newTextNode = document.createTextNode('');
-        textNode.appendChild(newTextNode);
-        textNode = newTextNode;
-      } else {
-        textNode = textNode.firstChild;
+    try {
+      // Focus the editor first
+      this.editor.focus();
+      
+      // Get current selection
+      const range = selection.getRangeAt(0);
+      const currentNode = range.startContainer;
+      
+      // Get the text content and cursor position
+      let textContent = '';
+      let cursorOffset = range.startOffset;
+      
+      if (currentNode.nodeType === Node.TEXT_NODE) {
+        textContent = currentNode.textContent;
+      } else if (currentNode.nodeType === Node.ELEMENT_NODE) {
+        // If in element, get text from first child or create one
+        if (currentNode.childNodes.length > 0 && currentNode.childNodes[0].nodeType === Node.TEXT_NODE) {
+          textContent = currentNode.childNodes[0].textContent;
+        }
       }
+      
+      console.log('Current text:', textContent, 'Cursor at:', cursorOffset);
+      
+      // Find where the partial word starts
+      let wordStart = cursorOffset;
+      while (wordStart > 0 && textContent[wordStart - 1] && !/[\s\n]/.test(textContent[wordStart - 1])) {
+        wordStart--;
+      }
+      
+      console.log('Word starts at:', wordStart);
+      
+      // Create the new text with replacement
+      const before = textContent.substring(0, wordStart);
+      const after = textContent.substring(cursorOffset);
+      const newText = before + fullWord + ' ';
+      
+      console.log('Replacing with:', newText);
+      
+      // Delete the partial word by selecting it
+      const deleteRange = document.createRange();
+      
+      if (currentNode.nodeType === Node.TEXT_NODE) {
+        deleteRange.setStart(currentNode, wordStart);
+        deleteRange.setEnd(currentNode, cursorOffset);
+      } else {
+        // For element nodes, work with first text child
+        const textNode = currentNode.childNodes[0] || currentNode;
+        deleteRange.setStart(textNode, wordStart);
+        deleteRange.setEnd(textNode, cursorOffset);
+      }
+      
+      deleteRange.deleteContents();
+      
+      // Insert the Tamil word with a space
+      const tamilNode = document.createTextNode(fullWord + ' ');
+      deleteRange.insertNode(tamilNode);
+      
+      // Move cursor after the inserted text
+      const newRange = document.createRange();
+      newRange.setStartAfter(tamilNode);
+      newRange.collapse(true);
+      
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+      
+      console.log('Insertion complete');
+      
+      // Trigger change event
+      this.onContentChange();
+      
+    } catch (error) {
+      console.error('Error inserting suggestion:', error);
     }
-    
-    const text = textNode.textContent || '';
-    const cursorPos = range.startOffset;
-
-    // Find the start of the partial word
-    let startPos = cursorPos;
-    while (startPos > 0 && text[startPos - 1] && !/\s/.test(text[startPos - 1])) {
-      startPos--;
-    }
-
-    // Replace the partial word with the Tamil word
-    const beforeWord = text.substring(0, startPos);
-    const afterWord = text.substring(cursorPos);
-    const newText = beforeWord + fullWord + ' ' + afterWord;
-    
-    textNode.textContent = newText;
-
-    // Move cursor to after the inserted word (including the space)
-    const newCursorPos = startPos + fullWord.length + 1;
-    range.setStart(textNode, newCursorPos);
-    range.setEnd(textNode, newCursorPos);
-    range.collapse(true);
-    
-    selection.removeAllRanges();
-    selection.addRange(range);
-
-    // Trigger content change
-    this.onContentChange();
   }
 
   getPlainText() {
