@@ -5,7 +5,16 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
 
 ## Recent Changes (November 17, 2025)
 
-### Latest Updates: Enhanced Autocomplete + Fixed Draft Navigation ✅
+### Latest Updates: Google Input Tools-Style Phonetic Transliteration ✅
+- **Multi-Variant Phonetic Transliteration**: Type English, see multiple Tamil variations like Google Input Tools!
+  - Type "thendral" → Get suggestions: தென்றல், தென்றால், தேறல், etc.
+  - Type "vanakkam" → Get suggestions: வனக்கம், வனகம், etc.
+  - Generates 6+ phonetic variations for each English input
+  - Handles ambiguous characters: n → [ந, ன, ண], th → [த, ட], r → [ர, ற], l → [ல, ள]
+  - Vowel length variations: Short → Long (e→ē, o→ō, i→ī, u→ū)
+  - Real-time suggestions as you type (not just on space)
+  
+### Previous Updates: Enhanced Autocomplete + Fixed Draft Navigation ✅
 - **Enhanced Autocomplete System**:
   - ✅ Fixed: Autocomplete now disappears when you delete/backspace text
   - ✅ Improved: Better word suggestions with priority-based matching
