@@ -15,6 +15,16 @@
     animation: fade-in-up 0.8s ease-out forwards;
     opacity: 0;
   }
+  
+  #home-editor:empty:before {
+    content: attr(placeholder);
+    color: #9ca3af;
+    pointer-events: none;
+  }
+  
+  #home-editor:focus:before {
+    content: '';
+  }
 </style>
 
 <!-- Navigation (only for logged-in users) -->
@@ -72,23 +82,59 @@
           <% } %>
         </div>
         
-        <!-- Editor Preview -->
-        <div class="mt-16 max-w-4xl mx-auto">
-          <div class="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
-            <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center gap-2">
-              <div class="w-3 h-3 rounded-full bg-red-400"></div>
-              <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
-              <div class="w-3 h-3 rounded-full bg-green-400"></div>
-            </div>
-            <div class="p-8 text-left">
-              <div class="text-gray-700 text-lg leading-relaxed mb-4">
-                உயர்தனிக் செம்மொழியாம் தமிழ்மொழியில் எழுது
+        <!-- Interactive Editor -->
+        <div class="mt-16 max-w-7xl mx-auto">
+          <div class="flex flex-col lg:flex-row gap-6">
+            <!-- Editor Panel -->
+            <div class="flex-1 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+              <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                  <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                  <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                  <span class="ml-2 text-sm font-semibold text-gray-700">Try it now!</span>
+                </div>
+                <span class="text-xs text-gray-500" id="home-char-count">0 / 200</span>
               </div>
-              <div class="border-l-4 border-orange-500 pl-4 py-2 bg-orange-50 rounded">
-                <p class="text-sm text-orange-800 font-semibold mb-1">AI Assistant</p>
-                <p class="text-sm text-gray-600">Grammar and style suggestions will show up here as you write.</p>
+              <div class="p-6">
+                <div 
+                  id="home-editor" 
+                  contenteditable="true"
+                  class="min-h-[200px] text-gray-700 text-lg leading-relaxed focus:outline-none"
+                  placeholder="Type in English (e.g., vanakkam) or paste Tamil text..."
+                ></div>
               </div>
             </div>
+
+            <!-- AI Assistant Panel -->
+            <div class="lg:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+              <div class="bg-orange-50 border-b border-orange-200 px-6 py-4">
+                <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <svg class="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                  AI Assistant
+                </h3>
+              </div>
+              <div id="home-suggestions-container" class="p-6">
+                <div class="text-center text-gray-500 py-8">
+                  <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                  </svg>
+                  <p class="text-sm">Type or paste Tamil text in the editor</p>
+                  <p class="text-xs text-gray-400 mt-2">AI suggestions appear automatically as you type</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="text-center mt-6">
+            <p class="text-sm text-gray-500">
+              Try typing in English like "vanakkam" or paste Tamil text to see AI-powered suggestions!
+              <% if (!user) { %>
+                <a href="/login" class="text-orange-600 font-semibold hover:text-orange-700">Sign up free</a> for unlimited access.
+              <% } %>
+            </p>
           </div>
         </div>
       </div>
@@ -547,5 +593,7 @@
     </div>
   </section>
 </div>
+
+<script src="/js/home-editor.js"></script>
 
 <%- include('../partials/footer') %>
