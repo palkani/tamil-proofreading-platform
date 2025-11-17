@@ -1,11 +1,37 @@
 // English to Tamil Transliteration
 // Based on standard Tamil romanization (ISO 15919 and common typing systems)
+// Enhanced with multi-variant generation for Google Input Tools-style suggestions
 
-const tamilConsonants = {
-  'k': 'க', 'ng': 'ங', 'ch': 'ச', 'nj': 'ஞ', 'ñ': 'ஞ',
-  't': 'ட', 'N': 'ண', 'th': 'த', 'n': 'ந', 'p': 'ப',
-  'm': 'ம', 'y': 'ய', 'r': 'ர', 'l': 'ல', 'v': 'வ',
-  'zh': 'ழ', 'L': 'ள', 'R': 'ற', 'n': 'ன'
+// Consonant mappings with variants for ambiguous cases
+const tamilConsonantMap = {
+  'k': { primary: 'க', variants: ['க'] },
+  'g': { primary: 'க', variants: ['க', 'ங'] },
+  'ng': { primary: 'ங', variants: ['ங'] },
+  'ch': { primary: 'ச', variants: ['ச'] },
+  's': { primary: 'ச', variants: ['ச', 'ஸ'] },
+  'j': { primary: 'ஜ', variants: ['ஜ', 'ச'] },
+  'nj': { primary: 'ஞ', variants: ['ஞ'] },
+  'ñ': { primary: 'ஞ', variants: ['ஞ'] },
+  't': { primary: 'ட', variants: ['ட', 'த'] },
+  'th': { primary: 'த', variants: ['த', 'ட'] },
+  'd': { primary: 'ட', variants: ['ட', 'த'] },
+  'N': { primary: 'ண', variants: ['ண'] },
+  'n': { primary: 'ந', variants: ['ந', 'ன', 'ண'] },
+  'p': { primary: 'ப', variants: ['ப'] },
+  'b': { primary: 'ப', variants: ['ப'] },
+  'm': { primary: 'ம', variants: ['ம'] },
+  'y': { primary: 'ய', variants: ['ய'] },
+  'r': { primary: 'ர', variants: ['ர', 'ற'] },
+  'l': { primary: 'ல', variants: ['ல', 'ள'] },
+  'v': { primary: 'வ', variants: ['வ'] },
+  'w': { primary: 'வ', variants: ['வ'] },
+  'zh': { primary: 'ழ', variants: ['ழ'] },
+  'L': { primary: 'ள', variants: ['ள'] },
+  'R': { primary: 'ற', variants: ['ற'] },
+  'z': { primary: 'ழ', variants: ['ழ', 'ஜ'] },
+  'h': { primary: 'ஹ', variants: ['ஹ', ''] },
+  'f': { primary: 'ஃப', variants: ['ஃப'] },
+  'sh': { primary: 'ஷ', variants: ['ஷ', 'ச'] }
 };
 
 const tamilVowels = {
@@ -27,6 +53,14 @@ const tamilVowelSigns = {
   'ai': 'ை',
   'o': 'ொ', 'oo': 'ோ', 'O': 'ோ',
   'au': 'ௌ'
+};
+
+// Legacy consonants for backward compatibility
+const tamilConsonants = {
+  'k': 'க', 'ng': 'ங', 'ch': 'ச', 'nj': 'ஞ', 'ñ': 'ஞ',
+  't': 'ட', 'N': 'ண', 'th': 'த', 'n': 'ந', 'p': 'ப',
+  'm': 'ம', 'y': 'ய', 'r': 'ர', 'l': 'ல', 'v': 'வ',
+  'zh': 'ழ', 'L': 'ள', 'R': 'ற', 'n': 'ன'
 };
 
 // Common word mappings for better accuracy (100+ words)
@@ -257,6 +291,138 @@ function transliterateToTamil(englishText) {
 }
 
 /**
+ * Generate multiple Tamil transliteration variants (Google Input Tools style)
+ * @param {string} englishText - English text to transliterate
+ * @returns {Array} - Array of Tamil variants
+ */
+function generateTamilVariants(englishText) {
+  if (!englishText || englishText.length < 2) return [];
+  
+  const lower = englishText.toLowerCase();
+  const variants = new Set();
+  
+  // Add the primary transliteration first
+  const primary = transliterateToTamil(lower);
+  if (primary && primary !== lower) {
+    variants.add(primary);
+  }
+  
+  // Generate phonetic variations with different consonant/vowel combinations
+  // For "thendral" → should generate: தென்றல், தென்றால், தேற்றல், etc.
+  
+  let result = '';
+  let i = 0;
+  
+  while (i < lower.length) {
+    let matched = false;
+    
+    // Try multi-character patterns first (longest match)
+    for (let len = 4; len >= 1; len--) {
+      if (i + len > lower.length) continue;
+      const substr = lower.substring(i, i + len);
+      
+      // Check for consonants with variants
+      if (tamilConsonantMap[substr]) {
+        const consonantData = tamilConsonantMap[substr];
+        
+        // Generate variants for each consonant option
+        consonantData.variants.forEach((consonant, idx) => {
+          if (idx > 0 && variants.size >= 5) return; // Limit variations
+          
+          let variantResult = result + consonant;
+          
+          // Look ahead for vowel
+          let nextIdx = i + len;
+          let hasVowel = false;
+          
+          // Try to match vowel patterns
+          for (let vlen = 2; vlen >= 1; vlen--) {
+            if (nextIdx + vlen > lower.length) continue;
+            const vowelSubstr = lower.substring(nextIdx, nextIdx + vlen);
+            
+            if (tamilVowelSigns[vowelSubstr]) {
+              variantResult += tamilVowelSigns[vowelSubstr];
+              
+              // Add pulli if followed by consonant
+              if (nextIdx + vlen < lower.length) {
+                const nextChar = lower[nextIdx + vlen];
+                if (tamilConsonantMap[nextChar] || tamilConsonantMap[lower.substring(nextIdx + vlen, nextIdx + vlen + 2)]) {
+                  variantResult += '்';
+                }
+              }
+              
+              // Recursively process rest of string
+              const remaining = lower.substring(nextIdx + vlen);
+              if (remaining) {
+                const restVariants = generateTamilVariants(remaining);
+                if (restVariants.length > 0) {
+                  variants.add(variantResult + restVariants[0].replace(/^.*$/, ''));
+                } else {
+                  variants.add(variantResult);
+                }
+              } else {
+                variants.add(variantResult);
+              }
+              
+              hasVowel = true;
+              break;
+            }
+          }
+          
+          // If no explicit vowel, use inherent 'a'
+          if (!hasVowel && idx === 0) {
+            result = variantResult;
+          }
+        });
+        
+        i += len;
+        matched = true;
+        break;
+      }
+      
+      // Check for standalone vowels
+      if (tamilVowels[substr]) {
+        result += tamilVowels[substr];
+        i += len;
+        matched = true;
+        break;
+      }
+    }
+    
+    if (!matched) {
+      i++;
+    }
+  }
+  
+  if (variants.size === 0 && result) {
+    variants.add(result);
+  }
+  
+  // Add vowel length variations for common patterns
+  const variantArray = Array.from(variants);
+  const lengthVariants = new Set(variantArray);
+  
+  variantArray.forEach(v => {
+    // Short → Long vowel variations
+    if (v.includes('ெ')) {
+      lengthVariants.add(v.replace(/ெ/g, 'ே')); // e → ee
+    }
+    if (v.includes('ொ')) {
+      lengthVariants.add(v.replace(/ொ/g, 'ோ')); // o → oo
+    }
+    if (v.includes('ி')) {
+      lengthVariants.add(v.replace(/ி/g, 'ீ')); // i → ii
+    }
+    if (v.includes('ு')) {
+      lengthVariants.add(v.replace(/ு/g, 'ூ')); // u → uu
+    }
+  });
+  
+  // Return top 6 unique variants
+  return Array.from(lengthVariants).slice(0, 6);
+}
+
+/**
  * Get Tamil word suggestions based on English input
  * @param {string} englishInput - English input text
  * @param {Array} tamilWords - Array of Tamil words to search
@@ -296,11 +462,19 @@ function getTamilSuggestionsFromEnglish(englishInput, tamilWords) {
     }
   });
   
-  // 4. Try transliteration for phonetic matching
+  // 4. PHONETIC VARIANTS: Generate multiple Tamil variations (Google Input Tools style)
+  const phoneticVariants = generateTamilVariants(lower);
+  phoneticVariants.forEach(variant => {
+    addSuggestion(variant, 85);
+  });
+  
+  // 5. Try single transliteration for phonetic matching
   const transliterated = transliterateToTamil(lower);
   
   // Find Tamil words that start with the transliterated text
   if (transliterated && transliterated !== lower) {
+    addSuggestion(transliterated, 75);
+    
     tamilWords.forEach(word => {
       if (word.startsWith(transliterated)) {
         addSuggestion(word, 70);
@@ -308,7 +482,7 @@ function getTamilSuggestionsFromEnglish(englishInput, tamilWords) {
     });
   }
   
-  // 5. Partial transliteration (first 2-3 chars)
+  // 6. Partial transliteration (first 2-3 chars)
   if (lower.length >= 2) {
     const partialTranslit = transliterateToTamil(lower.substring(0, Math.min(3, lower.length)));
     if (partialTranslit && partialTranslit !== lower.substring(0, Math.min(3, lower.length))) {
