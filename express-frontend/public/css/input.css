@@ -72,6 +72,18 @@
   border-color: #ea580c; /* orange-600 */
 }
 
+.toggle-btn {
+  @apply px-3 py-1.5;
+}
+
+.toggle-btn.active {
+  @apply bg-orange-600 text-white;
+}
+
+.toggle-btn:not(.active) {
+  @apply bg-gray-100 text-gray-500;
+}
+
 .toolbar-select {
   @apply px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none cursor-pointer hover:border-orange-400 transition-colors;
 }
