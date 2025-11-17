@@ -16,18 +16,14 @@ The platform is built with a Go backend (port 8080) and an Express.js frontend w
 - **Custom Tamil Logo:** Features "தமிழ்" text logo used throughout site including navigation header, footer, homepage, and browser favicon.
 - **Responsive Design:** Implemented with Tailwind CSS for optimal viewing on various devices.
 - **AI Assistant Panel:** Displays AI suggestions in a professional panel with suggestion cards.
-- **Tamil Editor:** A rich text editor with a unified header, simplified toolbar, feature toggles for Tamil typing and AI proofreading, and a footer status bar showing word count and accepted suggestions.
+- **Tamil Editor:** A rich text editor with a unified header, simplified toolbar, and a footer status bar showing word count and accepted suggestions.
 
 **Technical Implementations & Feature Specifications:**
-- **Feature Toggles (NEW - Nov 17, 2025):**
-    - **Tamil Typing Toggle:** Orange toggle button in toolbar to enable/disable English-to-Tamil conversion (Space key conversion and paste conversion). Active by default.
-    - **AI Proofreading Toggle:** Orange toggle button in toolbar to enable/disable automatic AI grammar checking. When disabled, clears existing suggestions and prevents API calls. Active by default.
-    - Both toggles provide visual feedback with orange background when active, gray when inactive.
 - **Tiered Model Workflow:** Supports advanced AI proofreading capabilities.
 - **Phonetic Transliteration:** Google Input Tools-style phonetic transliteration allows typing English and getting multiple Tamil variations in real-time (e.g., "thendral" → தென்றல், தென்றால்). It handles ambiguous characters and vowel length variations.
 - **Enhanced Autocomplete System:** Provides smart, priority-based word suggestions (exact, partial, phonetic matches) with real-time feedback, disappearing on backspace/delete.
-- **Google-Style Tamil Typing:** Auto-converts English phonetic input to Tamil script upon pressing space (e.g., "vanakkam" + Space → "வணக்கம்"). Can be toggled on/off via toolbar button.
-- **Paste Conversion:** Automatically converts pasted English paragraphs into Tamil while preserving punctuation and formatting. Can be toggled on/off via toolbar button.
+- **Google-Style Tamil Typing:** Auto-converts English phonetic input to Tamil script upon pressing space (e.g., "vanakkam" + Space → "வணக்கம்").
+- **Paste Conversion:** Automatically converts pasted English paragraphs into Tamil while preserving punctuation and formatting.
 - **Scalable Autocomplete System (COMPLETED - Nov 17, 2025):**
     - **Database-Backed Dictionary:** Created `tamil_words` PostgreSQL table to store millions of Tamil words with transliterations, frequencies, categories, and metadata.
     - **Server-Side API:** Three endpoints for complete word management:

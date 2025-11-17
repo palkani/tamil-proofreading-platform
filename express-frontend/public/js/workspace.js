@@ -16,19 +16,15 @@ class WorkspaceController {
     this.lastAnalyzedText = '';
     this.isAnalyzing = false;
     this.autoAnalysisEnabled = true; // Enable auto-analysis by default
-    
-    // Feature toggles
-    this.tamilTypingEnabled = true; // Enable Tamil typing by default
-    this.aiProofreadingEnabled = true; // Enable AI proofreading by default
 
     this.init();
   }
 
   init() {
-    // Initialize editor with workspace reference for toggle states
+    // Initialize editor
     const editorElement = document.getElementById('editor');
     if (editorElement) {
-      this.editor = new TamilEditor(editorElement, this);
+      this.editor = new TamilEditor(editorElement);
       this.editor.onChange = () => this.handleEditorChange();
     }
 
@@ -106,50 +102,6 @@ class WorkspaceController {
     if (showDraftsBtn) {
       showDraftsBtn.addEventListener('click', () => this.showDraftsList());
     }
-    
-    // Tamil Typing Toggle
-    const tamilTypingToggle = document.getElementById('tamil-typing-toggle');
-    if (tamilTypingToggle) {
-      tamilTypingToggle.addEventListener('click', () => this.toggleTamilTyping());
-    }
-    
-    // AI Proofreading Toggle
-    const aiProofreadingToggle = document.getElementById('ai-proofreading-toggle');
-    if (aiProofreadingToggle) {
-      aiProofreadingToggle.addEventListener('click', () => this.toggleAIProofreading());
-    }
-  }
-  
-  toggleTamilTyping() {
-    this.tamilTypingEnabled = !this.tamilTypingEnabled;
-    const btn = document.getElementById('tamil-typing-toggle');
-    if (btn) {
-      if (this.tamilTypingEnabled) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
-    }
-    console.log('Tamil typing:', this.tamilTypingEnabled ? 'enabled' : 'disabled');
-  }
-  
-  toggleAIProofreading() {
-    this.aiProofreadingEnabled = !this.aiProofreadingEnabled;
-    const btn = document.getElementById('ai-proofreading-toggle');
-    if (btn) {
-      if (this.aiProofreadingEnabled) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
-    }
-    
-    // Clear existing suggestions when disabled
-    if (!this.aiProofreadingEnabled && this.suggestionsPanel) {
-      this.suggestionsPanel.clearSuggestions();
-    }
-    
-    console.log('AI proofreading:', this.aiProofreadingEnabled ? 'enabled' : 'disabled');
   }
 
   handleEditorChange() {
@@ -163,11 +115,6 @@ class WorkspaceController {
   }
   
   scheduleAutoAnalysis() {
-    // Skip if AI proofreading is disabled
-    if (!this.aiProofreadingEnabled) {
-      return;
-    }
-    
     // Clear existing timeout
     if (this.analysisTimeout) {
       clearTimeout(this.analysisTimeout);

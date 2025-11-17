@@ -72,18 +72,6 @@
   border-color: #ea580c; /* orange-600 */
 }
 
-.toggle-btn {
-  @apply px-3 py-1.5;
-}
-
-.toggle-btn.active {
-  @apply bg-orange-600 text-white;
-}
-
-.toggle-btn:not(.active) {
-  @apply bg-gray-100 text-gray-500;
-}
-
 /* Toolbar scrollbar styling */
 .overflow-x-auto::-webkit-scrollbar {
   height: 6px;
