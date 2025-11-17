@@ -183,7 +183,7 @@ class TamilEditor {
       const items = autocompleteBox.querySelectorAll('div.px-4');
       items.forEach((item, idx) => {
         if (idx === selectedIndex) {
-          item.style.backgroundColor = '#3b82f6'; // Blue-500
+          item.style.backgroundColor = '#ea580c'; // Blue-500
           item.style.color = '#ffffff';
           item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         } else {
@@ -353,7 +353,7 @@ class TamilEditor {
     if (existing) existing.remove();
 
     const box = document.createElement('div');
-    box.className = 'autocomplete-box bg-white border-2 border-blue-200 rounded-lg shadow-xl z-50';
+    box.className = 'autocomplete-box bg-white border-2 border-orange-200 rounded-lg shadow-xl z-50';
     box.style.cssText = 'position: fixed; max-height: 250px; overflow-y: auto; min-width: 200px;';
 
     suggestions.forEach((suggestion, index) => {
@@ -364,7 +364,7 @@ class TamilEditor {
       
       // Add hover effect with theme color
       item.addEventListener('mouseenter', () => {
-        item.style.backgroundColor = '#3b82f6'; // Blue-500
+        item.style.backgroundColor = '#ea580c'; // Blue-500
         item.style.color = '#ffffff';
         item.style.transform = 'translateX(4px)';
       });
@@ -382,7 +382,7 @@ class TamilEditor {
       
       // Auto-select first item
       if (index === 0) {
-        item.style.backgroundColor = '#dbeafe'; // Blue-100
+        item.style.backgroundColor = '#fed7aa'; // Blue-100
       }
       
       box.appendChild(item);

@@ -31,7 +31,7 @@ async function loadDashboard() {
       
       row.innerHTML = `
         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-          <span class="text-blue-600 hover:text-blue-800 font-medium">
+          <span class="text-orange-600 hover:text-orange-800 font-medium">
             ${submission.id}
           </span>
         </td>

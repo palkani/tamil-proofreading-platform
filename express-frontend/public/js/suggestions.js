@@ -149,7 +149,7 @@ class SuggestionsPanel {
     card.innerHTML = `
       <div class="flex items-start justify-between mb-2">
         <h5 class="font-medium text-gray-900 text-sm">${escapeHtml(suggestion.title)}</h5>
-        <span class="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700">${this.getTypeLabel(suggestion.type)}</span>
+        <span class="text-xs px-2 py-1 rounded-full bg-orange-50 text-orange-700">${this.getTypeLabel(suggestion.type)}</span>
       </div>
       
       ${originalText || suggestedText ? `
@@ -173,7 +173,7 @@ class SuggestionsPanel {
       
       <div class="flex gap-2">
         ${suggestion.onApply ? `
-          <button class="apply-btn flex-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
+          <button class="apply-btn flex-1 px-3 py-1.5 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700 transition-colors">
             Apply
           </button>
         ` : ''}
