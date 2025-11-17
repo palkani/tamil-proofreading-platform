@@ -67,18 +67,6 @@ class WorkspaceController {
   }
 
   setupEventListeners() {
-    // Check with Gemini AI button
-    const geminiBtn = document.getElementById('check-gemini-btn');
-    if (geminiBtn) {
-      geminiBtn.addEventListener('click', () => this.checkWithGemini());
-    }
-
-    // Submit for proofreading button
-    const submitBtn = document.getElementById('submit-proofreading-btn');
-    if (submitBtn) {
-      submitBtn.addEventListener('click', () => this.submitForProofreading());
-    }
-
     // Accept all button
     const acceptAllBtn = document.getElementById('accept-all-btn');
     if (acceptAllBtn) {
