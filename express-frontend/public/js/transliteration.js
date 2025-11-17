@@ -292,6 +292,7 @@ function transliterateToTamil(englishText) {
 
 /**
  * Generate multiple Tamil transliteration variants (Google Input Tools style)
+ * Fixed to properly build complete Tamil words with correct syllable structure
  * @param {string} englishText - English text to transliterate
  * @returns {Array} - Array of Tamil variants
  */
@@ -299,127 +300,121 @@ function generateTamilVariants(englishText) {
   if (!englishText || englishText.length < 2) return [];
   
   const lower = englishText.toLowerCase();
-  const variants = new Set();
+  const allVariants = [];
   
-  // Add the primary transliteration first
-  const primary = transliterateToTamil(lower);
-  if (primary && primary !== lower) {
-    variants.add(primary);
-  }
-  
-  // Generate phonetic variations with different consonant/vowel combinations
-  // For "thendral" → should generate: தென்றல், தென்றால், தேற்றல், etc.
-  
-  let result = '';
-  let i = 0;
-  
-  while (i < lower.length) {
+  // Helper function to build Tamil syllables recursively
+  const buildVariants = (input, position, current) => {
+    // Base case: reached end of input
+    if (position >= input.length) {
+      if (current.length > 0) {
+        allVariants.push(current);
+      }
+      return;
+    }
+    
+    // Limit total variants to prevent explosion
+    if (allVariants.length >= 10) return;
+    
     let matched = false;
     
-    // Try multi-character patterns first (longest match)
-    for (let len = 4; len >= 1; len--) {
-      if (i + len > lower.length) continue;
-      const substr = lower.substring(i, i + len);
+    // Try to match consonant clusters (longest first)
+    for (let cLen = 4; cLen >= 1; cLen--) {
+      if (position + cLen > input.length) continue;
       
-      // Check for consonants with variants
-      if (tamilConsonantMap[substr]) {
-        const consonantData = tamilConsonantMap[substr];
+      const consonantStr = input.substring(position, position + cLen);
+      const consonantData = tamilConsonantMap[consonantStr];
+      
+      if (!consonantData) continue;
+      
+      // Look ahead for vowel
+      let vowelMatched = false;
+      for (let vLen = 2; vLen >= 1; vLen--) {
+        const vowelPos = position + cLen;
+        if (vowelPos + vLen > input.length) continue;
         
-        // Generate variants for each consonant option
-        consonantData.variants.forEach((consonant, idx) => {
-          if (idx > 0 && variants.size >= 5) return; // Limit variations
-          
-          let variantResult = result + consonant;
-          
-          // Look ahead for vowel
-          let nextIdx = i + len;
-          let hasVowel = false;
-          
-          // Try to match vowel patterns
-          for (let vlen = 2; vlen >= 1; vlen--) {
-            if (nextIdx + vlen > lower.length) continue;
-            const vowelSubstr = lower.substring(nextIdx, nextIdx + vlen);
+        const vowelStr = input.substring(vowelPos, vowelPos + vLen);
+        const vowelSign = tamilVowelSigns[vowelStr];
+        
+        if (vowelSign !== undefined) {
+          // Build consonant + vowel syllable variants
+          // CRITICAL: When vowel sign is present, NEVER add pulli
+          consonantData.variants.slice(0, 2).forEach(cons => {  // Limit to 2 consonant variants
+            const syllable = cons + vowelSign;
+            const nextPos = vowelPos + vLen;
             
-            if (tamilVowelSigns[vowelSubstr]) {
-              variantResult += tamilVowelSigns[vowelSubstr];
-              
-              // Add pulli if followed by consonant
-              if (nextIdx + vlen < lower.length) {
-                const nextChar = lower[nextIdx + vlen];
-                if (tamilConsonantMap[nextChar] || tamilConsonantMap[lower.substring(nextIdx + vlen, nextIdx + vlen + 2)]) {
-                  variantResult += '்';
-                }
-              }
-              
-              // Recursively process rest of string
-              const remaining = lower.substring(nextIdx + vlen);
-              if (remaining) {
-                const restVariants = generateTamilVariants(remaining);
-                if (restVariants.length > 0) {
-                  variants.add(variantResult + restVariants[0].replace(/^.*$/, ''));
-                } else {
-                  variants.add(variantResult);
-                }
-              } else {
-                variants.add(variantResult);
-              }
-              
-              hasVowel = true;
-              break;
-            }
-          }
+            // Vowel sign present = NO pulli (e.g., "தெ" in "தென்றல்")
+            buildVariants(input, nextPos, current + syllable);
+          });
           
-          // If no explicit vowel, use inherent 'a'
-          if (!hasVowel && idx === 0) {
-            result = variantResult;
-          }
-        });
-        
-        i += len;
-        matched = true;
-        break;
+          vowelMatched = true;
+          matched = true;
+          break;
+        }
       }
       
-      // Check for standalone vowels
-      if (tamilVowels[substr]) {
-        result += tamilVowels[substr];
-        i += len;
+      // If no vowel found, use inherent 'a' (default vowel)
+      if (!vowelMatched) {
+        consonantData.variants.slice(0, 1).forEach(cons => {  // Primary consonant only
+          const nextPos = position + cLen;
+          
+          // Add pulli ONLY when inherent 'a' AND followed by consonant
+          // Example: "த்" in "த்மிழ்" but NOT in "தமிழ்"
+          const isFollowedByConsonant = nextPos < input.length &&
+            (tamilConsonantMap[input[nextPos]] ||
+             tamilConsonantMap[input.substring(nextPos, nextPos + 2)]);
+          
+          const syllable = isFollowedByConsonant ? (cons + '்') : cons;
+          buildVariants(input, nextPos, current + syllable);
+        });
         matched = true;
-        break;
+      }
+      
+      if (matched) break;
+    }
+    
+    // Try standalone vowels
+    if (!matched) {
+      for (let vLen = 2; vLen >= 1; vLen--) {
+        if (position + vLen > input.length) continue;
+        
+        const vowelStr = input.substring(position, position + vLen);
+        const vowelChar = tamilVowels[vowelStr];
+        
+        if (vowelChar) {
+          buildVariants(input, position + vLen, current + vowelChar);
+          matched = true;
+          break;
+        }
       }
     }
     
+    // Skip unknown character
     if (!matched) {
-      i++;
+      buildVariants(input, position + 1, current);
     }
-  }
+  };
   
-  if (variants.size === 0 && result) {
-    variants.add(result);
-  }
+  // Start building variants
+  buildVariants(lower, 0, '');
   
-  // Add vowel length variations for common patterns
-  const variantArray = Array.from(variants);
-  const lengthVariants = new Set(variantArray);
+  // Add vowel length variations
+  const withLengthVariants = new Set(allVariants);
   
-  variantArray.forEach(v => {
-    // Short → Long vowel variations
-    if (v.includes('ெ')) {
-      lengthVariants.add(v.replace(/ெ/g, 'ே')); // e → ee
+  allVariants.forEach(variant => {
+    // Create long vowel versions
+    if (variant.includes('ெ') && withLengthVariants.size < 8) {
+      withLengthVariants.add(variant.replace(/ெ/g, 'ே')); // e → ee
     }
-    if (v.includes('ொ')) {
-      lengthVariants.add(v.replace(/ொ/g, 'ோ')); // o → oo
+    if (variant.includes('ொ') && withLengthVariants.size < 8) {
+      withLengthVariants.add(variant.replace(/ொ/g, 'ோ')); // o → oo
     }
-    if (v.includes('ி')) {
-      lengthVariants.add(v.replace(/ி/g, 'ீ')); // i → ii
-    }
-    if (v.includes('ு')) {
-      lengthVariants.add(v.replace(/ு/g, 'ூ')); // u → uu
+    if (variant.includes('ா') && withLengthVariants.size < 8) {
+      // a → aa already handled
     }
   });
   
   // Return top 6 unique variants
-  return Array.from(lengthVariants).slice(0, 6);
+  return Array.from(withLengthVariants).slice(0, 6);
 }
 
 /**

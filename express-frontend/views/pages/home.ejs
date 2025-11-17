@@ -6,152 +6,546 @@
     50% { background-position: 100% 50%; }
   }
   
-  @keyframes fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  
-  @keyframes slide-up {
-    from { opacity: 0; transform: translateY(20px); }
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(30px); }
     to { opacity: 1; transform: translateY(0); }
   }
   
-  .animate-fade-in {
-    animation: fade-in 1s ease-in-out;
-  }
-  
-  .animate-slide-up {
-    animation: slide-up 1s ease-in-out;
-  }
-  
-  .gradient-text-purple {
-    background: linear-gradient(135deg, #4F46E5 0%, #6366F1 30%, #8B5CF6 60%, #6366F1 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    background-size: 200% auto;
-    animation: gradient-shift 5s ease infinite;
-    filter: drop-shadow(0 4px 16px rgba(79, 70, 229, 0.4));
-  }
-  
-  .gradient-text-cyan {
-    background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 30%, #10B981 60%, #14B8A6 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    background-size: 200% auto;
-    animation: gradient-shift 5s ease infinite 0.7s;
-    filter: drop-shadow(0 4px 16px rgba(14, 165, 233, 0.4));
+  .section-animate {
+    animation: fade-in-up 0.8s ease-out forwards;
+    opacity: 0;
   }
 </style>
 
-<div class="min-h-screen bg-gray-50 text-gray-900">
-  <!-- Optional Header for logged-in users -->
-  <% if (user) { %>
-    <%- include('../partials/nav', { active: 'home', user: user }) %>
-  <% } %>
+<!-- Navigation (only for logged-in users) -->
+<% if (user) { %>
+  <%- include('../partials/nav', { active: 'home', user: user }) %>
+<% } %>
 
+<div class="min-h-screen bg-white">
   <!-- Hero Section -->
-  <div class="relative max-w-7xl mx-auto px-6 sm:px-12 lg:px-16 pt-32 pb-24 lg:pt-40 lg:pb-32">
-    <div class="text-center space-y-8">
-      <!-- Logo -->
-      <div class="flex justify-center animate-fade-in">
-        <div class="relative">
-          <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-3xl blur-2xl opacity-20 animate-pulse"></div>
-          <div class="relative bg-white rounded-3xl p-4 shadow-xl">
-            <div class="w-36 h-36 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-6xl font-bold">
-              PT
+  <section class="relative bg-gradient-to-b from-blue-50 via-white to-white py-20 md:py-32">
+    <div class="max-w-7xl mx-auto px-6 text-center">
+      <div class="space-y-8">
+        <!-- Logo -->
+        <div class="inline-flex items-center justify-center mb-4">
+          <div class="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-500 rounded-2xl flex items-center justify-center text-white text-3xl font-black shadow-2xl">
+            PT
+          </div>
+        </div>
+        
+        <!-- Main Heading -->
+        <h1 class="text-5xl md:text-7xl font-extrabold text-gray-900 leading-tight">
+          Your AI Writing Partner<br/>
+          <span class="bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 bg-clip-text text-transparent">
+            for Tamil that Shines
+          </span>
+        </h1>
+        
+        <p class="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+          Get instant, context-aware suggestions for grammar, spelling, and style, so you never have to second-guess your writing again.
+        </p>
+        
+        <!-- Language Badge -->
+        <div class="inline-block">
+          <span class="px-6 py-2 bg-blue-100 text-blue-800 rounded-full font-semibold text-sm">
+            தமிழ்
+          </span>
+        </div>
+        
+        <!-- CTA Buttons -->
+        <div class="flex flex-col sm:flex-row gap-4 justify-center items-center pt-6">
+          <% if (user) { %>
+            <a href="/workspace" class="px-8 py-4 bg-blue-600 text-white rounded-full font-semibold text-lg hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+              Open Workspace
+            </a>
+            <a href="/dashboard" class="px-8 py-4 bg-white border-2 border-gray-300 text-gray-700 rounded-full font-semibold text-lg hover:border-blue-600 hover:text-blue-600 transition-all">
+              View Dashboard
+            </a>
+          <% } else { %>
+            <a href="/login" class="px-8 py-4 bg-blue-600 text-white rounded-full font-semibold text-lg hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+              Try ProofTamil Free
+            </a>
+            <a href="/register" class="px-8 py-4 bg-white border-2 border-gray-300 text-gray-700 rounded-full font-semibold text-lg hover:border-blue-600 hover:text-blue-600 transition-all">
+              Sign Up
+            </a>
+          <% } %>
+        </div>
+        
+        <!-- Editor Preview -->
+        <div class="mt-16 max-w-4xl mx-auto">
+          <div class="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+            <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-red-400"></div>
+              <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+              <div class="w-3 h-3 rounded-full bg-green-400"></div>
+            </div>
+            <div class="p-8 text-left">
+              <div class="text-gray-700 text-lg leading-relaxed mb-4">
+                உயர்தனிக் செம்மொழியாம் தமிழ்மொழியில் எழுது
+              </div>
+              <div class="border-l-4 border-blue-500 pl-4 py-2 bg-blue-50 rounded">
+                <p class="text-sm text-blue-800 font-semibold mb-1">AI Assistant</p>
+                <p class="text-sm text-gray-600">Grammar and style suggestions will show up here as you write.</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
-      
-      <!-- Main Title -->
-      <div class="space-y-6 animate-slide-up">
-        <h1 class="text-7xl sm:text-8xl lg:text-9xl font-extrabold tracking-tight leading-none">
-          <div class="flex items-center justify-center gap-4 sm:gap-5 lg:gap-6">
-            <span class="gradient-text-purple font-black" style="letter-spacing: -0.03em; font-weight: 900; line-height: 1;">Proof</span>
-            <span class="gradient-text-cyan font-black" style="letter-spacing: -0.03em; font-weight: 900; line-height: 1;">Tamil</span>
+    </div>
+  </section>
+
+  <!-- Trusted By Section -->
+  <section class="py-12 bg-gray-50">
+    <div class="max-w-7xl mx-auto px-6 text-center">
+      <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+        Trusted by Tamil writers worldwide
+      </h2>
+      <p class="text-lg text-gray-600">
+        Join thousands who write with confidence using AI-powered Tamil language intelligence
+      </p>
+    </div>
+  </section>
+
+  <!-- Features Grid -->
+  <section class="py-20 bg-white">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div class="text-center space-y-4 section-animate" style="animation-delay: 0s">
+          <div class="w-16 h-16 mx-auto bg-blue-100 rounded-2xl flex items-center justify-center text-3xl">
+            🎯
           </div>
-          <span class="text-gray-600 text-4xl sm:text-5xl lg:text-6xl font-bold uppercase mt-3 inline-block" style="letter-spacing: 0.15em; font-weight: 700;">
-            Studio
-          </span>
-        </h1>
-        
-        <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 max-w-5xl mx-auto leading-tight">
-          From Thought to Text — Where AI Meets Tamil Brilliance
+          <h3 class="text-xl font-bold text-gray-900">Tamil-First AI</h3>
+          <p class="text-gray-600">
+            Built from the ground up for Tamil, our AI is trained on the unique nuances of the language.
+          </p>
+        </div>
+
+        <div class="text-center space-y-4 section-animate" style="animation-delay: 0.1s">
+          <div class="w-16 h-16 mx-auto bg-blue-100 rounded-2xl flex items-center justify-center text-3xl">
+            ✍️
+          </div>
+          <h3 class="text-xl font-bold text-gray-900">Beyond Grammar</h3>
+          <p class="text-gray-600">
+            Correct complex grammar, subtle spelling errors, punctuation, style, and tone.
+          </p>
+        </div>
+
+        <div class="text-center space-y-4 section-animate" style="animation-delay: 0.2s">
+          <div class="w-16 h-16 mx-auto bg-blue-100 rounded-2xl flex items-center justify-center text-3xl">
+            ⚡
+          </div>
+          <h3 class="text-xl font-bold text-gray-900">Smart Typing</h3>
+          <p class="text-gray-600">
+            Instantly convert English characters into perfect Tamil script as you type.
+          </p>
+        </div>
+
+        <div class="text-center space-y-4 section-animate" style="animation-delay: 0.3s">
+          <div class="w-16 h-16 mx-auto bg-blue-100 rounded-2xl flex items-center justify-center text-3xl">
+            ☁️
+          </div>
+          <h3 class="text-xl font-bold text-gray-900">Access Anywhere</h3>
+          <p class="text-gray-600">
+            Start on your phone, finish on your laptop. Your work is always saved and in sync.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Grammar Engine Section -->
+  <section class="py-20 bg-gradient-to-b from-white to-gray-50">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        <div class="inline-block px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold mb-4">
+          AI Grammar Engine
+        </div>
+        <h2 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
+          Correct Tamil grammar mistakes<br/>in seconds
         </h2>
-        
-        <p class="text-xl sm:text-2xl lg:text-3xl text-gray-600 font-semibold max-w-4xl mx-auto leading-relaxed">
-          AI-powered Tamil proofreading, typing assistance, and free Tamil writer tools to sharpen every sentence.
-        </p>
-        
-        <p class="text-base sm:text-lg text-gray-500 max-w-3xl mx-auto leading-relaxed">
-          Proof Tamil combines instant Tamil typing support, grammar checking, transliteration, and professional proofreading workflows so creators can publish flawless Tamil content faster.
+        <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+          Don't worry about tricky rules. ProofTamil's AI instantly detects and fixes the most complex errors, so your writing is always clear and professional.
         </p>
       </div>
-      
-      <!-- CTA Buttons -->
-      <div class="flex justify-center gap-4 pt-4 animate-fade-in">
-        <% if (user) { %>
-          <a href="/workspace" class="group relative px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-xl shadow-blue-600/30 hover:shadow-2xl hover:shadow-blue-600/40 font-semibold text-sm uppercase tracking-wider hover:scale-105 transition-all duration-300 overflow-hidden">
-            <span class="relative z-10">Open Workspace</span>
-            <div class="absolute inset-0 bg-gradient-to-r from-indigo-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          </a>
-          <a href="/dashboard" class="px-8 py-4 bg-white border-2 border-gray-200 text-blue-600 rounded-full shadow-lg hover:shadow-xl font-semibold text-sm uppercase tracking-wider hover:scale-105 hover:border-blue-600 transition-all duration-300">
-            View Dashboard
-          </a>
-        <% } else { %>
-          <a href="/login" class="group relative px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-xl shadow-blue-600/30 hover:shadow-2xl hover:shadow-blue-600/40 font-semibold text-sm uppercase tracking-wider hover:scale-105 transition-all duration-300 overflow-hidden">
-            <span class="relative z-10">Sign In</span>
-            <div class="absolute inset-0 bg-gradient-to-r from-indigo-600 to-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          </a>
-          <a href="/register" class="px-8 py-4 bg-white border-2 border-gray-200 text-blue-600 rounded-full shadow-lg hover:shadow-xl font-semibold text-sm uppercase tracking-wider hover:scale-105 hover:border-blue-600 transition-all duration-300">
-            Sign Up
-          </a>
-        <% } %>
+
+      <div class="grid md:grid-cols-3 gap-8 mb-12">
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
+          <div class="text-3xl mb-3">📝</div>
+          <h3 class="text-lg font-bold text-gray-900 mb-2">Verb conjugation errors</h3>
+          <p class="text-gray-600 text-sm">Catches incorrect verb forms and tense usage</p>
+        </div>
+
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
+          <div class="text-3xl mb-3">🔗</div>
+          <h3 class="text-lg font-bold text-gray-900 mb-2">Sandhi rule violations</h3>
+          <p class="text-gray-600 text-sm">Identifies and corrects complex sandhi mistakes</p>
+        </div>
+
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
+          <div class="text-3xl mb-3">✅</div>
+          <h3 class="text-lg font-bold text-gray-900 mb-2">Subject-verb agreement</h3>
+          <p class="text-gray-600 text-sm">Guarantees proper agreement between subjects and verbs</p>
+        </div>
+      </div>
+
+      <!-- Grammar Example -->
+      <div class="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+        <div class="bg-blue-50 px-6 py-3 border-b border-gray-200 flex items-center justify-between">
+          <span class="text-sm font-semibold text-blue-900">Pro</span>
+          <span class="w-6 h-6 bg-gradient-to-br from-blue-600 to-blue-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">PT</span>
+        </div>
+        <div class="p-6">
+          <div class="mb-4">
+            <p class="text-gray-700 leading-relaxed">
+              தோட்டத்தில் பல வண்ணப் பூக்கள்<span class="bg-red-100 text-red-700 px-1 rounded">இருந்தது</span>.
+            </p>
+          </div>
+          <div class="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-500">
+            <div class="flex items-start gap-3">
+              <div class="flex-shrink-0">
+                <span class="inline-block px-2 py-1 bg-blue-600 text-white text-xs rounded font-semibold">Grammar</span>
+              </div>
+              <div class="flex-1">
+                <p class="text-gray-700 mb-2">
+                  தோட்டத்தில் பல வண்ணப் பூக்கள்<span class="line-through text-red-600 px-1">இருந்தது</span><span class="bg-green-100 text-green-700 px-1 rounded font-semibold">இருந்தன</span>.
+                </p>
+                <div class="flex gap-2">
+                  <button class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition">
+                    Apply suggestion
+                  </button>
+                  <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition">
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
+  </section>
 
-    <!-- Features Grid -->
-    <div class="mt-32 grid grid-cols-1 md:grid-cols-3 gap-8">
-      <div class="group bg-white rounded-3xl border border-gray-200 p-8 text-left space-y-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600/10 to-cyan-500/10 mb-2 text-2xl">
-          ✨
+  <!-- Spell Check Section -->
+  <section class="py-20 bg-white">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        <div class="inline-block px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-semibold mb-4">
+          Smart Spell Check
         </div>
-        <h3 class="text-xl font-bold text-gray-900 leading-tight">
-          AI-Powered Proofreading
-        </h3>
-        <p class="text-gray-600 text-sm leading-relaxed">
-          Advanced Tamil-aware language models for grammar, spelling, and style corrections in seconds.
+        <h2 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
+          Fix spelling errors with context
+        </h2>
+        <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+          Avoid that "oops" moment after you've sent the message. ProofTamil catches everything from simple typos to tricky sound-alike words (ல vs. ழ vs. ள).
         </p>
       </div>
 
-      <div class="group bg-white rounded-3xl border border-gray-200 p-8 text-left space-y-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1" style="animation-delay: 100ms">
-        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600/10 to-cyan-500/10 mb-2 text-2xl">
-          ⌨️
+      <div class="grid md:grid-cols-3 gap-8 mb-12">
+        <div class="text-center space-y-3">
+          <div class="text-3xl">🔊</div>
+          <h3 class="text-lg font-bold text-gray-900">Phonetic awareness</h3>
+          <p class="text-gray-600 text-sm">
+            சோதணையா, சோதனையானு confuse ஆகுதா? We find the right spelling, instantly.
+          </p>
         </div>
-        <h3 class="text-xl font-bold text-gray-900 leading-tight">
-          Realtime Tamil Typing
-        </h3>
-        <p class="text-gray-600 text-sm leading-relaxed">
-          Phonetic transliteration, auto-complete, and keyboard shortcuts tuned for fast Tamil typing.
-        </p>
+
+        <div class="text-center space-y-3">
+          <div class="text-3xl">🌍</div>
+          <h3 class="text-lg font-bold text-gray-900">Understands Your Dialect</h3>
+          <p class="text-gray-600 text-sm">
+            Trained on Tamil from across the globe, our AI recognizes regional spelling variations.
+          </p>
+        </div>
+
+        <div class="text-center space-y-3">
+          <div class="text-3xl">🎯</div>
+          <h3 class="text-lg font-bold text-gray-900">Fixes with Context</h3>
+          <p class="text-gray-600 text-sm">
+            We don't just suggest a random word. We give you the right correction based on meaning.
+          </p>
+        </div>
       </div>
 
-      <div class="group bg-white rounded-3xl border border-gray-200 p-8 text-left space-y-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1" style="animation-delay: 200ms">
-        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600/10 to-cyan-500/10 mb-2 text-2xl">
-          📝
+      <!-- Spelling Example -->
+      <div class="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+        <div class="bg-green-50 px-6 py-3 border-b border-gray-200 flex items-center justify-between">
+          <span class="w-6 h-6 bg-gradient-to-br from-blue-600 to-blue-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">PT</span>
         </div>
-        <h3 class="text-xl font-bold text-gray-900 leading-tight">
-          Free Tamil Writer Workspace
-        </h3>
-        <p class="text-gray-600 text-sm leading-relaxed">
-          Draft, compare revisions, and export high-quality Tamil articles, blog posts, and scripts for free.
-        </p>
+        <div class="p-6">
+          <div class="mb-4">
+            <p class="text-gray-700 leading-relaxed">
+              நான் உங்களிடம் <span class="bg-red-100 text-red-700 px-1 rounded">முன்னூறு</span> ரூபாய் கொடுத்திருந்தேன்.
+            </p>
+          </div>
+          <div class="bg-green-50 rounded-lg p-4 border-l-4 border-green-500">
+            <div class="flex items-start gap-3">
+              <div class="flex-shrink-0">
+                <span class="inline-block px-2 py-1 bg-green-600 text-white text-xs rounded font-semibold">Spelling</span>
+              </div>
+              <div class="flex-1">
+                <p class="text-gray-700 mb-2">
+                  நான் உங்களிடம் <span class="line-through text-red-600 px-1">முன்னூறு</span><span class="bg-green-100 text-green-700 px-1 rounded font-semibold">முந்நூறு</span> ரூபாய் கொடுத்திருந்தேன்.
+                </p>
+                <div class="flex gap-2">
+                  <button class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition">
+                    Apply suggestion
+                  </button>
+                  <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition">
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
+  </section>
+
+  <!-- Transliteration Section -->
+  <section class="py-20 bg-gradient-to-b from-white to-blue-50">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        <div class="inline-block px-4 py-2 bg-purple-100 text-purple-800 rounded-full text-sm font-semibold mb-4">
+          Smart transliteration
+        </div>
+        <h2 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
+          Type in English. We'll make it Tamil.
+        </h2>
+        <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+          You already type <em>epdi irukinga</em>. Now, let us handle the rest. ProofTamil intelligently converts your everyday Tanglish messages into beautiful, clear Tamil script, instantly.
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-8 mb-12">
+        <div class="text-center space-y-3">
+          <div class="text-3xl">🤖</div>
+          <h3 class="text-lg font-bold text-gray-900">Intelligent understanding</h3>
+          <p class="text-gray-600 text-sm">
+            Our AI knows you mean வணக்கம் when you type vanakkam.
+          </p>
+        </div>
+
+        <div class="text-center space-y-3">
+          <div class="text-3xl">✨</div>
+          <h3 class="text-lg font-bold text-gray-900">Multiple smart choices</h3>
+          <p class="text-gray-600 text-sm">
+            Get multiple, context-aware options for any word in real-time.
+          </p>
+        </div>
+
+        <div class="text-center space-y-3">
+          <div class="text-3xl">⚡</div>
+          <h3 class="text-lg font-bold text-gray-900">Seamless experience</h3>
+          <p class="text-gray-600 text-sm">
+            Type naturally without switching keyboards or copy-pasting.
+          </p>
+        </div>
+      </div>
+
+      <!-- Transliteration Demo -->
+      <div class="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+        <div class="bg-purple-50 px-6 py-3 border-b border-gray-200 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-gray-700">B</span>
+            <span class="text-sm font-semibold text-gray-700">I</span>
+            <span class="text-sm font-semibold text-gray-700">U</span>
+          </div>
+          <span class="px-2 py-1 bg-purple-600 text-white text-xs rounded font-semibold">AI</span>
+        </div>
+        <div class="p-6">
+          <div class="mb-4">
+            <p class="text-gray-700 text-lg leading-relaxed">
+              உயர்தனிக் செம்மொழியாம் தமிழ்மொழியில் <span class="bg-blue-100 text-blue-700 px-1 rounded">yelidhu</span>
+            </p>
+          </div>
+          <div class="bg-white rounded-lg border-2 border-blue-500 p-4 shadow-lg">
+            <div class="grid grid-cols-2 gap-2 mb-3">
+              <button class="px-4 py-3 bg-blue-100 text-blue-900 rounded-lg text-sm font-semibold hover:bg-blue-200 transition text-left">
+                <span class="text-xs text-gray-500">1</span> எளிது
+              </button>
+              <button class="px-4 py-3 bg-gray-50 text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-100 transition text-left">
+                <span class="text-xs text-gray-500">2</span> எளித
+              </button>
+              <button class="px-4 py-3 bg-gray-50 text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-100 transition text-left">
+                <span class="text-xs text-gray-500">3</span> எளிதி
+              </button>
+              <button class="px-4 py-3 bg-gray-50 text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-100 transition text-left">
+                <span class="text-xs text-gray-500">4</span> எளிதத
+              </button>
+            </div>
+            <p class="text-xs text-gray-500 text-center">Press <kbd class="px-2 py-1 bg-gray-200 rounded font-mono">Space</kbd> to select</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Learn As You Write Section -->
+  <section class="py-20 bg-white">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        <div class="inline-block px-4 py-2 bg-yellow-100 text-yellow-800 rounded-full text-sm font-semibold mb-4">
+          Learn as you write
+        </div>
+        <h2 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
+          Learn the "why" behind the fix
+        </h2>
+        <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+          Every correction comes with an explanation of why your original text was wrong. Learn Tamil grammar naturally as you write.
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-8 mb-12">
+        <div class="text-center space-y-3">
+          <div class="text-3xl">💡</div>
+          <h3 class="text-lg font-bold text-gray-900">Simple "aha!" moments</h3>
+          <p class="text-gray-600 text-sm">
+            Get simple clarifications that make even the trickiest rules finally click.
+          </p>
+        </div>
+
+        <div class="text-center space-y-3">
+          <div class="text-3xl">📖</div>
+          <h3 class="text-lg font-bold text-gray-900">Clear grammar guides</h3>
+          <p class="text-gray-600 text-sm">
+            We explain everything from verb forms (வினைச்சொல்) to sandhi rules (புணர்ச்சி).
+          </p>
+        </div>
+
+        <div class="text-center space-y-3">
+          <div class="text-3xl">📈</div>
+          <h3 class="text-lg font-bold text-gray-900">Progressive learning</h3>
+          <p class="text-gray-600 text-sm">
+            Absorb the patterns of perfect Tamil just by writing, and watch your skills grow.
+          </p>
+        </div>
+      </div>
+
+      <!-- Learning Example -->
+      <div class="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+        <div class="bg-yellow-50 px-6 py-3 border-b border-gray-200 flex items-center justify-between">
+          <span class="text-sm font-semibold text-gray-700">Grammar</span>
+          <span class="w-6 h-6 bg-gradient-to-br from-blue-600 to-blue-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">PT</span>
+        </div>
+        <div class="p-6 space-y-4">
+          <div>
+            <p class="text-sm font-semibold text-gray-700 mb-2">Original:</p>
+            <p class="text-gray-700 leading-relaxed">
+              நாங்கள் அரங்கம் சென்றடைந்தபோது, விழா <strong class="text-red-600">தொடங்கியது</strong>.
+            </p>
+          </div>
+          <div>
+            <p class="text-sm font-semibold text-gray-700 mb-2">Suggested:</p>
+            <p class="text-gray-700 leading-relaxed">
+              நாங்கள் அரங்கம் சென்றடைந்தபோது, விழா <strong class="text-green-600">தொடங்கியிருந்தது</strong>.
+            </p>
+          </div>
+          <div class="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-400">
+            <p class="text-sm font-semibold text-gray-900 mb-2">Reason:</p>
+            <p class="text-gray-700 text-sm leading-relaxed">
+              இங்கே, <strong>'தொடங்கியது'</strong> என்ற வினைச்சொல், அவர்கள் வந்தடைந்த அதே கணத்தில் விழா தொடங்கியதாகப் பொருள் தருகிறது.
+              நிகழ்வு முன்னரே தொடங்கிவிட்டது என்பதைத் தெளிவாகக் காட்ட, <strong>'தொடங்கியிருந்தது'</strong> என்ற இறந்தகால வினைமுற்றைப் பயன்படுத்துவதே சரியானது.
+            </p>
+          </div>
+          <div class="flex gap-2">
+            <button class="px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm font-semibold hover:bg-yellow-700 transition">
+              Accept
+            </button>
+            <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition">
+              Ignore
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <section class="py-20 bg-gray-50">
+    <div class="max-w-4xl mx-auto px-6">
+      <div class="text-center mb-16">
+        <h2 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
+          Everything you need to know
+        </h2>
+        <p class="text-xl text-gray-600">
+          Common questions about ProofTamil's AI-powered Tamil writing assistant
+        </p>
+      </div>
+
+      <div class="space-y-4">
+        <details class="bg-white rounded-xl p-6 shadow-md border border-gray-200 group">
+          <summary class="font-bold text-lg text-gray-900 cursor-pointer list-none flex items-center justify-between">
+            <span>What exactly is ProofTamil?</span>
+            <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </summary>
+          <p class="text-gray-600 mt-4 leading-relaxed">
+            ProofTamil is an AI-powered Tamil writing assistant that helps you write flawless Tamil content with real-time grammar checking, spelling correction, style suggestions, and intelligent transliteration. It's designed specifically for Tamil writers who want to produce professional, error-free content.
+          </p>
+        </details>
+
+        <details class="bg-white rounded-xl p-6 shadow-md border border-gray-200 group">
+          <summary class="font-bold text-lg text-gray-900 cursor-pointer list-none flex items-center justify-between">
+            <span>How accurate is ProofTamil's Tamil spelling checker?</span>
+            <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </summary>
+          <p class="text-gray-600 mt-4 leading-relaxed">
+            ProofTamil uses advanced AI models specifically trained on Tamil language patterns. It understands phonetic nuances, regional spelling variations, and contextual word usage to provide highly accurate spelling and grammar corrections. The AI continuously learns and improves with use.
+          </p>
+        </details>
+
+        <details class="bg-white rounded-xl p-6 shadow-md border border-gray-200 group">
+          <summary class="font-bold text-lg text-gray-900 cursor-pointer list-none flex items-center justify-between">
+            <span>Can I use ProofTamil for professional work?</span>
+            <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </summary>
+          <p class="text-gray-600 mt-4 leading-relaxed">
+            Absolutely! ProofTamil is designed for both casual and professional Tamil writing. It's perfect for blog posts, articles, business communications, academic papers, social media content, and more. Many professional Tamil writers and content creators use ProofTamil to ensure their work is polished and error-free.
+          </p>
+        </details>
+
+        <details class="bg-white rounded-xl p-6 shadow-md border border-gray-200 group">
+          <summary class="font-bold text-lg text-gray-900 cursor-pointer list-none flex items-center justify-between">
+            <span>What's the smart transliteration feature?</span>
+            <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </summary>
+          <p class="text-gray-600 mt-4 leading-relaxed">
+            Smart transliteration allows you to type in English characters and automatically converts them to Tamil script. Just type "vanakkam" and press Space, and it becomes "வணக்கம்". The AI provides multiple context-aware options for each word, so you can choose the right one for your meaning.
+          </p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final CTA Section -->
+  <section class="py-20 bg-gradient-to-br from-blue-600 to-blue-700 text-white">
+    <div class="max-w-4xl mx-auto px-6 text-center">
+      <h2 class="text-4xl md:text-5xl font-extrabold mb-6">
+        Ready to write perfect Tamil?
+      </h2>
+      <p class="text-xl mb-8">
+        Join thousands of Tamil writers who trust ProofTamil for flawless writing.
+      </p>
+      <% if (user) { %>
+        <a href="/workspace" class="inline-block px-8 py-4 bg-white text-blue-600 rounded-full font-bold text-lg hover:bg-gray-100 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5">
+          Open Workspace
+        </a>
+      <% } else { %>
+        <a href="/register" class="inline-block px-8 py-4 bg-white text-blue-600 rounded-full font-bold text-lg hover:bg-gray-100 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5">
+          Try ProofTamil Free
+        </a>
+      <% } %>
+    </div>
+  </section>
 </div>
 
 <%- include('../partials/footer') %>

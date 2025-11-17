@@ -55,3 +55,64 @@
 .suggestion-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
+
+/* Enhanced Toolbar Styles */
+.toolbar-btn {
+  @apply p-2 rounded-md text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-all duration-150 flex items-center gap-1;
+  border: 1px solid transparent;
+}
+
+.toolbar-btn:hover {
+  border-color: #dbeafe; /* blue-100 */
+}
+
+.toolbar-btn:active,
+.toolbar-btn.active {
+  @apply bg-blue-500 text-white;
+  border-color: #3b82f6; /* blue-500 */
+}
+
+.toolbar-select {
+  @apply px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none cursor-pointer hover:border-blue-400 transition-colors;
+}
+
+.dropdown-item {
+  @apply w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center transition-colors;
+  border: none;
+}
+
+.dropdown-item:first-child {
+  @apply rounded-t-md;
+}
+
+.dropdown-item:last-child {
+  @apply rounded-b-md;
+}
+
+/* Language Toggle Button */
+.language-toggle-btn {
+  @apply flex items-center gap-3 px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-all duration-200;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.language-toggle-btn:hover {
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+.toggle-switch {
+  @apply relative w-10 h-6 bg-white bg-opacity-30 rounded-full transition-colors;
+}
+
+.toggle-knob {
+  @apply absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform;
+}
+
+.language-toggle-btn:hover .toggle-knob {
+  transform: translateX(16px);
+}
+
+/* Editor Button Legacy Support */
+.editor-btn {
+  @apply toolbar-btn;
+}

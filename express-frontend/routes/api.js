@@ -122,7 +122,21 @@ Provide title and description in TAMIL language only.`
       const aiText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
       
       try {
-        const chunkSuggestions = JSON.parse(aiText);
+        // Clean and validate JSON before parsing
+        let cleanedJson = aiText.trim();
+        
+        // If response is truncated or malformed, try to fix it
+        if (!cleanedJson.endsWith(']')) {
+          // Find the last complete object
+          const lastCompleteObject = cleanedJson.lastIndexOf('}');
+          if (lastCompleteObject > 0) {
+            cleanedJson = cleanedJson.substring(0, lastCompleteObject + 1) + ']';
+          } else {
+            cleanedJson = '[]';
+          }
+        }
+        
+        const chunkSuggestions = JSON.parse(cleanedJson);
         
         if (Array.isArray(chunkSuggestions)) {
           // Adjust offsets to global text positions
@@ -136,7 +150,8 @@ Provide title and description in TAMIL language only.`
           });
         }
       } catch (parseErr) {
-        console.error('Failed to parse chunk response:', aiText, parseErr);
+        console.error('Failed to parse chunk response, skipping chunk:', parseErr.message);
+        // Continue processing other chunks instead of failing completely
       }
     }
 

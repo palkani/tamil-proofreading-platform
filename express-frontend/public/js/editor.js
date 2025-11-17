@@ -51,14 +51,106 @@ class TamilEditor {
   }
 
   setupToolbar() {
-    const toolbarButtons = document.querySelectorAll('.editor-btn');
+    // All toolbar buttons
+    const toolbarButtons = document.querySelectorAll('.toolbar-btn[data-command]');
     toolbarButtons.forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         const command = btn.getAttribute('data-command');
         this.executeCommand(command);
+        
+        // Toggle active state for formatting buttons
+        if (['bold', 'italic', 'underline', 'strikeThrough'].includes(command)) {
+          btn.classList.toggle('active');
+        }
       });
     });
+    
+    // Font size selector
+    const fontSizeSelect = document.getElementById('font-size-select');
+    if (fontSizeSelect) {
+      fontSizeSelect.addEventListener('change', (e) => {
+        const size = e.target.value;
+        document.execCommand('fontSize', false, '7');
+        const fontElements = this.editor.querySelectorAll('font[size="7"]');
+        fontElements.forEach(el => {
+          el.removeAttribute('size');
+          el.style.fontSize = size;
+        });
+        this.editor.focus();
+      });
+    }
+    
+    // Alignment dropdown
+    const alignBtn = document.getElementById('align-dropdown-btn');
+    const alignDropdown = document.getElementById('align-dropdown');
+    if (alignBtn && alignDropdown) {
+      alignBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        alignDropdown.classList.toggle('hidden');
+      });
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', () => {
+        alignDropdown.classList.add('hidden');
+      });
+      
+      // Dropdown items
+      const dropdownItems = alignDropdown.querySelectorAll('.dropdown-item');
+      dropdownItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+          e.preventDefault();
+          const command = item.getAttribute('data-command');
+          this.executeCommand(command);
+          alignDropdown.classList.add('hidden');
+        });
+      });
+    }
+    
+    // Insert link button
+    const insertLinkBtn = document.getElementById('insert-link-btn');
+    if (insertLinkBtn) {
+      insertLinkBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const url = prompt('Enter URL:');
+        if (url) {
+          document.execCommand('createLink', false, url);
+          this.editor.focus();
+        }
+      });
+    }
+    
+    // Search button (placeholder functionality)
+    const searchBtn = document.getElementById('search-btn');
+    if (searchBtn) {
+      searchBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const searchTerm = prompt('Search in document:');
+        if (searchTerm) {
+          window.find(searchTerm);
+        }
+      });
+    }
+    
+    // Language toggle (placeholder - can be extended for actual Tamil/English switching)
+    const languageToggle = document.getElementById('language-toggle-btn');
+    if (languageToggle) {
+      let isTamilMode = true;
+      languageToggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        isTamilMode = !isTamilMode;
+        const toggleKnob = languageToggle.querySelector('.toggle-knob');
+        if (toggleKnob) {
+          if (isTamilMode) {
+            toggleKnob.style.transform = 'translateX(0)';
+            languageToggle.querySelector('span').textContent = 'தமிழ்';
+          } else {
+            toggleKnob.style.transform = 'translateX(16px)';
+            languageToggle.querySelector('span').textContent = 'English';
+          }
+        }
+      });
+    }
   }
 
   executeCommand(command) {
