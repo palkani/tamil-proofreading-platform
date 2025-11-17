@@ -520,7 +520,45 @@ const commonWordMap = {
   'hot': 'சூடு',
   'soodu': 'சூடு',
   'kulira': 'குளிர்',
-  'cold': 'குளிர்'
+  'cold': 'குளிர்',
+  
+  // Titles & Honorifics
+  'raja': 'ராஜா',
+  'king': 'அரசன்',
+  'arasan': 'அரசன்',
+  'rani': 'ராணி',
+  'queen': 'அரசி',
+  'arasi': 'அரசி',
+  'thalaivar': 'தலைவர்',
+  'leader': 'தலைவர்',
+  'sir': 'ஐயா',
+  'aiyaa': 'ஐயா',
+  'madam': 'அம்மா',
+  'thalaivi': 'தலைவி',
+  
+  // Common Names & Words
+  'raman': 'ராமன்',
+  'krishnan': 'கிருஷ்ணன்',
+  'murugan': 'முருகன்',
+  'vinayagar': 'விநாயகர்',
+  'sivan': 'சிவன்',
+  'lakshmi': 'லட்சுமி',
+  'saraswathi': 'சரஸ்வதி',
+  'durga': 'துர்கா',
+  
+  // More Common Words
+  'vallu': 'வாழ்',
+  'live': 'வாழ்',
+  'vaazhkai': 'வாழ்க்கை',
+  'life': 'வாழ்க்கை',
+  'maranam': 'மரணம்',
+  'death': 'மரணம்',
+  'pirappu': 'பிறப்பு',
+  'birth': 'பிறப்பு',
+  'kalyanam': 'கல்யாணம்',
+  'marriage': 'கல்யாணம',
+  'thirumanam': 'திருமணம்',
+  'wedding': 'திருமணம்'
 };
 
 /**
