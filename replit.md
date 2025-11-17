@@ -3,9 +3,17 @@
 ## Project Overview
 A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The platform uses Go (backend) and Next.js (frontend) to provide AI-powered Tamil text proofreading with a tiered model workflow.
 
-## Recent Changes (November 16, 2025)
+## Recent Changes (November 17, 2025)
 
-### Latest Updates: Reliable Tamil AI Grammar Checking ✅
+### Latest Updates: Draft Loading and Auto AI Analysis ✅
+- **Fixed Draft Navigation**: Changed "My Drafts" from URL-based to SPA-style view switching
+- **Removed 404 Errors**: No longer using URL parameters to avoid Replit proxy issues
+- **Auto AI Analysis**: Opening a draft automatically triggers AI grammar checking after 500ms
+- **Enhanced Debugging**: Added comprehensive console logging for draft operations
+- **Improved Error Handling**: Better error messages and response tracking for draft loading
+- **Click Event Handling**: Added preventDefault/stopPropagation to prevent navigation conflicts
+
+### Previous Updates: Reliable Tamil AI Grammar Checking ✅
 - **Fixed AI Reliability**: Implemented sentence-level chunking (<=120 chars) for consistent error detection
 - **System Instructions**: Separated prompt instructions from text analysis using `systemInstruction`
 - **JSON Output Mode**: Enforced `responseMimeType: "application/json"` for structured responses

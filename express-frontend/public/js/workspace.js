@@ -558,7 +558,12 @@ class WorkspaceController {
 
   renderDrafts() {
     const container = document.getElementById('drafts-container');
-    if (!container) return;
+    if (!container) {
+      console.error('Drafts container not found');
+      return;
+    }
+    
+    console.log(`Rendering ${this.drafts.length} drafts`);
     
     container.innerHTML = this.drafts.map(draft => {
       const date = new Date(draft.created_at);
@@ -593,9 +598,15 @@ class WorkspaceController {
     }).join('');
     
     // Add click handlers
-    container.querySelectorAll('[data-draft-id]').forEach(card => {
-      card.addEventListener('click', () => {
+    const cards = container.querySelectorAll('[data-draft-id]');
+    console.log(`Adding click handlers to ${cards.length} draft cards`);
+    
+    cards.forEach(card => {
+      card.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const draftId = parseInt(card.dataset.draftId);
+        console.log('Draft card clicked:', draftId);
         this.openDraft(draftId);
       });
     });
@@ -630,14 +641,22 @@ class WorkspaceController {
   }
 
   async openDraft(draftId) {
+    console.log('Opening draft:', draftId);
     try {
-      const response = await fetch(`/api/submissions/${draftId}`);
+      const apiUrl = `/api/submissions/${draftId}`;
+      console.log('Fetching from:', apiUrl);
+      
+      const response = await fetch(apiUrl);
+      console.log('Response status:', response.status);
       
       if (!response.ok) {
-        throw new Error('Failed to load draft');
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        throw new Error(`Failed to load draft: ${response.status} ${errorText}`);
       }
       
       const data = await response.json();
+      console.log('Draft data loaded:', data);
       const draft = data.submission;
       
       // Load draft into editor
@@ -657,6 +676,7 @@ class WorkspaceController {
       
       // Automatically trigger AI analysis for the loaded draft
       setTimeout(() => {
+        console.log('Triggering auto-analysis for draft');
         this.autoAnalyze();
       }, 500);
     } catch (error) {
