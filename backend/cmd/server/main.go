@@ -33,6 +33,7 @@ func main() {
                 &models.Usage{},
                 &models.RefreshToken{},
                 &models.ContactMessage{},
+                &models.TamilWord{},
         )
         if err != nil {
                 log.Fatal("Failed to migrate database:", err)
@@ -69,6 +70,11 @@ func main() {
                 api.POST("/auth/otp/send", h.SendOTP)
                 api.POST("/auth/otp/verify", h.VerifyOTP)
                 api.POST("/auth/social", h.SocialLogin)
+                
+                // Tamil autocomplete (public for instant access)
+                api.GET("/autocomplete", h.AutocompleteTamil)
+                api.POST("/tamil-words", h.AddTamilWord)
+                api.POST("/tamil-words/confirm", h.ConfirmTamilWord)
         }
 
         // Protected routes (AUTH DISABLED FOR TESTING - RE-ENABLE BEFORE PRODUCTION)
