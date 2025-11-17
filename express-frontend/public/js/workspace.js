@@ -675,7 +675,7 @@ class WorkspaceController {
     const badges = {
       'pending': '<span class="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">Pending</span>',
       'completed': '<span class="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">Completed</span>',
-      'processing': '<span class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">Processing</span>',
+      'processing': '<span class="text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-700">Processing</span>',
       'failed': '<span class="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">Failed</span>'
     };
     return badges[status] || '';
