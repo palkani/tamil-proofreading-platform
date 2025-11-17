@@ -1,8 +1,9 @@
 // Rich Text Editor with Tamil Support
 
 class TamilEditor {
-  constructor(editorElement) {
+  constructor(editorElement, workspace = null) {
     this.editor = editorElement;
+    this.workspace = workspace; // Reference to workspace controller for toggle states
     this.setupEditor();
     this.setupToolbar();
     this.setupAutocomplete();
@@ -32,10 +33,13 @@ class TamilEditor {
       e.preventDefault();
       const text = e.clipboardData.getData('text/plain');
       
+      // Check if Tamil typing is enabled
+      const tamilTypingEnabled = !this.workspace || this.workspace.tamilTypingEnabled;
+      
       // Check if text contains mostly English characters
       const englishRatio = (text.match(/[a-zA-Z]/g) || []).length / text.length;
       
-      if (englishRatio > 0.5) {
+      if (englishRatio > 0.5 && tamilTypingEnabled) {
         // Text is mostly English, convert to Tamil
         const tamilText = this.convertEnglishParagraphToTamil(text);
         document.execCommand('insertText', false, tamilText);
@@ -234,8 +238,11 @@ class TamilEditor {
         const words = textBeforeCursor.split(/\s/);
         const currentWord = words[words.length - 1];
         
-        // If typing English word, convert to Tamil on space
-        if (currentWord && /^[a-zA-Z]+$/.test(currentWord)) {
+        // Check if Tamil typing is enabled
+        const tamilTypingEnabled = !this.workspace || this.workspace.tamilTypingEnabled;
+        
+        // If typing English word, convert to Tamil on space (only if enabled)
+        if (currentWord && /^[a-zA-Z]+$/.test(currentWord) && tamilTypingEnabled) {
           e.preventDefault();
           
           // Convert to Tamil
