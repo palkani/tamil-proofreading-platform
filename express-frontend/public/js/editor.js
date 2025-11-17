@@ -129,18 +129,37 @@ class TamilEditor {
     if (existing) existing.remove();
 
     const box = document.createElement('div');
-    box.className = 'autocomplete-box absolute bg-white border border-gray-300 rounded-lg shadow-lg z-50 max-w-xs';
-    box.style.cssText = 'position: fixed; max-height: 200px; overflow-y: auto;';
+    box.className = 'autocomplete-box bg-white border-2 border-blue-200 rounded-lg shadow-xl z-50';
+    box.style.cssText = 'position: fixed; max-height: 250px; overflow-y: auto; min-width: 200px;';
 
     suggestions.forEach((suggestion, index) => {
       const item = document.createElement('div');
-      item.className = 'px-4 py-2 hover:bg-blue-50 cursor-pointer tamil-text';
+      item.className = 'px-4 py-3 cursor-pointer tamil-text transition-all duration-150 border-b border-gray-100 last:border-b-0';
       item.textContent = suggestion;
+      item.style.fontSize = '1.1rem';
+      
+      // Add hover effect with theme color
+      item.addEventListener('mouseenter', () => {
+        item.style.backgroundColor = '#3b82f6'; // Blue-500
+        item.style.color = '#ffffff';
+        item.style.transform = 'translateX(4px)';
+      });
+      
+      item.addEventListener('mouseleave', () => {
+        item.style.backgroundColor = '';
+        item.style.color = '';
+        item.style.transform = '';
+      });
       
       item.addEventListener('click', () => {
         this.insertSuggestion(partialWord, suggestion);
         box.remove();
       });
+      
+      // Auto-select first item
+      if (index === 0) {
+        item.style.backgroundColor = '#dbeafe'; // Blue-100
+      }
       
       box.appendChild(item);
     });

@@ -5,9 +5,20 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
 
 ## Recent Changes (November 17, 2025)
 
-### Latest Updates: English-to-Tamil Transliteration ✅
-- **Smart Autocomplete**: Type in English, get Tamil word suggestions automatically
-- **30+ Common Words**: Pre-mapped common words (vanakkam → வணக்கம், nandri → நன்றி, etc.)
+### Latest Updates: Enhanced English-to-Tamil Autocomplete ✅
+- **Expanded Dictionary**: 130+ common Tamil words with English mappings
+  - Greetings: vanakkam, nandri, welcome, sorry, please
+  - Question words: how, when, where, what, who, why
+  - Pronouns: I, you, he, she, they, we, this, that
+  - Time words: today, yesterday, tomorrow, morning, evening, night
+  - Adjectives: good, big, small, new, old, beautiful, very
+  - Common verbs: come, go, see, say, do, eat, drink, read, write
+  - Common nouns: house, school, work, food, water, mother, father
+  - Numbers: one through ten
+- **Beautiful Highlighting**: Blue theme color on hover with smooth transitions
+- **Auto-Selection**: First suggestion pre-highlighted with light blue
+- **Proper Replacement**: Fixed cursor position tracking - English words now correctly replaced with Tamil
+- **Smart Autocomplete**: Type in English, get relevant Tamil word suggestions automatically
 - **Phonetic Transliteration**: Converts English phonetics to Tamil script in real-time
 - **Dual Language Support**: Works with both Tamil script and English romanization
 - **Dashboard Enhancement**: Added "Create New Draft" button for quick access to workspace
