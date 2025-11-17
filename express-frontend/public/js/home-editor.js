@@ -197,8 +197,17 @@ class HomeEditor {
     const tamilChars = text.match(/[\u0B80-\u0BFF]/g) || [];
     const tamilRatio = tamilChars.length / text.length;
     
+    console.log('Tamil analysis check:', { 
+      text, 
+      tamilChars: tamilChars.length, 
+      totalChars: text.length, 
+      tamilRatio: tamilRatio.toFixed(2),
+      willAnalyze: tamilRatio >= 0.3
+    });
+    
     if (tamilRatio < 0.3) {
       // Not enough Tamil content, skip analysis
+      console.log('Skipping analysis - not enough Tamil content');
       return;
     }
     
@@ -229,6 +238,8 @@ class HomeEditor {
       }
       
       const data = await response.json();
+      console.log('AI analysis response:', data);
+      console.log('Number of suggestions:', (data.suggestions || []).length);
       this.displaySuggestions(data.suggestions || []);
       
     } catch (error) {
