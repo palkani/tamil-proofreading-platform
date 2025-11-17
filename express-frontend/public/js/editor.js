@@ -130,8 +130,21 @@ class TamilEditor {
     if (!selection.rangeCount) return;
 
     const range = selection.getRangeAt(0);
-    const textNode = range.startContainer;
-    const text = textNode.textContent;
+    let textNode = range.startContainer;
+    
+    // If we're in an element node, get the text node
+    if (textNode.nodeType === Node.ELEMENT_NODE) {
+      // Create a text node if needed
+      if (!textNode.firstChild || textNode.firstChild.nodeType !== Node.TEXT_NODE) {
+        const newTextNode = document.createTextNode('');
+        textNode.appendChild(newTextNode);
+        textNode = newTextNode;
+      } else {
+        textNode = textNode.firstChild;
+      }
+    }
+    
+    const text = textNode.textContent || '';
     const cursorPos = range.startOffset;
 
     // Find the start of the partial word
@@ -140,16 +153,23 @@ class TamilEditor {
       startPos--;
     }
 
-    // Replace the partial word
-    const newText = text.substring(0, startPos) + fullWord + text.substring(cursorPos);
+    // Replace the partial word with the Tamil word
+    const beforeWord = text.substring(0, startPos);
+    const afterWord = text.substring(cursorPos);
+    const newText = beforeWord + fullWord + ' ' + afterWord;
+    
     textNode.textContent = newText;
 
-    // Move cursor to end of inserted word
-    range.setStart(textNode, startPos + fullWord.length);
+    // Move cursor to after the inserted word (including the space)
+    const newCursorPos = startPos + fullWord.length + 1;
+    range.setStart(textNode, newCursorPos);
+    range.setEnd(textNode, newCursorPos);
     range.collapse(true);
+    
     selection.removeAllRanges();
     selection.addRange(range);
 
+    // Trigger content change
     this.onContentChange();
   }
 
