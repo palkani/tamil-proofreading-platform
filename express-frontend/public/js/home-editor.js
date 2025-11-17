@@ -5,6 +5,9 @@ class HomeEditor {
     this.editor = document.getElementById('home-editor');
     this.charCount = document.getElementById('home-char-count');
     this.suggestionsContainer = document.getElementById('home-suggestions-container');
+    this.boldBtn = document.getElementById('home-bold-btn');
+    this.italicBtn = document.getElementById('home-italic-btn');
+    this.underlineBtn = document.getElementById('home-underline-btn');
     this.maxChars = 200;
     
     // Auto-analysis state
@@ -45,6 +48,17 @@ class HomeEditor {
   init() {
     if (!this.editor) return;
     
+    // Setup toolbar buttons
+    if (this.boldBtn) {
+      this.boldBtn.addEventListener('click', () => this.formatText('bold'));
+    }
+    if (this.italicBtn) {
+      this.italicBtn.addEventListener('click', () => this.formatText('italic'));
+    }
+    if (this.underlineBtn) {
+      this.underlineBtn.addEventListener('click', () => this.formatText('underline'));
+    }
+    
     // Handle input events
     this.editor.addEventListener('input', () => this.handleInput());
     this.editor.addEventListener('paste', (e) => this.handlePaste(e));
@@ -54,6 +68,11 @@ class HomeEditor {
     
     // Update character count on load
     this.updateCharCount();
+  }
+  
+  formatText(command) {
+    document.execCommand(command, false, null);
+    this.editor.focus();
   }
   
   handleInput() {
@@ -283,16 +302,33 @@ class HomeEditor {
   displaySuggestions(suggestions) {
     if (!this.suggestionsContainer) return;
     
+    // Get current text to check if editor is empty
+    const currentText = this.getPlainText().trim();
+    
     if (suggestions.length === 0) {
-      this.suggestionsContainer.innerHTML = `
-        <div class="text-center text-gray-500 py-8">
-          <svg class="w-16 h-16 mx-auto mb-4 text-green-400" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-          </svg>
-          <p class="text-sm font-semibold text-green-600">Looks great!</p>
-          <p class="text-xs text-gray-400 mt-2">No grammar issues found</p>
-        </div>
-      `;
+      // Only show "Looks great!" if there's actual text
+      if (currentText) {
+        this.suggestionsContainer.innerHTML = `
+          <div class="text-center text-gray-500 py-8">
+            <svg class="w-16 h-16 mx-auto mb-4 text-green-400" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            <p class="text-sm font-semibold text-green-600">Looks great!</p>
+            <p class="text-xs text-gray-400 mt-2">No grammar issues found</p>
+          </div>
+        `;
+      } else {
+        // Show default empty state
+        this.suggestionsContainer.innerHTML = `
+          <div class="text-center text-gray-500 py-8">
+            <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+            <p class="text-sm">Type or paste Tamil text in the editor</p>
+            <p class="text-xs text-gray-400 mt-2">AI suggestions appear automatically as you type</p>
+          </div>
+        `;
+      }
       return;
     }
     
