@@ -196,8 +196,10 @@ class HomeEditor {
   async autoAnalyze() {
     const text = this.getPlainText();
     
-    // Skip if empty
+    // If empty, clear suggestions and reset
     if (!text) {
+      this.lastAnalyzedText = '';
+      this.displaySuggestions([]);
       return;
     }
     
