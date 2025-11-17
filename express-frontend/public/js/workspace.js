@@ -601,13 +601,23 @@ class WorkspaceController {
       const status = this.getStatusBadge(draft.status);
       
       return `
-        <div class="bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer p-4" data-draft-id="${draft.id}">
+        <div class="bg-white rounded-lg border border-gray-200 hover:border-orange-500 hover:shadow-md transition-all cursor-pointer p-4" data-draft-id="${draft.id}">
           <div class="flex items-start justify-between mb-2">
             <div class="flex-1">
               <h3 class="font-semibold text-gray-900 mb-1">Draft #${draft.id}</h3>
               <p class="text-sm text-gray-600 line-clamp-2">${preview}</p>
             </div>
-            ${status}
+            <div class="flex items-center gap-2">
+              ${status}
+              <button 
+                class="delete-draft-btn p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" 
+                data-draft-id="${draft.id}"
+                title="Delete draft">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+              </button>
+            </div>
           </div>
           <div class="flex items-center gap-4 text-xs text-gray-500 mt-3">
             <span class="flex items-center gap-1">
@@ -627,17 +637,31 @@ class WorkspaceController {
       `;
     }).join('');
     
-    // Add click handlers
+    // Add click handlers for draft cards
     const cards = container.querySelectorAll('[data-draft-id]');
     console.log(`Adding click handlers to ${cards.length} draft cards`);
     
     cards.forEach(card => {
       card.addEventListener('click', (e) => {
+        if (e.target.closest('.delete-draft-btn')) {
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
         const draftId = parseInt(card.dataset.draftId);
         console.log('Draft card clicked:', draftId);
         this.openDraft(draftId);
+      });
+    });
+    
+    // Add click handlers for delete buttons
+    const deleteButtons = container.querySelectorAll('.delete-draft-btn');
+    deleteButtons.forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const draftId = parseInt(btn.dataset.draftId);
+        await this.deleteDraft(draftId);
       });
     });
   }
@@ -737,6 +761,33 @@ class WorkspaceController {
     
     // Update URL
     window.history.pushState({}, '', '/workspace');
+  }
+
+  async deleteDraft(draftId) {
+    if (!confirm('Are you sure you want to delete this draft? It will be moved to Archive for 45 days.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/submissions/${draftId}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete draft');
+      }
+
+      const data = await response.json();
+      console.log('Draft deleted:', data);
+
+      this.showNotification('Draft moved to Archive (45 day retention)', 'success');
+      
+      // Reload the drafts list
+      await this.loadDrafts();
+    } catch (error) {
+      console.error('Error deleting draft:', error);
+      this.showNotification('Failed to delete draft', 'error');
+    }
   }
 }
 
