@@ -217,7 +217,7 @@ class HomeEditor {
       
       this.abortController = new AbortController();
       
-      const response = await fetch('/api/proofread', {
+      const response = await fetch('/api/gemini/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
