@@ -45,8 +45,25 @@ class WorkspaceController {
     this.updateWordCount();
     this.updateAcceptedCount();
     
+    // Check for URL hash to open specific draft
+    this.checkUrlHash();
+    
     // Start in editor mode
     this.showEditor();
+  }
+  
+  checkUrlHash() {
+    const hash = window.location.hash;
+    if (hash && hash.startsWith('#draft-')) {
+      const draftId = parseInt(hash.replace('#draft-', ''));
+      if (draftId && !isNaN(draftId)) {
+        console.log('Opening draft from URL hash:', draftId);
+        // Open the draft after a brief delay to ensure everything is initialized
+        setTimeout(() => {
+          this.openDraft(draftId);
+        }, 100);
+      }
+    }
   }
 
   setupEventListeners() {
@@ -671,6 +688,11 @@ class WorkspaceController {
       
       // Switch to editor view
       this.showEditor();
+      
+      // Clear URL hash to prevent reloading
+      if (window.location.hash) {
+        history.replaceState(null, null, ' ');
+      }
       
       this.showNotification('Draft loaded successfully', 'success');
       

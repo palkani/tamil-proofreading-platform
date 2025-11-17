@@ -20,6 +20,8 @@ async function loadDashboard() {
     // Render submissions
     data.recent_submissions.forEach(submission => {
       const row = document.createElement('tr');
+      row.style.cursor = 'pointer';
+      row.dataset.submissionId = submission.id;
       
       const statusClass = 
         submission.status === 'completed' ? 'bg-green-200 text-green-900' :
@@ -29,9 +31,9 @@ async function loadDashboard() {
       
       row.innerHTML = `
         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-          <a href="/submissions/${submission.id}" class="text-gray-900 hover:text-gray-700 underline">
+          <span class="text-blue-600 hover:text-blue-800 font-medium">
             ${submission.id}
-          </a>
+          </span>
         </td>
         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${submission.word_count || 0}</td>
         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${submission.model_used || 'N/A'}</td>
@@ -44,6 +46,14 @@ async function loadDashboard() {
           ${new Date(submission.created_at).toLocaleDateString()}
         </td>
       `;
+      
+      // Add click handler to open draft in workspace
+      row.addEventListener('click', (e) => {
+        e.preventDefault();
+        const submissionId = row.dataset.submissionId;
+        // Navigate to workspace with draft ID in URL hash
+        window.location.href = `/workspace#draft-${submissionId}`;
+      });
       
       tbody.appendChild(row);
     });

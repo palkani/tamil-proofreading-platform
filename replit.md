@@ -5,7 +5,15 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
 
 ## Recent Changes (November 17, 2025)
 
-### Latest Updates: Google-Style Tamil Typing + Paste Conversion ✅
+### Latest Updates: Fixed Draft Navigation + Google-Style Tamil Typing ✅
+- **Fixed Draft Click Navigation**: Dashboard draft links now properly open drafts in workspace
+  - No more 404 errors when clicking on draft messages
+  - Dashboard drafts use JavaScript click handlers instead of broken href links
+  - Clicking any draft row in the dashboard opens it in the workspace editor
+  - URL hash system (`#draft-{id}`) for reliable draft loading
+  - Auto-clears hash after loading to prevent reload loops
+
+### Previous Updates: Google-Style Tamil Typing + Paste Conversion ✅
 - **Google-Style Tamil Typing**: Type English, press Space → auto-converts to Tamil!
   - Type "vanakkam" + Space → "வணக்கம் "
   - Type "hello" + Space → "வணக்கம் "
