@@ -12,6 +12,7 @@ class HomeEditor {
     this.abortController = null;
     this.lastAnalyzedText = '';
     this.isAnalyzing = false;
+    this.pendingAnalysis = false;
     
     // Tamil conversion dictionary (simplified version)
     this.tamilDict = {
@@ -176,13 +177,19 @@ class HomeEditor {
   async autoAnalyze() {
     const text = this.getPlainText();
     
-    // Skip if empty or same as last analyzed
-    if (!text || text === this.lastAnalyzedText) {
+    // Skip if empty
+    if (!text) {
       return;
     }
     
-    // Skip if already analyzing
+    // If already analyzing, mark that we need to re-run after completion
     if (this.isAnalyzing) {
+      this.pendingAnalysis = true;
+      return;
+    }
+    
+    // Skip if same as last analyzed
+    if (text === this.lastAnalyzedText) {
       return;
     }
     
@@ -197,6 +204,7 @@ class HomeEditor {
     
     this.lastAnalyzedText = text;
     this.isAnalyzing = true;
+    this.pendingAnalysis = false;
     
     // Show loading state
     this.showLoading();
@@ -230,6 +238,13 @@ class HomeEditor {
       }
     } finally {
       this.isAnalyzing = false;
+      
+      // If text changed during analysis, re-run
+      if (this.pendingAnalysis) {
+        this.pendingAnalysis = false;
+        // Re-schedule analysis for new content
+        this.scheduleAutoAnalysis();
+      }
     }
   }
   
