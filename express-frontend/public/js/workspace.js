@@ -517,11 +517,11 @@ class WorkspaceController {
     // Show list view, hide editor
     const listView = document.getElementById('drafts-list-view');
     const editorPanel = document.querySelector('.flex-1.flex.flex-col.bg-slate-50.border-r');
-    const aiPanel = document.querySelector('.w-96.bg-white');
+    const aiPanel = document.getElementById('ai-assistant-panel');
     
     if (listView) listView.classList.remove('hidden');
     if (editorPanel) editorPanel.classList.add('hidden');
-    if (aiPanel) aiPanel.classList.add('hidden');
+    if (aiPanel) aiPanel.style.display = 'none';
     
     // Load drafts
     await this.loadDrafts();
@@ -533,7 +533,7 @@ class WorkspaceController {
     // Hide list view, show editor
     const listView = document.getElementById('drafts-list-view');
     const editorPanel = document.querySelector('.flex-1.flex.flex-col.bg-slate-50.border-r');
-    const aiPanel = document.querySelector('.w-96.bg-white.flex.flex-col');
+    const aiPanel = document.getElementById('ai-assistant-panel');
     
     console.log('Showing editor - AI Panel found:', !!aiPanel);
     
@@ -545,7 +545,9 @@ class WorkspaceController {
     if (aiPanel) {
       aiPanel.classList.remove('hidden');
       aiPanel.style.display = 'flex';
-      console.log('AI Assistant panel is now visible');
+      aiPanel.style.visibility = 'visible';
+      aiPanel.style.opacity = '1';
+      console.log('AI Assistant panel is now visible', aiPanel.offsetWidth, 'px wide');
     } else {
       console.error('AI Assistant panel not found!');
     }
