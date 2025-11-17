@@ -217,6 +217,25 @@ const commonWordMap = {
   'saadham': 'சாதம்',
   'rice': 'சாதம்',
   
+  // Cultural & Nature Words
+  'sangam': 'சங்கம்',
+  'thenral': 'தென்றல்',
+  'thendral': 'தென்றல்',
+  'katru': 'காற்று',
+  'wind': 'காற்று',
+  'malar': 'மலர்',
+  'flower': 'மலர்',
+  'poo': 'பூ',
+  'mazhai': 'மழை',
+  'rain': 'மழை',
+  'nila': 'நிலா',
+  'moon': 'நிலா',
+  'suryan': 'சூரியன்',
+  'sun': 'சூரியன்',
+  'kaadal': 'காதல்',
+  'love': 'காதல்',
+  'anbu': 'அன்பு',
+  
   // Numbers
   'ondru': 'ஒன்று',
   'one': 'ஒன்று',
