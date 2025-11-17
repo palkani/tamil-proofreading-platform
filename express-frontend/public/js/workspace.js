@@ -533,11 +533,22 @@ class WorkspaceController {
     // Hide list view, show editor
     const listView = document.getElementById('drafts-list-view');
     const editorPanel = document.querySelector('.flex-1.flex.flex-col.bg-slate-50.border-r');
-    const aiPanel = document.querySelector('.w-96.bg-white');
+    const aiPanel = document.querySelector('.w-96.bg-white.flex.flex-col');
+    
+    console.log('Showing editor - AI Panel found:', !!aiPanel);
     
     if (listView) listView.classList.add('hidden');
-    if (editorPanel) editorPanel.classList.remove('hidden');
-    if (aiPanel) aiPanel.classList.remove('hidden');
+    if (editorPanel) {
+      editorPanel.classList.remove('hidden');
+      editorPanel.style.display = 'flex';
+    }
+    if (aiPanel) {
+      aiPanel.classList.remove('hidden');
+      aiPanel.style.display = 'flex';
+      console.log('AI Assistant panel is now visible');
+    } else {
+      console.error('AI Assistant panel not found!');
+    }
   }
 
   async loadDrafts() {
