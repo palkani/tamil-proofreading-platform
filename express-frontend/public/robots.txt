@@ -1,0 +1,20 @@
+# ProofTamil - Free Tamil Editor & Typing Tool
+# Allow all search engines to index and crawl
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://prooftamil.com/sitemap.xml
+
+# Crawl rate
+Crawl-delay: 0
+
+# Specific paths to prioritize
+Allow: /workspace
+Allow: /login
+Allow: /register
+
+# Block admin and API endpoints from search results
+Disallow: /api/
+Disallow: /admin/

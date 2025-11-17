@@ -12,7 +12,7 @@ router.get('/', (req, res) => {
   };
   
   res.render('pages/workspace', { 
-    title: 'Workspace - Tamil Proofreading',
+    title: 'Free Tamil Typing Workspace - Online Editor | ProofTamil',
     user: user
   });
 });

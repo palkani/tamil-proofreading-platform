@@ -12,7 +12,7 @@ const mockUser = {
 // Homepage
 router.get('/', (req, res) => {
   res.render('pages/home', { 
-    title: 'ProofTamil - AI-Powered Tamil Proofreading Studio',
+    title: 'Free Tamil Editor & Typing Tool - AI Grammar Checker | ProofTamil',
     user: mockUser // Show logged-in state for testing
   });
 });
