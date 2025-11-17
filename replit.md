@@ -23,11 +23,17 @@ The platform is built with a Go backend (port 8080) and an Express.js frontend w
 - **Enhanced Autocomplete System:** Provides smart, priority-based word suggestions (exact, partial, phonetic matches) with real-time feedback, disappearing on backspace/delete.
 - **Google-Style Tamil Typing:** Auto-converts English phonetic input to Tamil script upon pressing space (e.g., "vanakkam" + Space → "வணக்கம்").
 - **Paste Conversion:** Automatically converts pasted English paragraphs into Tamil while preserving punctuation and formatting.
-- **Scalable Autocomplete System (NEW - Nov 17, 2025):**
+- **Scalable Autocomplete System (COMPLETED - Nov 17, 2025):**
     - **Database-Backed Dictionary:** Created `tamil_words` PostgreSQL table to store millions of Tamil words with transliterations, frequencies, categories, and metadata.
-    - **Server-Side API:** Added `/api/v1/autocomplete` endpoint for fast prefix-based word lookup using indexed queries.
-    - **100+ Words Seeded:** Database populated with 100 high-frequency Tamil words covering common phrases, names, food, nature, animals, colors, body parts, verbs, deities, places, transportation, and emotions.
-    - **Frequency-Based Ranking:** Results sorted by word frequency (1000=very common, 500=common) for most relevant suggestions first.
+    - **Server-Side API:** Three endpoints for complete word management:
+        - `GET /api/v1/autocomplete?query=<prefix>&limit=<n>` - Fast prefix-based lookup (default limit: 10, max: 100)
+        - `POST /api/v1/tamil-words` - Add new words with transliterations
+        - `POST /api/v1/tamil-words/confirm` - Increment user confirmation count
+    - **Security Hardened:** All queries use parameterized binding (SQL injection prevented), case-insensitive matching via lowercase normalization, and unique index on transliteration column prevents duplicates.
+    - **100+ Words Seeded:** Database populated with 100 high-frequency Tamil words covering greetings, family, food, nature, animals, colors, body parts, verbs, deities, places, transportation, and emotions.
+    - **Frequency-Based Ranking:** Results sorted by word frequency (1000=very common, 500=common) with exact match prioritization for most relevant suggestions first.
+    - **Performance:** Btree unique index on `transliteration` column enables O(log n) prefix matching, scales to millions of rows.
+    - **Normalization Invariant:** All transliterations stored and searched in lowercase throughout system (seed script, API handlers, autocomplete queries) for consistent case-insensitive behavior.
     - **Client-Side Cache:** Includes 500+ common Tamil words in browser for instant autocomplete without API calls.
     - **Future-Ready:** Architecture supports millions of words via open-source datasets (Wiktionary, Tamil NLP Catalog, Open-Tamil 40K dictionary).
 - **Draft Management:**
