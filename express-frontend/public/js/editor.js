@@ -55,6 +55,7 @@ class TamilEditor {
 
   setupAutocomplete() {
     let autocompleteBox = null;
+    this.savedCursorPos = null; // Store cursor position for autocomplete
     
     this.editor.addEventListener('keyup', (e) => {
       if (e.key === 'Escape' && autocompleteBox) {
@@ -83,12 +84,43 @@ class TamilEditor {
       }
       
       if (suggestions.length > 0) {
+        // Save cursor position before showing autocomplete
+        this.savedCursorPos = this.getCursorPosition();
         this.showAutocomplete(suggestions, currentWord);
       } else if (autocompleteBox) {
         autocompleteBox.remove();
         autocompleteBox = null;
       }
     });
+  }
+
+  getCursorPosition() {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return 0;
+    
+    const range = selection.getRangeAt(0);
+    const fullText = this.editor.textContent || '';
+    
+    // Calculate actual cursor position in the text
+    let cursorPos = 0;
+    const walker = document.createTreeWalker(
+      this.editor,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    let currentNode = walker.nextNode();
+    while (currentNode) {
+      if (currentNode === range.startContainer) {
+        cursorPos += range.startOffset;
+        break;
+      }
+      cursorPos += currentNode.textContent.length;
+      currentNode = walker.nextNode();
+    }
+    
+    return cursorPos;
   }
 
   showAutocomplete(suggestions, partialWord) {
@@ -128,47 +160,22 @@ class TamilEditor {
   insertSuggestion(partialWord, fullWord) {
     console.log('Inserting suggestion:', { partialWord, fullWord });
     
-    this.editor.focus();
-    
     try {
       // Get the entire text content
       const fullText = this.editor.textContent || '';
       console.log('Full text before:', fullText);
       
-      // Get cursor position in the full text
-      const selection = window.getSelection();
-      if (!selection.rangeCount) return;
+      // Use saved cursor position (captured before click)
+      const cursorPos = this.savedCursorPos !== null ? this.savedCursorPos : this.getCursorPosition();
+      console.log('Cursor position (saved):', cursorPos);
       
-      const range = selection.getRangeAt(0);
-      
-      // Calculate actual cursor position in the text
-      let cursorPos = 0;
-      const walker = document.createTreeWalker(
-        this.editor,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-      );
-      
-      let currentNode = walker.nextNode();
-      while (currentNode) {
-        if (currentNode === range.startContainer) {
-          cursorPos += range.startOffset;
-          break;
-        }
-        cursorPos += currentNode.textContent.length;
-        currentNode = walker.nextNode();
-      }
-      
-      console.log('Cursor position:', cursorPos);
-      
-      // Find the start of the current word
+      // Find the start of the current word (going backwards from cursor)
       let wordStart = cursorPos;
       while (wordStart > 0 && fullText[wordStart - 1] && !/[\s\n]/.test(fullText[wordStart - 1])) {
         wordStart--;
       }
       
-      console.log('Word starts at:', wordStart, 'Word:', fullText.substring(wordStart, cursorPos));
+      console.log('Word starts at:', wordStart, 'Word to replace:', fullText.substring(wordStart, cursorPos));
       
       // Build new text with the Tamil word replacing the English word
       const before = fullText.substring(0, wordStart);
@@ -182,6 +189,9 @@ class TamilEditor {
       
       // Set cursor position after the inserted word
       const newCursorPos = wordStart + fullWord.length + 1;
+      
+      // Focus editor and set cursor position
+      this.editor.focus();
       
       // Create new range at the correct position
       const newRange = document.createRange();
@@ -215,6 +225,9 @@ class TamilEditor {
       newSelection.addRange(newRange);
       
       console.log('Insertion complete');
+      
+      // Clear saved cursor position
+      this.savedCursorPos = null;
       
       // Trigger change event
       this.onContentChange();
