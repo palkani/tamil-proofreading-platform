@@ -5,7 +5,14 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
 
 ## Recent Changes (November 17, 2025)
 
-### Latest Updates: Draft Loading and Auto AI Analysis ✅
+### Latest Updates: English-to-Tamil Transliteration ✅
+- **Smart Autocomplete**: Type in English, get Tamil word suggestions automatically
+- **30+ Common Words**: Pre-mapped common words (vanakkam → வணக்கம், nandri → நன்றி, etc.)
+- **Phonetic Transliteration**: Converts English phonetics to Tamil script in real-time
+- **Dual Language Support**: Works with both Tamil script and English romanization
+- **Dashboard Enhancement**: Added "Create New Draft" button for quick access to workspace
+
+### Previous Updates: Draft Loading and Auto AI Analysis ✅
 - **Fixed Draft Navigation**: Changed "My Drafts" from URL-based to SPA-style view switching
 - **Removed 404 Errors**: No longer using URL parameters to avoid Replit proxy issues
 - **Auto AI Analysis**: Opening a draft automatically triggers AI grammar checking after 500ms

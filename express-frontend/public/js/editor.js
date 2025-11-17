@@ -71,16 +71,19 @@ class TamilEditor {
       const words = textBeforeCursor.split(/\s/);
       const currentWord = words[words.length - 1];
 
-      // Only show autocomplete for Tamil words (2+ characters)
+      let suggestions = [];
+
+      // Check if typing in Tamil (2+ characters)
       if (currentWord && currentWord.length >= 2 && /[\u0B80-\u0BFF]/.test(currentWord)) {
-        const suggestions = getAutocompleteSuggestions(currentWord);
-        
-        if (suggestions.length > 0) {
-          this.showAutocomplete(suggestions, currentWord);
-        } else if (autocompleteBox) {
-          autocompleteBox.remove();
-          autocompleteBox = null;
-        }
+        suggestions = getAutocompleteSuggestions(currentWord);
+      } 
+      // Check if typing in English (2+ characters) - transliterate to Tamil
+      else if (currentWord && currentWord.length >= 2 && /^[a-zA-Z]+$/.test(currentWord)) {
+        suggestions = getTamilSuggestionsFromEnglish(currentWord, tamilDictionary);
+      }
+      
+      if (suggestions.length > 0) {
+        this.showAutocomplete(suggestions, currentWord);
       } else if (autocompleteBox) {
         autocompleteBox.remove();
         autocompleteBox = null;
