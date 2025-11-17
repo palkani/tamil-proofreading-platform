@@ -5,7 +5,14 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
 
 ## Recent Changes (November 17, 2025)
 
-### Latest Updates: Fixed Draft Navigation + Google-Style Tamil Typing ✅
+### Latest Updates: Enhanced Autocomplete + Fixed Draft Navigation ✅
+- **Enhanced Autocomplete System**:
+  - ✅ Fixed: Autocomplete now disappears when you delete/backspace text
+  - ✅ Improved: Better word suggestions with priority-based matching
+  - ✅ Smarter: Exact matches ranked highest, then partial matches, then phonetic matches
+  - ✅ Flexible: Supports "starts with", "contains", and transliteration matching
+  - ✅ Responsive: Hides autocomplete on Backspace, Delete, Escape, or when word is too short
+  - ✅ Accurate: 5-tier priority system for best suggestion ranking
 - **Fixed Draft Click Navigation**: Dashboard draft links now properly open drafts in workspace
   - No more 404 errors when clicking on draft messages
   - Dashboard drafts use JavaScript click handlers instead of broken href links

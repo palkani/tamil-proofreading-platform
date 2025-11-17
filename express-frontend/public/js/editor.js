@@ -71,8 +71,22 @@ class TamilEditor {
     this.savedCursorPos = null; // Store cursor position for autocomplete
     this.currentEnglishWord = ''; // Track current English word for Google-style typing
     
+    // Helper to remove autocomplete
+    const removeAutocomplete = () => {
+      if (autocompleteBox) {
+        autocompleteBox.remove();
+        autocompleteBox = null;
+      }
+    };
+    
     // Google-style typing: Convert on Space key
     this.editor.addEventListener('keydown', (e) => {
+      // Hide autocomplete on Backspace, Delete, or Escape
+      if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Escape') {
+        removeAutocomplete();
+        if (e.key === 'Escape') return;
+      }
+      
       if (e.key === ' ') {
         const selection = window.getSelection();
         if (!selection.rangeCount) return;
@@ -106,52 +120,58 @@ class TamilEditor {
             this.setCursorPosition(wordStart + tamilWord.length + 1);
             this.onContentChange();
             
-            // Close autocomplete if open
-            if (autocompleteBox) {
-              autocompleteBox.remove();
-              autocompleteBox = null;
-            }
+            // Close autocomplete
+            removeAutocomplete();
           } else {
             // No Tamil conversion, just add space normally
             document.execCommand('insertText', false, ' ');
+            removeAutocomplete();
           }
         }
       }
     });
     
     this.editor.addEventListener('keyup', (e) => {
-      if (e.key === 'Escape' && autocompleteBox) {
-        autocompleteBox.remove();
-        autocompleteBox = null;
+      // Skip for special keys
+      if (['Escape', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         return;
       }
 
       const selection = window.getSelection();
-      if (!selection.rangeCount) return;
+      if (!selection.rangeCount) {
+        removeAutocomplete();
+        return;
+      }
 
       const range = selection.getRangeAt(0);
       const textBeforeCursor = range.startContainer.textContent?.substring(0, range.startOffset) || '';
       const words = textBeforeCursor.split(/\s/);
       const currentWord = words[words.length - 1];
 
+      // If word is too short or empty, hide autocomplete
+      if (!currentWord || currentWord.length < 2) {
+        removeAutocomplete();
+        return;
+      }
+
       let suggestions = [];
 
       // Check if typing in Tamil (2+ characters)
-      if (currentWord && currentWord.length >= 2 && /[\u0B80-\u0BFF]/.test(currentWord)) {
+      if (currentWord.length >= 2 && /[\u0B80-\u0BFF]/.test(currentWord)) {
         suggestions = getAutocompleteSuggestions(currentWord);
       } 
       // Check if typing in English (2+ characters) - show Tamil suggestions
-      else if (currentWord && currentWord.length >= 2 && /^[a-zA-Z]+$/.test(currentWord)) {
+      else if (currentWord.length >= 2 && /^[a-zA-Z]+$/.test(currentWord)) {
         suggestions = getTamilSuggestionsFromEnglish(currentWord, tamilDictionary);
       }
       
       if (suggestions.length > 0) {
         // Save cursor position before showing autocomplete
         this.savedCursorPos = this.getCursorPosition();
-        this.showAutocomplete(suggestions, currentWord);
-      } else if (autocompleteBox) {
-        autocompleteBox.remove();
-        autocompleteBox = null;
+        this.showAutocomplete(suggestions, currentWord, autocompleteBox);
+        autocompleteBox = document.querySelector('.autocomplete-box');
+      } else {
+        removeAutocomplete();
       }
     });
   }

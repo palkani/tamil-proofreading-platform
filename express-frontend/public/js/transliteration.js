@@ -267,35 +267,66 @@ function getTamilSuggestionsFromEnglish(englishInput, tamilWords) {
   
   const lower = englishInput.toLowerCase();
   const suggestions = [];
+  const seen = new Set();
   
-  // First, check direct common word matches
+  // Helper to add unique suggestions with priority
+  const addSuggestion = (word, priority = 0) => {
+    if (!seen.has(word)) {
+      seen.add(word);
+      suggestions.push({ word, priority });
+    }
+  };
+  
+  // 1. HIGHEST PRIORITY: Exact match in common word map
   if (commonWordMap[lower]) {
-    suggestions.push(commonWordMap[lower]);
+    addSuggestion(commonWordMap[lower], 100);
   }
   
-  // Try transliteration
+  // 2. HIGH PRIORITY: Partial matches in common word map (starts with)
+  Object.keys(commonWordMap).forEach(key => {
+    if (key.startsWith(lower) && key !== lower) {
+      addSuggestion(commonWordMap[key], 90);
+    }
+  });
+  
+  // 3. MEDIUM PRIORITY: Contains match in common word map
+  Object.keys(commonWordMap).forEach(key => {
+    if (key.includes(lower) && !key.startsWith(lower)) {
+      addSuggestion(commonWordMap[key], 80);
+    }
+  });
+  
+  // 4. Try transliteration for phonetic matching
   const transliterated = transliterateToTamil(lower);
   
   // Find Tamil words that start with the transliterated text
   if (transliterated && transliterated !== lower) {
-    const matches = tamilWords.filter(word => 
-      word.startsWith(transliterated)
-    );
-    suggestions.push(...matches);
+    tamilWords.forEach(word => {
+      if (word.startsWith(transliterated)) {
+        addSuggestion(word, 70);
+      }
+    });
   }
   
-  // Also search for Tamil words that could match the English phonetics
-  // For example, searching for "van" should suggest words starting with "வ"
-  const partialTranslit = transliterateToTamil(lower.substring(0, Math.min(3, lower.length)));
-  if (partialTranslit && partialTranslit !== lower.substring(0, Math.min(3, lower.length))) {
-    const partialMatches = tamilWords.filter(word => 
-      word.startsWith(partialTranslit) && !suggestions.includes(word)
-    );
-    suggestions.push(...partialMatches.slice(0, 5));
+  // 5. Partial transliteration (first 2-3 chars)
+  if (lower.length >= 2) {
+    const partialTranslit = transliterateToTamil(lower.substring(0, Math.min(3, lower.length)));
+    if (partialTranslit && partialTranslit !== lower.substring(0, Math.min(3, lower.length))) {
+      tamilWords.forEach(word => {
+        if (word.startsWith(partialTranslit)) {
+          addSuggestion(word, 60);
+        }
+      });
+    }
   }
   
-  // Limit to top 8 suggestions
-  return [...new Set(suggestions)].slice(0, 8);
+  // Sort by priority (highest first) and return top 8
+  const sortedSuggestions = suggestions
+    .sort((a, b) => b.priority - a.priority)
+    .map(s => s.word)
+    .slice(0, 8);
+  
+  return sortedSuggestions;
 }
 
 // Export for use in other modules
