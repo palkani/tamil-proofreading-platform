@@ -160,6 +160,9 @@ class TamilEditor {
 
   setupAutocomplete() {
     let autocompleteBox = null;
+    let selectedIndex = 0; // Track selected autocomplete item
+    let currentSuggestions = []; // Store current suggestions
+    let currentPartialWord = ''; // Store current partial word being typed
     this.savedCursorPos = null; // Store cursor position for autocomplete
     this.currentEnglishWord = ''; // Track current English word for Google-style typing
     
@@ -168,11 +171,54 @@ class TamilEditor {
       if (autocompleteBox) {
         autocompleteBox.remove();
         autocompleteBox = null;
+        currentSuggestions = [];
+        currentPartialWord = '';
+        selectedIndex = 0;
       }
+    };
+    
+    // Helper to update selected item highlighting
+    const updateSelection = () => {
+      if (!autocompleteBox) return;
+      const items = autocompleteBox.querySelectorAll('div.px-4');
+      items.forEach((item, idx) => {
+        if (idx === selectedIndex) {
+          item.style.backgroundColor = '#3b82f6'; // Blue-500
+          item.style.color = '#ffffff';
+          item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+          item.style.backgroundColor = '';
+          item.style.color = '';
+        }
+      });
     };
     
     // Google-style typing: Convert on Space key
     this.editor.addEventListener('keydown', (e) => {
+      // Handle autocomplete keyboard navigation
+      if (autocompleteBox && currentSuggestions.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          selectedIndex = (selectedIndex + 1) % currentSuggestions.length;
+          updateSelection();
+          return;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          selectedIndex = (selectedIndex - 1 + currentSuggestions.length) % currentSuggestions.length;
+          updateSelection();
+          return;
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          // Insert the selected suggestion
+          const selectedSuggestion = currentSuggestions[selectedIndex];
+          if (selectedSuggestion && currentPartialWord) {
+            this.insertSuggestion(currentPartialWord, selectedSuggestion);
+            removeAutocomplete();
+          }
+          return;
+        }
+      }
+      
       // Hide autocomplete on Backspace, Delete, or Escape
       if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Escape') {
         removeAutocomplete();
@@ -258,10 +304,14 @@ class TamilEditor {
       }
       
       if (suggestions.length > 0) {
-        // Save cursor position before showing autocomplete
+        // Save cursor position and current state before showing autocomplete
         this.savedCursorPos = this.getCursorPosition();
+        currentSuggestions = suggestions;
+        currentPartialWord = currentWord;
+        selectedIndex = 0; // Reset selection to first item
         this.showAutocomplete(suggestions, currentWord, autocompleteBox);
         autocompleteBox = document.querySelector('.autocomplete-box');
+        updateSelection(); // Highlight first item
       } else {
         removeAutocomplete();
       }
