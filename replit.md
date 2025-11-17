@@ -5,9 +5,20 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
 
 ## Recent Changes (November 17, 2025)
 
-### Latest Updates: Enhanced English-to-Tamil Autocomplete ✅
+### Latest Updates: Google-Style Tamil Typing + Paste Conversion ✅
+- **Google-Style Tamil Typing**: Type English, press Space → auto-converts to Tamil!
+  - Type "vanakkam" + Space → "வணக்கம் "
+  - Type "hello" + Space → "வணக்கம் "
+  - Type "good morning" + Space after each word → "நல்ல காலை "
+  - Real-time phonetic transliteration as you type
+  - Works exactly like Google Tamil Input Tools
+- **Paste English Paragraph → Auto-Convert to Tamil**:
+  - Copy English text from anywhere
+  - Paste into editor → automatically converts to Tamil
+  - Preserves punctuation and formatting
+  - Example: Paste "hello how are you today" → "வணக்கம் எப்படி நீ இன்று"
 - **Expanded Dictionary**: 130+ common Tamil words with English mappings
-  - Greetings: vanakkam, nandri, welcome, sorry, please
+  - Greetings: vanakkam, nandri, welcome, sorry, please, hello, thanks
   - Question words: how, when, where, what, who, why
   - Pronouns: I, you, he, she, they, we, this, that
   - Time words: today, yesterday, tomorrow, morning, evening, night
@@ -17,11 +28,10 @@ A full-stack Tamil AI proofreading platform migrated from Vercel to Replit. The 
   - Numbers: one through ten
 - **Beautiful Highlighting**: Blue theme color on hover with smooth transitions
 - **Auto-Selection**: First suggestion pre-highlighted with light blue
-- **Proper Replacement**: Fixed cursor position tracking - English words now correctly replaced with Tamil
-- **Smart Autocomplete**: Type in English, get relevant Tamil word suggestions automatically
+- **Proper Replacement**: Fixed cursor position tracking - English words correctly replaced with Tamil
+- **Smart Autocomplete**: Type in English, get relevant Tamil word suggestions
 - **Phonetic Transliteration**: Converts English phonetics to Tamil script in real-time
 - **Dual Language Support**: Works with both Tamil script and English romanization
-- **Dashboard Enhancement**: Added "Create New Draft" button for quick access to workspace
 
 ### Previous Updates: Draft Loading and Auto AI Analysis ✅
 - **Fixed Draft Navigation**: Changed "My Drafts" from URL-based to SPA-style view switching

@@ -27,11 +27,24 @@ class TamilEditor {
       this.onContentChange();
     });
 
-    // Handle paste events
+    // Handle paste events - Convert English to Tamil
     this.editor.addEventListener('paste', (e) => {
       e.preventDefault();
       const text = e.clipboardData.getData('text/plain');
-      document.execCommand('insertText', false, text);
+      
+      // Check if text contains mostly English characters
+      const englishRatio = (text.match(/[a-zA-Z]/g) || []).length / text.length;
+      
+      if (englishRatio > 0.5) {
+        // Text is mostly English, convert to Tamil
+        const tamilText = this.convertEnglishParagraphToTamil(text);
+        document.execCommand('insertText', false, tamilText);
+        console.log('Converted English to Tamil:', { original: text, converted: tamilText });
+      } else {
+        // Keep as is (already Tamil or mixed)
+        document.execCommand('insertText', false, text);
+      }
+      
       // Explicitly trigger content change for paste events
       this.onContentChange();
     });
@@ -56,6 +69,55 @@ class TamilEditor {
   setupAutocomplete() {
     let autocompleteBox = null;
     this.savedCursorPos = null; // Store cursor position for autocomplete
+    this.currentEnglishWord = ''; // Track current English word for Google-style typing
+    
+    // Google-style typing: Convert on Space key
+    this.editor.addEventListener('keydown', (e) => {
+      if (e.key === ' ') {
+        const selection = window.getSelection();
+        if (!selection.rangeCount) return;
+        
+        const range = selection.getRangeAt(0);
+        const textBeforeCursor = range.startContainer.textContent?.substring(0, range.startOffset) || '';
+        const words = textBeforeCursor.split(/\s/);
+        const currentWord = words[words.length - 1];
+        
+        // If typing English word, convert to Tamil on space
+        if (currentWord && /^[a-zA-Z]+$/.test(currentWord)) {
+          e.preventDefault();
+          
+          // Convert to Tamil
+          const tamilWord = this.convertWordToTamil(currentWord);
+          
+          if (tamilWord && tamilWord !== currentWord) {
+            // Replace English with Tamil
+            const cursorPos = this.getCursorPosition();
+            const fullText = this.editor.textContent || '';
+            let wordStart = cursorPos;
+            while (wordStart > 0 && fullText[wordStart - 1] && !/[\s\n]/.test(fullText[wordStart - 1])) {
+              wordStart--;
+            }
+            
+            const before = fullText.substring(0, wordStart);
+            const after = fullText.substring(cursorPos);
+            this.editor.textContent = before + tamilWord + ' ' + after;
+            
+            // Set cursor after the Tamil word and space
+            this.setCursorPosition(wordStart + tamilWord.length + 1);
+            this.onContentChange();
+            
+            // Close autocomplete if open
+            if (autocompleteBox) {
+              autocompleteBox.remove();
+              autocompleteBox = null;
+            }
+          } else {
+            // No Tamil conversion, just add space normally
+            document.execCommand('insertText', false, ' ');
+          }
+        }
+      }
+    });
     
     this.editor.addEventListener('keyup', (e) => {
       if (e.key === 'Escape' && autocompleteBox) {
@@ -68,7 +130,7 @@ class TamilEditor {
       if (!selection.rangeCount) return;
 
       const range = selection.getRangeAt(0);
-      const textBeforeCursor = range.startContainer.textContent.substring(0, range.startOffset);
+      const textBeforeCursor = range.startContainer.textContent?.substring(0, range.startOffset) || '';
       const words = textBeforeCursor.split(/\s/);
       const currentWord = words[words.length - 1];
 
@@ -78,7 +140,7 @@ class TamilEditor {
       if (currentWord && currentWord.length >= 2 && /[\u0B80-\u0BFF]/.test(currentWord)) {
         suggestions = getAutocompleteSuggestions(currentWord);
       } 
-      // Check if typing in English (2+ characters) - transliterate to Tamil
+      // Check if typing in English (2+ characters) - show Tamil suggestions
       else if (currentWord && currentWord.length >= 2 && /^[a-zA-Z]+$/.test(currentWord)) {
         suggestions = getTamilSuggestionsFromEnglish(currentWord, tamilDictionary);
       }
@@ -254,6 +316,77 @@ class TamilEditor {
     } catch (error) {
       console.error('Error inserting suggestion:', error);
     }
+  }
+
+  convertEnglishParagraphToTamil(englishText) {
+    // Convert an entire English paragraph to Tamil word by word
+    const words = englishText.split(/(\s+)/); // Keep whitespace
+    
+    return words.map(word => {
+      // Skip whitespace
+      if (/^\s+$/.test(word)) return word;
+      
+      // Check if word is English
+      if (/[a-zA-Z]/.test(word)) {
+        // Extract punctuation
+        const match = word.match(/^([a-zA-Z]+)([\s\S]*)$/);
+        if (match) {
+          const englishPart = match[1];
+          const punctuation = match[2];
+          const tamilWord = this.convertWordToTamil(englishPart);
+          return (tamilWord || englishPart) + punctuation;
+        }
+      }
+      
+      // Return as is (numbers, Tamil text, punctuation)
+      return word;
+    }).join('');
+  }
+
+  convertWordToTamil(englishWord) {
+    if (!englishWord) return '';
+    
+    // Use transliteration function from transliteration.js
+    if (typeof transliterateToTamil === 'function') {
+      return transliterateToTamil(englishWord);
+    }
+    
+    // Fallback: return original
+    return englishWord;
+  }
+
+  setCursorPosition(position) {
+    this.editor.focus();
+    
+    const range = document.createRange();
+    const selection = window.getSelection();
+    
+    // Find the text node and offset for the position
+    const walker = document.createTreeWalker(
+      this.editor,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    let textNode = walker.nextNode();
+    let charCount = 0;
+    
+    while (textNode) {
+      const nextCharCount = charCount + textNode.textContent.length;
+      if (position <= nextCharCount) {
+        const offset = position - charCount;
+        range.setStart(textNode, offset);
+        range.setEnd(textNode, offset);
+        break;
+      }
+      charCount = nextCharCount;
+      textNode = walker.nextNode();
+    }
+    
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
   }
 
   getPlainText() {
