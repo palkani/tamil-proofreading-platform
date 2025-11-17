@@ -128,76 +128,91 @@ class TamilEditor {
   insertSuggestion(partialWord, fullWord) {
     console.log('Inserting suggestion:', { partialWord, fullWord });
     
-    const selection = window.getSelection();
-    if (!selection.rangeCount) {
-      console.error('No selection range');
-      return;
-    }
-
+    this.editor.focus();
+    
     try {
-      // Focus the editor first
-      this.editor.focus();
+      // Get the entire text content
+      const fullText = this.editor.textContent || '';
+      console.log('Full text before:', fullText);
       
-      // Get current selection
+      // Get cursor position in the full text
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return;
+      
       const range = selection.getRangeAt(0);
-      const currentNode = range.startContainer;
       
-      // Get the text content and cursor position
-      let textContent = '';
-      let cursorOffset = range.startOffset;
+      // Calculate actual cursor position in the text
+      let cursorPos = 0;
+      const walker = document.createTreeWalker(
+        this.editor,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
       
-      if (currentNode.nodeType === Node.TEXT_NODE) {
-        textContent = currentNode.textContent;
-      } else if (currentNode.nodeType === Node.ELEMENT_NODE) {
-        // If in element, get text from first child or create one
-        if (currentNode.childNodes.length > 0 && currentNode.childNodes[0].nodeType === Node.TEXT_NODE) {
-          textContent = currentNode.childNodes[0].textContent;
+      let currentNode = walker.nextNode();
+      while (currentNode) {
+        if (currentNode === range.startContainer) {
+          cursorPos += range.startOffset;
+          break;
         }
+        cursorPos += currentNode.textContent.length;
+        currentNode = walker.nextNode();
       }
       
-      console.log('Current text:', textContent, 'Cursor at:', cursorOffset);
+      console.log('Cursor position:', cursorPos);
       
-      // Find where the partial word starts
-      let wordStart = cursorOffset;
-      while (wordStart > 0 && textContent[wordStart - 1] && !/[\s\n]/.test(textContent[wordStart - 1])) {
+      // Find the start of the current word
+      let wordStart = cursorPos;
+      while (wordStart > 0 && fullText[wordStart - 1] && !/[\s\n]/.test(fullText[wordStart - 1])) {
         wordStart--;
       }
       
-      console.log('Word starts at:', wordStart);
+      console.log('Word starts at:', wordStart, 'Word:', fullText.substring(wordStart, cursorPos));
       
-      // Create the new text with replacement
-      const before = textContent.substring(0, wordStart);
-      const after = textContent.substring(cursorOffset);
-      const newText = before + fullWord + ' ';
+      // Build new text with the Tamil word replacing the English word
+      const before = fullText.substring(0, wordStart);
+      const after = fullText.substring(cursorPos);
+      const newText = before + fullWord + ' ' + after;
       
-      console.log('Replacing with:', newText);
+      console.log('New text:', newText);
       
-      // Delete the partial word by selecting it
-      const deleteRange = document.createRange();
+      // Clear and set new content
+      this.editor.textContent = newText;
       
-      if (currentNode.nodeType === Node.TEXT_NODE) {
-        deleteRange.setStart(currentNode, wordStart);
-        deleteRange.setEnd(currentNode, cursorOffset);
-      } else {
-        // For element nodes, work with first text child
-        const textNode = currentNode.childNodes[0] || currentNode;
-        deleteRange.setStart(textNode, wordStart);
-        deleteRange.setEnd(textNode, cursorOffset);
+      // Set cursor position after the inserted word
+      const newCursorPos = wordStart + fullWord.length + 1;
+      
+      // Create new range at the correct position
+      const newRange = document.createRange();
+      const newSelection = window.getSelection();
+      
+      // Find the text node and position for the new cursor
+      const newWalker = document.createTreeWalker(
+        this.editor,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
+      
+      let textNode = newWalker.nextNode();
+      let charCount = 0;
+      
+      while (textNode) {
+        const nextCharCount = charCount + textNode.textContent.length;
+        if (newCursorPos <= nextCharCount) {
+          const offset = newCursorPos - charCount;
+          newRange.setStart(textNode, offset);
+          newRange.setEnd(textNode, offset);
+          break;
+        }
+        charCount = nextCharCount;
+        textNode = newWalker.nextNode();
       }
       
-      deleteRange.deleteContents();
-      
-      // Insert the Tamil word with a space
-      const tamilNode = document.createTextNode(fullWord + ' ');
-      deleteRange.insertNode(tamilNode);
-      
-      // Move cursor after the inserted text
-      const newRange = document.createRange();
-      newRange.setStartAfter(tamilNode);
       newRange.collapse(true);
-      
-      selection.removeAllRanges();
-      selection.addRange(newRange);
+      newSelection.removeAllRanges();
+      newSelection.addRange(newRange);
       
       console.log('Insertion complete');
       
