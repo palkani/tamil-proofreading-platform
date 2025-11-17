@@ -1,6 +1,6 @@
 // Archive page functionality
 
-const RETENTION_DAYS = 15;
+const RETENTION_DAYS = 45;
 
 function calculateDaysRemaining(archivedAt) {
   if (!archivedAt) return RETENTION_DAYS;
@@ -26,7 +26,7 @@ async function loadArchive() {
     const submissions = data.submissions || [];
     
     if (submissions.length === 0) {
-      summaryEl.textContent = 'No archived drafts at the moment. Archived drafts appear here for 15 days before deletion.';
+      summaryEl.textContent = 'No archived drafts at the moment. Archived drafts appear here for 45 days before deletion.';
       emptyStateDiv.classList.remove('hidden');
       return;
     }
