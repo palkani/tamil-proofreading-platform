@@ -270,8 +270,8 @@ class TamilEditor {
     });
     
     this.editor.addEventListener('keyup', (e) => {
-      // Skip for special keys
-      if (['Escape', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      // Skip for special keys and Enter (to prevent reopening autocomplete after selection)
+      if (['Escape', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) {
         return;
       }
 
