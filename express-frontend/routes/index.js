@@ -56,6 +56,30 @@ router.get('/archive', (req, res) => {
   });
 });
 
+// Contact page
+router.get('/contact', (req, res) => {
+  res.render('pages/contact', { 
+    title: 'Contact Us - ProofTamil',
+    user: mockUser
+  });
+});
+
+// Privacy Policy page
+router.get('/privacy', (req, res) => {
+  res.render('pages/privacy', { 
+    title: 'Privacy Policy - ProofTamil',
+    user: mockUser
+  });
+});
+
+// Terms of Service page
+router.get('/terms', (req, res) => {
+  res.render('pages/terms', { 
+    title: 'Terms of Service - ProofTamil',
+    user: mockUser
+  });
+});
+
 // Logout
 router.post('/logout', (req, res) => {
   req.session.destroy((err) => {

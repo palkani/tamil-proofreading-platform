@@ -1,0 +1,120 @@
+<%- include('../partials/header') %>
+
+<% if (user) { %>
+  <%- include('../partials/nav', { active: '', user: user }) %>
+<% } %>
+
+<div class="min-h-screen bg-gray-50 py-12">
+  <div class="max-w-4xl mx-auto px-6">
+    <!-- Header -->
+    <div class="mb-12">
+      <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
+        Privacy Policy
+      </h1>
+      <p class="text-gray-600">
+        Last updated: November 17, 2025
+      </p>
+    </div>
+
+    <!-- Content -->
+    <div class="bg-white rounded-xl p-8 md:p-12 shadow-lg border border-gray-200 prose prose-lg max-w-none">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Introduction</h2>
+      <p class="text-gray-700 mb-6">
+        ProofTamil ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our free Tamil text editing and proofreading platform.
+      </p>
+
+      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Information We Collect</h2>
+      
+      <h3 class="text-xl font-semibold text-gray-900 mb-3">Personal Information</h3>
+      <p class="text-gray-700 mb-4">
+        When you register for an account, we may collect:
+      </p>
+      <ul class="list-disc list-inside text-gray-700 mb-6 ml-4">
+        <li>Email address</li>
+        <li>Name (optional)</li>
+        <li>Account preferences and settings</li>
+      </ul>
+
+      <h3 class="text-xl font-semibold text-gray-900 mb-3">Content Data</h3>
+      <p class="text-gray-700 mb-6">
+        We temporarily process the Tamil text you write in our editor to provide AI-powered grammar checking and proofreading suggestions. Your drafts are stored securely in your account and are only accessible to you.
+      </p>
+
+      <h3 class="text-xl font-semibold text-gray-900 mb-3">Usage Information</h3>
+      <p class="text-gray-700 mb-6">
+        We collect information about how you interact with ProofTamil, including:
+      </p>
+      <ul class="list-disc list-inside text-gray-700 mb-6 ml-4">
+        <li>Features you use and actions you take</li>
+        <li>Browser type and version</li>
+        <li>Device information</li>
+        <li>IP address and general location</li>
+      </ul>
+
+      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">How We Use Your Information</h2>
+      <p class="text-gray-700 mb-4">
+        We use the collected information to:
+      </p>
+      <ul class="list-disc list-inside text-gray-700 mb-6 ml-4">
+        <li>Provide and improve our Tamil editing and proofreading services</li>
+        <li>Process your text through AI models for grammar checking</li>
+        <li>Save and manage your drafts securely</li>
+        <li>Communicate with you about updates, features, and support</li>
+        <li>Analyze usage patterns to improve our platform</li>
+        <li>Ensure security and prevent fraud</li>
+      </ul>
+
+      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">AI Processing</h2>
+      <p class="text-gray-700 mb-6">
+        ProofTamil uses Google Gemini AI to analyze your Tamil text and provide grammar suggestions. Your text is sent to Google's AI services for processing. We do not store your text permanently on external AI servers. Please review Google's privacy policy for information about how they handle data.
+      </p>
+
+      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Data Storage and Security</h2>
+      <p class="text-gray-700 mb-6">
+        Your account data and drafts are stored securely using industry-standard encryption. We use PostgreSQL databases hosted on secure servers. While we implement reasonable security measures, no method of transmission over the internet is 100% secure.
+      </p>
+
+      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Your Privacy Rights</h2>
+      <p class="text-gray-700 mb-4">
+        You have the right to:
+      </p>
+      <ul class="list-disc list-inside text-gray-700 mb-6 ml-4">
+        <li>Access your personal data</li>
+        <li>Request correction of inaccurate data</li>
+        <li>Request deletion of your account and data</li>
+        <li>Export your drafts and content</li>
+        <li>Opt-out of marketing communications</li>
+      </ul>
+
+      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Cookies and Tracking</h2>
+      <p class="text-gray-700 mb-6">
+        We use essential cookies to maintain your login session and remember your preferences. We do not use third-party advertising cookies or tracking scripts.
+      </p>
+
+      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Children's Privacy</h2>
+      <p class="text-gray-700 mb-6">
+        ProofTamil is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13.
+      </p>
+
+      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Changes to This Policy</h2>
+      <p class="text-gray-700 mb-6">
+        We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last updated" date.
+      </p>
+
+      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Contact Us</h2>
+      <p class="text-gray-700 mb-6">
+        If you have questions about this Privacy Policy or how we handle your data, please contact us at:
+        <a href="mailto:privacy@prooftamil.com" class="text-blue-600 hover:underline">privacy@prooftamil.com</a>
+      </p>
+    </div>
+
+    <!-- Back to Home -->
+    <div class="text-center mt-12">
+      <a href="/" class="inline-block px-8 py-3 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition">
+        Back to Home
+      </a>
+    </div>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

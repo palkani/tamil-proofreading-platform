@@ -44,4 +44,28 @@
     <priority>0.6</priority>
   </url>
   
+  <!-- Contact -->
+  <url>
+    <loc>https://prooftamil.com/contact</loc>
+    <lastmod>2025-11-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  
+  <!-- Privacy Policy -->
+  <url>
+    <loc>https://prooftamil.com/privacy</loc>
+    <lastmod>2025-11-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  
+  <!-- Terms of Service -->
+  <url>
+    <loc>https://prooftamil.com/terms</loc>
+    <lastmod>2025-11-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  
 </urlset>

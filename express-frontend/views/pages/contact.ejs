@@ -1,0 +1,104 @@
+<%- include('../partials/header') %>
+
+<% if (user) { %>
+  <%- include('../partials/nav', { active: '', user: user }) %>
+<% } %>
+
+<div class="min-h-screen bg-gray-50 py-12">
+  <div class="max-w-4xl mx-auto px-6">
+    <!-- Header -->
+    <div class="text-center mb-12">
+      <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
+        Contact Us
+      </h1>
+      <p class="text-xl text-gray-600">
+        Have questions or feedback? We'd love to hear from you!
+      </p>
+    </div>
+
+    <!-- Contact Options -->
+    <div class="grid md:grid-cols-2 gap-8 mb-12">
+      <!-- Email Support -->
+      <div class="bg-white rounded-xl p-8 shadow-lg border border-gray-200">
+        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 mb-4">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-900 mb-2">Email Support</h2>
+        <p class="text-gray-600 mb-4">
+          Send us an email and we'll get back to you within 24 hours.
+        </p>
+        <a href="mailto:support@prooftamil.com" class="text-blue-600 font-semibold hover:text-blue-700">
+          support@prooftamil.com
+        </a>
+      </div>
+
+      <!-- Community -->
+      <div class="bg-white rounded-xl p-8 shadow-lg border border-gray-200">
+        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center text-green-600 mb-4">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
+          </svg>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-900 mb-2">Feedback</h2>
+        <p class="text-gray-600 mb-4">
+          Share your ideas, feature requests, or report bugs.
+        </p>
+        <a href="mailto:feedback@prooftamil.com" class="text-green-600 font-semibold hover:text-green-700">
+          feedback@prooftamil.com
+        </a>
+      </div>
+    </div>
+
+    <!-- FAQ Section -->
+    <div class="bg-white rounded-xl p-8 shadow-lg border border-gray-200">
+      <h2 class="text-2xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
+      
+      <div class="space-y-6">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">How do I report a bug?</h3>
+          <p class="text-gray-600">
+            Please email us at <a href="mailto:feedback@prooftamil.com" class="text-blue-600 hover:underline">feedback@prooftamil.com</a> with:
+          </p>
+          <ul class="list-disc list-inside text-gray-600 mt-2 ml-4">
+            <li>A description of what happened</li>
+            <li>What you expected to happen</li>
+            <li>Steps to reproduce the issue</li>
+            <li>Screenshots if applicable</li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Can I request a new feature?</h3>
+          <p class="text-gray-600">
+            Absolutely! We welcome all feature requests. Send your ideas to <a href="mailto:feedback@prooftamil.com" class="text-blue-600 hover:underline">feedback@prooftamil.com</a> and explain how it would help improve your Tamil writing experience.
+          </p>
+        </div>
+
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">How quickly will I get a response?</h3>
+          <p class="text-gray-600">
+            We aim to respond to all support emails within 24 hours during business days. For urgent issues, please mark your email as "Urgent" in the subject line.
+          </p>
+        </div>
+
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Do you offer technical support?</h3>
+          <p class="text-gray-600">
+            Yes! If you're experiencing technical issues with ProofTamil, email <a href="mailto:support@prooftamil.com" class="text-blue-600 hover:underline">support@prooftamil.com</a> with details about your browser, operating system, and the problem you're facing.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Back to Home -->
+    <div class="text-center mt-12">
+      <a href="/" class="inline-block px-8 py-3 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition">
+        Back to Home
+      </a>
+    </div>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>
