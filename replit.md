@@ -4,8 +4,10 @@
 This project is a full-stack AI-powered Tamil text proofreading platform, designed to assist users in writing accurate and fluent Tamil. It aims to be the "AI Writing Partner for Tamil that Shines" by offering features beyond basic grammar correction, including smart typing, phonetic transliteration, and detailed grammar explanations. The platform targets a broad audience, from casual writers to professionals, providing a comprehensive tool for enhancing Tamil communication. The architecture utilizes Go for the backend and Express.js with EJS for the frontend, with a PostgreSQL database.
 
 ## User Preferences
-- User requested removal of login requirement for easier testing
 - Focus on workspace page enhancement
+- **Authentication System (Nov 17, 2025):** Implemented two-version system:
+  - **Without Login:** Only homepage accessible with Sign Up/Login buttons
+  - **With Login:** Full access to Dashboard, Workspace, Archive, Account pages
 
 ## System Architecture
 The platform is built with a Go backend (port 8080) and an Express.js frontend with EJS templates (port 5000), configured to run concurrently via `start.sh`.
@@ -51,7 +53,14 @@ The platform is built with a Go backend (port 8080) and an Express.js frontend w
     - Employs `systemInstruction` for prompt instructions and `responseMimeType: "application/json"` for structured output.
     - Configured with `temperature: 0` and `topP: 0.1` for deterministic results.
     - Provides error titles and descriptions exclusively in Tamil.
-- **Authentication:** Currently uses mock authentication for testing (user_id=1) with JWT authentication commented out for development ease; this needs to be re-enabled for production.
+- **Authentication (UPDATED - Nov 17, 2025):** 
+    - **Session-based authentication** implemented with Express sessions
+    - **Protected Routes:** Dashboard, Workspace, Archive, and Account pages require login
+    - **Public Pages:** Homepage, Contact, Privacy, Terms accessible to everyone
+    - **Login/Register:** Proper form-based authentication with redirects
+    - **Demo Mode:** Currently accepts any email/password for testing (production requires database validation)
+    - **Session Management:** 24-hour session cookies with automatic redirect to login for protected pages
+    - **Smart Redirects:** After login, users are redirected to the page they were trying to access
 - **Backend API:** Provides endpoints for AI proofreading, draft persistence, and user management.
 - **Frontend Controllers:** Vanilla JavaScript modules manage workspace features, editor functionality, suggestions, dashboard, account, and archive pages.
 - **CORS:** Configured to allow localhost and Replit domains for development, requiring stricter rules for production.

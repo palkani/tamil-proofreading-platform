@@ -1,82 +1,114 @@
 const express = require('express');
 const router = express.Router();
+const { requireAuth, redirectIfAuth, getCurrentUser } = require('../middleware/auth');
 
-// Mock user for testing (same as backend)
-const mockUser = {
-  id: 1,
-  email: 'test@example.com',
-  name: 'Test User',
-  role: 'user'
-};
-
-// Homepage
+// Homepage - accessible to everyone
 router.get('/', (req, res) => {
+  const user = getCurrentUser(req);
   res.render('pages/home', { 
     title: 'Free Tamil Editor & Typing Tool - AI Grammar Checker | ProofTamil',
-    user: mockUser // Show logged-in state for testing
+    user: user
   });
 });
 
-// Login page
-router.get('/login', (req, res) => {
+// Login page - redirect if already logged in
+router.get('/login', redirectIfAuth, (req, res) => {
   res.render('pages/login', { 
     title: 'Sign In - ProofTamil',
     error: req.query.error || null
   });
 });
 
-// Register page
-router.get('/register', (req, res) => {
+// Register page - redirect if already logged in
+router.get('/register', redirectIfAuth, (req, res) => {
   res.render('pages/register', { 
     title: 'Register - ProofTamil'
   });
 });
 
-// Dashboard page
-router.get('/dashboard', (req, res) => {
+// Handle login form submission
+router.post('/login', (req, res) => {
+  const { email, password } = req.body;
+  
+  // For now, accept any email/password and create a session
+  // In production, validate against database
+  req.session.user = {
+    id: 1,
+    email: email || 'user@example.com',
+    name: email ? email.split('@')[0] : 'User',
+    role: 'user'
+  };
+  
+  // Redirect to the page they were trying to access, or dashboard
+  const redirectTo = req.session.returnTo || '/dashboard';
+  delete req.session.returnTo;
+  res.redirect(redirectTo);
+});
+
+// Handle registration form submission
+router.post('/register', (req, res) => {
+  const { email, password, name } = req.body;
+  
+  // For now, accept any registration and create a session
+  // In production, validate and save to database
+  req.session.user = {
+    id: 1,
+    email: email || 'user@example.com',
+    name: name || email.split('@')[0],
+    role: 'user'
+  };
+  
+  res.redirect('/dashboard');
+});
+
+// Dashboard page - requires authentication
+router.get('/dashboard', requireAuth, (req, res) => {
   res.render('pages/dashboard', { 
     title: 'Dashboard - ProofTamil',
-    user: mockUser
+    user: req.session.user
   });
 });
 
-// Account page
-router.get('/account', (req, res) => {
+// Account page - requires authentication
+router.get('/account', requireAuth, (req, res) => {
   res.render('pages/account', { 
     title: 'Account Settings - ProofTamil',
-    user: mockUser
+    user: req.session.user
   });
 });
 
-// Archive page
-router.get('/archive', (req, res) => {
+// Archive page - requires authentication
+router.get('/archive', requireAuth, (req, res) => {
   res.render('pages/archive', { 
     title: 'Archive - ProofTamil',
-    user: mockUser
+    user: req.session.user
   });
 });
 
-// Contact page
+// Contact page - accessible to everyone
 router.get('/contact', (req, res) => {
+  const user = getCurrentUser(req);
   res.render('pages/contact', { 
     title: 'Contact Us - ProofTamil',
-    user: mockUser
+    user: user
   });
 });
 
-// Privacy Policy page
+// Privacy Policy page - accessible to everyone
 router.get('/privacy', (req, res) => {
+  const user = getCurrentUser(req);
   res.render('pages/privacy', { 
     title: 'Privacy Policy - ProofTamil',
-    user: mockUser
+    user: user
   });
 });
 
-// Terms of Service page
+// Terms of Service page - accessible to everyone
 router.get('/terms', (req, res) => {
+  const user = getCurrentUser(req);
   res.render('pages/terms', { 
     title: 'Terms of Service - ProofTamil',
-    user: mockUser
+    user: user
   });
 });
 

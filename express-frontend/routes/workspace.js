@@ -1,19 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const { requireAuth } = require('../middleware/auth');
 
-// Workspace page - main editor
-router.get('/', (req, res) => {
-  // Mock auth bypass for testing (same as Next.js version)
-  // TODO: Re-enable authentication before production
-  const user = {
-    id: 1,
-    email: 'test@example.com',
-    name: 'Test User'
-  };
-  
+// Workspace page - main editor (requires authentication)
+router.get('/', requireAuth, (req, res) => {
   res.render('pages/workspace', { 
     title: 'Free Tamil Typing Workspace - Online Editor | ProofTamil',
-    user: user
+    user: req.session.user
   });
 });
 

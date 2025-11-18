@@ -63,7 +63,7 @@
           </div>
         </div>
 
-        <form id="register-form" class="space-y-5">
+        <form id="register-form" method="POST" action="/register" class="space-y-5">
           <div class="space-y-2">
             <label for="name" class="text-sm font-semibold">Full name</label>
             <input id="name" name="name" type="text" required class="input-field" placeholder="e.g. Kavya Raman" />
@@ -79,13 +79,20 @@
             <input id="password" name="password" type="password" required minlength="6" class="input-field" placeholder="Minimum 6 characters" />
           </div>
 
-          <button type="submit" id="submit-btn" class="w-full rounded-full bg-gray-900 py-3 font-semibold text-white shadow-lg transition hover:bg-gray-800 disabled:opacity-50">
+          <div class="text-xs text-gray-600">
+            <label class="flex items-start gap-2">
+              <input type="checkbox" required class="mt-1">
+              <span>I agree to the <a href="/terms" class="underline">Terms</a> and <a href="/privacy" class="underline">Privacy Policy</a></span>
+            </label>
+          </div>
+
+          <button type="submit" id="submit-btn" class="w-full rounded-full bg-orange-600 py-3 font-semibold text-white shadow-lg transition hover:bg-orange-700 disabled:opacity-50">
             Create free account
           </button>
         </form>
 
-        <p class="text-xs text-gray-600">
-          By signing up you agree to receive product updates from ProofTamil. You can unsubscribe anytime.
+        <p class="text-xs text-center text-gray-500">
+          ℹ️ <strong>Demo Mode:</strong> Any email and password will work for testing
         </p>
 
         <div class="text-sm text-gray-700">
@@ -98,7 +105,5 @@
     </div>
   </div>
 </div>
-
-<script src="/js/register.js"></script>
 
 <%- include('../partials/footer') %>
