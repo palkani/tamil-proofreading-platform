@@ -61,6 +61,28 @@ router.post('/register', (req, res) => {
   res.redirect('/dashboard');
 });
 
+// Handle Google OAuth callback from frontend
+router.post('/auth/google-callback', (req, res) => {
+  const { id, email, name, role } = req.body;
+  
+  // Create session for Google authenticated user
+  req.session.user = {
+    id: id || 1,
+    email: email,
+    name: name,
+    role: role || 'user'
+  };
+  
+  res.json({ success: true });
+});
+
+// Provide Google Client ID to frontend
+router.get('/api/config/google-client-id', (req, res) => {
+  res.json({ 
+    clientId: process.env.GOOGLE_CLIENT_ID || '' 
+  });
+});
+
 // Dashboard page - requires authentication
 router.get('/dashboard', requireAuth, (req, res) => {
   res.render('pages/dashboard', { 

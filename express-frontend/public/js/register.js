@@ -37,7 +37,11 @@ document.getElementById('register-form')?.addEventListener('submit', async (e) =
 });
 
 document.getElementById('google-signup-btn')?.addEventListener('click', () => {
-  const errorDiv = document.getElementById('error-message');
-  errorDiv.textContent = 'Google sign-up is coming soon. Please use email sign-up for now.';
-  errorDiv.classList.remove('hidden');
+  if (window.triggerGoogleSignIn) {
+    window.triggerGoogleSignIn();
+  } else {
+    const errorDiv = document.getElementById('error-message');
+    errorDiv.textContent = 'Google Sign-In is loading. Please wait a moment and try again.';
+    errorDiv.classList.remove('hidden');
+  }
 });

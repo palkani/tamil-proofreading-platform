@@ -53,12 +53,14 @@ The platform is built with a Go backend (port 8080) and an Express.js frontend w
     - Employs `systemInstruction` for prompt instructions and `responseMimeType: "application/json"` for structured output.
     - Configured with `temperature: 0` and `topP: 0.1` for deterministic results.
     - Provides error titles and descriptions exclusively in Tamil.
-- **Authentication (UPDATED - Nov 17, 2025):** 
+- **Authentication (UPDATED - Nov 18, 2025):** 
     - **Session-based authentication** implemented with Express sessions
+    - **Google OAuth Sign-In:** Fully integrated Google OAuth 2.0 authentication on login/register pages using Google Identity Services API
     - **Protected Routes:** Dashboard, Workspace, Archive, and Account pages require login
     - **Public Pages:** Homepage, Contact, Privacy, Terms accessible to everyone
-    - **Login/Register:** Proper form-based authentication with redirects
-    - **Demo Mode:** Currently accepts any email/password for testing (production requires database validation)
+    - **Login/Register:** Form-based authentication + Google Sign-In with automatic session creation
+    - **Backend OAuth Flow:** Go backend validates Google ID tokens via `/api/v1/auth/social` endpoint, creates/retrieves users, and issues sessions
+    - **Demo Mode:** Email/password authentication accepts any credentials for testing
     - **Session Management:** 24-hour session cookies with automatic redirect to login for protected pages
     - **Smart Redirects:** After login, users are redirected to the page they were trying to access
 - **Backend API:** Provides endpoints for AI proofreading, draft persistence, and user management.
