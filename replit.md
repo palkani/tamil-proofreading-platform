@@ -3,6 +3,8 @@
 ## Overview
 This project is a full-stack AI-powered Tamil text proofreading platform, designed to assist users in writing accurate and fluent Tamil. It aims to be the "AI Writing Partner for Tamil that Shines" by offering features beyond basic grammar correction, including smart typing, phonetic transliteration, and detailed grammar explanations. The platform targets a broad audience, from casual writers to professionals, providing a comprehensive tool for enhancing Tamil communication. The architecture utilizes Go for the backend and Express.js with EJS for the frontend, with a PostgreSQL database.
 
+**Contact Email:** prooftamil@gmail.com
+
 ## User Preferences
 - Focus on workspace page enhancement
 - **Authentication System (Nov 17, 2025):** Implemented two-version system:
