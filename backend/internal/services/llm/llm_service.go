@@ -505,6 +505,10 @@ func extractFromInterface(v any) (string, []Suggestion, []Change, []string) {
                                 if parsed, ok := toSuggestionSlice(val); ok {
                                         suggestions = append(suggestions, parsed...)
                                 }
+                        case "corrections":
+                                if parsed, ok := toSuggestionSlice(val); ok {
+                                        suggestions = append(suggestions, parsed...)
+                                }
                         case "changes":
                                 if parsed, ok := toChangeSlice(val); ok {
                                         changes = append(changes, parsed...)
@@ -559,16 +563,23 @@ func toSuggestionSlice(val any) ([]Suggestion, bool) {
                 }
 
                 suggestion := Suggestion{}
+                // Support both old format (original/corrected) and new format (originalText/correction)
                 if v, ok := getStringInsensitive(obj, "original"); ok {
+                        suggestion.Original = v
+                } else if v, ok := getStringInsensitive(obj, "originaltext"); ok {
                         suggestion.Original = v
                 }
                 if v, ok := getStringInsensitive(obj, "corrected"); ok {
+                        suggestion.Corrected = v
+                } else if v, ok := getStringInsensitive(obj, "correction"); ok {
                         suggestion.Corrected = v
                 }
                 if v, ok := getStringInsensitive(obj, "reason"); ok {
                         suggestion.Reason = v
                 }
                 if v, ok := getStringInsensitive(obj, "type"); ok {
+                        suggestion.Type = v
+                } else if v, ok := getStringInsensitive(obj, "error_type"); ok {
                         suggestion.Type = v
                 }
                 if v, ok := getIntInsensitive(obj, "start_index"); ok {
@@ -577,7 +588,9 @@ func toSuggestionSlice(val any) ([]Suggestion, bool) {
                 if v, ok := getIntInsensitive(obj, "end_index"); ok {
                         suggestion.EndIndex = v
                 }
-                suggestions = append(suggestions, suggestion)
+                if suggestion.Original != "" && suggestion.Corrected != "" {
+                        suggestions = append(suggestions, suggestion)
+                }
         }
 
         return suggestions, len(suggestions) > 0
