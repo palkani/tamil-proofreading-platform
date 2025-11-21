@@ -175,7 +175,8 @@ Provide title and description in TAMIL language only.`
 // Proxy other API calls to Go backend
 router.all('/*', async (req, res) => {
   try {
-    const backendPath = req.path.replace(/^\//, '');
+    // req.path includes the leading slash, so /v1/submit becomes just v1/submit
+    const backendPath = req.path.replace(/^\/v1\//, ''); // Remove /v1/ prefix
     const url = `${BACKEND_URL}/${backendPath}`;
     
     const config = {
