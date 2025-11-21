@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
+const { trackPageView } = require('./middleware/analytics');
 
 const app = express();
 const PORT = 5000; // Express frontend always runs on 5000
@@ -23,6 +24,9 @@ app.use(session({
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
+
+// Analytics tracking middleware (track all page views)
+app.use(trackPageView);
 
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));

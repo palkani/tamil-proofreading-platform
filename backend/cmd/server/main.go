@@ -34,6 +34,10 @@ func main() {
                 &models.RefreshToken{},
                 &models.ContactMessage{},
                 &models.TamilWord{},
+                &models.VisitEvent{},
+                &models.ActivityEvent{},
+                &models.DailyVisitStats{},
+                &models.DailyActivityStats{},
         )
         if err != nil {
                 log.Fatal("Failed to migrate database:", err)
@@ -75,6 +79,9 @@ func main() {
                 api.GET("/autocomplete", h.AutocompleteTamil)
                 api.POST("/tamil-words", h.AddTamilWord)
                 api.POST("/tamil-words/confirm", h.ConfirmTamilWord)
+                
+                // Analytics (public for page view tracking)
+                api.POST("/events/visit", h.LogVisit)
         }
 
         // Protected routes (AUTH DISABLED FOR TESTING - RE-ENABLE BEFORE PRODUCTION)
@@ -101,6 +108,9 @@ func main() {
                 protected.GET("/payments", h.GetPayments)
                 protected.GET("/dashboard/stats", h.GetDashboardStats)
                 protected.GET("/usage", h.GetUsage)
+                
+                // Analytics activity logging (authenticated users only)
+                protected.POST("/events/activity", h.LogActivity)
         }
 
         // Admin routes
@@ -114,6 +124,9 @@ func main() {
                 admin.GET("/analytics", h.AdminGetAnalytics)
                 admin.GET("/model-logs", h.AdminGetModelLogs)
                 admin.GET("/contact", h.AdminListContactMessages)
+                
+                // Analytics dashboard (admin only)
+                admin.GET("/analytics-dashboard", h.GetAnalyticsDashboard)
         }
 
         // Webhook routes (no auth required, verified by signature)

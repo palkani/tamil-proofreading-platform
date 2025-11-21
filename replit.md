@@ -5,6 +5,8 @@ This project is a full-stack AI-powered Tamil text proofreading platform, design
 
 **Contact Email:** prooftamil@gmail.com
 
+**Admin Email:** prooftamil@gmail.com (has access to analytics dashboard)
+
 ## User Preferences
 - Focus on workspace page enhancement
 - **Authentication System (Nov 17, 2025):** Implemented two-version system:
@@ -65,6 +67,17 @@ The platform is built with a Go backend (port 8080) and an Express.js frontend w
     - **Demo Mode:** Email/password authentication accepts any credentials for testing
     - **Session Management:** 24-hour session cookies with automatic redirect to login for protected pages
     - **Smart Redirects:** After login, users are redirected to the page they were trying to access
+    - **Admin Role:** prooftamil@gmail.com automatically receives admin role with access to analytics dashboard
+- **Analytics & Visitor Tracking (COMPLETED - Nov 21, 2025):**
+    - **Database Schema:** Created `visit_events`, `activity_events`, `daily_visit_stats`, and `daily_activity_stats` tables in PostgreSQL
+    - **Page View Tracking:** Express middleware automatically tracks all page views with privacy-preserving measures (truncated IPs, hashed user agents)
+    - **User Activity Logging:** Tracks registrations, logins, draft creation, AI requests, and suggestion acceptances
+    - **Admin Dashboard:** Full analytics dashboard at `/analytics` with Chart.js visualizations showing visits, activities, top pages, and real-time events
+    - **Admin-Only Access:** Dashboard restricted to prooftamil@gmail.com via role-based access control
+    - **Privacy Compliance:** IP addresses truncated to first 3 octets, user agents hashed, referrer query params removed
+    - **Non-Blocking:** Analytics logging runs asynchronously after request completion to avoid performance impact
+    - **Graceful Degradation:** Dashboard shows mock data when backend unavailable, ensuring always-available interface
+    - **Backend API:** Three endpoints - `/api/v1/events/visit` (public), `/api/v1/events/activity` (authenticated), `/api/v1/admin/analytics-dashboard` (admin only)
 - **Backend API:** Provides endpoints for AI proofreading, draft persistence, and user management.
 - **Frontend Controllers:** Vanilla JavaScript modules manage workspace features, editor functionality, suggestions, dashboard, account, and archive pages.
 - **CORS:** Configured to allow localhost and Replit domains for development, requiring stricter rules for production.

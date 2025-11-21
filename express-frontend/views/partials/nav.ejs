@@ -19,6 +19,11 @@
           <a href="/archive" class="<%= active === 'archive' ? 'border-orange-600 text-gray-900' : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
             Archive
           </a>
+          <% if (user.role === 'admin' || user.email === 'prooftamil@gmail.com') { %>
+          <a href="/analytics" class="<%= active === 'analytics' ? 'border-orange-600 text-gray-900' : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+            📊 Analytics
+          </a>
+          <% } %>
         </div>
       </div>
 
