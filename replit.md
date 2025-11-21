@@ -82,11 +82,38 @@ The platform is built with a Go backend (port 8080) and an Express.js frontend w
 - **Frontend Controllers:** Vanilla JavaScript modules manage workspace features, editor functionality, suggestions, dashboard, account, and archive pages.
 - **CORS:** Configured to allow localhost and Replit domains for development, requiring stricter rules for production.
 
+## Deployment Strategy (UPDATED - Nov 21, 2025)
+**MVP Phase (Current):** Google Cloud Run with Neon PostgreSQL
+- **Frontend:** Express.js on Cloud Run (port 5000) - $2-10/month
+- **Backend:** Go + Gin on Cloud Run (port 8080) - $5-15/month
+- **Database:** Neon serverless PostgreSQL - $0-9/month
+- **Total Cost:** $7-35/month (vs $25-65 with Cloud SQL)
+- **Deployment Time:** 35 minutes using `./QUICK_DEPLOY_NEON.sh`
+- **Auto-scaling:** Handles traffic spikes automatically
+- **CI/CD:** GitHub Actions workflow automates deployments on every push
+
+**Pro Phase (Future):** Migration path available to:
+- Cloud SQL if enterprise compliance needed
+- Supabase for built-in auth/real-time features
+- Any PostgreSQL-compatible database
+
+**Deployment Files:**
+- `DEPLOYMENT_PLAN.md` - Complete 6-phase deployment guide
+- `DEPLOYMENT_ALTERNATIVES.md` - Database comparison and options
+- `QUICK_DEPLOY_NEON.sh` - One-command automated deployment
+- `.github/workflows/deploy.yml` - CI/CD pipeline for automatic deployments
+- `Dockerfile` - Frontend container
+- `backend/Dockerfile` - Backend container
+- `docker-compose.yml` - Local development environment
+- `.dockerignore` - Optimized container builds
+
 ## External Dependencies
-- **Database:** PostgreSQL (Replit-hosted Neon database)
-- **AI Services:** Google Gemini (via Replit AI Integrations), OpenAI GPT (used by the backend)
+- **Database:** PostgreSQL via Neon (serverless, $0-9/month)
+- **Hosting:** Google Cloud Run (auto-scaling, $7-35/month)
+- **CI/CD:** GitHub Actions (free for public repos)
+- **AI Services:** Google Gemini (via Replit AI Integrations), OpenAI GPT (used by backend)
 - **Styling:** Tailwind CSS
-- **Backend Framework:** Gin (Go)
-- **ORM:** GORM (Go)
+- **Backend Framework:** Gin (Go 1.23)
+- **ORM:** GORM (PostgreSQL driver)
 - **Frontend Framework:** Express 4.18 with EJS Templates
-- **Payment Gateways:** Stripe, Razorpay (configured but not actively required for core functionality)
+- **Payment Gateways:** Stripe, Razorpay (configured but optional for core functionality)
