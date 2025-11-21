@@ -143,3 +143,7 @@ func main() {
                 log.Fatal("Failed to start server:", err)
         }
 }
+
+// Add suggestion limit check endpoint before other endpoints
+// Add this to the router setup in main():
+// api.GET("/suggestion-limit", middleware.AuthMiddleware(), handlers.CheckSuggestionLimit)

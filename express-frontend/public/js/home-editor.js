@@ -8,7 +8,7 @@ class HomeEditor {
     this.boldBtn = document.getElementById('home-bold-btn');
     this.italicBtn = document.getElementById('home-italic-btn');
     this.underlineBtn = document.getElementById('home-underline-btn');
-    this.maxChars = 200;
+    this.maxWords = 200;
     
     // Auto-analysis state
     this.analysisTimeout = null;
@@ -66,8 +66,8 @@ class HomeEditor {
     // Handle space key for English-to-Tamil conversion
     this.editor.addEventListener('keydown', (e) => this.handleKeyDown(e));
     
-    // Update character count on load
-    this.updateCharCount();
+    // Update word count on load
+    this.updateWordCount();
   }
   
   formatText(command) {
@@ -76,8 +76,8 @@ class HomeEditor {
   }
   
   handleInput() {
-    this.enforceCharLimit();
-    this.updateCharCount();
+    this.enforceWordLimit();
+    this.updateWordCount();
     this.scheduleAutoAnalysis();
   }
   
@@ -94,13 +94,22 @@ class HomeEditor {
       processedText = this.convertEnglishToTamil(text);
     }
     
-    // Enforce character limit
+    // Enforce word limit
     const currentText = this.getPlainText();
-    const remainingChars = this.maxChars - currentText.length;
-    const textToInsert = processedText.substring(0, remainingChars);
+    const currentWords = this.countWords(currentText);
+    const remainingWords = this.maxWords - currentWords;
+    const textWords = this.countWords(processedText);
     
-    document.execCommand('insertText', false, textToInsert);
-    this.updateCharCount();
+    if (textWords > remainingWords) {
+      // Truncate to fit remaining words
+      const wordsArray = processedText.split(/\s+/);
+      const textToInsert = wordsArray.slice(0, remainingWords).join(' ');
+      document.execCommand('insertText', false, textToInsert);
+    } else {
+      document.execCommand('insertText', false, processedText);
+    }
+    
+    this.updateWordCount();
     this.scheduleAutoAnalysis();
   }
   
@@ -149,11 +158,19 @@ class HomeEditor {
     }).join('');
   }
   
-  enforceCharLimit() {
+  countWords(text) {
+    if (!text.trim()) return 0;
+    return text.trim().split(/\s+/).length;
+  }
+
+  enforceWordLimit() {
     const text = this.getPlainText();
-    if (text.length > this.maxChars) {
-      // Truncate to max chars
-      const truncated = text.substring(0, this.maxChars);
+    const wordCount = this.countWords(text);
+    
+    if (wordCount > this.maxWords) {
+      // Truncate to max words
+      const wordsArray = text.split(/\s+/);
+      const truncated = wordsArray.slice(0, this.maxWords).join(' ');
       this.editor.textContent = truncated;
       
       // Move cursor to end
@@ -166,13 +183,13 @@ class HomeEditor {
     }
   }
   
-  updateCharCount() {
+  updateWordCount() {
     const text = this.getPlainText();
-    const count = text.length;
-    const isOverLimit = count >= this.maxChars;
+    const count = this.countWords(text);
+    const isOverLimit = count >= this.maxWords;
     
     if (this.charCount) {
-      this.charCount.textContent = `${count} / ${this.maxChars}`;
+      this.charCount.textContent = `${count} / ${this.maxWords} words`;
       this.charCount.style.color = isOverLimit ? '#dc2626' : '#6b7280';
     }
   }
