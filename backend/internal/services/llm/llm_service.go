@@ -80,7 +80,7 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
 		return &ProofreadResult{
 			CorrectedText: text,
 			Suggestions:   []Suggestion{},
-			ModelUsed:     models.ModelGoogle,
+			ModelUsed:     models.ModelGeminiFlash,
 			ProcessingTime: time.Since(start).Seconds(),
 		}, nil
 	}
@@ -89,7 +89,7 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
 	cleaned = sanitizeUserInput(cleaned)
 
 	// Use the Gemini API directly with the clean prompt
-	content, err := CallGeminiProofread(cleaned, "gemini-2.5-flash")
+	content, err := CallGeminiProofread(cleaned, models.ModelGeminiFlash)
 	if err != nil {
 		log.Printf("gemini proofread error (request_id=%s): %v", requestID, err)
 		return nil, err
@@ -114,7 +114,7 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
 		Suggestions:    suggestions,
 		Changes:        changes,
 		Alternatives:   alternatives,
-		ModelUsed:      models.ModelGoogle,
+		ModelUsed:      models.ModelGeminiFlash,
 		ProcessingTime: time.Since(start).Seconds(),
 	}, nil
 }
@@ -130,7 +130,7 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
 		return &ProofreadResult{
 			CorrectedText: text,
 			Suggestions:   []Suggestion{},
-			ModelUsed:     models.ModelGoogle,
+			ModelUsed:     models.ModelGeminiFlash,
 			ProcessingTime: time.Since(start).Seconds(),
 		}, nil
 	}
@@ -140,7 +140,7 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
 
 	// Try Google Gemini first
 	if s.googleAPIKey != "" {
-		content, err := CallGeminiProofread(cleaned, "gemini-2.5-flash")
+		content, err := CallGeminiProofread(cleaned, models.ModelGeminiFlash)
 		if err == nil && strings.TrimSpace(content) != "" {
 			corrected, suggestions, changes, alternatives, ok := parseProofreadJSON(content)
 			if ok {
@@ -152,7 +152,7 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
 					Suggestions:    suggestions,
 					Changes:        changes,
 					Alternatives:   alternatives,
-					ModelUsed:      models.ModelGoogle,
+					ModelUsed:      models.ModelGeminiFlash,
 					ProcessingTime: time.Since(start).Seconds(),
 				}, nil
 			}
@@ -381,4 +381,9 @@ func sanitizeUserInput(text string) string {
 		}
 	}
 	return text
+}
+
+// ProofreadText is the main method called by handlers - wraps Proofread for backward compatibility
+func (s *LLMService) ProofreadText(ctx context.Context, text string, wordCount int, includeAlternatives bool, requestID string) (*ProofreadResult, error) {
+	return s.Proofread(ctx, text, requestID)
 }
