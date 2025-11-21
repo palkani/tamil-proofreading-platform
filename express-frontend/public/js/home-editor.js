@@ -264,10 +264,10 @@ class HomeEditor {
       
       this.abortController = new AbortController();
       
-      const response = await fetch('/api/gemini/analyze', {
+      const response = await fetch('/api/v1/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, save_draft: false }),
         signal: this.abortController.signal
       });
       
@@ -277,8 +277,9 @@ class HomeEditor {
       
       const data = await response.json();
       console.log('AI analysis response:', data);
-      console.log('Number of suggestions:', (data.suggestions || []).length);
-      this.displaySuggestions(data.suggestions || []);
+      const suggestions = (data.result?.suggestions || []);
+      console.log('Number of suggestions:', suggestions.length);
+      this.displaySuggestions(suggestions);
       
     } catch (error) {
       if (error.name !== 'AbortError') {
