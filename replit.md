@@ -48,7 +48,8 @@ The platform is built with a Go backend (port 8080) and an Express.js frontend w
     - **Auto-Save:** Drafts are automatically saved to the PostgreSQL database every 2 seconds.
     - **Draft Loading:** Users can view and open all saved drafts from the "My Drafts" section in the workspace.
     - **Auto AI Analysis:** Opening a draft automatically triggers AI grammar checking.
-- **Reliable AI Grammar Checking (OPTIMIZED - Nov 17, 2025):**
+- **Reliable AI Grammar Checking (ENHANCED - Nov 21, 2025):**
+    - **Aggressive Error Detection:** Specifically trained to catch Tamil grammar errors like incorrect verb suffixes ("அமைந்தத" → "அமைந்த"), doubled letters at word endings, and complex case marker issues.
     - **Performance Optimized:** 3-5x faster response times through parallel chunk processing with Promise.all() instead of sequential processing.
     - **Efficient Chunking:** Uses sentence-level chunking (<=200 chars, increased from 120) to reduce API calls while maintaining accuracy.
     - **Token Optimization:** Reduced maxOutputTokens from 2048 to 1024 for faster generation.
@@ -56,7 +57,14 @@ The platform is built with a Go backend (port 8080) and an Express.js frontend w
     - Uses Gemini 2.5 Flash model optimized for speed and cost-efficiency.
     - Employs `systemInstruction` for prompt instructions and `responseMimeType: "application/json"` for structured output.
     - Configured with `temperature: 0` and `topP: 0.1` for deterministic results.
-    - Provides error titles and descriptions exclusively in Tamil.
+    - **Tamil-Specific Grammar Rules:** Comprehensive detection of:
+        - Spelling errors: Double consonants (ட/ண்ட), vowel length (ஆ vs அ), consonant usage (ற vs ர)
+        - Verb suffixes: Past tense (-த), imperative (-ம்), attribute forms (ஆன், அற்ற)
+        - Case markers: Accusative (ஐ), dative (க்கு), instrumental (ஆல்), genitive (இன்), locative (இல்)
+        - Subject-verb agreement: Gender and number agreement across masculine/feminine/neuter
+        - Word order: Validates Tamil SOV (Subject-Object-Verb) structure
+    - **Alternatives Generation:** When enabled, provides 2-3 alternative phrasings for each correction, allowing users to choose the best fit for context.
+    - **Provides error titles and descriptions exclusively in Tamil.**
 - **Authentication (UPDATED - Nov 18, 2025):** 
     - **Session-based authentication** implemented with Express sessions
     - **Google OAuth Sign-In:** Fully integrated Google OAuth 2.0 authentication on login/register pages using Google Identity Services API
