@@ -284,6 +284,11 @@ class HomeEditor {
     } catch (error) {
       if (error.name !== 'AbortError') {
         console.error('Auto-analysis error:', error);
+        console.error('Error details:', {
+          message: error.message,
+          status: error.status,
+          stack: error.stack
+        });
         this.showError();
       }
     } finally {

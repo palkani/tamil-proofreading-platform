@@ -179,6 +179,8 @@ router.all('/*', async (req, res) => {
     const backendPath = req.path.replace(/^\/v1\//, ''); // Remove /v1/ prefix
     const url = `${BACKEND_URL}/${backendPath}`;
     
+    console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
+    
     const config = {
       method: req.method,
       url: url,
@@ -193,7 +195,9 @@ router.all('/*', async (req, res) => {
     const response = await axios(config);
     res.status(response.status).json(response.data);
   } catch (error) {
-    console.error('Backend proxy error:', error.message);
+    console.error(`[PROXY-ERROR] ${error.message}`);
+    console.error('[PROXY-ERROR] Response data:', error.response?.data);
+    console.error('[PROXY-ERROR] Status:', error.response?.status);
     res.status(error.response?.status || 500).json({
       error: error.response?.data || 'Backend request failed'
     });
