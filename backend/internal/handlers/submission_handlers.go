@@ -54,13 +54,6 @@ func sanitizeHTML(input string) string {
 
 // SubmitText handles text submission for proofreading
 func (h *Handlers) SubmitText(c *gin.Context) {
-        // Get user ID from context
-        userID, err := middleware.GetUserFromContext(c)
-        if err != nil {
-                c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - please login"})
-                return
-        }
-
         requestID := middleware.GetRequestID(c)
         if requestID == "" {
                 requestID = strconv.FormatInt(time.Now().UnixNano(), 36)
@@ -106,6 +99,7 @@ func (h *Handlers) SubmitText(c *gin.Context) {
                 saveDraft = *req.SaveDraft
         }
 
+        // For inline analysis (demo/homepage), no auth required
         if !saveDraft {
                 result, err := h.llmService.ProofreadText(c.Request.Context(), req.Text, wordCount, req.IncludeAlternatives, requestID)
                 if err != nil {
@@ -121,6 +115,13 @@ func (h *Handlers) SubmitText(c *gin.Context) {
                         "result":     result,
                         "message":    "Proofreading completed",
                 })
+                return
+        }
+
+        // Require authentication for draft saving
+        userID, err := middleware.GetUserFromContext(c)
+        if err != nil {
+                c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - please login"})
                 return
         }
 
