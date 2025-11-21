@@ -11,6 +11,15 @@ router.get('/', (req, res) => {
   });
 });
 
+// How to Use page - accessible to everyone
+router.get('/how-to-use', (req, res) => {
+  const user = getCurrentUser(req);
+  res.render('pages/how-to-use', { 
+    title: 'How to Use ProofTamil - Step by Step Guide',
+    user: user
+  });
+});
+
 // Login page - redirect if already logged in
 router.get('/login', redirectIfAuth, (req, res) => {
   res.render('pages/login', { 
