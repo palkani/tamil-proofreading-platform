@@ -351,26 +351,45 @@ class HomeEditor {
       return;
     }
     
-    const suggestionsHTML = suggestions.map((suggestion, index) => `
-      <div class="bg-orange-50 rounded-lg p-4 border-l-4 border-orange-500 mb-3">
-        <div class="flex items-start gap-2">
-          <span class="inline-block px-2 py-1 bg-orange-600 text-white text-xs rounded font-semibold flex-shrink-0">
-            ${suggestion.type || 'Grammar'}
-          </span>
-          <div class="flex-1">
-            <p class="text-sm font-semibold text-gray-900 mb-1">${suggestion.title || 'Suggestion'}</p>
-            <p class="text-sm text-gray-700 mb-2">${suggestion.description || ''}</p>
-            ${suggestion.original && suggestion.suggestion ? `
-              <p class="text-sm text-gray-700">
-                <span class="line-through text-red-600">${suggestion.original}</span>
-                <span class="mx-2">→</span>
-                <span class="text-green-600 font-semibold">${suggestion.suggestion}</span>
-              </p>
-            ` : ''}
+    const suggestionsHTML = suggestions.map((suggestion, index) => {
+      const typeLabel = (suggestion.type || 'grammar').toUpperCase();
+      const hasCorrection = suggestion.original && suggestion.corrected;
+      const hasAlternatives = suggestion.alternatives && Array.isArray(suggestion.alternatives) && suggestion.alternatives.length > 0;
+      
+      return `
+        <div class="bg-orange-50 rounded-lg p-4 border-l-4 border-orange-500 mb-3">
+          <div class="flex items-start gap-2">
+            <span class="inline-block px-2 py-1 bg-orange-600 text-white text-xs rounded font-semibold flex-shrink-0 whitespace-nowrap">
+              ${typeLabel}
+            </span>
+            <div class="flex-1 min-w-0">
+              ${hasCorrection ? `
+                <p class="text-sm text-gray-700 mb-2">
+                  <span class="line-through text-red-600">"${suggestion.original}"</span>
+                  <span class="mx-1 text-gray-400">→</span>
+                  <span class="text-green-600 font-semibold">"${suggestion.corrected}"</span>
+                </p>
+              ` : ''}
+              ${suggestion.reason ? `
+                <p class="text-sm text-gray-700 mb-2">${suggestion.reason}</p>
+              ` : ''}
+              ${hasAlternatives ? `
+                <div class="mt-2 pt-2 border-t border-orange-200">
+                  <p class="text-xs font-semibold text-gray-600 mb-1">Alternatives:</p>
+                  <div class="space-y-1">
+                    ${suggestion.alternatives.map(alt => `
+                      <p class="text-xs text-gray-600 pl-2 border-l-2 border-orange-300">
+                        "${alt}"
+                      </p>
+                    `).join('')}
+                  </div>
+                </div>
+              ` : ''}
+            </div>
           </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
     
     this.suggestionsContainer.innerHTML = `
       <div class="space-y-3">
