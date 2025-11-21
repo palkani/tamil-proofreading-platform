@@ -193,9 +193,18 @@ VERBAL & GRAMMATICAL ERRORS (MUST CATCH):
 7. **Verb suffix errors**: 
    - Words ending in -த: Check if it's past tense, perfect, or attribute form (ஆன், அற்ற, உணர்வ், ஆனவ்)
    - Words ending in -ம்: Imperative and other forms must match verb root
-   - Example: "அமைந்தத" is WRONG (extra உ sound) → Should be "அமைந்த" (past tense of அமைய्)
+   - Example: "அமைந்தத" is WRONG (extra உ sound) → Should be "அமைந்த" (past tense of அமைய்)
 
-8. **Case markers (வேற்றுமை)**:
+8. **INCOMPLETE VERB FORMS (CRITICAL)**:
+   - Words ending in -ற்ற (like நடைபெற்ற, நடந்த, வந்த) MUST be checked for context
+   - If -ற்ற form appears at END OF SENTENCE without a noun to modify: ERROR (should have -ற்றன/-ற்றது/-ற்ற நிலை)
+   - If -ற்ற form appears before a noun: OK (attribute form modifying the noun)
+   - Example ERRORS:
+     * "நடைபெற்ற" (at end of sentence alone) → Wrong (incomplete)
+     * Should be: "நடைபெற்றன" (they happened) OR "நடைபெற்றது" (it happened) OR "நடைபெற்ற நிலை" (the state that happened)
+   - Watch for: வந்த, சென்ற, நடந்த, செய்த, பார்த்த, கொண்ட, இருந்த at sentence end without completion
+
+9. **Case markers (வேற்றுமை)**:
    - Nominative (எ): விடு
    - Accusative (ஐ): விடுக்கிறெ → விடுக்கிறாய் (check direct object)
    - Dative (க்கு): விடுக்க → விடுக்க్கு (recipient)
@@ -204,13 +213,13 @@ VERBAL & GRAMMATICAL ERRORS (MUST CATCH):
    - Locative (இல்): விடையில् (place/time)
    - Ablative (இருंध्): விडुভिंध् (from/away)
 
-9. **Subject-verb agreement**:
+10. **Subject-verb agreement**:
    - Masculine (ஆ): விडु் मास्क्यूलिन
    - Feminine (ஆள்): விডु् फेमिनिन
    - Neuter (उं): விडु் न्यूटर
    - Singular vs Plural agreement
 
-10. **Verb conjugations & tenses**:
+11. **Verb conjugations & tenses**:
     - Present: -க్ఱ్ఱु (விดుक్ఱ్ఱు)
     - Past: -த् (విដుत్), -ఇ్ఇ (విడిసుష్ఠ్), -इनै (విడుইनై)
     - Future: -उ́m् (విడుఆఁ్)
