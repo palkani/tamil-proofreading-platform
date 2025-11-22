@@ -135,8 +135,17 @@ document.addEventListener('DOMContentLoaded', function() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to send message');
+        let errorMessage = 'Failed to send message. Please try again.';
+        try {
+          const data = await response.json();
+          if (data.error) {
+            errorMessage = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+          }
+        } catch (parseError) {
+          // If JSON parsing fails, use default error message
+          console.error('Error parsing response:', parseError);
+        }
+        throw new Error(errorMessage);
       }
 
       // Show success message and reset form
@@ -150,11 +159,20 @@ document.addEventListener('DOMContentLoaded', function() {
         successMessage.classList.add('hidden');
       }, 5000);
     } catch (error) {
-      // Show error message
-      errorText.textContent = error.message || 'Failed to send message. Please try again.';
+      // Show error message with proper string conversion
+      let displayError = 'Failed to send message. Please try again.';
+      if (error instanceof Error) {
+        displayError = error.message;
+      } else if (typeof error === 'string') {
+        displayError = error;
+      } else {
+        displayError = JSON.stringify(error);
+      }
+      errorText.textContent = displayError;
       errorMessage.classList.remove('hidden');
       submitBtn.textContent = originalText;
       submitBtn.disabled = false;
+      console.error('Contact form error:', error);
     }
   });
 });
