@@ -56,9 +56,17 @@ The platform features a Go backend (port 8080) and an Express.js frontend with E
 - **Database:** PostgreSQL via Neon
 - **Hosting:** Google Cloud Run
 - **CI/CD:** GitHub Actions
+- **Domain:** prooftamil.com (Namecheap DNS)
 - **AI Services:** Google Gemini, OpenAI GPT
 - **Styling:** Tailwind CSS
 - **Backend Framework:** Gin (Go 1.23)
 - **ORM:** GORM (PostgreSQL driver)
 - **Frontend Framework:** Express 4.18 with EJS Templates
 - **Payment Gateways:** Stripe, Razorpay (optional)
+
+## Deployment
+- **Complete Deployment Guides:** See `GOOGLE_CLOUD_DEPLOYMENT_PLAN.md` and `QUICK_DEPLOYMENT_GUIDE.md`
+- **Estimated Cost:** $50-80/month on Google Cloud Run
+- **Target Regions:** us-central1 (customizable)
+- **Auto-scaling:** 1-10 instances per service (configurable)
+- **SSL/TLS:** Auto-provisioned by Google Cloud Run
