@@ -1,5 +1,8 @@
 <%- include('../partials/header') %>
 
+<!-- Google Client ID for OAuth -->
+<input type="hidden" id="google-client-id" value="<%= googleClientId || '' %>">
+
 <div class="min-h-screen bg-gray-50 text-gray-900">
   <div class="absolute top-6 left-6 flex items-center gap-3">
     <a href="/" class="flex items-center gap-2">

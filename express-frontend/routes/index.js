@@ -24,14 +24,16 @@ router.get('/how-to-use', (req, res) => {
 router.get('/login', redirectIfAuth, (req, res) => {
   res.render('pages/login', { 
     title: 'Sign In - ProofTamil',
-    error: req.query.error || null
+    error: req.query.error || null,
+    googleClientId: process.env.GOOGLE_CLIENT_ID || ''
   });
 });
 
 // Register page - redirect if already logged in
 router.get('/register', redirectIfAuth, (req, res) => {
   res.render('pages/register', { 
-    title: 'Register - ProofTamil'
+    title: 'Register - ProofTamil',
+    googleClientId: process.env.GOOGLE_CLIENT_ID || ''
   });
 });
 

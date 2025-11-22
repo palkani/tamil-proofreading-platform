@@ -7,16 +7,19 @@ let googleClientId = null;
 // Initialize Google Sign-In
 async function initializeGoogleAuth() {
   try {
-    // Get Google Client ID from backend config
-    const response = await fetch('/api/config/google-client-id');
-    const config = await response.json();
-    
-    if (!config.clientId) {
-      console.error('Google OAuth not configured - no client ID');
+    // Get Google Client ID from DOM (set by backend in HTML)
+    const clientIdElement = document.getElementById('google-client-id');
+    if (!clientIdElement) {
+      console.error('Google OAuth not configured - no client ID element in DOM');
       return;
     }
     
-    googleClientId = config.clientId;
+    googleClientId = clientIdElement.value;
+    if (!googleClientId) {
+      console.error('Google OAuth not configured - no client ID value');
+      return;
+    }
+    
     console.log('Google Client ID loaded:', googleClientId ? 'Yes' : 'No');
     
     // Load Google Identity Services library
@@ -76,8 +79,8 @@ async function handleGoogleCallback(response) {
       throw new Error('No credential received from Google');
     }
     
-    // Send credential to backend for verification
-    const result = await fetch('http://localhost:8080/api/v1/auth/social', {
+    // Send credential to backend for verification via Express proxy
+    const result = await fetch('/api/v1/auth/social', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

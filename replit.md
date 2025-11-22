@@ -7,9 +7,14 @@ This project is a full-stack AI-powered Tamil text proofreading platform, design
 
 **Admin Email:** prooftamil@gmail.com (has access to analytics dashboard)
 
-## Recent Fixes (Nov 22, 2025)
+## Recent Fixes (Nov 22, 2025 - FINAL SESSION)
 - **CRITICAL FIX:** Fixed API endpoint routing - changed homepage editor API calls from `/v1/submit` to `/api/v1/submit` to match Express router mount point at `/api`
 - **Backend Error Handling:** Added safe fallback in LLM service to return empty suggestions instead of errors when Gemini API fails
+- **Google OAuth Fix:** Fixed "Failed to fetch" error by:
+  - Changing hardcoded `http://localhost:8080/api/v1/auth/social` to `/api/v1/auth/social` (uses Express proxy)
+  - Getting Google Client ID from DOM hidden input instead of API call
+  - Passing Google Client ID through EJS templates to login/register pages
+  - Updated Express routes to pass environment variables to templates
 - **Authentication Logic:** Reorganized auth check to allow unauthenticated demo requests on homepage while protecting draft saves
 - All code changes tested and verified working end-to-end
 
@@ -77,7 +82,7 @@ The platform is built with a Go backend (port 8080) and an Express.js frontend w
         - Word order: Validates Tamil SOV (Subject-Object-Verb) structure
     - **Alternatives Generation:** When enabled, provides 2-3 alternative phrasings for each correction, allowing users to choose the best fit for context.
     - **Provides error titles and descriptions exclusively in Tamil.**
-- **Authentication (UPDATED - Nov 18, 2025):** 
+- **Authentication (UPDATED - Nov 22, 2025):** 
     - **Session-based authentication** implemented with Express sessions
     - **Google OAuth Sign-In:** Fully integrated Google OAuth 2.0 authentication on login/register pages using Google Identity Services API
     - **Protected Routes:** Dashboard, Workspace, Archive, and Account pages require login
