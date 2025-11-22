@@ -6,7 +6,6 @@ import (
         "errors"
         "fmt"
         "log"
-        "regexp"
         "strings"
         "time"
 
@@ -179,13 +178,20 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
         }, nil
 }
 
-var codeFenceRegex = regexp.MustCompile("(?s)^```[a-zA-Z0-9]*\\s*(.*?)\\s*```$")
-
 func stripCodeFence(input string) string {
         trimmed := strings.TrimSpace(input)
-        if matches := codeFenceRegex.FindStringSubmatch(trimmed); len(matches) == 2 {
-                return matches[1]
+        
+        // Check if wrapped in code fences
+        if strings.HasPrefix(trimmed, "```") && strings.HasSuffix(trimmed, "```") {
+                lines := strings.Split(trimmed, "\n")
+                if len(lines) >= 3 {
+                        // Skip first line (```json or similar) and last line (```)
+                        // Join everything in between
+                        content := strings.Join(lines[1:len(lines)-1], "\n")
+                        return strings.TrimSpace(content)
+                }
         }
+        
         return trimmed
 }
 
@@ -195,9 +201,11 @@ func parseProofreadJSON(raw string) (string, []Suggestion, []Change, []string, b
         }
 
         cleaned := stripCodeFence(raw)
+        log.Printf("[PARSE-DEBUG] After stripCodeFence: %q", cleaned)
 
         var data any
         if err := json.Unmarshal([]byte(cleaned), &data); err != nil {
+                log.Printf("[PARSE-ERROR] JSON unmarshal failed: %v, cleaned text: %q", err, cleaned)
                 return "", nil, nil, nil, false
         }
 
