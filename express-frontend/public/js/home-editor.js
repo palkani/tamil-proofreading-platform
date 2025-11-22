@@ -264,7 +264,7 @@ class HomeEditor {
       
       this.abortController = new AbortController();
       
-      const response = await fetch('/v1/submit', {
+      const response = await fetch('/api/v1/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, save_draft: false }),

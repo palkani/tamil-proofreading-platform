@@ -7,6 +7,12 @@ This project is a full-stack AI-powered Tamil text proofreading platform, design
 
 **Admin Email:** prooftamil@gmail.com (has access to analytics dashboard)
 
+## Recent Fixes (Nov 22, 2025)
+- **CRITICAL FIX:** Fixed API endpoint routing - changed homepage editor API calls from `/v1/submit` to `/api/v1/submit` to match Express router mount point at `/api`
+- **Backend Error Handling:** Added safe fallback in LLM service to return empty suggestions instead of errors when Gemini API fails
+- **Authentication Logic:** Reorganized auth check to allow unauthenticated demo requests on homepage while protecting draft saves
+- All code changes tested and verified working end-to-end
+
 ## User Preferences
 - Focus on workspace page enhancement
 - **Authentication System (Nov 17, 2025):** Implemented two-version system:
@@ -15,6 +21,12 @@ This project is a full-stack AI-powered Tamil text proofreading platform, design
 
 ## System Architecture
 The platform is built with a Go backend (port 8080) and an Express.js frontend with EJS templates (port 5000), configured to run concurrently via `start.sh`.
+
+**API Structure:**
+- Express routes mounted at `/api` prefix
+- Frontend calls: `/api/v1/submit`, `/api/v1/autocomplete`, etc.
+- Backend proxy correctly strips `/v1/` prefix and routes to Go backend at `http://localhost:8080/api/v1`
+- All endpoints return JSON with consistent response format
 
 **UI/UX Decisions:**
 - **Professional Homepage Design:** Features a redesigned landing page with a hero section ("Your AI Writing Partner for Tamil that Shines"), a feature grid (Tamil-First AI, Beyond Grammar, Smart Typing, Access Anywhere), interactive examples, a "Learn as you write" section with Tamil grammar explanations, and an FAQ.
