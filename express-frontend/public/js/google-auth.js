@@ -246,5 +246,29 @@ if (document.readyState === 'loading') {
   initializeGoogleAuth();
 }
 
+// Attach click handlers to Google Sign-In buttons
+function attachButtonHandlers() {
+  // Login page button (id: google-signin-btn)
+  const loginButton = document.getElementById('google-signin-btn');
+  if (loginButton && !loginButton.dataset.handlerAttached) {
+    loginButton.addEventListener('click', triggerGoogleSignIn);
+    loginButton.dataset.handlerAttached = 'true';
+  }
+  
+  // Sign up page button (id: google-signup-btn)
+  const signupButton = document.getElementById('google-signup-btn');
+  if (signupButton && !signupButton.dataset.handlerAttached) {
+    signupButton.addEventListener('click', triggerGoogleSignIn);
+    signupButton.dataset.handlerAttached = 'true';
+  }
+}
+
+// Attach handlers when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', attachButtonHandlers);
+} else {
+  attachButtonHandlers();
+}
+
 // Export for use in other scripts
 window.triggerGoogleSignIn = triggerGoogleSignIn;
