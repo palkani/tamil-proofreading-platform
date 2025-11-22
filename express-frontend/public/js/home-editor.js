@@ -277,7 +277,21 @@ class HomeEditor {
       
       const data = await response.json();
       console.log('AI analysis response:', data);
-      const suggestions = (data.result?.suggestions || []);
+      
+      // Extract corrections from API response
+      // The API returns corrections array with properties: originalText, correction, reason, type
+      const corrections = data.result?.corrections || data.corrections || [];
+      
+      // Transform to match displaySuggestions format: original, corrected, reason, type, alternatives
+      const suggestions = corrections.map((item, index) => ({
+        id: index,
+        original: item.originalText || item.original || '',
+        corrected: item.correction || item.corrected || '',
+        reason: item.reason || '',
+        type: item.type || 'grammar',
+        alternatives: item.alternatives || []
+      }));
+      
       console.log('Number of suggestions:', suggestions.length);
       this.displaySuggestions(suggestions);
       

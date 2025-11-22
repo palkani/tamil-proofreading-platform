@@ -168,18 +168,20 @@ class WorkspaceController {
       this.lastAnalyzedText = text;
       
       // Map backend response format to suggestions
-      const geminiSuggestions = (data.suggestions || []).map((result, index) => ({
+      // API returns either 'corrections' (from Gemini) or 'suggestions' (from other sources)
+      const corrections = data.corrections || data.suggestions || [];
+      const geminiSuggestions = corrections.map((result, index) => ({
         id: `gemini-${result.id || index}-${Date.now()}`,
         title: result.reason || result.title || 'Suggestion',
         description: result.description || '',
         type: result.type || 'grammar',
-        preview: result.original && result.corrected 
-          ? `${result.original} → ${result.corrected}` 
-          : result.corrected || result.original || '',
-        sourceText: result.original,
-        onApply: result.corrected && result.original ? () => {
+        preview: (result.originalText || result.original) && (result.correction || result.corrected)
+          ? `${result.originalText || result.original} → ${result.correction || result.corrected}` 
+          : result.correction || result.corrected || result.originalText || result.original || '',
+        sourceText: result.originalText || result.original,
+        onApply: (result.correction || result.corrected) && (result.originalText || result.original) ? () => {
           const currentText = this.editor.getPlainText();
-          const { text: newText, changed } = applyReplacement(currentText, result.original, result.corrected, result.start_index);
+          const { text: newText, changed } = applyReplacement(currentText, result.originalText || result.original, result.correction || result.corrected, result.start_index);
           
           if (changed) {
             this.editor.setText(newText);
