@@ -3,6 +3,17 @@
 ## Overview
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database.
 
+## Recent Updates (Nov 22, 2025)
+- **Contact Page Simplified:** Replaced multi-option contact page with a single email form featuring:
+  - Sender email field (required)
+  - Subject field (required) 
+  - Message text field (required, max 4000 characters)
+  - Updated `ContactMessage` model to replace "Name" field with "Subject"
+  - Backend handler validates all three fields and saves to PostgreSQL
+  - Frontend includes form validation, success/error messaging, and visual feedback
+- **AI Assistant Fixes:** Fixed suggestions display with enhanced API response parsing and comprehensive debug logging
+- **Google Sign-In Buttons:** Added proper click event listeners for OAuth flow triggering
+
 ## User Preferences
 - Focus on workspace page enhancement
 - **Authentication System (Nov 17, 2025):** Implemented two-version system:
