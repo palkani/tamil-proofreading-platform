@@ -276,11 +276,33 @@ class HomeEditor {
       }
       
       const data = await response.json();
-      console.log('AI analysis response:', data);
+      console.log('AI analysis response (full):', JSON.stringify(data, null, 2));
+      console.log('Response structure check:', {
+        hasResult: !!data.result,
+        resultType: typeof data.result,
+        resultKeys: data.result ? Object.keys(data.result) : 'no result',
+        hasCorrections: !!data.corrections,
+        hasResultCorrections: !!data.result?.corrections,
+      });
       
       // Extract corrections from API response
       // The API returns corrections array with properties: originalText, correction, reason, type
-      const corrections = data.result?.corrections || data.corrections || [];
+      // It could be at data.result.corrections or data.result directly
+      let corrections = [];
+      
+      if (data.result?.corrections) {
+        corrections = data.result.corrections;
+      } else if (Array.isArray(data.result)) {
+        corrections = data.result;
+      } else if (data.corrections) {
+        corrections = data.corrections;
+      } else if (data.result && typeof data.result === 'object') {
+        // If result is an object but not the corrections array, it might BE the result object directly
+        corrections = data.result.corrections || [];
+      }
+      
+      console.log('Extracted corrections:', corrections);
+      console.log('Corrections count:', corrections.length);
       
       // Transform to match displaySuggestions format: original, corrected, reason, type, alternatives
       const suggestions = corrections.map((item, index) => ({
@@ -292,7 +314,7 @@ class HomeEditor {
         alternatives: item.alternatives || []
       }));
       
-      console.log('Number of suggestions:', suggestions.length);
+      console.log('Final suggestions to display:', suggestions.length, suggestions);
       this.displaySuggestions(suggestions);
       
     } catch (error) {
