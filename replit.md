@@ -11,6 +11,8 @@ This project is a full-stack AI-powered Tamil text proofreading platform, aimed 
   - Updated `ContactMessage` model to replace "Name" field with "Subject"
   - Backend handler validates all three fields and saves to PostgreSQL
   - Frontend includes form validation, success/error messaging, and visual feedback
+  - Fixed database schema by removing old "name" column to match updated backend model
+  - Error handling improved with proper string conversion for user-friendly error messages
 - **AI Assistant Fixes:** Fixed suggestions display with enhanced API response parsing and comprehensive debug logging
 - **Google Sign-In Buttons:** Added proper click event listeners for OAuth flow triggering
 
