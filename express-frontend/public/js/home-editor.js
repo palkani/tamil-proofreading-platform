@@ -8,7 +8,7 @@ class HomeEditor {
     this.boldBtn = document.getElementById('home-bold-btn');
     this.italicBtn = document.getElementById('home-italic-btn');
     this.underlineBtn = document.getElementById('home-underline-btn');
-    this.maxChars = 200;
+    this.maxWords = 200;
     
     // Auto-analysis state
     this.analysisTimeout = null;
@@ -66,8 +66,8 @@ class HomeEditor {
     // Handle space key for English-to-Tamil conversion
     this.editor.addEventListener('keydown', (e) => this.handleKeyDown(e));
     
-    // Update character count on load
-    this.updateCharCount();
+    // Update word count on load
+    this.updateWordCount();
   }
   
   formatText(command) {
@@ -76,8 +76,8 @@ class HomeEditor {
   }
   
   handleInput() {
-    this.enforceCharLimit();
-    this.updateCharCount();
+    this.enforceWordLimit();
+    this.updateWordCount();
     this.scheduleAutoAnalysis();
   }
   
@@ -94,13 +94,22 @@ class HomeEditor {
       processedText = this.convertEnglishToTamil(text);
     }
     
-    // Enforce character limit
+    // Enforce word limit
     const currentText = this.getPlainText();
-    const remainingChars = this.maxChars - currentText.length;
-    const textToInsert = processedText.substring(0, remainingChars);
+    const currentWords = this.countWords(currentText);
+    const remainingWords = this.maxWords - currentWords;
+    const textWords = this.countWords(processedText);
     
-    document.execCommand('insertText', false, textToInsert);
-    this.updateCharCount();
+    if (textWords > remainingWords) {
+      // Truncate to fit remaining words
+      const wordsArray = processedText.split(/\s+/);
+      const textToInsert = wordsArray.slice(0, remainingWords).join(' ');
+      document.execCommand('insertText', false, textToInsert);
+    } else {
+      document.execCommand('insertText', false, processedText);
+    }
+    
+    this.updateWordCount();
     this.scheduleAutoAnalysis();
   }
   
@@ -149,11 +158,19 @@ class HomeEditor {
     }).join('');
   }
   
-  enforceCharLimit() {
+  countWords(text) {
+    if (!text.trim()) return 0;
+    return text.trim().split(/\s+/).length;
+  }
+
+  enforceWordLimit() {
     const text = this.getPlainText();
-    if (text.length > this.maxChars) {
-      // Truncate to max chars
-      const truncated = text.substring(0, this.maxChars);
+    const wordCount = this.countWords(text);
+    
+    if (wordCount > this.maxWords) {
+      // Truncate to max words
+      const wordsArray = text.split(/\s+/);
+      const truncated = wordsArray.slice(0, this.maxWords).join(' ');
       this.editor.textContent = truncated;
       
       // Move cursor to end
@@ -166,13 +183,13 @@ class HomeEditor {
     }
   }
   
-  updateCharCount() {
+  updateWordCount() {
     const text = this.getPlainText();
-    const count = text.length;
-    const isOverLimit = count >= this.maxChars;
+    const count = this.countWords(text);
+    const isOverLimit = count >= this.maxWords;
     
     if (this.charCount) {
-      this.charCount.textContent = `${count} / ${this.maxChars}`;
+      this.charCount.textContent = `${count} / ${this.maxWords} words`;
       this.charCount.style.color = isOverLimit ? '#dc2626' : '#6b7280';
     }
   }
@@ -247,10 +264,10 @@ class HomeEditor {
       
       this.abortController = new AbortController();
       
-      const response = await fetch('/api/gemini/analyze', {
+      const response = await fetch('/api/v1/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, save_draft: false }),
         signal: this.abortController.signal
       });
       
@@ -259,13 +276,55 @@ class HomeEditor {
       }
       
       const data = await response.json();
-      console.log('AI analysis response:', data);
-      console.log('Number of suggestions:', (data.suggestions || []).length);
-      this.displaySuggestions(data.suggestions || []);
+      console.log('AI analysis response (full):', JSON.stringify(data, null, 2));
+      console.log('Response structure check:', {
+        hasResult: !!data.result,
+        resultType: typeof data.result,
+        resultKeys: data.result ? Object.keys(data.result) : 'no result',
+        hasCorrections: !!data.corrections,
+        hasResultCorrections: !!data.result?.corrections,
+      });
+      
+      // Extract corrections from API response
+      // The API returns corrections array with properties: originalText, correction, reason, type
+      // It could be at data.result.corrections or data.result directly
+      let corrections = [];
+      
+      if (data.result?.corrections) {
+        corrections = data.result.corrections;
+      } else if (Array.isArray(data.result)) {
+        corrections = data.result;
+      } else if (data.corrections) {
+        corrections = data.corrections;
+      } else if (data.result && typeof data.result === 'object') {
+        // If result is an object but not the corrections array, it might BE the result object directly
+        corrections = data.result.corrections || [];
+      }
+      
+      console.log('Extracted corrections:', corrections);
+      console.log('Corrections count:', corrections.length);
+      
+      // Transform to match displaySuggestions format: original, corrected, reason, type, alternatives
+      const suggestions = corrections.map((item, index) => ({
+        id: index,
+        original: item.originalText || item.original || '',
+        corrected: item.correction || item.corrected || '',
+        reason: item.reason || '',
+        type: item.type || 'grammar',
+        alternatives: item.alternatives || []
+      }));
+      
+      console.log('Final suggestions to display:', suggestions.length, suggestions);
+      this.displaySuggestions(suggestions);
       
     } catch (error) {
       if (error.name !== 'AbortError') {
         console.error('Auto-analysis error:', error);
+        console.error('Error details:', {
+          message: error.message,
+          status: error.status,
+          stack: error.stack
+        });
         this.showError();
       }
     } finally {
@@ -334,26 +393,45 @@ class HomeEditor {
       return;
     }
     
-    const suggestionsHTML = suggestions.map((suggestion, index) => `
-      <div class="bg-orange-50 rounded-lg p-4 border-l-4 border-orange-500 mb-3">
-        <div class="flex items-start gap-2">
-          <span class="inline-block px-2 py-1 bg-orange-600 text-white text-xs rounded font-semibold flex-shrink-0">
-            ${suggestion.type || 'Grammar'}
-          </span>
-          <div class="flex-1">
-            <p class="text-sm font-semibold text-gray-900 mb-1">${suggestion.title || 'Suggestion'}</p>
-            <p class="text-sm text-gray-700 mb-2">${suggestion.description || ''}</p>
-            ${suggestion.original && suggestion.suggestion ? `
-              <p class="text-sm text-gray-700">
-                <span class="line-through text-red-600">${suggestion.original}</span>
-                <span class="mx-2">→</span>
-                <span class="text-green-600 font-semibold">${suggestion.suggestion}</span>
-              </p>
-            ` : ''}
+    const suggestionsHTML = suggestions.map((suggestion, index) => {
+      const typeLabel = (suggestion.type || 'grammar').toUpperCase();
+      const hasCorrection = suggestion.original && suggestion.corrected;
+      const hasAlternatives = suggestion.alternatives && Array.isArray(suggestion.alternatives) && suggestion.alternatives.length > 0;
+      
+      return `
+        <div class="bg-orange-50 rounded-lg p-4 border-l-4 border-orange-500 mb-3">
+          <div class="flex items-start gap-2">
+            <span class="inline-block px-2 py-1 bg-orange-600 text-white text-xs rounded font-semibold flex-shrink-0 whitespace-nowrap">
+              ${typeLabel}
+            </span>
+            <div class="flex-1 min-w-0">
+              ${hasCorrection ? `
+                <p class="text-sm text-gray-700 mb-2">
+                  <span class="line-through text-red-600">"${suggestion.original}"</span>
+                  <span class="mx-1 text-gray-400">→</span>
+                  <span class="text-green-600 font-semibold">"${suggestion.corrected}"</span>
+                </p>
+              ` : ''}
+              ${suggestion.reason ? `
+                <p class="text-sm text-gray-700 mb-2">${suggestion.reason}</p>
+              ` : ''}
+              ${hasAlternatives ? `
+                <div class="mt-2 pt-2 border-t border-orange-200">
+                  <p class="text-xs font-semibold text-gray-600 mb-1">Alternatives:</p>
+                  <div class="space-y-1">
+                    ${suggestion.alternatives.map(alt => `
+                      <p class="text-xs text-gray-600 pl-2 border-l-2 border-orange-300">
+                        "${alt}"
+                      </p>
+                    `).join('')}
+                  </div>
+                </div>
+              ` : ''}
+            </div>
           </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
     
     this.suggestionsContainer.innerHTML = `
       <div class="space-y-3">

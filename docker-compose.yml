@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - BACKEND_URL=http://backend:8080
+      - DATABASE_URL=${DATABASE_URL:-postgresql://prooftamil:localdev123@db:5432/prooftamil_local}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - SESSION_SECRET=${SESSION_SECRET:-dev-secret-key}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - prooftamil
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://prooftamil:localdev123@db:5432/prooftamil_local}
+      - PORT=8080
+      - GIN_MODE=release
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - prooftamil
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=prooftamil
+      - POSTGRES_PASSWORD=localdev123
+      - POSTGRES_DB=prooftamil_local
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prooftamil"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - prooftamil
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  prooftamil:
+    driver: bridge

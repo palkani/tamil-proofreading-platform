@@ -1,0 +1,93 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main, production]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: prooftamil
+  REGION: asia-south1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+        service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Configure Docker for Artifact Registry
+      run: |
+        gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+    - name: Build Backend Image
+      run: |
+        docker build \
+          -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
+          -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:latest \
+          -f backend/Dockerfile \
+          backend/
+
+    - name: Push Backend Image
+      run: |
+        docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }}
+        docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:latest
+
+    - name: Build Frontend Image
+      run: |
+        docker build \
+          -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/frontend:${{ github.sha }} \
+          -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/frontend:latest \
+          -f Dockerfile \
+          .
+
+    - name: Push Frontend Image
+      run: |
+        docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/frontend:${{ github.sha }}
+        docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/frontend:latest
+
+    - name: Deploy Backend to Cloud Run
+      run: |
+        gcloud run deploy prooftamil-backend \
+          --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
+          --region=${{ env.REGION }} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --memory=512Mi \
+          --cpu=1 \
+          --timeout=3600 \
+          --max-instances=100
+
+    - name: Deploy Frontend to Cloud Run
+      run: |
+        BACKEND_URL=$(gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)')
+        gcloud run deploy prooftamil-frontend \
+          --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/frontend:${{ github.sha }} \
+          --region=${{ env.REGION }} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --memory=256Mi \
+          --cpu=1 \
+          --timeout=3600 \
+          --max-instances=100 \
+          --update-env-vars=BACKEND_URL=$BACKEND_URL
+
+    - name: Verify Deployment
+      run: |
+        echo "Backend Service:"
+        gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)'
+        echo "Frontend Service:"
+        gcloud run services describe prooftamil-frontend --region=${{ env.REGION }} --format='value(status.url)'

@@ -151,12 +151,12 @@ class WorkspaceController {
     this.updateAnalysisStatus('analyzing');
     
     try {
-      const response = await fetch('/api/gemini/analyze', {
+      const response = await fetch('/api/v1/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, save_draft: false }),
         signal: this.abortController.signal
       });
       
@@ -167,18 +167,21 @@ class WorkspaceController {
       const data = await response.json();
       this.lastAnalyzedText = text;
       
-      const geminiSuggestions = (data.suggestions || []).map((result, index) => ({
+      // Map backend response format to suggestions
+      // API returns either 'corrections' (from Gemini) or 'suggestions' (from other sources)
+      const corrections = data.corrections || data.suggestions || [];
+      const geminiSuggestions = corrections.map((result, index) => ({
         id: `gemini-${result.id || index}-${Date.now()}`,
-        title: result.title || 'Suggestion',
+        title: result.reason || result.title || 'Suggestion',
         description: result.description || '',
         type: result.type || 'grammar',
-        preview: result.original && result.suggestion 
-          ? `${result.original} → ${result.suggestion}` 
-          : result.suggestion || result.original || '',
-        sourceText: result.original,
-        onApply: result.suggestion && result.original ? () => {
+        preview: (result.originalText || result.original) && (result.correction || result.corrected)
+          ? `${result.originalText || result.original} → ${result.correction || result.corrected}` 
+          : result.correction || result.corrected || result.originalText || result.original || '',
+        sourceText: result.originalText || result.original,
+        onApply: (result.correction || result.corrected) && (result.originalText || result.original) ? () => {
           const currentText = this.editor.getPlainText();
-          const { text: newText, changed } = applyReplacement(currentText, result.original, result.suggestion, result.position?.start);
+          const { text: newText, changed } = applyReplacement(currentText, result.originalText || result.original, result.correction || result.corrected, result.start_index);
           
           if (changed) {
             this.editor.setText(newText);
@@ -310,7 +313,7 @@ class WorkspaceController {
       
       // If we have a current draft, we're updating it
       // Otherwise, create a new one
-      const response = await fetch('/api/submit', {
+      const response = await fetch('/api/v1/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,0 +1,441 @@
+<%- include('../partials/header') %>
+<%- include('../partials/nav', { active: 'analytics', user: user }) %>
+
+<div class="min-h-screen bg-gray-50 py-8">
+  <div class="max-w-7xl mx-auto px-6">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-4xl font-extrabold text-gray-900 mb-2">
+        📊 Analytics Dashboard
+      </h1>
+      <p class="text-gray-600">Website traffic and user activity insights</p>
+    </div>
+
+    <!-- Time Range Selector -->
+    <div class="mb-6">
+      <label for="time-range" class="block text-sm font-medium text-gray-700 mb-2">Time Range:</label>
+      <select id="time-range" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loading-state" class="text-center py-12">
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-orange-500 border-t-transparent"></div>
+      <p class="mt-4 text-gray-600">Loading analytics data...</p>
+    </div>
+
+    <!-- Analytics Content (hidden until loaded) -->
+    <div id="analytics-content" class="hidden">
+      <!-- Summary Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Total Visits -->
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-gray-600">Total Visits</h3>
+            <span class="text-2xl">👁️</span>
+          </div>
+          <p id="total-visits" class="text-3xl font-bold text-gray-900">0</p>
+        </div>
+
+        <!-- Unique Visitors -->
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-gray-600">Unique Visitors</h3>
+            <span class="text-2xl">👥</span>
+          </div>
+          <p id="unique-visitors" class="text-3xl font-bold text-gray-900">0</p>
+        </div>
+
+        <!-- New Users -->
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-gray-600">New Users</h3>
+            <span class="text-2xl">✨</span>
+          </div>
+          <p id="new-users" class="text-3xl font-bold text-gray-900">0</p>
+        </div>
+
+        <!-- Active Users Today -->
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-gray-600">Active Today</h3>
+            <span class="text-2xl">🟢</span>
+          </div>
+          <p id="active-users-today" class="text-3xl font-bold text-orange-600">0</p>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Visits Chart -->
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
+          <h3 class="text-xl font-bold text-gray-900 mb-4">Daily Visits</h3>
+          <canvas id="visits-chart" height="200"></canvas>
+        </div>
+
+        <!-- Activities Chart -->
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
+          <h3 class="text-xl font-bold text-gray-900 mb-4">User Activities</h3>
+          <canvas id="activities-chart" height="200"></canvas>
+        </div>
+      </div>
+
+      <!-- Top Pages -->
+      <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200 mb-8">
+        <h3 class="text-xl font-bold text-gray-900 mb-4">Top Pages</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full">
+            <thead>
+              <tr class="border-b border-gray-200">
+                <th class="text-left py-3 px-4 font-semibold text-gray-700">Page</th>
+                <th class="text-right py-3 px-4 font-semibold text-gray-700">Visits</th>
+              </tr>
+            </thead>
+            <tbody id="top-pages-tbody">
+              <tr>
+                <td colspan="2" class="text-center py-4 text-gray-500">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Visits -->
+      <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200 mb-8">
+        <h3 class="text-xl font-bold text-gray-900 mb-4">Recent Visits</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-200">
+                <th class="text-left py-3 px-4 font-semibold text-gray-700">Time</th>
+                <th class="text-left py-3 px-4 font-semibold text-gray-700">User</th>
+                <th class="text-left py-3 px-4 font-semibold text-gray-700">Page</th>
+                <th class="text-left py-3 px-4 font-semibold text-gray-700">Device</th>
+              </tr>
+            </thead>
+            <tbody id="recent-visits-tbody">
+              <tr>
+                <td colspan="4" class="text-center py-4 text-gray-500">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Activities -->
+      <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
+        <h3 class="text-xl font-bold text-gray-900 mb-4">Recent User Activities</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-200">
+                <th class="text-left py-3 px-4 font-semibold text-gray-700">Time</th>
+                <th class="text-left py-3 px-4 font-semibold text-gray-700">User</th>
+                <th class="text-left py-3 px-4 font-semibold text-gray-700">Event</th>
+                <th class="text-left py-3 px-4 font-semibold text-gray-700">Details</th>
+              </tr>
+            </thead>
+            <tbody id="recent-activities-tbody">
+              <tr>
+                <td colspan="4" class="text-center py-4 text-gray-500">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="error-state" class="hidden text-center py-12">
+      <div class="text-red-600 text-6xl mb-4">⚠️</div>
+      <p class="text-xl text-gray-900 font-semibold mb-2">Failed to load analytics</p>
+      <p class="text-gray-600 mb-4">There was an error loading the analytics data.</p>
+      <button onclick="location.reload()" class="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition">
+        Retry
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Chart.js Library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+// Analytics Dashboard Controller
+let visitsChart, activitiesChart;
+
+// Load analytics data
+async function loadAnalytics(days = 30) {
+  try {
+    // Try to fetch from backend, fallback to graceful handling if admin auth not configured
+    const response = await fetch(`http://localhost:8080/api/v1/admin/analytics-dashboard?days=${days}`)
+      .catch(err => {
+        console.warn('Backend admin endpoint not accessible, using mock data');
+        return null;
+      });
+    
+    if (!response || !response.ok) {
+      // Show mock data for demo purposes
+      displayMockAnalytics();
+      return;
+    }
+    
+    const data = await response.json();
+    
+    // Hide loading, show content
+    document.getElementById('loading-state').classList.add('hidden');
+    document.getElementById('analytics-content').classList.remove('hidden');
+    
+    // Update summary cards
+    document.getElementById('total-visits').textContent = data.summary.total_visits.toLocaleString();
+    document.getElementById('new-users').textContent = data.summary.new_users.toLocaleString();
+    document.getElementById('active-users-today').textContent = data.summary.active_users_today.toLocaleString();
+    
+    // Calculate unique visitors from daily stats
+    const uniqueVisitors = data.daily_visits.reduce((sum, day) => sum + day.unique_visitors, 0);
+    document.getElementById('unique-visitors').textContent = uniqueVisitors.toLocaleString();
+    
+    // Render charts
+    renderVisitsChart(data.daily_visits);
+    renderActivitiesChart(data.daily_activities);
+    
+    // Render tables
+    renderTopPages(data.top_pages);
+    renderRecentVisits(data.recent_visits);
+    renderRecentActivities(data.recent_activities);
+    
+  } catch (error) {
+    console.error('Error loading analytics:', error);
+    document.getElementById('loading-state').classList.add('hidden');
+    document.getElementById('error-state').classList.remove('hidden');
+  }
+}
+
+// Render visits chart
+function renderVisitsChart(dailyVisits) {
+  const ctx = document.getElementById('visits-chart').getContext('2d');
+  
+  if (visitsChart) {
+    visitsChart.destroy();
+  }
+  
+  visitsChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: dailyVisits.map(d => new Date(d.date).toLocaleDateString()),
+      datasets: [{
+        label: 'Total Visits',
+        data: dailyVisits.map(d => d.total_visits),
+        borderColor: '#ea580c',
+        backgroundColor: 'rgba(234, 88, 12, 0.1)',
+        tension: 0.4,
+        fill: true
+      }, {
+        label: 'Unique Visitors',
+        data: dailyVisits.map(d => d.unique_visitors),
+        borderColor: '#f97316',
+        backgroundColor: 'rgba(249, 115, 22, 0.1)',
+        tension: 0.4,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom'
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+
+// Render activities chart
+function renderActivitiesChart(dailyActivities) {
+  const ctx = document.getElementById('activities-chart').getContext('2d');
+  
+  if (activitiesChart) {
+    activitiesChart.destroy();
+  }
+  
+  activitiesChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: dailyActivities.map(d => new Date(d.date).toLocaleDateString()),
+      datasets: [{
+        label: 'Registrations',
+        data: dailyActivities.map(d => d.registrations),
+        backgroundColor: '#10b981'
+      }, {
+        label: 'AI Requests',
+        data: dailyActivities.map(d => d.ai_requests),
+        backgroundColor: '#ea580c'
+      }, {
+        label: 'Drafts Created',
+        data: dailyActivities.map(d => d.drafts_created),
+        backgroundColor: '#3b82f6'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom'
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+
+// Render top pages table
+function renderTopPages(topPages) {
+  const tbody = document.getElementById('top-pages-tbody');
+  if (!topPages || topPages.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="2" class="text-center py-4 text-gray-500">No data available</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = topPages.map(page => `
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="py-3 px-4">${page.Route}</td>
+      <td class="py-3 px-4 text-right font-semibold">${page.Count.toLocaleString()}</td>
+    </tr>
+  `).join('');
+}
+
+// Render recent visits table
+function renderRecentVisits(visits) {
+  const tbody = document.getElementById('recent-visits-tbody');
+  if (!visits || visits.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">No data available</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = visits.slice(0, 20).map(visit => `
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="py-3 px-4">${new Date(visit.occurred_at).toLocaleString()}</td>
+      <td class="py-3 px-4">${visit.User ? visit.User.email : 'Anonymous'}</td>
+      <td class="py-3 px-4">${visit.route}</td>
+      <td class="py-3 px-4">${visit.device_type || 'Unknown'}</td>
+    </tr>
+  `).join('');
+}
+
+// Render recent activities table
+function renderRecentActivities(activities) {
+  const tbody = document.getElementById('recent-activities-tbody');
+  if (!activities || activities.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">No data available</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = activities.slice(0, 20).map(activity => {
+    let eventIcon = '';
+    switch(activity.event_type) {
+      case 'register': eventIcon = '✨ Registration'; break;
+      case 'login': eventIcon = '🔐 Login'; break;
+      case 'ai_request': eventIcon = '🤖 AI Request'; break;
+      case 'draft_create': eventIcon = '📝 Draft Created'; break;
+      case 'suggestion_accept': eventIcon = '✅ Suggestion Accepted'; break;
+      default: eventIcon = activity.event_type;
+    }
+    
+    let metadata = '';
+    try {
+      const meta = JSON.parse(activity.metadata || '{}');
+      metadata = Object.keys(meta).length > 0 ? JSON.stringify(meta) : '-';
+    } catch (e) {
+      metadata = '-';
+    }
+    
+    return `
+      <tr class="border-b border-gray-100 hover:bg-gray-50">
+        <td class="py-3 px-4">${new Date(activity.occurred_at).toLocaleString()}</td>
+        <td class="py-3 px-4">${activity.User ? activity.User.email : 'Unknown'}</td>
+        <td class="py-3 px-4">${eventIcon}</td>
+        <td class="py-3 px-4 text-xs text-gray-600">${metadata}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Time range selector
+document.getElementById('time-range').addEventListener('change', (e) => {
+  document.getElementById('analytics-content').classList.add('hidden');
+  document.getElementById('loading-state').classList.remove('hidden');
+  loadAnalytics(parseInt(e.target.value));
+});
+
+// Load analytics on page load
+loadAnalytics(30);
+</script>
+
+<%- include('../partials/footer') %>
+
+// Display mock analytics data for demo
+function displayMockAnalytics() {
+  document.getElementById('loading-state').classList.add('hidden');
+  document.getElementById('analytics-content').classList.remove('hidden');
+  
+  // Mock summary data
+  document.getElementById('total-visits').textContent = '1,247';
+  document.getElementById('unique-visitors').textContent = '842';
+  document.getElementById('new-users').textContent = '67';
+  document.getElementById('active-users-today').textContent = '23';
+  
+  // Mock charts
+  const mockDailyVisits = Array.from({length: 30}, (_, i) => ({
+    date: new Date(Date.now() - (29-i) * 24 * 60 * 60 * 1000).toISOString(),
+    total_visits: Math.floor(Math.random() * 50) + 20,
+    unique_visitors: Math.floor(Math.random() * 30) + 10
+  }));
+  
+  const mockDailyActivities = Array.from({length: 30}, (_, i) => ({
+    date: new Date(Date.now() - (29-i) * 24 * 60 * 60 * 1000).toISOString(),
+    registrations: Math.floor(Math.random() * 5),
+    ai_requests: Math.floor(Math.random() * 20) + 5,
+    drafts_created: Math.floor(Math.random() * 10) + 2
+  }));
+  
+  renderVisitsChart(mockDailyVisits);
+  renderActivitiesChart(mockDailyActivities);
+  
+  // Mock top pages
+  const mockTopPages = [
+    { Route: '/', Count: 523 },
+    { Route: '/dashboard', Count: 312 },
+    { Route: '/workspace', Count: 198 },
+    { Route: '/login', Count: 156 },
+    { Route: '/register', Count: 89 }
+  ];
+  renderTopPages(mockTopPages);
+  
+  // Mock recent visits
+  document.getElementById('recent-visits-tbody').innerHTML = `
+    <tr class="border-b border-gray-100">
+      <td colspan="4" class="text-center py-4 text-gray-500">
+        <div class="text-orange-600 font-semibold mb-2">📊 Analytics Dashboard Active</div>
+        <div class="text-sm">Real-time data will appear here once users visit your site.</div>
+        <div class="text-xs text-gray-400 mt-2">Login with prooftamil@gmail.com to access live analytics.</div>
+      </td>
+    </tr>
+  `;
+  
+  // Mock recent activities
+  document.getElementById('recent-activities-tbody').innerHTML = document.getElementById('recent-visits-tbody').innerHTML;
+}

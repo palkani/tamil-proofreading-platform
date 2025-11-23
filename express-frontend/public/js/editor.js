@@ -3,9 +3,34 @@
 class TamilEditor {
   constructor(editorElement) {
     this.editor = editorElement;
+    this.maxWords = 2000;
     this.setupEditor();
     this.setupToolbar();
     this.setupAutocomplete();
+  }
+  
+  countWords(text) {
+    if (!text.trim()) return 0;
+    return text.trim().split(/\s+/).length;
+  }
+  
+  enforceWordLimit() {
+    const text = this.editor.textContent;
+    const wordCount = this.countWords(text);
+    
+    if (wordCount > this.maxWords) {
+      const wordsArray = text.split(/\s+/);
+      const truncated = wordsArray.slice(0, this.maxWords).join(' ');
+      this.editor.textContent = truncated;
+      
+      // Move cursor to end
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(this.editor);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
   }
 
   setupEditor() {
@@ -24,6 +49,7 @@ class TamilEditor {
 
     // Track content changes
     this.editor.addEventListener('input', () => {
+      this.enforceWordLimit();
       this.onContentChange();
     });
 

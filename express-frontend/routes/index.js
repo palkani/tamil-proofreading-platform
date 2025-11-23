@@ -11,18 +11,29 @@ router.get('/', (req, res) => {
   });
 });
 
+// How to Use page - accessible to everyone
+router.get('/how-to-use', (req, res) => {
+  const user = getCurrentUser(req);
+  res.render('pages/how-to-use', { 
+    title: 'How to Use ProofTamil - Step by Step Guide',
+    user: user
+  });
+});
+
 // Login page - redirect if already logged in
 router.get('/login', redirectIfAuth, (req, res) => {
   res.render('pages/login', { 
     title: 'Sign In - ProofTamil',
-    error: req.query.error || null
+    error: req.query.error || null,
+    googleClientId: process.env.GOOGLE_CLIENT_ID || ''
   });
 });
 
 // Register page - redirect if already logged in
 router.get('/register', redirectIfAuth, (req, res) => {
   res.render('pages/register', { 
-    title: 'Register - ProofTamil'
+    title: 'Register - ProofTamil',
+    googleClientId: process.env.GOOGLE_CLIENT_ID || ''
   });
 });
 
@@ -30,13 +41,16 @@ router.get('/register', redirectIfAuth, (req, res) => {
 router.post('/login', (req, res) => {
   const { email, password } = req.body;
   
+  // Set admin role for prooftamil@gmail.com
+  const role = (email === 'prooftamil@gmail.com') ? 'admin' : 'user';
+  
   // For now, accept any email/password and create a session
   // In production, validate against database
   req.session.user = {
     id: 1,
     email: email || 'user@example.com',
     name: email ? email.split('@')[0] : 'User',
-    role: 'user'
+    role: role
   };
   
   // Redirect to the page they were trying to access, or dashboard
@@ -49,13 +63,16 @@ router.post('/login', (req, res) => {
 router.post('/register', (req, res) => {
   const { email, password, name } = req.body;
   
+  // Set admin role for prooftamil@gmail.com
+  const role = (email === 'prooftamil@gmail.com') ? 'admin' : 'user';
+  
   // For now, accept any registration and create a session
   // In production, validate and save to database
   req.session.user = {
     id: 1,
     email: email || 'user@example.com',
     name: name || email.split('@')[0],
-    role: 'user'
+    role: role
   };
   
   res.redirect('/dashboard');
@@ -65,12 +82,15 @@ router.post('/register', (req, res) => {
 router.post('/auth/google-callback', (req, res) => {
   const { id, email, name, role } = req.body;
   
+  // Set admin role for prooftamil@gmail.com
+  const userRole = (email === 'prooftamil@gmail.com') ? 'admin' : (role || 'user');
+  
   // Create session for Google authenticated user
   req.session.user = {
     id: id || 1,
     email: email,
     name: name,
-    role: role || 'user'
+    role: userRole
   };
   
   res.json({ success: true });
@@ -96,6 +116,24 @@ router.get('/account', requireAuth, (req, res) => {
   res.render('pages/account', { 
     title: 'Account Settings - ProofTamil',
     user: req.session.user
+  });
+});
+
+// Analytics dashboard - requires admin role
+router.get('/analytics', requireAuth, (req, res) => {
+  // Check if user is admin (prooftamil@gmail.com)
+  const user = req.session.user;
+  if (user.email !== 'prooftamil@gmail.com' && user.role !== 'admin') {
+    return res.status(403).render('pages/error', {
+      title: 'Access Denied',
+      message: 'You do not have permission to view this page.',
+      user: user
+    });
+  }
+  
+  res.render('pages/analytics', { 
+    title: 'Analytics Dashboard - ProofTamil',
+    user: user
   });
 });
 
