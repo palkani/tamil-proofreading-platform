@@ -51,7 +51,7 @@ jobs:
         docker build \
           -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/frontend:${{ github.sha }} \
           -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/frontend:latest \
-          -f Dockerfile \
+          -f express-frontend/Dockerfile \
           .
 
     - name: Push Frontend Image
