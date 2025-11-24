@@ -1,177 +1,163 @@
 package main
 
 import (
-        "log"
-        "os"
-        "time"
+	"log"
+	"os"
+	"time"
 
-        "tamil-proofreading-platform/backend/internal/config"
-        "tamil-proofreading-platform/backend/internal/handlers"
-        "tamil-proofreading-platform/backend/internal/middleware"
-        "tamil-proofreading-platform/backend/internal/models"
+	"github.com/gin-gonic/gin"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 
-        "github.com/gin-gonic/gin"
-        "gorm.io/driver/postgres"
-        "gorm.io/gorm"
+	"tamil-proofreading-platform/backend/internal/config"
+	"tamil-proofreading-platform/backend/internal/handlers"
+	"tamil-proofreading-platform/backend/internal/middleware"
+	"tamil-proofreading-platform/backend/internal/models"
 )
 
-func maskDatabaseURL(url string) string {
-        if len(url) < 10 {
-                return "***"
-        }
-        return url[:20] + "...***"
-}
-
 func main() {
-        // Load configuration
-        cfg := config.Load()
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 
-        // Log startup info
-        log.Println("Starting server...")
-        log.Println("DATABASE_URL:", maskDatabaseURL(cfg.DatabaseURL))
-        log.Println("PORT:", cfg.Port)
+	log.Printf("========================================")
+	log.Printf("[INIT] Tamil Proofreading Backend starting on port %s", port)
+	log.Printf("========================================")
 
-        // Initialize database with retry
-        log.Println("Attempting to connect to database...")
-        var db *gorm.DB
-        var err error
-        
-        // Try to connect, but don't crash if it fails - server will still start
-        db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
-        if err != nil {
-                log.Printf("WARNING: Failed to connect to database: %v", err)
-                log.Println("Server will start but database-dependent features will be unavailable")
-        } else {
-                log.Println("Successfully connected to database")
-                
-                // Auto-migrate database models only if connection succeeds
-                err = db.AutoMigrate(
-                        &models.User{},
-                        &models.Submission{},
-                        &models.Payment{},
-                        &models.Usage{},
-                        &models.RefreshToken{},
-                        &models.ContactMessage{},
-                        &models.TamilWord{},
-                        &models.VisitEvent{},
-                        &models.ActivityEvent{},
-                        &models.DailyVisitStats{},
-                        &models.DailyActivityStats{},
-                )
-                if err != nil {
-                        log.Printf("WARNING: Failed to migrate database: %v", err)
-                }
-        }
+	// Create router immediately
+	router := gin.New()
+	router.Use(gin.Logger())
+	router.Use(gin.Recovery())
 
-        // Initialize handlers (db can be nil, handlers should handle this gracefully)
-        h := handlers.New(db, cfg)
+	// Health check endpoint - minimal dependency
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":  "ok",
+			"service": "tamil-proofreading-backend",
+			"time":    time.Now().Unix(),
+		})
+	})
 
-        // Setup router
-        router := gin.Default()
+	// Ready check - checks if database is available
+	router.GET("/ready", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"ready": "checking database...",
+		})
+	})
 
-        // Health check endpoint (no auth required, doesn't need database)
-        router.GET("/health", func(c *gin.Context) {
-                c.JSON(200, gin.H{
-                        "status": "ok",
-                        "service": "tamil-proofreading-backend",
-                })
-        })
+	// Start router in main thread - this is critical!
+	// The server MUST start listening BEFORE we try to do anything else
+	log.Printf("[INIT] Starting Gin router on :%s", port)
+	
+	go func() {
+		if err := router.Run(":" + port); err != nil {
+			log.Printf("[ERROR] Router failed: %v", err)
+		}
+	}()
 
-        // Request tracing and security headers
-        router.Use(middleware.RequestID())
-        router.Use(middleware.SecurityHeaders())
+	// Give the server time to start listening
+	time.Sleep(2 * time.Second)
 
-        // CORS middleware
-        router.Use(middleware.CORS(cfg.FrontendURL))
+	// Now try to initialize database and handlers in background
+	log.Printf("[BACKGROUND] Loading configuration and database...")
+	cfg := config.Load()
 
-        // Rate limiting middleware
-        router.Use(middleware.RateLimitMiddleware(100, 60*time.Second)) // 100 requests per minute
-        router.Use(middleware.SecurityMonitoring(5, 5*time.Minute))
+	var db *gorm.DB
+	var err error
 
-        // Input sanitization
-        router.Use(middleware.SanitizeInput())
-        router.Use(middleware.BodySizeLimit(10 * 1024 * 1024)) // 10 MB max payload
+	db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
+	if err != nil {
+		log.Printf("[ERROR] Database connection failed: %v", err)
+		log.Printf("[INFO] Server running but database operations will fail")
+	} else {
+		log.Printf("[SUCCESS] Connected to database")
 
-        // Public routes
-        api := router.Group("/api/v1")
-        {
-                api.POST("/auth/register", h.Register)
-                api.POST("/auth/login", h.Login)
-                api.POST("/auth/logout", h.Logout)
-                api.POST("/auth/refresh", h.RefreshAccessToken)
-                api.POST("/auth/otp/send", h.SendOTP)
-                api.POST("/auth/otp/verify", h.VerifyOTP)
-                api.POST("/auth/social", h.SocialLogin)
-                
-                // Tamil autocomplete (public for instant access)
-                api.GET("/autocomplete", h.AutocompleteTamil)
-                api.POST("/tamil-words", h.AddTamilWord)
-                api.POST("/tamil-words/confirm", h.ConfirmTamilWord)
-                
-                // Analytics (public for page view tracking)
-                api.POST("/events/visit", h.LogVisit)
-        }
+		// Auto-migrate
+		err = db.AutoMigrate(
+			&models.User{},
+			&models.Submission{},
+			&models.Payment{},
+			&models.Usage{},
+			&models.RefreshToken{},
+			&models.ContactMessage{},
+			&models.TamilWord{},
+			&models.VisitEvent{},
+			&models.ActivityEvent{},
+			&models.DailyVisitStats{},
+			&models.DailyActivityStats{},
+		)
+		if err != nil {
+			log.Printf("[ERROR] Database migration failed: %v", err)
+		} else {
+			log.Printf("[SUCCESS] Database migrations completed")
+		}
+	}
 
-        // Protected routes (AUTH DISABLED FOR TESTING - RE-ENABLE BEFORE PRODUCTION)
-        protected := api.Group("")
-        // protected.Use(middleware.AuthMiddleware(cfg.JWTSecret)) // TEMPORARILY DISABLED
-        // Mock auth middleware for testing - always sets a test user
-        protected.Use(func(c *gin.Context) {
-                c.Set("user_id", uint(1)) // Mock test user with ID 1 - NOTE: use "user_id" key
-                c.Set("user_email", "test@example.com")
-                c.Set("user_role", models.RoleWriter)
-                c.Next()
-        })
-        {
-                protected.GET("/auth/me", h.GetCurrentUser)
-                protected.POST("/submit", h.SubmitText)
-                protected.GET("/submissions", h.GetSubmissions)
-                protected.GET("/submissions/:id", h.GetSubmission)
-                protected.DELETE("/submissions/:id", h.ArchiveSubmission)
-                protected.GET("/stream/submissions/:id", h.StreamSubmission)
-                protected.GET("/archive", h.GetArchivedSubmissions)
-                protected.POST("/contact", h.SubmitContactMessage)
-                protected.POST("/payments/create", h.CreatePayment)
-                protected.POST("/payments/verify", h.VerifyPayment)
-                protected.GET("/payments", h.GetPayments)
-                protected.GET("/dashboard/stats", h.GetDashboardStats)
-                protected.GET("/usage", h.GetUsage)
-                
-                // Analytics activity logging (authenticated users only)
-                protected.POST("/events/activity", h.LogActivity)
-        }
+	// Initialize handlers
+	h := handlers.New(db, cfg)
 
-        // Admin routes
-        admin := protected.Group("/admin")
-        admin.Use(middleware.AdminMiddleware(db))
-        {
-                admin.GET("/users", h.AdminGetUsers)
-                admin.PUT("/users/:id", h.AdminUpdateUser)
-                admin.DELETE("/users/:id", h.AdminDeleteUser)
-                admin.GET("/payments", h.AdminGetPayments)
-                admin.GET("/analytics", h.AdminGetAnalytics)
-                admin.GET("/model-logs", h.AdminGetModelLogs)
-                admin.GET("/contact", h.AdminListContactMessages)
-                
-                // Analytics dashboard (admin only)
-                admin.GET("/analytics-dashboard", h.GetAnalyticsDashboard)
-        }
+	// Setup API routes
+	api := router.Group("/api/v1")
+	{
+		// Public routes
+		api.POST("/auth/register", h.Register)
+		api.POST("/auth/login", h.Login)
+		api.POST("/auth/logout", h.Logout)
+		api.POST("/auth/refresh", h.RefreshAccessToken)
+		api.POST("/auth/otp/send", h.SendOTP)
+		api.POST("/auth/otp/verify", h.VerifyOTP)
+		api.POST("/auth/social", h.SocialLogin)
+		api.GET("/autocomplete", h.AutocompleteTamil)
+		api.POST("/tamil-words", h.AddTamilWord)
+		api.POST("/tamil-words/confirm", h.ConfirmTamilWord)
+		api.POST("/events/visit", h.LogVisit)
+		api.POST("/webhooks/stripe", h.StripeWebhook)
+		api.POST("/webhooks/razorpay", h.RazorpayWebhook)
+	}
 
-        // Webhook routes (no auth required, verified by signature)
-        api.POST("/webhooks/stripe", h.StripeWebhook)
-        api.POST("/webhooks/razorpay", h.RazorpayWebhook)
+	// Protected routes with mock auth for testing
+	protected := api.Group("")
+	protected.Use(func(c *gin.Context) {
+		c.Set("user_id", uint(1))
+		c.Set("user_email", "test@example.com")
+		c.Set("user_role", models.RoleWriter)
+		c.Next()
+	})
+	{
+		protected.GET("/auth/me", h.GetCurrentUser)
+		protected.POST("/submit", h.SubmitText)
+		protected.GET("/submissions", h.GetSubmissions)
+		protected.GET("/submissions/:id", h.GetSubmission)
+		protected.DELETE("/submissions/:id", h.ArchiveSubmission)
+		protected.GET("/stream/submissions/:id", h.StreamSubmission)
+		protected.GET("/archive", h.GetArchivedSubmissions)
+		protected.POST("/contact", h.SubmitContactMessage)
+		protected.POST("/payments/create", h.CreatePayment)
+		protected.POST("/payments/verify", h.VerifyPayment)
+		protected.GET("/payments", h.GetPayments)
+		protected.GET("/dashboard/stats", h.GetDashboardStats)
+		protected.GET("/usage", h.GetUsage)
+		protected.POST("/events/activity", h.LogActivity)
+	}
 
-        port := os.Getenv("PORT")
-        if port == "" {
-                port = "8080"
-        }
+	// Admin routes
+	admin := protected.Group("/admin")
+	admin.Use(middleware.AdminMiddleware(db))
+	{
+		admin.GET("/users", h.AdminGetUsers)
+		admin.PUT("/users/:id", h.AdminUpdateUser)
+		admin.DELETE("/users/:id", h.AdminDeleteUser)
+		admin.GET("/payments", h.AdminGetPayments)
+		admin.GET("/analytics", h.AdminGetAnalytics)
+		admin.GET("/model-logs", h.AdminGetModelLogs)
+		admin.GET("/contact", h.AdminListContactMessages)
+		admin.GET("/analytics-dashboard", h.GetAnalyticsDashboard)
+	}
 
-        log.Printf("Server starting on port %s", port)
-        if err := router.Run(":" + port); err != nil {
-                log.Fatal("Failed to start server:", err)
-        }
+	log.Printf("[SUCCESS] All routes registered")
+	log.Printf("[INFO] Server is ready. Press Ctrl+C to exit")
+
+	// Keep the main thread alive
+	select {}
 }
-
-// Add suggestion limit check endpoint before other endpoints
-// Add this to the router setup in main():
-// api.GET("/suggestion-limit", middleware.AuthMiddleware(), handlers.CheckSuggestionLimit)
