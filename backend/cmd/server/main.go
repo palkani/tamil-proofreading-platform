@@ -15,15 +15,29 @@ import (
         "gorm.io/gorm"
 )
 
+func maskDatabaseURL(url string) string {
+        if len(url) < 10 {
+                return "***"
+        }
+        return url[:20] + "...***"
+}
+
 func main() {
         // Load configuration
         cfg := config.Load()
 
+        // Log startup info
+        log.Println("Starting server...")
+        log.Println("DATABASE_URL:", maskDatabaseURL(cfg.DatabaseURL))
+        log.Println("PORT:", cfg.Port)
+
         // Initialize database
+        log.Println("Attempting to connect to database...")
         db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
         if err != nil {
                 log.Fatal("Failed to connect to database:", err)
         }
+        log.Println("Successfully connected to database")
 
         // Auto-migrate database models
         err = db.AutoMigrate(
