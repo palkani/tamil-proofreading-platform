@@ -1,0 +1,140 @@
+{
+  "apiVersion": "serving.knative.dev/v1",
+  "kind": "Service",
+  "metadata": {
+    "annotations": {
+      "run.googleapis.com/client-name": "gcloud",
+      "run.googleapis.com/client-version": "547.0.0",
+      "run.googleapis.com/ingress": "all",
+      "run.googleapis.com/ingress-status": "all",
+      "run.googleapis.com/maxScale": "100",
+      "run.googleapis.com/operation-id": "9688be2d-6613-434b-98ec-e4e0f00242d0",
+      "run.googleapis.com/urls": "[\"https://prooftamil-backend-991187041222.asia-south1.run.app\"]",
+      "serving.knative.dev/creator": "prooftamil@gmail.com",
+      "serving.knative.dev/lastModifier": "prooftamil@gmail.com"
+    },
+    "creationTimestamp": "2025-11-23T16:58:13.508974Z",
+    "generation": 6,
+    "labels": {
+      "cloud.googleapis.com/location": "asia-south1",
+      "run.googleapis.com/satisfiesPzs": "true"
+    },
+    "name": "prooftamil-backend",
+    "namespace": "991187041222",
+    "resourceVersion": "AAZEVbX73lQ",
+    "selfLink": "/apis/serving.knative.dev/v1/namespaces/991187041222/services/prooftamil-backend",
+    "uid": "2b5d696c-bbed-42c6-a8b7-cc0fdb870e83"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "20",
+          "run.googleapis.com/client-name": "gcloud",
+          "run.googleapis.com/client-version": "547.0.0",
+          "run.googleapis.com/startup-cpu-boost": "true"
+        },
+        "labels": {
+          "client.knative.dev/nonce": "zhzfsawtye",
+          "run.googleapis.com/startupProbeType": "Default"
+        }
+      },
+      "spec": {
+        "containerConcurrency": 80,
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "GIN_MODE",
+                "value": "release"
+              },
+              {
+                "name": "DATABASE_URL",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "latest",
+                    "name": "DATABASE_URL"
+                  }
+                }
+              },
+              {
+                "name": "GOOGLE_GENAI_API_KEY",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "latest",
+                    "name": "GOOGLE_GENAI_API_KEY"
+                  }
+                }
+              },
+              {
+                "name": "OPENAI_API_KEY",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "latest",
+                    "name": "OPENAI_API_KEY"
+                  }
+                }
+              }
+            ],
+            "image": "asia-south1-docker.pkg.dev/prooftamil/docker-repo/backend:latest",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "http1"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "1",
+                "memory": "512Mi"
+              }
+            },
+            "startupProbe": {
+              "failureThreshold": 1,
+              "periodSeconds": 240,
+              "tcpSocket": {
+                "port": 8080
+              },
+              "timeoutSeconds": 240
+            }
+          }
+        ],
+        "serviceAccountName": "991187041222-compute@developer.gserviceaccount.com",
+        "timeoutSeconds": 3600
+      }
+    },
+    "traffic": [
+      {
+        "latestRevision": true,
+        "percent": 100
+      }
+    ]
+  },
+  "status": {
+    "conditions": [
+      {
+        "lastTransitionTime": "2025-11-24T11:46:16.299640Z",
+        "message": "The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.\n\nLogs URL: https://console.cloud.google.com/logs/viewer?project=prooftamil&resource=cloud_run_revision/service_name/prooftamil-backend/revision_name/prooftamil-backend-00006-6fh&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22prooftamil-backend%22%0Aresource.labels.revision_name%3D%22prooftamil-backend-00006-6fh%22 \nFor more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start",
+        "reason": "HealthCheckContainerError",
+        "status": "False",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2025-11-24T11:46:16.270020Z",
+        "message": "The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.\n\nLogs URL: https://console.cloud.google.com/logs/viewer?project=prooftamil&resource=cloud_run_revision/service_name/prooftamil-backend/revision_name/prooftamil-backend-00006-6fh&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22prooftamil-backend%22%0Aresource.labels.revision_name%3D%22prooftamil-backend-00006-6fh%22 \nFor more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start",
+        "reason": "HealthCheckContainerError",
+        "status": "False",
+        "type": "ConfigurationsReady"
+      },
+      {
+        "lastTransitionTime": "2025-11-24T11:46:16.299640Z",
+        "message": "The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.\n\nLogs URL: https://console.cloud.google.com/logs/viewer?project=prooftamil&resource=cloud_run_revision/service_name/prooftamil-backend/revision_name/prooftamil-backend-00006-6fh&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22prooftamil-backend%22%0Aresource.labels.revision_name%3D%22prooftamil-backend-00006-6fh%22 \nFor more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start",
+        "reason": "HealthCheckContainerError",
+        "status": "False",
+        "type": "RoutesReady"
+      }
+    ],
+    "latestCreatedRevisionName": "prooftamil-backend-00006-6fh",
+    "observedGeneration": 6
+  }
+}
