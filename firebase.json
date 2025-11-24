@@ -1,0 +1,19 @@
+{
+  "hosting": {
+    "public": "express-frontend/public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "prooftamil-frontend",
+          "region": "asia-south1"
+        }
+      }
+    ]
+  }
+}
