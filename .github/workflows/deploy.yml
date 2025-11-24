@@ -12,6 +12,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: read
       id-token: write
@@ -19,16 +20,6 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Debug - Check if secret exists
-      run: |
-        if [ -z "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" ]; then
-          echo "❌ GOOGLE_CREDENTIALS_JSON secret is empty or not found!"
-          exit 1
-        else
-          echo "✅ GOOGLE_CREDENTIALS_JSON secret found"
-          echo "Length: $(echo ${{ secrets.GOOGLE_CREDENTIALS_JSON }} | wc -c) characters"
-        fi
 
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
