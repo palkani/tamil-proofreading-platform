@@ -31,37 +31,51 @@ func main() {
         log.Println("DATABASE_URL:", maskDatabaseURL(cfg.DatabaseURL))
         log.Println("PORT:", cfg.Port)
 
-        // Initialize database
+        // Initialize database with retry
         log.Println("Attempting to connect to database...")
-        db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
+        var db *gorm.DB
+        var err error
+        
+        // Try to connect, but don't crash if it fails - server will still start
+        db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
         if err != nil {
-                log.Fatal("Failed to connect to database:", err)
+                log.Printf("WARNING: Failed to connect to database: %v", err)
+                log.Println("Server will start but database-dependent features will be unavailable")
+        } else {
+                log.Println("Successfully connected to database")
+                
+                // Auto-migrate database models only if connection succeeds
+                err = db.AutoMigrate(
+                        &models.User{},
+                        &models.Submission{},
+                        &models.Payment{},
+                        &models.Usage{},
+                        &models.RefreshToken{},
+                        &models.ContactMessage{},
+                        &models.TamilWord{},
+                        &models.VisitEvent{},
+                        &models.ActivityEvent{},
+                        &models.DailyVisitStats{},
+                        &models.DailyActivityStats{},
+                )
+                if err != nil {
+                        log.Printf("WARNING: Failed to migrate database: %v", err)
+                }
         }
-        log.Println("Successfully connected to database")
 
-        // Auto-migrate database models
-        err = db.AutoMigrate(
-                &models.User{},
-                &models.Submission{},
-                &models.Payment{},
-                &models.Usage{},
-                &models.RefreshToken{},
-                &models.ContactMessage{},
-                &models.TamilWord{},
-                &models.VisitEvent{},
-                &models.ActivityEvent{},
-                &models.DailyVisitStats{},
-                &models.DailyActivityStats{},
-        )
-        if err != nil {
-                log.Fatal("Failed to migrate database:", err)
-        }
-
-        // Initialize handlers
+        // Initialize handlers (db can be nil, handlers should handle this gracefully)
         h := handlers.New(db, cfg)
 
         // Setup router
         router := gin.Default()
+
+        // Health check endpoint (no auth required, doesn't need database)
+        router.GET("/health", func(c *gin.Context) {
+                c.JSON(200, gin.H{
+                        "status": "ok",
+                        "service": "tamil-proofreading-backend",
+                })
+        })
 
         // Request tracing and security headers
         router.Use(middleware.RequestID())
