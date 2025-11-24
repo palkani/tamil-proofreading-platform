@@ -70,14 +70,13 @@ jobs:
           --timeout=300 \
           --max-instances=100 \
           --port=8080 \
-          --set-env-vars="GIN_MODE=release" \
-          --set-secrets=\
-DATABASE_URL=DATABASE_URL:latest,\
-GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest,\
-OPENAI_API_KEY=OPENAI_API_KEY:latest,\
-GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,\
-GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,\
-JWT_SECRET=JWT_SECRET:latest
+          --set-env-vars=GIN_MODE=release \
+          --update-secrets DATABASE_URL=DATABASE_URL:latest \
+          --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
+          --update-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest \
+          --update-secrets GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest \
+          --update-secrets GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest \
+          --update-secrets JWT_SECRET=JWT_SECRET:latest
 
     - name: Verify Backend Health
       run: |
