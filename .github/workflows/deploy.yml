@@ -39,7 +39,7 @@ jobs:
           -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
           -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:latest \
           -f backend/Dockerfile \
-          backend/
+          .
 
     - name: Push Backend Image
       run: |
