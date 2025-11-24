@@ -23,8 +23,7 @@ jobs:
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-        service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+        credentials_json: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
@@ -68,8 +67,24 @@ jobs:
           --allow-unauthenticated \
           --memory=512Mi \
           --cpu=1 \
-          --timeout=3600 \
-          --max-instances=100
+          --timeout=300 \
+          --max-instances=100 \
+          --port=8080 \
+          --set-env-vars="GIN_MODE=release" \
+          --set-secrets=\
+DATABASE_URL=DATABASE_URL:latest,\
+GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest,\
+OPENAI_API_KEY=OPENAI_API_KEY:latest,\
+GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,\
+GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,\
+JWT_SECRET=JWT_SECRET:latest
+
+    - name: Verify Backend Health
+      run: |
+        sleep 10
+        BACKEND_URL=$(gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)')
+        echo "Backend URL: $BACKEND_URL"
+        curl -f "$BACKEND_URL/health" || echo "Health check pending..."
 
     - name: Deploy Frontend to Cloud Run
       run: |
@@ -81,13 +96,13 @@ jobs:
           --allow-unauthenticated \
           --memory=256Mi \
           --cpu=1 \
-          --timeout=3600 \
+          --timeout=300 \
           --max-instances=100 \
-          --update-env-vars=BACKEND_URL=$BACKEND_URL
+          --port=5000 \
+          --set-env-vars="BACKEND_URL=$BACKEND_URL"
 
-    - name: Verify Deployment
+    - name: Deployment Complete
       run: |
-        echo "Backend Service:"
-        gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)'
-        echo "Frontend Service:"
-        gcloud run services describe prooftamil-frontend --region=${{ env.REGION }} --format='value(status.url)'
+        echo "✅ Deployment Complete!"
+        echo "Backend Service: $(gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)')"
+        echo "Frontend Service: $(gcloud run services describe prooftamil-frontend --region=${{ env.REGION }} --format='value(status.url)')"
