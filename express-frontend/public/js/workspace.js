@@ -168,8 +168,8 @@ class WorkspaceController {
       this.lastAnalyzedText = text;
       
       // Map backend response format to suggestions
-      // API returns either 'corrections' (from Gemini) or 'suggestions' (from other sources)
-      const corrections = data.corrections || data.suggestions || [];
+      // API can return suggestions at different levels: data.result.suggestions, data.corrections, or data.suggestions
+      const corrections = data.result?.suggestions || data.corrections || data.suggestions || [];
       const geminiSuggestions = corrections.map((result, index) => ({
         id: `gemini-${result.id || index}-${Date.now()}`,
         title: result.reason || result.title || 'Suggestion',
@@ -395,18 +395,20 @@ class WorkspaceController {
       }
 
       const data = await response.json();
-      const geminiSuggestions = (data.suggestions || []).map((result, index) => ({
+      // Handle different API response formats
+      const suggestions = data.result?.suggestions || data.suggestions || [];
+      const geminiSuggestions = suggestions.map((result, index) => ({
         id: `gemini-${result.id || index}-${Date.now()}`,
-        title: result.title || 'Suggestion',
+        title: result.reason || result.title || 'Suggestion',
         description: result.description || '',
         type: result.type || 'grammar',
-        preview: result.original && result.suggestion 
-          ? `${result.original} → ${result.suggestion}` 
-          : result.suggestion || result.original || '',
-        sourceText: result.original,
-        onApply: result.suggestion && result.original ? () => {
+        preview: (result.original || result.originalText) && (result.corrected || result.suggestion)
+          ? `${result.original || result.originalText} → ${result.corrected || result.suggestion}` 
+          : result.corrected || result.suggestion || result.original || result.originalText || '',
+        sourceText: result.original || result.originalText,
+        onApply: (result.corrected || result.suggestion) && (result.original || result.originalText) ? () => {
           const currentText = this.editor.getPlainText();
-          const { text: newText, changed } = applyReplacement(currentText, result.original, result.suggestion, result.position?.start);
+          const { text: newText, changed } = applyReplacement(currentText, result.original || result.originalText, result.corrected || result.suggestion, result.start_index || result.position?.start);
           
           if (changed) {
             this.editor.setText(newText);
