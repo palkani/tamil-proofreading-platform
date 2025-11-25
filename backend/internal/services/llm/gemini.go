@@ -1,4 +1,4 @@
-// Add logging to CallGeminiProofread to see actual responses
+// Gemini AI service - supports both Replit AI Integrations and direct Google API
 package llm
 
 import (
@@ -8,6 +8,7 @@ import (
         "io"
         "log"
         "net/http"
+        "os"
         "strings"
         "time"
 )
@@ -65,25 +66,42 @@ type GeminiResponse struct {
         } `json:"candidates"`
 }
 
-// CallGeminiProofread calls Gemini 2.5 Flash with the proofreading prompt
+// CallGeminiProofread calls Gemini with the proofreading prompt
+// Uses Replit AI Integrations if available, otherwise falls back to direct Google API
 func CallGeminiProofread(userText string, model string, apiKey string) (string, error) {
-        if apiKey == "" {
-                return "", fmt.Errorf("API key not provided")
-        }
-
         log.Printf("[GEMINI] Starting with model: %s, text length: %d", model, len(userText))
+
+        // Check for Replit AI Integrations environment variables
+        replitBaseURL := os.Getenv("AI_INTEGRATIONS_GEMINI_BASE_URL")
+        replitAPIKey := os.Getenv("AI_INTEGRATIONS_GEMINI_API_KEY")
+
+        var url string
+        var useReplitIntegration bool
+
+        if replitBaseURL != "" && replitAPIKey != "" {
+                // Use Replit AI Integrations (no external API key needed)
+                log.Printf("[GEMINI] Using Replit AI Integrations")
+                url = fmt.Sprintf("%s/models/%s:generateContent", replitBaseURL, model)
+                apiKey = replitAPIKey
+                useReplitIntegration = true
+        } else if apiKey != "" {
+                // Use direct Google API with provided key
+                log.Printf("[GEMINI] Using direct Google API")
+                url = fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
+                        model, apiKey)
+                useReplitIntegration = false
+        } else {
+                return "", fmt.Errorf("no API key or Replit AI Integration available")
+        }
 
         // Build final prompt
         finalPrompt := strings.Replace(proofreadingPrompt, "{{user_text}}", userText, 1)
-
-        // Gemini API Endpoint
-        url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
-                model, apiKey)
 
         // Request payload with JSON mode and optimized settings
         payload := map[string]interface{}{
                 "contents": []map[string]interface{}{
                         {
+                                "role": "user",
                                 "parts": []map[string]string{
                                         {
                                                 "text": finalPrompt,
@@ -92,10 +110,10 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
                         },
                 },
                 "generationConfig": map[string]interface{}{
-                        "temperature":     0.1,
-                        "topP":            0.8,
-                        "topK":            40,
-                        "maxOutputTokens": 8192,
+                        "temperature":      0.1,
+                        "topP":             0.8,
+                        "topK":             40,
+                        "maxOutputTokens":  8192,
                         "responseMimeType": "application/json",
                 },
         }
@@ -104,7 +122,7 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
 
         // HTTP client with timeout
         client := &http.Client{
-                Timeout: 20 * time.Second,
+                Timeout: 30 * time.Second,
         }
 
         req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
@@ -114,6 +132,11 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
         }
 
         req.Header.Set("Content-Type", "application/json")
+
+        // Add Authorization header for Replit AI Integrations
+        if useReplitIntegration {
+                req.Header.Set("Authorization", "Bearer "+apiKey)
+        }
 
         resp, err := client.Do(req)
         if err != nil {
