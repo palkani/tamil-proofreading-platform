@@ -1,16 +1,15 @@
-// Gemini AI service - supports both Replit AI Integrations and direct Google API
+// Gemini AI service for Tamil proofreading
 package llm
 
 import (
-        "bytes"
-        "encoding/json"
-        "fmt"
-        "io"
-        "log"
-        "net/http"
-        "os"
-        "strings"
-        "time"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"strings"
+	"time"
 )
 
 var proofreadingPrompt = `You are an expert Tamil Proofreading Assistant specialized in finding ALL types of errors.
@@ -57,125 +56,103 @@ INPUT TEXT:
 {{user_text}}`
 
 type GeminiResponse struct {
-        Candidates []struct {
-                Content struct {
-                        Parts []struct {
-                                Text string `json:"text"`
-                        } `json:"parts"`
-                } `json:"content"`
-        } `json:"candidates"`
+	Candidates []struct {
+		Content struct {
+			Parts []struct {
+				Text string `json:"text"`
+			} `json:"parts"`
+		} `json:"content"`
+	} `json:"candidates"`
 }
 
-// CallGeminiProofread calls Gemini with the proofreading prompt
-// Uses Replit AI Integrations if available, otherwise falls back to direct Google API
+// CallGeminiProofread calls Gemini 2.5 Flash with the proofreading prompt
 func CallGeminiProofread(userText string, model string, apiKey string) (string, error) {
-        log.Printf("[GEMINI] Starting with model: %s, text length: %d", model, len(userText))
+	if apiKey == "" {
+		return "", fmt.Errorf("API key not provided")
+	}
 
-        // Check for Replit AI Integrations environment variables
-        replitBaseURL := os.Getenv("AI_INTEGRATIONS_GEMINI_BASE_URL")
-        replitAPIKey := os.Getenv("AI_INTEGRATIONS_GEMINI_API_KEY")
+	log.Printf("[GEMINI] Starting with model: %s, text length: %d", model, len(userText))
 
-        var url string
-        var useReplitIntegration bool
+	// Build final prompt
+	finalPrompt := strings.Replace(proofreadingPrompt, "{{user_text}}", userText, 1)
 
-        if replitBaseURL != "" && replitAPIKey != "" {
-                // Use Replit AI Integrations (no external API key needed)
-                log.Printf("[GEMINI] Using Replit AI Integrations")
-                url = fmt.Sprintf("%s/models/%s:generateContent", replitBaseURL, model)
-                apiKey = replitAPIKey
-                useReplitIntegration = true
-        } else if apiKey != "" {
-                // Use direct Google API with provided key
-                log.Printf("[GEMINI] Using direct Google API")
-                url = fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
-                        model, apiKey)
-                useReplitIntegration = false
-        } else {
-                return "", fmt.Errorf("no API key or Replit AI Integration available")
-        }
+	// Gemini API Endpoint
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
+		model, apiKey)
 
-        // Build final prompt
-        finalPrompt := strings.Replace(proofreadingPrompt, "{{user_text}}", userText, 1)
+	// Request payload with JSON mode and optimized settings
+	payload := map[string]interface{}{
+		"contents": []map[string]interface{}{
+			{
+				"parts": []map[string]string{
+					{
+						"text": finalPrompt,
+					},
+				},
+			},
+		},
+		"generationConfig": map[string]interface{}{
+			"temperature":      0.1,
+			"topP":             0.8,
+			"topK":             40,
+			"maxOutputTokens":  8192,
+			"responseMimeType": "application/json",
+		},
+	}
 
-        // Request payload with JSON mode and optimized settings
-        payload := map[string]interface{}{
-                "contents": []map[string]interface{}{
-                        {
-                                "role": "user",
-                                "parts": []map[string]string{
-                                        {
-                                                "text": finalPrompt,
-                                        },
-                                },
-                        },
-                },
-                "generationConfig": map[string]interface{}{
-                        "temperature":      0.1,
-                        "topP":             0.8,
-                        "topK":             40,
-                        "maxOutputTokens":  8192,
-                        "responseMimeType": "application/json",
-                },
-        }
+	jsonBody, _ := json.Marshal(payload)
 
-        jsonBody, _ := json.Marshal(payload)
+	// HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 
-        // HTTP client with timeout
-        client := &http.Client{
-                Timeout: 30 * time.Second,
-        }
+	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
+	if err != nil {
+		log.Printf("[GEMINI] Request build error: %v", err)
+		return "", err
+	}
 
-        req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
-        if err != nil {
-                log.Printf("[GEMINI] Request build error: %v", err)
-                return "", err
-        }
+	req.Header.Set("Content-Type", "application/json")
 
-        req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[GEMINI] Request error: %v", err)
+		return "", err
+	}
+	defer resp.Body.Close()
 
-        // Add Authorization header for Replit AI Integrations
-        if useReplitIntegration {
-                req.Header.Set("Authorization", "Bearer "+apiKey)
-        }
+	log.Printf("[GEMINI] Response status: %d", resp.StatusCode)
 
-        resp, err := client.Do(req)
-        if err != nil {
-                log.Printf("[GEMINI] Request error: %v", err)
-                return "", err
-        }
-        defer resp.Body.Close()
+	// Read full response body
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("[GEMINI] Error reading response body: %v", err)
+		return "", err
+	}
 
-        log.Printf("[GEMINI] Response status: %d", resp.StatusCode)
+	bodyStr := string(bodyBytes)
+	log.Printf("[GEMINI] Raw response: %s", bodyStr)
 
-        // Read full response body
-        bodyBytes, err := io.ReadAll(resp.Body)
-        if err != nil {
-                log.Printf("[GEMINI] Error reading response body: %v", err)
-                return "", err
-        }
+	// Parse response
+	var geminiResp GeminiResponse
+	if err := json.Unmarshal(bodyBytes, &geminiResp); err != nil {
+		log.Printf("[GEMINI] JSON parse error: %v", err)
+		return "", err
+	}
 
-        bodyStr := string(bodyBytes)
-        log.Printf("[GEMINI] Raw response: %s", bodyStr)
+	// Extract final text
+	if len(geminiResp.Candidates) == 0 {
+		log.Printf("[GEMINI] No candidates in response")
+		return "", fmt.Errorf("no candidates returned from Gemini")
+	}
 
-        // Parse response
-        var geminiResp GeminiResponse
-        if err := json.Unmarshal(bodyBytes, &geminiResp); err != nil {
-                log.Printf("[GEMINI] JSON parse error: %v", err)
-                return "", err
-        }
+	if len(geminiResp.Candidates[0].Content.Parts) == 0 {
+		log.Printf("[GEMINI] No parts in candidates")
+		return "", fmt.Errorf("no content returned from Gemini")
+	}
 
-        // Extract final text
-        if len(geminiResp.Candidates) == 0 {
-                log.Printf("[GEMINI] No candidates in response")
-                return "", fmt.Errorf("no candidates returned from Gemini")
-        }
-
-        if len(geminiResp.Candidates[0].Content.Parts) == 0 {
-                log.Printf("[GEMINI] No parts in candidates")
-                return "", fmt.Errorf("no content returned from Gemini")
-        }
-
-        result := geminiResp.Candidates[0].Content.Parts[0].Text
-        log.Printf("[GEMINI] Extracted result (length: %d): %s", len(result), result)
-        return result, nil
+	result := geminiResp.Candidates[0].Content.Parts[0].Text
+	log.Printf("[GEMINI] Extracted result (length: %d): %s", len(result), result)
+	return result, nil
 }
