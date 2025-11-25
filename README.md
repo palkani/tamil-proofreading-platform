@@ -4,7 +4,7 @@ A web-based platform that enables Tamil writers to upload text for AI-assisted p
 
 ## Features
 
-### Core Features
+### Core Feature
 
 - **User Authentication**: Secure login via email/password, OTP, and social login (Google, Facebook)
 - **Text Submission**: Upload or paste Tamil text for proofreading
