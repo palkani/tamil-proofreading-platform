@@ -43,71 +43,146 @@
 
       <!-- Right side - Form -->
       <div class="p-8 sm:p-10 space-y-8">
-        <header class="space-y-2">
-          <h1 class="text-3xl font-bold">Sign up for ProofTamil</h1>
-          <p class="text-sm text-gray-600">
-            Choose email or continue with Google. It takes less than a minute.
-          </p>
-        </header>
+        <!-- Step 1: Registration Form -->
+        <div id="registration-step" class="space-y-8">
+          <header class="space-y-2">
+            <h1 class="text-3xl font-bold">Sign up for ProofTamil</h1>
+            <p class="text-sm text-gray-600">
+              Choose email or continue with Google. It takes less than a minute.
+            </p>
+          </header>
 
-        <div id="error-message" class="hidden rounded-xl border border-red-500/40 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+          <div id="error-message" class="hidden rounded-xl border border-red-500/40 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
 
-        <div class="space-y-4">
-          <button id="google-signup-btn" type="button" class="w-full flex items-center justify-center gap-3 rounded-full border border-gray-300 bg-white px-4 py-3 font-semibold text-gray-900 shadow-sm transition hover:bg-gray-50">
-            <svg class="h-5 w-5" viewBox="0 0 24 24">
-              <path fill="#EA4335" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
-            </svg>
-            Continue with Google
-          </button>
-          <div class="flex items-center gap-3 text-xs uppercase tracking-wider text-gray-500">
-            <span class="h-px flex-1 bg-gray-300" />
-            Or use email
-            <span class="h-px flex-1 bg-gray-300" />
+          <div class="space-y-4">
+            <button id="google-signup-btn" type="button" class="w-full flex items-center justify-center gap-3 rounded-full border border-gray-300 bg-white px-4 py-3 font-semibold text-gray-900 shadow-sm transition hover:bg-gray-50">
+              <svg class="h-5 w-5" viewBox="0 0 24 24">
+                <path fill="#EA4335" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
+              </svg>
+              Continue with Google
+            </button>
+            <div class="flex items-center gap-3 text-xs uppercase tracking-wider text-gray-500">
+              <span class="h-px flex-1 bg-gray-300" />
+              Or use email
+              <span class="h-px flex-1 bg-gray-300" />
+            </div>
+          </div>
+
+          <form id="register-form" class="space-y-5">
+            <div class="space-y-2">
+              <label for="name" class="text-sm font-semibold">Full name</label>
+              <input id="name" name="name" type="text" required class="input-field" placeholder="e.g. Kavya Raman" />
+            </div>
+
+            <div class="space-y-2">
+              <label for="email" class="text-sm font-semibold">Email address</label>
+              <input id="email" name="email" type="email" required class="input-field" placeholder="you@example.com" />
+            </div>
+
+            <div class="space-y-2">
+              <label for="password" class="text-sm font-semibold">Password</label>
+              <input id="password" name="password" type="password" required minlength="8" class="input-field" placeholder="Minimum 8 characters" />
+              
+              <!-- Password Strength Indicator -->
+              <div id="password-strength" class="hidden mt-2 space-y-2">
+                <div class="flex gap-1">
+                  <div id="strength-bar-1" class="h-1 flex-1 rounded bg-gray-200"></div>
+                  <div id="strength-bar-2" class="h-1 flex-1 rounded bg-gray-200"></div>
+                  <div id="strength-bar-3" class="h-1 flex-1 rounded bg-gray-200"></div>
+                  <div id="strength-bar-4" class="h-1 flex-1 rounded bg-gray-200"></div>
+                  <div id="strength-bar-5" class="h-1 flex-1 rounded bg-gray-200"></div>
+                </div>
+                <div id="password-requirements" class="text-xs space-y-1">
+                  <div id="req-length" class="flex items-center gap-1 text-gray-400">
+                    <span class="req-icon">○</span> At least 8 characters
+                  </div>
+                  <div id="req-upper" class="flex items-center gap-1 text-gray-400">
+                    <span class="req-icon">○</span> One uppercase letter
+                  </div>
+                  <div id="req-lower" class="flex items-center gap-1 text-gray-400">
+                    <span class="req-icon">○</span> One lowercase letter
+                  </div>
+                  <div id="req-number" class="flex items-center gap-1 text-gray-400">
+                    <span class="req-icon">○</span> One number
+                  </div>
+                  <div id="req-special" class="flex items-center gap-1 text-gray-400">
+                    <span class="req-icon">○</span> One special character (!@#$%^&*)
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-xs text-gray-600">
+              <label class="flex items-start gap-2">
+                <input type="checkbox" id="terms-checkbox" required class="mt-1">
+                <span>I agree to the <a href="/terms" class="underline">Terms</a> and <a href="/privacy" class="underline">Privacy Policy</a></span>
+              </label>
+            </div>
+
+            <button type="submit" id="submit-btn" disabled class="w-full rounded-full bg-orange-600 py-3 font-semibold text-white shadow-lg transition hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed">
+              Create free account
+            </button>
+          </form>
+
+          <div class="text-sm text-gray-700">
+            Already have an account? 
+            <a href="/login" class="font-semibold text-gray-900 underline decoration-gray-400 underline-offset-4">Sign in</a>
+            <br/>
+            <a href="/" class="text-gray-500 hover:text-gray-900 mt-2 inline-block">← Back to home</a>
           </div>
         </div>
 
-        <form id="register-form" method="POST" action="/register" class="space-y-5">
-          <div class="space-y-2">
-            <label for="name" class="text-sm font-semibold">Full name</label>
-            <input id="name" name="name" type="text" required class="input-field" placeholder="e.g. Kavya Raman" />
+        <!-- Step 2: Email Verification -->
+        <div id="verification-step" class="hidden space-y-8">
+          <header class="space-y-2">
+            <h1 class="text-3xl font-bold">Verify your email</h1>
+            <p class="text-sm text-gray-600">
+              We've sent a 6-digit verification code to <span id="verification-email" class="font-semibold"></span>
+            </p>
+          </header>
+
+          <div id="verification-error" class="hidden rounded-xl border border-red-500/40 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+          <div id="verification-success" class="hidden rounded-xl border border-green-500/40 bg-green-50 px-4 py-3 text-sm text-green-700"></div>
+
+          <form id="verification-form" class="space-y-5">
+            <div class="space-y-2">
+              <label for="otp" class="text-sm font-semibold">Verification code</label>
+              <input id="otp" name="otp" type="text" required maxlength="6" pattern="[0-9]{6}" 
+                     class="input-field text-center text-2xl tracking-widest font-mono" 
+                     placeholder="000000" 
+                     inputmode="numeric"
+                     autocomplete="one-time-code" />
+              <p class="text-xs text-gray-500">Enter the 6-digit code from your email</p>
+            </div>
+
+            <button type="submit" id="verify-btn" class="w-full rounded-full bg-orange-600 py-3 font-semibold text-white shadow-lg transition hover:bg-orange-700 disabled:opacity-50">
+              Verify Email
+            </button>
+          </form>
+
+          <div class="text-sm text-gray-600 space-y-2">
+            <p>
+              Didn't receive the code? 
+              <button id="resend-btn" type="button" class="font-semibold text-orange-600 hover:text-orange-700 underline">
+                Resend code
+              </button>
+            </p>
+            <p id="resend-timer" class="hidden text-gray-500">
+              You can resend in <span id="timer-seconds">60</span> seconds
+            </p>
           </div>
 
-          <div class="space-y-2">
-            <label for="email" class="text-sm font-semibold">Email address</label>
-            <input id="email" name="email" type="email" required class="input-field" placeholder="you@example.com" />
+          <div class="text-sm text-gray-700">
+            <button id="back-to-register" type="button" class="text-gray-500 hover:text-gray-900">
+              ← Back to registration
+            </button>
           </div>
-
-          <div class="space-y-2">
-            <label for="password" class="text-sm font-semibold">Password</label>
-            <input id="password" name="password" type="password" required minlength="6" class="input-field" placeholder="Minimum 6 characters" />
-          </div>
-
-          <div class="text-xs text-gray-600">
-            <label class="flex items-start gap-2">
-              <input type="checkbox" required class="mt-1">
-              <span>I agree to the <a href="/terms" class="underline">Terms</a> and <a href="/privacy" class="underline">Privacy Policy</a></span>
-            </label>
-          </div>
-
-          <button type="submit" id="submit-btn" class="w-full rounded-full bg-orange-600 py-3 font-semibold text-white shadow-lg transition hover:bg-orange-700 disabled:opacity-50">
-            Create free account
-          </button>
-        </form>
-
-        <p class="text-xs text-center text-gray-500">
-          ℹ️ <strong>Demo Mode:</strong> Any email and password will work for testing
-        </p>
-
-        <div class="text-sm text-gray-700">
-          Already have an account? 
-          <a href="/login" class="font-semibold text-gray-900 underline decoration-gray-400 underline-offset-4">Sign in</a>
-          <br/>
-          <a href="/" class="text-gray-500 hover:text-gray-900 mt-2 inline-block">← Back to home</a>
         </div>
       </div>
     </div>
   </div>
 </div>
 
+<script src="/js/register.js"></script>
 <script src="/js/google-auth.js"></script>
 <%- include('../partials/footer') %>

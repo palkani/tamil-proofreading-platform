@@ -7,6 +7,7 @@ import (
         "tamil-proofreading-platform/backend/internal/config"
         "tamil-proofreading-platform/backend/internal/models"
         "tamil-proofreading-platform/backend/internal/services/auth"
+        "tamil-proofreading-platform/backend/internal/services/email"
         "tamil-proofreading-platform/backend/internal/services/llm"
         "tamil-proofreading-platform/backend/internal/services/nlp"
         "tamil-proofreading-platform/backend/internal/services/payment"
@@ -18,6 +19,7 @@ type Handlers struct {
         db             *gorm.DB
         cfg            *config.Config
         authService    *auth.AuthService
+        emailService   *email.EmailService
         nlpService     *nlp.TamilNLPService
         llmService     *llm.LLMService
         paymentService *payment.PaymentService
@@ -38,6 +40,7 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
         }
 
         authService := auth.NewAuthService(db, cfg.JWTSecret, cfg.RefreshTokenSecret, accessTTL, refreshTTL)
+        emailService := email.NewEmailService()
         nlpService := nlp.NewTamilNLPService()
         llmService := llm.NewLLMService(cfg.OpenAIAPIKey, cfg.GoogleGenAIKey, nlpService)
         paymentService := payment.NewPaymentService(db, cfg)
@@ -46,6 +49,7 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
                 db:             db,
                 cfg:            cfg,
                 authService:    authService,
+                emailService:   emailService,
                 nlpService:     nlpService,
                 llmService:     llmService,
                 paymentService: paymentService,
