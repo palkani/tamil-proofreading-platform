@@ -12,43 +12,45 @@ import (
         "time"
 )
 
-var proofreadingPrompt = `You are an expert Tamil Proofreading Assistant.
+var proofreadingPrompt = `You are an expert Tamil Proofreading Assistant specialized in finding ALL types of errors.
 
-Your job is to carefully analyze the given Tamil text (multiple sentences or paragraphs) and produce detailed corrections.
+CRITICAL: Your job is to CAREFULLY analyze the given Tamil text and find ALL mistakes including:
+1. SPELLING ERRORS - Wrong letters, missing letters, extra letters
+2. GRAMMAR ERRORS - Verb conjugation, subject-verb agreement, case markers
+3. PUNCTUATION ERRORS - Missing/wrong punctuation marks, spacing issues
+4. INCOMPLETE WORDS - Words that are cut off or incomplete (e.g., "நல்வாழ்த்துக" should be "நல்வாழ்த்துக்கள்")
+5. MISSING SPACES - Text without proper word spacing (e.g., "word1word2" should be "word1 word2")
+6. SANDHI ERRORS - Incorrect Tamil sandhi (punarchi) rules
+7. WORD CHOICE - Wrong word usage or better alternatives
+
+BE VERY THOROUGH - Even small issues like missing spaces between sentences should be reported!
 
 For every mistake you find, you must identify:
 - The original text (word or phrase)
 - The corrected version
-- A clear Tamil explanation of the correction
-- The type of the issue: "grammar", "spelling", "punctuation", or "suggestion"
+- A clear Tamil explanation of WHY this is an error
+- The type of the issue
 
-VERY IMPORTANT RULES:
-- Respond ONLY in Tamil.
-- Preserve the original meaning.
-- Do NOT rewrite entire sentences unless a correction is needed.
-- Return ONLY the corrections found.
-- Each correction must be precise and explain the linguistic rule.
-- Keep output as clean JSON — strict format below.
-- If no corrections, return an empty list.
-
-STRICT OUTPUT FORMAT (MANDATORY):
+STRICT OUTPUT FORMAT (MANDATORY JSON):
 {
-    "success": true,
+    "corrected_text": "The full corrected Tamil text with all fixes applied",
     "corrections": [
         {
-            "originalText": "",
-            "correction": "",
-            "reason": "",
-            "type": ""
+            "original": "exact wrong text",
+            "corrected": "the fixed version",
+            "reason": "விளக்கம் தமிழில்",
+            "type": "spelling|grammar|punctuation|suggestion"
         }
     ]
 }
 
-FIELD DEFINITIONS:
-- "originalText": The exact incorrect Tamil word or phrase.
-- "correction": The corrected form.
-- "reason": A short but clear Tamil explanation (grammatical rule, spelling rule, sandhi rule, etc.)
-- "type": One of the following: "grammar", "spelling", "punctuation", "suggestion"
+RULES:
+- ALWAYS respond with valid JSON only - no markdown, no extra text
+- ALWAYS include "corrected_text" with the full fixed text
+- ALWAYS include "corrections" array (even if empty)
+- Explanations in "reason" must be in Tamil
+- Check for missing spaces after punctuation marks like ! ? .
+- Check for incomplete words
 
 INPUT TEXT:
 {{user_text}}`
@@ -78,7 +80,7 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
         url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
                 model, apiKey)
 
-        // Request payload
+        // Request payload with JSON mode and optimized settings
         payload := map[string]interface{}{
                 "contents": []map[string]interface{}{
                         {
@@ -88,6 +90,13 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
                                         },
                                 },
                         },
+                },
+                "generationConfig": map[string]interface{}{
+                        "temperature":     0.1,
+                        "topP":            0.8,
+                        "topK":            40,
+                        "maxOutputTokens": 8192,
+                        "responseMimeType": "application/json",
                 },
         }
 
