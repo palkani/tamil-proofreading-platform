@@ -26,6 +26,10 @@ jobs:
       with:
         credentials_json: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
 
+    - name: Create GCP key file for Firebase
+      run: |
+        echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > ${{ github.workspace }}/gcp-key.json
+
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
 
@@ -101,8 +105,16 @@ jobs:
           --port=5000 \
           --set-env-vars="BACKEND_URL=$BACKEND_URL"
 
+    - name: Deploy to Firebase Hosting
+      run: |
+        npm install -g firebase-tools
+        firebase deploy --only hosting --project prooftamil --non-interactive
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/gcp-key.json
+
     - name: Deployment Complete
       run: |
         echo "✅ Deployment Complete!"
         echo "Backend Service: $(gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)')"
         echo "Frontend Service: $(gcloud run services describe prooftamil-frontend --region=${{ env.REGION }} --format='value(status.url)')"
+        echo "Firebase Hosting: https://prooftamil.web.app"
