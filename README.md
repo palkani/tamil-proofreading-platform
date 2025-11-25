@@ -9,7 +9,7 @@ A web-based platform that enables Tamil writers to upload text for AI-assisted p
 - **User Authentication**: Secure login via email/password, OTP, and social login (Google, Facebook)
 - **Text Submission**: Upload or paste Tamil text for proofreading
 - **Tiered Model Workflow**:
-  - Model A: Handles up to 500 words (fast, basic grammar/spelling)
+  - Model A: Handles up to 1000 words (fast, basic grammar/spelling)
   - Model B: Handles 500+ words (deep syntax, semantic checks)
 - **Payment Integration**: Stripe and Razorpay support for global and Indian users
 - **Pay-per-use**: ₹10 per 500 words (Model A), ₹20 per 500 words (Model B)
