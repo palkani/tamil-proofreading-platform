@@ -1,20 +1,38 @@
-# ProofTamil - Free Tamil Editor & Typing Tool
-# Allow all search engines to index and crawl
+# ProofTamil - Free Tamil Typing & AI Proofreading Tool
+# https://prooftamil.com
+# Best Free Tamil Keyboard Online
 
 User-agent: *
 Allow: /
+Allow: /workspace
+Allow: /how-to-use
+Allow: /login
+Allow: /register
+Allow: /contact
+Allow: /privacy
+Allow: /terms
+
+# Disallow private/authenticated pages from indexing
+Disallow: /dashboard
+Disallow: /account
+Disallow: /archive
+Disallow: /analytics
+Disallow: /api/
+Disallow: /admin/
 
 # Sitemap location
 Sitemap: https://prooftamil.com/sitemap.xml
+Sitemap: https://www.prooftamil.com/sitemap.xml
 
-# Crawl rate
+# Crawl delay (be gentle with the server)
+Crawl-delay: 1
+
+# Google specific
+User-agent: Googlebot
+Allow: /
 Crawl-delay: 0
 
-# Specific paths to prioritize
-Allow: /workspace
-Allow: /login
-Allow: /register
-
-# Block admin and API endpoints from search results
-Disallow: /api/
-Disallow: /admin/
+# Bing specific
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1

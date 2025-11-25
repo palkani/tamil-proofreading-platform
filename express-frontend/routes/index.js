@@ -6,7 +6,7 @@ const { requireAuth, redirectIfAuth, getCurrentUser } = require('../middleware/a
 router.get('/', (req, res) => {
   const user = getCurrentUser(req);
   res.render('pages/home', { 
-    title: 'Free Tamil Editor & Typing Tool - AI Grammar Checker | ProofTamil',
+    title: 'Free Tamil Typing Online | Tamil Proofreading & AI Grammar Checker - ProofTamil',
     user: user
   });
 });
@@ -15,7 +15,7 @@ router.get('/', (req, res) => {
 router.get('/how-to-use', (req, res) => {
   const user = getCurrentUser(req);
   res.render('pages/how-to-use', { 
-    title: 'How to Use ProofTamil - Step by Step Guide',
+    title: 'How to Type Tamil Online Free - Step by Step Guide | ProofTamil',
     user: user
   });
 });
@@ -23,7 +23,7 @@ router.get('/how-to-use', (req, res) => {
 // Login page - redirect if already logged in
 router.get('/login', redirectIfAuth, (req, res) => {
   res.render('pages/login', { 
-    title: 'Sign In - ProofTamil',
+    title: 'Login to Free Tamil Typing Tool | ProofTamil',
     error: req.query.error || null,
     googleClientId: process.env.GOOGLE_CLIENT_ID || ''
   });
@@ -32,7 +32,7 @@ router.get('/login', redirectIfAuth, (req, res) => {
 // Register page - redirect if already logged in
 router.get('/register', redirectIfAuth, (req, res) => {
   res.render('pages/register', { 
-    title: 'Register - ProofTamil',
+    title: 'Sign Up Free - Tamil Typing & Proofreading | ProofTamil',
     googleClientId: process.env.GOOGLE_CLIENT_ID || ''
   });
 });
@@ -149,7 +149,7 @@ router.get('/archive', requireAuth, (req, res) => {
 router.get('/contact', (req, res) => {
   const user = getCurrentUser(req);
   res.render('pages/contact', { 
-    title: 'Contact Us - ProofTamil',
+    title: 'Contact ProofTamil - Free Tamil Typing Support',
     user: user
   });
 });
@@ -158,7 +158,7 @@ router.get('/contact', (req, res) => {
 router.get('/privacy', (req, res) => {
   const user = getCurrentUser(req);
   res.render('pages/privacy', { 
-    title: 'Privacy Policy - ProofTamil',
+    title: 'Privacy Policy - ProofTamil Tamil Typing Tool',
     user: user
   });
 });
