@@ -15,11 +15,10 @@ function getSecretManagerClient() {
   return secretManagerClient;
 }
 
-async function getSecretFromManager(secretName) {
+async function getSecretFromManager(secretName, timeoutMs = 5000) {
   const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
   
   if (!projectId) {
-    console.log('[Secrets] No GCP project ID found, skipping Secret Manager');
     return null;
   }
 
@@ -28,15 +27,20 @@ async function getSecretFromManager(secretName) {
     if (!client) return null;
 
     const name = `projects/${projectId}/secrets/${secretName}/versions/latest`;
-    console.log(`[Secrets] Fetching secret: ${secretName}`);
     
-    const [version] = await client.accessSecretVersion({ name });
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout')), timeoutMs)
+    );
+    
+    const fetchPromise = client.accessSecretVersion({ name });
+    
+    const [version] = await Promise.race([fetchPromise, timeoutPromise]);
     const payload = version.payload.data.toString('utf8');
     
-    console.log(`[Secrets] Successfully fetched: ${secretName}`);
+    console.log(`[Secrets] Fetched from Secret Manager: ${secretName}`);
     return payload;
   } catch (error) {
-    console.log(`[Secrets] Failed to fetch ${secretName}:`, error.message);
+    console.log(`[Secrets] Could not fetch ${secretName}: ${error.message}`);
     return null;
   }
 }
@@ -51,7 +55,7 @@ async function getSecret(secretName, envVarName = null) {
   let value = process.env[envName];
   
   if (value) {
-    console.log(`[Secrets] ${secretName} loaded from environment variable`);
+    console.log(`[Secrets] ${secretName} from env`);
     secretsCache[secretName] = value;
     return value;
   }
@@ -64,7 +68,6 @@ async function getSecret(secretName, envVarName = null) {
     return value;
   }
   
-  console.log(`[Secrets] ${secretName} not found in environment or Secret Manager`);
   return null;
 }
 
@@ -78,11 +81,13 @@ async function loadAllSecrets() {
     { name: 'SESSION_SECRET', env: 'SESSION_SECRET' },
   ];
   
-  for (const secret of secrets) {
-    await getSecret(secret.name, secret.env);
+  try {
+    await Promise.all(secrets.map(s => getSecret(s.name, s.env)));
+  } catch (error) {
+    console.log('[Secrets] Error loading secrets:', error.message);
   }
   
-  console.log('[Secrets] Secrets loading complete');
+  console.log('[Secrets] Done');
 }
 
 module.exports = {

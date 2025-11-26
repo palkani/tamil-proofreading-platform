@@ -58,16 +58,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server with secrets initialization
-initializeApp().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Express server running on http://0.0.0.0:${PORT}`);
+// Start server immediately, load secrets in background
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Express server running on http://0.0.0.0:${PORT}`);
+  
+  initializeApp().then(() => {
     console.log(`GOOGLE_CLIENT_ID available: ${!!process.env.GOOGLE_CLIENT_ID}`);
-  });
-}).catch(error => {
-  console.error('Failed to initialize app:', error);
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Express server running on http://0.0.0.0:${PORT} (without secrets)`);
+  }).catch(error => {
+    console.log('Secrets loading error (non-fatal):', error.message);
   });
 });
 
