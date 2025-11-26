@@ -3,9 +3,14 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const { trackPageView } = require('./middleware/analytics');
+const { loadAllSecrets } = require('./utils/secrets');
 
 const app = express();
 const PORT = 5000; // Express frontend always runs on 5000
+
+async function initializeApp() {
+  await loadAllSecrets();
+}
 
 // View engine setup
 app.set('view engine', 'ejs');
@@ -53,9 +58,17 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Express server running on http://0.0.0.0:${PORT}`);
+// Start server with secrets initialization
+initializeApp().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Express server running on http://0.0.0.0:${PORT}`);
+    console.log(`GOOGLE_CLIENT_ID available: ${!!process.env.GOOGLE_CLIENT_ID}`);
+  });
+}).catch(error => {
+  console.error('Failed to initialize app:', error);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Express server running on http://0.0.0.0:${PORT} (without secrets)`);
+  });
 });
 
 module.exports = app;

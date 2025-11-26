@@ -3,7 +3,20 @@
 ## Overview
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database. tamil
 
-## Recent Updates (Nov 25, 2025)
+## Recent Updates (Nov 26, 2025)
+- **Google Secret Manager Integration for Frontend:**
+  - Frontend now fetches secrets from Google Secret Manager when environment variables are not set
+  - Secrets are loaded at startup and cached for performance
+  - Supports: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, RESEND_API_KEY, SESSION_SECRET
+  - Eliminates need to manually set environment variables in Cloud Run after each deployment
+- **Skip Migrations in Production:**
+  - Added `SKIP_MIGRATIONS=true` environment variable support for Go backend
+  - Prevents unnecessary database migrations on every Cloud Run deployment
+- **Smart AI Model Selection:**
+  - Uses gemini-2.5-flash-lite for short texts (<200 chars) for faster responses (2-4s)
+  - Uses gemini-2.5-flash for longer texts for accuracy
+  
+## Previous Updates (Nov 25, 2025)
 - **Email/Password Authentication with Email Verification:**
   - New users can register with email, password, and name
   - Strong password requirements enforced: 8+ characters, uppercase, lowercase, number, special character
