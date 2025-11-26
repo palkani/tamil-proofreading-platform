@@ -183,6 +183,83 @@ Provide title and description in TAMIL language only.`
   }
 });
 
+// Google OAuth callback handler
+router.get('/v1/auth/google/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+  
+  console.log('[GOOGLE-OAUTH] Callback received');
+  
+  if (error) {
+    console.error('[GOOGLE-OAUTH] Error from Google:', error);
+    return res.redirect(`/login?error=${encodeURIComponent(error)}`);
+  }
+  
+  if (!code) {
+    console.error('[GOOGLE-OAUTH] No authorization code received');
+    return res.redirect('/login?error=Missing authorization code');
+  }
+  
+  try {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const redirectUri = `${req.protocol}://${req.get('host')}/api/v1/auth/google/callback`;
+    
+    if (!clientId || !clientSecret) {
+      throw new Error('Google OAuth not configured');
+    }
+    
+    console.log('[GOOGLE-OAUTH] Exchanging code for token...');
+    
+    // Exchange authorization code for ID token
+    const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
+      client_id: clientId,
+      client_secret: clientSecret,
+      code: code,
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri
+    });
+    
+    const idToken = tokenResponse.data.id_token;
+    if (!idToken) {
+      throw new Error('No ID token in response');
+    }
+    
+    console.log('[GOOGLE-OAUTH] Token received, authenticating with backend...');
+    
+    // Send ID token to backend for verification
+    const backendUrl = getBackendApiUrl();
+    const authResponse = await axios.post(`${backendUrl}/auth/social`, {
+      provider: 'google',
+      token: idToken
+    });
+    
+    if (!authResponse.data.user) {
+      throw new Error('No user data in backend response');
+    }
+    
+    const user = authResponse.data.user;
+    console.log('[GOOGLE-OAUTH] Backend authentication successful:', user.email);
+    
+    // Create session
+    req.session.user = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role || 'user'
+    };
+    
+    console.log('[GOOGLE-OAUTH] Session created, redirecting to dashboard');
+    res.redirect('/dashboard');
+    
+  } catch (error) {
+    console.error('[GOOGLE-OAUTH] Error:', error.message);
+    console.error('[GOOGLE-OAUTH] Details:', error.response?.data || error.stack);
+    
+    const errorMessage = error.response?.data?.error || error.message || 'Authentication failed';
+    res.redirect(`/login?error=${encodeURIComponent(errorMessage)}`);
+  }
+});
+
 // Proxy other API calls to Go backend
 router.all('/*', async (req, res) => {
   try {
