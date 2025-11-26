@@ -1,7 +1,19 @@
 // Analytics middleware for tracking page views
 const axios = require('axios');
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080/api/v1';
+// Construct backend API URL - handle both cases:
+// 1. BACKEND_URL = http://localhost:8080/api/v1 (dev)
+// 2. BACKEND_URL = https://prooftamil-backend-xxx.run.app (prod - needs /api/v1)
+function getBackendApiUrl() {
+  const baseUrl = process.env.BACKEND_URL || 'http://localhost:8080';
+  // If URL already ends with /api/v1, use as-is; otherwise append it
+  if (baseUrl.endsWith('/api/v1')) {
+    return baseUrl;
+  }
+  return baseUrl.replace(/\/$/, '') + '/api/v1';
+}
+
+const BACKEND_URL = getBackendApiUrl();
 
 // List of routes to skip analytics (admin, api, static assets)
 const SKIP_ROUTES = [
