@@ -167,9 +167,13 @@ class WorkspaceController {
       const data = await response.json();
       this.lastAnalyzedText = text;
       
+      // Debug: Log the API response
+      console.log('[AI Debug] API Response:', JSON.stringify(data, null, 2));
+      
       // Map backend response format to suggestions
       // API can return suggestions at different levels: data.result.suggestions, data.corrections, or data.suggestions
       const corrections = data.result?.suggestions || data.corrections || data.suggestions || [];
+      console.log('[AI Debug] Extracted corrections:', corrections.length, 'items');
       const geminiSuggestions = corrections.map((result, index) => ({
         id: `gemini-${result.id || index}-${Date.now()}`,
         title: result.reason || result.title || 'Suggestion',
@@ -192,8 +196,12 @@ class WorkspaceController {
         }
       }));
       
+      console.log('[AI Debug] Mapped suggestions:', geminiSuggestions);
+      
       this.suggestionsPanel.clearSuggestions();
       this.suggestionsPanel.addSuggestions(geminiSuggestions);
+      
+      console.log('[AI Debug] Panel suggestions count:', this.suggestionsPanel.suggestions.length);
       
       if (geminiSuggestions.length === 0) {
         this.updateAnalysisStatus('no-issues');

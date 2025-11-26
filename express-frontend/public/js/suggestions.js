@@ -99,6 +99,8 @@ class SuggestionsPanel {
       style: [],
       clarity: [],
       spelling: [],
+      punctuation: [],
+      'word choice': [],
       alternative: []
     };
 
@@ -120,6 +122,8 @@ class SuggestionsPanel {
       style: 'Style',
       clarity: 'Clarity',
       spelling: 'Spelling',
+      punctuation: 'Punctuation',
+      'word choice': 'Word Choice',
       alternative: 'Alternative Phrasings'
     };
     return labels[type] || 'Suggestions';
