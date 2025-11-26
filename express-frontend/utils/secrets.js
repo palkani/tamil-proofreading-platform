@@ -1,21 +1,23 @@
-const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
-
+let SecretManagerServiceClient = null;
 let secretsCache = {};
 let secretManagerClient = null;
 
 function getSecretManagerClient() {
   if (!secretManagerClient) {
     try {
+      if (!SecretManagerServiceClient) {
+        SecretManagerServiceClient = require('@google-cloud/secret-manager').SecretManagerServiceClient;
+      }
       secretManagerClient = new SecretManagerServiceClient();
     } catch (error) {
-      console.log('[Secrets] Secret Manager client not available:', error.message);
+      console.log('[Secrets] Secret Manager not available');
       return null;
     }
   }
   return secretManagerClient;
 }
 
-async function getSecretFromManager(secretName, timeoutMs = 5000) {
+async function getSecretFromManager(secretName) {
   const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
   
   if (!projectId) {
@@ -29,7 +31,7 @@ async function getSecretFromManager(secretName, timeoutMs = 5000) {
     const name = `projects/${projectId}/secrets/${secretName}/versions/latest`;
     
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Timeout')), timeoutMs)
+      setTimeout(() => reject(new Error('Timeout')), 3000)
     );
     
     const fetchPromise = client.accessSecretVersion({ name });
@@ -37,10 +39,9 @@ async function getSecretFromManager(secretName, timeoutMs = 5000) {
     const [version] = await Promise.race([fetchPromise, timeoutPromise]);
     const payload = version.payload.data.toString('utf8');
     
-    console.log(`[Secrets] Fetched from Secret Manager: ${secretName}`);
+    console.log(`[Secrets] Fetched: ${secretName}`);
     return payload;
   } catch (error) {
-    console.log(`[Secrets] Could not fetch ${secretName}: ${error.message}`);
     return null;
   }
 }
@@ -55,7 +56,6 @@ async function getSecret(secretName, envVarName = null) {
   let value = process.env[envName];
   
   if (value) {
-    console.log(`[Secrets] ${secretName} from env`);
     secretsCache[secretName] = value;
     return value;
   }
@@ -72,7 +72,7 @@ async function getSecret(secretName, envVarName = null) {
 }
 
 async function loadAllSecrets() {
-  console.log('[Secrets] Loading secrets...');
+  console.log('[Secrets] Loading...');
   
   const secrets = [
     { name: 'GOOGLE_CLIENT_ID', env: 'GOOGLE_CLIENT_ID' },
@@ -84,7 +84,7 @@ async function loadAllSecrets() {
   try {
     await Promise.all(secrets.map(s => getSecret(s.name, s.env)));
   } catch (error) {
-    console.log('[Secrets] Error loading secrets:', error.message);
+    console.log('[Secrets] Error:', error.message);
   }
   
   console.log('[Secrets] Done');

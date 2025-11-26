@@ -3,13 +3,17 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const { trackPageView } = require('./middleware/analytics');
-const { loadAllSecrets } = require('./utils/secrets');
 
 const app = express();
 const PORT = 5000; // Express frontend always runs on 5000
 
 async function initializeApp() {
-  await loadAllSecrets();
+  try {
+    const { loadAllSecrets } = require('./utils/secrets');
+    await loadAllSecrets();
+  } catch (error) {
+    console.log('[Init] Secrets module error (non-fatal):', error.message);
+  }
 }
 
 // View engine setup
