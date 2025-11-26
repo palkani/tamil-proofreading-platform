@@ -79,6 +79,8 @@ async function handleGoogleCallback(response) {
       throw new Error('No credential received from Google');
     }
     
+    console.log('Sending credential to backend...');
+    
     // Send credential to backend for verification via Express proxy
     const result = await fetch('/api/v1/auth/social', {
       method: 'POST',
@@ -92,13 +94,16 @@ async function handleGoogleCallback(response) {
       })
     });
     
+    console.log('Backend response status:', result.status);
+    
     if (!result.ok) {
-      const error = await result.json();
-      throw new Error(error.error || 'Google sign-in failed');
+      const errorData = await result.json();
+      console.error('Backend error:', errorData);
+      throw new Error(errorData.error || JSON.stringify(errorData) || 'Google sign-in failed');
     }
     
     const data = await result.json();
-    console.log('Backend authentication successful');
+    console.log('Backend authentication successful, user:', data.user?.email);
     
     // Create session on Express
     const sessionResponse = await fetch('/auth/google-callback', {
@@ -114,10 +119,14 @@ async function handleGoogleCallback(response) {
       })
     });
     
+    console.log('Session response status:', sessionResponse.status);
+    
     if (sessionResponse.ok) {
       console.log('Session created, redirecting to dashboard');
       window.location.href = '/dashboard';
     } else {
+      const sessionError = await sessionResponse.text();
+      console.error('Session creation failed:', sessionError);
       throw new Error('Failed to create session');
     }
     
