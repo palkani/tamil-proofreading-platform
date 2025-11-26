@@ -3,18 +3,22 @@
 ## Overview
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database. tamil
 
-## Recent Updates (Nov 22, 2025)
-- **Contact Page Simplified:** Replaced multi-option contact page with a single email form featuring:
-  - Sender email field (required)
-  - Subject field (required) 
-  - Message text field (required, max 4000 characters)
-  - Updated `ContactMessage` model to replace "Name" field with "Subject"
-  - Backend handler validates all three fields and saves to PostgreSQL
-  - Frontend includes form validation, success/error messaging, and visual feedback
-  - Fixed database schema by removing old "name" column to match updated backend model
-  - Error handling improved with proper string conversion for user-friendly error messages
-- **AI Assistant Fixes:** Fixed suggestions display with enhanced API response parsing and comprehensive debug logging
-- **Google Sign-In Buttons:** Added proper click event listeners for OAuth flow triggering
+## Recent Updates (Nov 25, 2025)
+- **Email/Password Authentication with Email Verification:**
+  - New users can register with email, password, and name
+  - Strong password requirements enforced: 8+ characters, uppercase, lowercase, number, special character
+  - Real-time password strength indicator shows requirements as user types
+  - One-time verification code (OTP) sent to email after registration
+  - OTP codes securely hashed with SHA-256 before database storage
+  - 15-minute OTP expiry for security
+  - Users must verify email before gaining full access
+  - Email service using Resend API integration (requires RESEND_API_KEY secret)
+  - Database updates: `EmailVerified` field on users, new `email_verifications` table
+
+## Previous Updates (Nov 22, 2025)
+- **Contact Page Simplified:** Single email form with sender email, subject, and message fields
+- **AI Assistant Fixes:** Enhanced API response parsing with debug logging
+- **Google Sign-In Buttons:** Added proper click event listeners for OAuth flow
 
 ## User Preferences
 - Focus on workspace page enhancement
