@@ -96,9 +96,16 @@
   </div>
 </div>
 
-<script src="/js/google-auth.js"></script>
+<script src="/js/google-auth.js?v=20251126d"></script>
 <script>
+// Debug: Check if Google Client ID is present
+const clientId = document.getElementById('google-client-id')?.value;
+console.log('Login page - Google Client ID present:', !!clientId, clientId ? 'Length: ' + clientId.length : 'Empty');
+
 document.getElementById('google-signin-btn')?.addEventListener('click', () => {
+  console.log('Google Sign-In button clicked');
+  console.log('triggerGoogleSignIn available:', !!window.triggerGoogleSignIn);
+  
   if (window.triggerGoogleSignIn) {
     window.triggerGoogleSignIn();
   } else {

@@ -73,25 +73,32 @@ func main() {
         } else {
                 log.Printf("[SUCCESS] Connected to database")
 
-                // Auto-migrate
-                err = db.AutoMigrate(
-                        &models.User{},
-                        &models.Submission{},
-                        &models.Payment{},
-                        &models.Usage{},
-                        &models.RefreshToken{},
-                        &models.ContactMessage{},
-                        &models.TamilWord{},
-                        &models.VisitEvent{},
-                        &models.ActivityEvent{},
-                        &models.DailyVisitStats{},
-                        &models.DailyActivityStats{},
-                        &models.EmailVerification{},
-                )
-                if err != nil {
-                        log.Printf("[ERROR] Database migration failed: %v", err)
+                // Only run migrations if SKIP_MIGRATIONS is not set to "true"
+                // In production, set SKIP_MIGRATIONS=true to avoid running migrations on every deploy
+                skipMigrations := os.Getenv("SKIP_MIGRATIONS")
+                if skipMigrations == "true" {
+                        log.Printf("[INFO] Skipping database migrations (SKIP_MIGRATIONS=true)")
                 } else {
-                        log.Printf("[SUCCESS] Database migrations completed")
+                        log.Printf("[INFO] Running database migrations...")
+                        err = db.AutoMigrate(
+                                &models.User{},
+                                &models.Submission{},
+                                &models.Payment{},
+                                &models.Usage{},
+                                &models.RefreshToken{},
+                                &models.ContactMessage{},
+                                &models.TamilWord{},
+                                &models.VisitEvent{},
+                                &models.ActivityEvent{},
+                                &models.DailyVisitStats{},
+                                &models.DailyActivityStats{},
+                                &models.EmailVerification{},
+                        )
+                        if err != nil {
+                                log.Printf("[ERROR] Database migration failed: %v", err)
+                        } else {
+                                log.Printf("[SUCCESS] Database migrations completed")
+                        }
                 }
         }
 
