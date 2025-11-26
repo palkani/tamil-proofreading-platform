@@ -112,11 +112,15 @@ class SuggestionsPanel {
       spelling: [],
       punctuation: [],
       'word choice': [],
+      'incomplete word': [],
+      'sandhi': [],
+      'missing space': [],
+      suggestion: [],
       alternative: []
     };
 
     suggestions.forEach(s => {
-      const type = s.type || 'grammar';
+      const type = (s.type || 'grammar').toLowerCase();
       if (groups[type]) {
         groups[type].push(s);
       } else {
@@ -135,9 +139,13 @@ class SuggestionsPanel {
       spelling: 'Spelling',
       punctuation: 'Punctuation',
       'word choice': 'Word Choice',
+      'incomplete word': 'Incomplete Word',
+      'sandhi': 'Sandhi (Punarchi)',
+      'missing space': 'Missing Space',
+      suggestion: 'Suggestions',
       alternative: 'Alternative Phrasings'
     };
-    return labels[type] || 'Suggestions';
+    return labels[type?.toLowerCase()] || 'Suggestions';
   }
 
   createSuggestionCard(suggestion) {
