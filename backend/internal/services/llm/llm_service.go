@@ -68,6 +68,23 @@ var promptInjectionPhrases = []string{
         "forget the previous",
 }
 
+// selectOptimalModel chooses the best model based on text characteristics
+// - flash-lite: Faster for short texts (<200 chars or <50 words)
+// - flash: More accurate for longer or complex texts
+func (s *LLMService) selectOptimalModel(text string, wordCount int) models.ModelType {
+        charCount := len(text)
+        
+        // Use flash-lite for short, simple texts (faster response)
+        if charCount < 200 || wordCount < 50 {
+                log.Printf("[MODEL-SELECT] Using flash-lite (chars=%d, words=%d)", charCount, wordCount)
+                return models.ModelType(models.ModelGeminiFlashLite)
+        }
+        
+        // Use full flash for longer texts (better accuracy)
+        log.Printf("[MODEL-SELECT] Using flash (chars=%d, words=%d)", charCount, wordCount)
+        return models.ModelType(models.ModelGeminiFlash)
+}
+
 func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, requestID string, includeAlternatives bool) (*ProofreadResult, error) {
         start := time.Now()
 
@@ -86,9 +103,13 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
 
         cleaned := s.nlpService.Preprocess(text)
         cleaned = sanitizeUserInput(cleaned)
+        
+        // Smart model selection based on text length
+        wordCount := s.nlpService.CountWords(cleaned)
+        selectedModel := s.selectOptimalModel(cleaned, wordCount)
 
-        // Use the Gemini API directly with the clean prompt
-        content, err := CallGeminiProofread(cleaned, models.ModelGeminiFlash, s.googleAPIKey)
+        // Use the Gemini API with the selected model
+        content, err := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey)
         if err != nil {
                 log.Printf("gemini proofread error (request_id=%s): %v", requestID, err)
                 return nil, err
@@ -113,7 +134,7 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
                 Suggestions:    suggestions,
                 Changes:        changes,
                 Alternatives:   alternatives,
-                ModelUsed:      models.ModelGeminiFlash,
+                ModelUsed:      selectedModel,
                 ProcessingTime: time.Since(start).Seconds(),
         }, nil
 }
@@ -136,10 +157,14 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
 
         cleaned := s.nlpService.Preprocess(text)
         cleaned = sanitizeUserInput(cleaned)
+        
+        // Smart model selection based on text length
+        wordCount := s.nlpService.CountWords(cleaned)
+        selectedModel := s.selectOptimalModel(cleaned, wordCount)
 
         // Try Google Gemini first
         if s.googleAPIKey != "" {
-                content, err := CallGeminiProofread(cleaned, models.ModelGeminiFlash, s.googleAPIKey)
+                content, err := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey)
                 if err == nil && strings.TrimSpace(content) != "" {
                         log.Printf("[GEMINI-SUCCESS] Got response (request_id=%s, len=%d)", requestID, len(content))
                         corrected, suggestions, changes, alternatives, ok := parseProofreadJSON(content)
@@ -152,7 +177,7 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
                                         Suggestions:    suggestions,
                                         Changes:        changes,
                                         Alternatives:   alternatives,
-                                        ModelUsed:      models.ModelGeminiFlash,
+                                        ModelUsed:      selectedModel,
                                         ProcessingTime: time.Since(start).Seconds(),
                                 }, nil
                         }
@@ -173,7 +198,7 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
                 Suggestions:    []Suggestion{},
                 Changes:        []Change{},
                 Alternatives:   []string{},
-                ModelUsed:      models.ModelGeminiFlash,
+                ModelUsed:      selectedModel,
                 ProcessingTime: time.Since(start).Seconds(),
         }, nil
 }
