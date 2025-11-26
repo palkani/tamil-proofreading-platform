@@ -285,31 +285,34 @@ class HomeEditor {
         hasResultCorrections: !!data.result?.corrections,
       });
       
-      // Extract corrections from API response
-      // The API returns corrections array with properties: originalText, correction, reason, type
-      // It could be at data.result.corrections or data.result directly
-      let corrections = [];
+      // Extract suggestions from API response
+      // The API returns suggestions array with properties: original, corrected, reason, type
+      // It could be at data.result.suggestions, data.result.corrections, or data.corrections
+      let rawSuggestions = [];
       
-      if (data.result?.corrections) {
-        corrections = data.result.corrections;
+      if (data.result?.suggestions) {
+        rawSuggestions = data.result.suggestions;
+      } else if (data.result?.corrections) {
+        rawSuggestions = data.result.corrections;
       } else if (Array.isArray(data.result)) {
-        corrections = data.result;
+        rawSuggestions = data.result;
+      } else if (data.suggestions) {
+        rawSuggestions = data.suggestions;
       } else if (data.corrections) {
-        corrections = data.corrections;
+        rawSuggestions = data.corrections;
       } else if (data.result && typeof data.result === 'object') {
-        // If result is an object but not the corrections array, it might BE the result object directly
-        corrections = data.result.corrections || [];
+        rawSuggestions = data.result.suggestions || data.result.corrections || [];
       }
       
-      console.log('Extracted corrections:', corrections);
-      console.log('Corrections count:', corrections.length);
+      console.log('Extracted rawSuggestions:', rawSuggestions);
+      console.log('Suggestions count:', rawSuggestions.length);
       
       // Transform to match displaySuggestions format: original, corrected, reason, type, alternatives
-      const suggestions = corrections.map((item, index) => ({
+      const suggestions = rawSuggestions.map((item, index) => ({
         id: index,
-        original: item.originalText || item.original || '',
-        corrected: item.correction || item.corrected || '',
-        reason: item.reason || '',
+        original: item.original || item.originalText || '',
+        corrected: item.corrected || item.correction || '',
+        reason: item.reason || item.description || '',
         type: item.type || 'grammar',
         alternatives: item.alternatives || []
       }));
