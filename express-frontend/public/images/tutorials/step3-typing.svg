@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" fill="none">
+  <rect width="400" height="300" fill="#FFF7ED"/>
+  <rect x="50" y="50" width="300" height="200" rx="12" fill="white" stroke="#EA580C" stroke-width="2"/>
+  <rect x="70" y="70" width="260" height="120" rx="8" fill="#F9FAFB" stroke="#E5E7EB"/>
+  <text x="90" y="100" fill="#1F2937" font-size="16" font-family="Arial">vanakkam</text>
+  <path d="M165 90 L165 110" stroke="#EA580C" stroke-width="2" stroke-linecap="round">
+    <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/>
+  </path>
+  <path d="M180 100 L220 100 L200 80 Z" fill="#EA580C"/>
+  <text x="90" y="140" fill="#EA580C" font-size="20" font-family="Arial" font-weight="bold">வணக்கம்</text>
+  <rect x="70" y="200" width="260" height="30" rx="6" fill="#FEF3C7"/>
+  <text x="200" y="220" text-anchor="middle" fill="#92400E" font-size="10" font-family="Arial">Type in English, get Tamil instantly!</text>
+</svg>
