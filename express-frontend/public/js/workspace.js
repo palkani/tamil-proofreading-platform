@@ -174,27 +174,34 @@ class WorkspaceController {
       // API can return suggestions at different levels: data.result.suggestions, data.corrections, or data.suggestions
       const corrections = data.result?.suggestions || data.corrections || data.suggestions || [];
       console.log('[AI Debug] Extracted corrections:', corrections.length, 'items');
-      const geminiSuggestions = corrections.map((result, index) => ({
-        id: `gemini-${result.id || index}-${Date.now()}`,
-        title: result.reason || result.title || 'Suggestion',
-        description: result.description || '',
-        type: result.type || 'grammar',
-        preview: (result.originalText || result.original) && (result.correction || result.corrected)
-          ? `${result.originalText || result.original} → ${result.correction || result.corrected}` 
-          : result.correction || result.corrected || result.originalText || result.original || '',
-        sourceText: result.originalText || result.original,
-        onApply: (result.correction || result.corrected) && (result.originalText || result.original) ? () => {
-          const currentText = this.editor.getPlainText();
-          const { text: newText, changed } = applyReplacement(currentText, result.originalText || result.original, result.correction || result.corrected, result.start_index);
-          
-          if (changed) {
-            this.editor.setText(newText);
+      const geminiSuggestions = corrections.map((result, index) => {
+        // Map backend fields to frontend expected format
+        const original = result.original || result.originalText || '';
+        const corrected = result.corrected || result.correction || '';
+        const reason = result.reason || result.description || result.title || '';
+        
+        console.log('[AI Debug] Mapping suggestion:', { original, corrected, reason, type: result.type });
+        
+        return {
+          id: `gemini-${result.id || index}-${Date.now()}`,
+          title: reason || 'Grammar Suggestion',
+          description: reason,
+          type: result.type || 'grammar',
+          preview: original && corrected ? `${original} → ${corrected}` : corrected || original || '',
+          sourceText: original,
+          onApply: original && corrected ? () => {
+            const currentText = this.editor.getPlainText();
+            const { text: newText, changed } = applyReplacement(currentText, original, corrected, result.start_index);
+            
+            if (changed) {
+              this.editor.setText(newText);
+            }
+          } : null,
+          onIgnore: () => {
+            // Just removes the suggestion
           }
-        } : null,
-        onIgnore: () => {
-          // Just removes the suggestion
-        }
-      }));
+        };
+      });
       
       console.log('[AI Debug] Mapped suggestions:', geminiSuggestions);
       
