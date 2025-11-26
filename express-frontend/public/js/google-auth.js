@@ -37,6 +37,10 @@ function triggerGoogleSignIn() {
     const currentUrl = window.location.origin;
     const redirectUri = `${currentUrl}/api/v1/auth/google/callback`;
     
+    console.log('[GOOGLE-AUTH] Origin:', currentUrl);
+    console.log('[GOOGLE-AUTH] Redirect URI:', redirectUri);
+    console.log('[GOOGLE-AUTH] Client ID:', googleClientId.substring(0, 20) + '...');
+    
     // Build Google OAuth URL
     const params = new URLSearchParams({
       client_id: googleClientId,
@@ -48,7 +52,8 @@ function triggerGoogleSignIn() {
     
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     
-    console.log('Redirecting to Google OAuth...');
+    console.log('[GOOGLE-AUTH] Full OAuth URL:', googleAuthUrl);
+    console.log('[GOOGLE-AUTH] Redirecting to Google OAuth...');
     window.location.href = googleAuthUrl;
     
   } catch (error) {
