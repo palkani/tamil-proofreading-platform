@@ -15,11 +15,20 @@ class SuggestionsPanel {
   }
 
   addSuggestions(newSuggestions) {
-    if (!newSuggestions || !Array.isArray(newSuggestions)) return;
+    console.log('[SuggestionsPanel] addSuggestions called with:', newSuggestions?.length, 'items');
+    
+    if (!newSuggestions || !Array.isArray(newSuggestions)) {
+      console.log('[SuggestionsPanel] Invalid input - not an array');
+      return;
+    }
     
     // Filter out already handled suggestions
     const filtered = newSuggestions.filter(s => !this.handledIds.has(s.id));
+    console.log('[SuggestionsPanel] After filtering handledIds:', filtered.length, 'items remain');
+    
     this.suggestions = [...this.suggestions, ...filtered];
+    console.log('[SuggestionsPanel] Total suggestions now:', this.suggestions.length);
+    
     this.render();
   }
 
@@ -40,6 +49,8 @@ class SuggestionsPanel {
   }
 
   render() {
+    console.log('[SuggestionsPanel] render() called with', this.suggestions.length, 'suggestions');
+    
     // Update summary
     const total = this.suggestions.length;
     if (total === 0) {
