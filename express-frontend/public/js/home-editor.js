@@ -145,14 +145,30 @@ class HomeEditor {
   
   convertWordToTamil(word) {
     const lower = word.toLowerCase();
-    return this.tamilDict[lower] || null;
+    
+    // First check local dictionary for common words
+    if (this.tamilDict[lower]) {
+      return this.tamilDict[lower];
+    }
+    
+    // Use global transliteration function if available
+    if (typeof transliterateToTamil === 'function') {
+      const result = transliterateToTamil(word);
+      // Only return if conversion was successful (different from input)
+      if (result && result !== lower && result !== word) {
+        return result;
+      }
+    }
+    
+    return null;
   }
   
   convertEnglishToTamil(text) {
     const words = text.split(/(\s+)/);
     return words.map(word => {
       if (/^[a-zA-Z]+$/.test(word)) {
-        return this.convertWordToTamil(word) || word;
+        const converted = this.convertWordToTamil(word);
+        return converted || word;
       }
       return word;
     }).join('');
