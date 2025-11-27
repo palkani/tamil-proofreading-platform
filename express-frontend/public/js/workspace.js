@@ -102,6 +102,12 @@ class WorkspaceController {
     if (showDraftsBtn) {
       showDraftsBtn.addEventListener('click', () => this.showDraftsList());
     }
+
+    // Translate English to Tamil button
+    const translateBtn = document.getElementById('translate-english-btn');
+    if (translateBtn) {
+      translateBtn.addEventListener('click', () => this.translateEnglishToTamil());
+    }
   }
 
   handleEditorChange() {
@@ -279,6 +285,104 @@ class WorkspaceController {
 
   handleSuggestionAccepted() {
     this.updateAcceptedCount();
+  }
+
+  async translateEnglishToTamil() {
+    const text = this.editor.getPlainText().trim();
+    
+    if (!text) {
+      alert('Please enter some English text to translate.');
+      return;
+    }
+    
+    // Check if text is mostly English using word-level heuristics
+    // Split by whitespace and check each word's character composition
+    const words = text.split(/\s+/).filter(w => w.length > 0);
+    
+    // Only apply language detection if we have more than 2 words
+    // Short phrases (1-2 words) should always be allowed to translate
+    if (words.length > 2) {
+      const englishWords = words.filter(word => {
+        // A word is English if it contains mostly Latin letters
+        const latinLetters = (word.match(/[a-zA-Z]/g) || []).length;
+        const totalAlphaChars = (word.match(/[a-zA-Z\u0B80-\u0BFF]/g) || []).length;
+        return totalAlphaChars > 0 && (latinLetters / totalAlphaChars) > 0.5;
+      });
+      const englishWordRatio = englishWords.length / words.length;
+      
+      // Only block if text is clearly Tamil (less than 30% English words)
+      if (englishWordRatio < 0.3) {
+        alert('This text appears to already be in Tamil. Enter English text to translate.');
+        return;
+      }
+    }
+    
+    // Show loading state
+    const translateBtn = document.getElementById('translate-english-btn');
+    const originalBtnContent = translateBtn.innerHTML;
+    translateBtn.innerHTML = `
+      <svg class="animate-spin w-5 h-5" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span class="ml-1 text-xs">Translating...</span>
+    `;
+    translateBtn.disabled = true;
+    
+    try {
+      const response = await fetch('/api/gemini/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Translation failed');
+      }
+      
+      const data = await response.json();
+      
+      if (data.translated_text) {
+        // Replace editor content with translated text
+        this.editor.setText(data.translated_text);
+        
+        // Show translation suggestions in the AI panel
+        if (data.suggestions && data.suggestions.length > 0) {
+          const translationSuggestions = data.suggestions.map((sugg, index) => ({
+            id: `translate-${index}-${Date.now()}`,
+            title: sugg.note || 'Translation Choice',
+            description: `${sugg.original} → ${sugg.translated}`,
+            type: 'translation',
+            preview: sugg.alternative ? `Alternative: ${sugg.alternative}` : '',
+            onApply: sugg.alternative ? () => {
+              const currentText = this.editor.getPlainText();
+              // Only replace the first occurrence to avoid corrupting other text
+              const index = currentText.indexOf(sugg.translated);
+              if (index !== -1) {
+                const newText = currentText.substring(0, index) + sugg.alternative + currentText.substring(index + sugg.translated.length);
+                this.editor.setText(newText);
+              }
+            } : null
+          }));
+          
+          this.suggestionsPanel.clearSuggestions();
+          this.suggestionsPanel.addSuggestions(translationSuggestions);
+          
+          this.updateAnalysisStatus('complete', translationSuggestions.length);
+        } else {
+          this.updateAnalysisStatus('no-issues');
+        }
+        
+        console.log('[Translate] Successfully translated:', data.translated_text.substring(0, 50) + '...');
+      }
+    } catch (error) {
+      console.error('[Translate] Error:', error);
+      alert('Translation failed. Please try again.');
+      this.updateAnalysisStatus('error');
+    } finally {
+      translateBtn.innerHTML = originalBtnContent;
+      translateBtn.disabled = false;
+    }
   }
 
   updateWordCount() {

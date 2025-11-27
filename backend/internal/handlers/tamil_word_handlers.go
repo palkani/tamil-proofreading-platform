@@ -36,11 +36,11 @@ func (h *Handlers) AutocompleteTamil(c *gin.Context) {
                 return
         }
 
-        // Parse and validate limit parameter
-        limit := 10
+        // Parse and validate limit parameter - increased default to 20 for better suggestions
+        limit := 20
         if limitStr := c.Query("limit"); limitStr != "" {
                 parsedLimit, err := strconv.Atoi(limitStr)
-                if err == nil && parsedLimit > 0 && parsedLimit <= 100 {
+                if err == nil && parsedLimit > 0 && parsedLimit <= 500 {
                         limit = parsedLimit
                 }
         }

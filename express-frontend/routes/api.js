@@ -183,6 +183,109 @@ Provide title and description in TAMIL language only.`
   }
 });
 
+// English to Tamil Translation with Gemini AI
+// This endpoint translates English text to Tamil and provides grammar corrections
+router.post('/gemini/translate', async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+    const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
+    
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Gemini AI not configured - API key missing' });
+    }
+
+    console.log('[TRANSLATE] Translating English to Tamil:', text.substring(0, 50) + '...');
+
+    const response = await axios.post(
+      `${baseUrl}/models/gemini-2.5-flash:generateContent`,
+      {
+        systemInstruction: {
+          parts: [{
+            text: `You are an expert English to Tamil translator. Translate the given English text to proper, grammatically correct Tamil.
+
+TRANSLATION RULES:
+1. Use formal, literary Tamil (செந்தமிழ்) when appropriate
+2. Preserve the meaning and tone of the original text
+3. Use proper Tamil grammar and sentence structure
+4. For technical terms, provide the Tamil equivalent if available
+5. Maintain paragraph structure
+
+OUTPUT FORMAT (MANDATORY JSON):
+{
+  "translated_text": "The complete Tamil translation",
+  "suggestions": [
+    {
+      "original": "original English phrase",
+      "translated": "Tamil translation",
+      "alternative": "alternative Tamil phrasing (optional)",
+      "note": "explanation in Tamil about the translation choice"
+    }
+  ]
+}
+
+RULES:
+- ALWAYS respond with valid JSON only
+- Include key phrase translations in suggestions array
+- Provide alternatives for important translations`
+          }]
+        },
+        contents: [{
+          role: "user",
+          parts: [{
+            text: `Translate this English text to Tamil:\n\n${text}`
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.3,
+          topP: 0.8,
+          maxOutputTokens: 2048,
+          responseMimeType: "application/json"
+        }
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        timeout: 30000
+      }
+    );
+
+    const aiText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    
+    let result;
+    try {
+      result = JSON.parse(aiText.trim());
+    } catch (parseErr) {
+      console.error('[TRANSLATE] JSON parse error:', parseErr.message);
+      result = { translated_text: aiText, suggestions: [] };
+    }
+
+    console.log('[TRANSLATE] Translation complete:', result.translated_text?.substring(0, 50) + '...');
+
+    res.json({
+      success: true,
+      original_text: text,
+      translated_text: result.translated_text || '',
+      suggestions: result.suggestions || [],
+      model_used: 'gemini-2.5-flash'
+    });
+
+  } catch (error) {
+    console.error('[TRANSLATE] Error:', error.response?.data || error.message);
+    res.status(500).json({
+      error: 'Failed to translate text',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
 // Google OAuth callback handler
 router.get('/v1/auth/google/callback', async (req, res) => {
   const { code, state, error } = req.query;
