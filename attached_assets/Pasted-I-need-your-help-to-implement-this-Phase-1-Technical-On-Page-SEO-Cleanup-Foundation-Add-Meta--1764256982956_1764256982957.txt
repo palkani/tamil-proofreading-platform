@@ -1,0 +1,101 @@
+I need your help to implement this 
+Phase 1: Technical & On-Page SEO Cleanup / Foundation
+
+Add Meta Titles + Meta Descriptions + H1/H2 Structure for All Pages
+
+For each page (home, workspace, contact, etc.), ensure the <title>, <meta description>, H1, and headers are keyword optimized and descriptive.
+
+Titles should ideally include your main keyword(s): e.g. “ProofTamil — AI Tamil Grammar & Spelling Checker”
+
+Ensure Crawlability & Indexing
+
+Add robots.txt to allow bots, ensure no important page is inadvertently blocked.
+
+Generate and submit an XML sitemap to Google (via Search Console).
+
+Use clean URL slugs (SEO-friendly URLs).
+
+Optimize Page Speed & Core Web Vitals
+
+Use techniques like image compression, caching, minifying CSS/JS, CDN, lazy loading, etc. to ensure fast load times — especially on mobile (since many Tamil users may use phone).
+
+Test via tools like PageSpeed Insights; ensure mobile-first and good user experience.
+
+Add Structured Data (Schema)
+
+Add JSON-LD schema for webpages, FAQs (for any FAQ content you add), maybe “SoftwareApplication” schema for your tool, to help search engines better understand and represent your site.
+
+
+Please use these keywords 
+Tamil proofreading tool
+
+Tamil proofreader online
+
+Tamil grammar checker
+
+Tamil grammar corrector
+
+Tamil spell checker
+
+Tamil spell check online
+
+Tamil writing assistant
+
+Tamil writing correction tool
+
+Tamil writing improvement tool
+
+Tamil grammar correction online
+
+Tamil grammar error checker
+
+Tamil AI grammar checker
+
+Tamil spelling correction tool
+
+Tamil spelling corrector online
+
+Tamil grammar and spelling checker
+
+Tamil AI writing tool
+
+Tamil text correction tool
+
+Tamil grammar fix tool
+
+Tamil grammar rewrite tool
+
+Tamil sentence correction tool
+
+
+Tamil content writing correction
+
+Tamil article proofreading tool
+
+Tamil blog writing checker
+
+Tamil story writing assistant
+
+Tamil poetry grammar checker
+
+Tamil script writing correction tool
+
+Correct Tamil grammar
+
+Fix Tamil spelling
+
+Fix Tamil grammar mistakes
+
+Check Tamil grammar
+
+Check Tamil spelling
+
+Rewrite Tamil sentences
+
+Improve Tamil writing online
+
+Tamil grammar check free
+
+Tamil proofreading free
+
+Tamil grammar correction free tool
