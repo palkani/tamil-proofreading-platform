@@ -151,7 +151,7 @@ class WorkspaceController {
     this.updateAnalysisStatus('analyzing');
     
     try {
-      const response = await fetch('/api/v1/submit', {
+      const response = await fetch('/api/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -328,7 +328,7 @@ class WorkspaceController {
       
       // If we have a current draft, we're updating it
       // Otherwise, create a new one
-      const response = await fetch('/api/v1/submit', {
+      const response = await fetch('/api/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

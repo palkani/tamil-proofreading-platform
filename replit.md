@@ -4,6 +4,7 @@
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database. tamil
 
 ## Recent Updates (Nov 27, 2025)
+- **API Routing Fix:** Fixed duplicated `/api/v1/v1/submit` path by updating frontend to call `/api/submit` instead of `/api/v1/submit`. The Express proxy already adds `/api/v1` prefix.
 - **Phase 1 SEO Implementation:**
   - **Dynamic Page-Specific Meta Tags:** Each page now has optimized title, description, keywords, canonical URL, and robots directives
   - **SEO Configuration:** Centralized SEO config in `express-frontend/config/seo.js` with all target keywords
