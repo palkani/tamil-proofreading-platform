@@ -4,6 +4,10 @@
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database. tamil
 
 ## Recent Updates (Nov 27, 2025)
+- **Production 404 Fix:**
+  - Removed `/api/**` rewrite rule from firebase.json that was bypassing the Express frontend
+  - All API requests now route through the Express frontend which correctly proxies to backend at `/api/v1/*`
+  - Firebase previously sent `/api/submit` to backend which expects `/api/v1/submit`, causing 404 errors
 - **English-to-Tamil Translation Feature:**
   - New "Translate" button in workspace toolbar to translate English paragraphs to Tamil
   - Uses Gemini 2.5 Flash AI for accurate translations

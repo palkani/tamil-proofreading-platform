@@ -8,13 +8,6 @@
     ],
     "rewrites": [
       {
-        "source": "/api/**",
-        "run": {
-          "serviceId": "prooftamil-backend",
-          "region": "asia-south1"
-        }
-      },
-      {
         "source": "**",
         "run": {
           "serviceId": "prooftamil-frontend",
