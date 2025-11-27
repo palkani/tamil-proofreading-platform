@@ -1,12 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, redirectIfAuth, getCurrentUser } = require('../middleware/auth');
+const { seoConfig, getSeoData } = require('../config/seo');
 
 // Homepage - accessible to everyone
 router.get('/', (req, res) => {
   const user = getCurrentUser(req);
+  const seo = getSeoData('home');
   res.render('pages/home', { 
-    title: 'Free Tamil Typing Online | Tamil Proofreading & AI Grammar Checker - ProofTamil',
+    title: seo.title,
+    seo: seo,
     user: user
   });
 });
@@ -14,16 +17,20 @@ router.get('/', (req, res) => {
 // How to Use page - accessible to everyone
 router.get('/how-to-use', (req, res) => {
   const user = getCurrentUser(req);
+  const seo = getSeoData('howToUse');
   res.render('pages/how-to-use', { 
-    title: 'How to Type Tamil Online Free - Step by Step Guide | ProofTamil',
+    title: seo.title,
+    seo: seo,
     user: user
   });
 });
 
 // Login page - redirect if already logged in
 router.get('/login', redirectIfAuth, (req, res) => {
+  const seo = getSeoData('login');
   res.render('pages/login', { 
-    title: 'Login to Free Tamil Typing Tool | ProofTamil',
+    title: seo.title,
+    seo: seo,
     error: req.query.error || null,
     googleClientId: process.env.GOOGLE_CLIENT_ID || ''
   });
@@ -31,8 +38,10 @@ router.get('/login', redirectIfAuth, (req, res) => {
 
 // Register page - redirect if already logged in
 router.get('/register', redirectIfAuth, (req, res) => {
+  const seo = getSeoData('register');
   res.render('pages/register', { 
-    title: 'Sign Up Free - Tamil Typing & Proofreading | ProofTamil',
+    title: seo.title,
+    seo: seo,
     googleClientId: process.env.GOOGLE_CLIENT_ID || ''
   });
 });
@@ -105,16 +114,20 @@ router.get('/api/config/google-client-id', (req, res) => {
 
 // Dashboard page - requires authentication
 router.get('/dashboard', requireAuth, (req, res) => {
+  const seo = getSeoData('dashboard');
   res.render('pages/dashboard', { 
-    title: 'Dashboard - ProofTamil',
+    title: seo.title,
+    seo: seo,
     user: req.session.user
   });
 });
 
 // Account page - requires authentication
 router.get('/account', requireAuth, (req, res) => {
+  const seo = getSeoData('account');
   res.render('pages/account', { 
-    title: 'Account Settings - ProofTamil',
+    title: seo.title,
+    seo: seo,
     user: req.session.user
   });
 });
@@ -124,23 +137,29 @@ router.get('/analytics', requireAuth, (req, res) => {
   // Check if user is admin (prooftamil@gmail.com)
   const user = req.session.user;
   if (user.email !== 'prooftamil@gmail.com' && user.role !== 'admin') {
+    const seo = getSeoData('error');
     return res.status(403).render('pages/error', {
       title: 'Access Denied',
+      seo: seo,
       message: 'You do not have permission to view this page.',
       user: user
     });
   }
   
+  const seo = getSeoData('analytics');
   res.render('pages/analytics', { 
-    title: 'Analytics Dashboard - ProofTamil',
+    title: seo.title,
+    seo: seo,
     user: user
   });
 });
 
 // Archive page - requires authentication
 router.get('/archive', requireAuth, (req, res) => {
+  const seo = getSeoData('archive');
   res.render('pages/archive', { 
-    title: 'Archive - ProofTamil',
+    title: seo.title,
+    seo: seo,
     user: req.session.user
   });
 });
@@ -148,8 +167,10 @@ router.get('/archive', requireAuth, (req, res) => {
 // Contact page - accessible to everyone
 router.get('/contact', (req, res) => {
   const user = getCurrentUser(req);
+  const seo = getSeoData('contact');
   res.render('pages/contact', { 
-    title: 'Contact ProofTamil - Free Tamil Typing Support',
+    title: seo.title,
+    seo: seo,
     user: user
   });
 });
@@ -157,8 +178,10 @@ router.get('/contact', (req, res) => {
 // Privacy Policy page - accessible to everyone
 router.get('/privacy', (req, res) => {
   const user = getCurrentUser(req);
+  const seo = getSeoData('privacy');
   res.render('pages/privacy', { 
-    title: 'Privacy Policy - ProofTamil Tamil Typing Tool',
+    title: seo.title,
+    seo: seo,
     user: user
   });
 });
@@ -166,8 +189,10 @@ router.get('/privacy', (req, res) => {
 // Terms of Service page - accessible to everyone
 router.get('/terms', (req, res) => {
   const user = getCurrentUser(req);
+  const seo = getSeoData('terms');
   res.render('pages/terms', { 
-    title: 'Terms of Service - ProofTamil',
+    title: seo.title,
+    seo: seo,
     user: user
   });
 });

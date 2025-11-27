@@ -1,0 +1,39 @@
+{
+  "name": "ProofTamil - Tamil Grammar Checker & Proofreading Tool",
+  "short_name": "ProofTamil",
+  "description": "Free Tamil grammar checker and AI proofreading tool. Check Tamil spelling, fix grammar errors, and improve your Tamil writing instantly.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ea580c",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "ta",
+  "categories": ["productivity", "utilities", "education"],
+  "icons": [
+    {
+      "src": "/images/tamil-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open Workspace",
+      "short_name": "Workspace",
+      "description": "Start writing Tamil with AI assistance",
+      "url": "/workspace",
+      "icons": [{"src": "/images/tamil-logo.svg", "sizes": "any"}]
+    },
+    {
+      "name": "How to Use",
+      "short_name": "Guide",
+      "description": "Learn how to use ProofTamil",
+      "url": "/how-to-use",
+      "icons": [{"src": "/images/tamil-logo.svg", "sizes": "any"}]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

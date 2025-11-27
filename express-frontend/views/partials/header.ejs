@@ -4,85 +4,118 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- Primary Meta Tags - Optimized for Tamil Typing & Proofreading Keywords -->
-  <title><%= title %></title>
-  <meta name="title" content="<%= title %>">
-  <meta name="description" content="Free Tamil typing online with AI proofreading. Type Tamil in English (Tanglish to Tamil converter), get instant grammar corrections. Best free Tamil keyboard & editor - no download needed. தமிழ் தட்டச்சு இலவசமாக!">
-  <meta name="keywords" content="tamil proofreading online, free tamil typing, tamil typing online, tamil keyboard online, type tamil online free, english to tamil typing, tanglish to tamil, tamil transliteration, tamil grammar checker, tamil spell check, tamil editor online, tamil input tool, tamil writing assistant, free tamil keyboard, tamil text editor, online tamil typing software, tamil proofreader, AI tamil grammar, tamil autocomplete, phonetic tamil typing, tamil unicode typing, tamil font typing online, best tamil typing tool, instant tamil typing, easy tamil typing, tamil typing practice, learn tamil typing, tamil word processor, தமிழ் தட்டச்சு, தமிழ் எழுதுதல், இலவச தமிழ் டைப்பிங்">
+  <% 
+  const baseUrl = 'https://prooftamil.com';
+  const defaultKeywords = 'tamil proofreading tool, tamil proofreader online, tamil grammar checker, tamil grammar corrector, tamil spell checker, tamil spell check online, tamil writing assistant, tamil writing correction tool, tamil writing improvement tool, tamil grammar correction online, tamil grammar error checker, tamil AI grammar checker, tamil spelling correction tool, tamil spelling corrector online, tamil grammar and spelling checker, tamil AI writing tool, tamil text correction tool, tamil grammar fix tool, tamil grammar rewrite tool, tamil sentence correction tool, tamil content writing correction, tamil article proofreading tool, tamil blog writing checker, correct tamil grammar, fix tamil spelling, fix tamil grammar mistakes, check tamil grammar, check tamil spelling, improve tamil writing online, tamil grammar check free, tamil proofreading free, tamil grammar correction free tool';
+  
+  const seoTitle = typeof seo !== 'undefined' && seo.title ? seo.title : title;
+  const seoDescription = typeof seo !== 'undefined' && seo.description ? seo.description : 'Free Tamil proofreading tool with AI-powered grammar checker, spell check, and writing correction. Check Tamil grammar online free, fix spelling errors, and improve Tamil writing instantly.';
+  const seoKeywords = typeof seo !== 'undefined' && seo.keywords ? seo.keywords + ', ' + defaultKeywords : defaultKeywords;
+  const canonicalUrl = typeof seo !== 'undefined' && seo.canonical ? seo.canonical : baseUrl + '/';
+  const ogTitle = typeof seo !== 'undefined' && seo.ogTitle ? seo.ogTitle : seoTitle;
+  const ogDescription = typeof seo !== 'undefined' && seo.ogDescription ? seo.ogDescription : seoDescription;
+  const noIndex = typeof seo !== 'undefined' && seo.noIndex ? true : false;
+  const pageType = typeof seo !== 'undefined' && seo.pageType ? seo.pageType : 'website';
+  %>
+  
+  <!-- Primary Meta Tags - Optimized for Tamil Grammar Checker & Proofreading Keywords -->
+  <title><%= seoTitle %></title>
+  <meta name="title" content="<%= seoTitle %>">
+  <meta name="description" content="<%= seoDescription %>">
+  <meta name="keywords" content="<%= seoKeywords %>">
   <meta name="author" content="ProofTamil">
+  <% if (noIndex) { %>
+  <meta name="robots" content="noindex, nofollow">
+  <% } else { %>
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+  <% } %>
   <meta name="language" content="Tamil, English">
   <meta name="revisit-after" content="3 days">
   <meta name="rating" content="General">
   <meta name="distribution" content="global">
   <meta name="geo.region" content="IN-TN">
   <meta name="geo.placename" content="Tamil Nadu, India">
+  <meta name="theme-color" content="#ea580c">
   
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://prooftamil.com/">
-  <meta property="og:title" content="Free Tamil Typing Online | AI Tamil Proofreading & Grammar Checker - ProofTamil">
-  <meta property="og:description" content="Type Tamil online FREE with AI-powered proofreading. Convert English to Tamil instantly (phonetic typing). Grammar check, spell check & autocomplete. No download - start typing now!">
-  <meta property="og:site_name" content="ProofTamil - Free Tamil Typing Tool">
+  <meta property="og:url" content="<%= canonicalUrl %>">
+  <meta property="og:title" content="<%= ogTitle %>">
+  <meta property="og:description" content="<%= ogDescription %>">
+  <meta property="og:site_name" content="ProofTamil - Tamil Grammar Checker & Proofreading Tool">
   <meta property="og:locale" content="ta_IN">
   <meta property="og:locale:alternate" content="en_US">
-  <meta property="og:image" content="https://prooftamil.com/images/tamil-logo.svg">
-  <meta property="og:image:alt" content="ProofTamil - Free Tamil Typing and Proofreading Tool">
+  <meta property="og:image" content="<%= baseUrl %>/images/tamil-logo.svg">
+  <meta property="og:image:alt" content="ProofTamil - Free Tamil Grammar Checker and Proofreading Tool">
   
   <!-- Twitter -->
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:url" content="https://prooftamil.com/">
-  <meta name="twitter:title" content="Free Tamil Typing Online | AI Grammar Checker - ProofTamil">
-  <meta name="twitter:description" content="Type Tamil online FREE! AI-powered proofreading, English to Tamil converter, grammar check. Best free Tamil keyboard online.">
-  <meta name="twitter:image" content="https://prooftamil.com/images/tamil-logo.svg">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:url" content="<%= canonicalUrl %>">
+  <meta name="twitter:title" content="<%= ogTitle %>">
+  <meta name="twitter:description" content="<%= ogDescription %>">
+  <meta name="twitter:image" content="<%= baseUrl %>/images/tamil-logo.svg">
   
   <!-- Canonical URL -->
-  <link rel="canonical" href="https://prooftamil.com/">
+  <link rel="canonical" href="<%= canonicalUrl %>">
   
   <!-- Alternate Languages -->
-  <link rel="alternate" hreflang="ta" href="https://prooftamil.com/">
-  <link rel="alternate" hreflang="en" href="https://prooftamil.com/">
-  <link rel="alternate" hreflang="x-default" href="https://prooftamil.com/">
+  <link rel="alternate" hreflang="ta" href="<%= canonicalUrl %>">
+  <link rel="alternate" hreflang="en" href="<%= canonicalUrl %>">
+  <link rel="alternate" hreflang="x-default" href="<%= canonicalUrl %>">
   
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="/images/tamil-logo.svg">
   <link rel="apple-touch-icon" href="/images/tamil-logo.svg">
+  <link rel="manifest" href="/manifest.json">
   
-  <!-- Preconnect for performance -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <!-- Preconnect for performance - Critical resources -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+  <link rel="dns-prefetch" href="https://www.googletagmanager.com">
   
-  <!-- Structured Data - WebApplication -->
+  <!-- Preload critical assets -->
+  <link rel="preload" href="/css/output.css" as="style">
+  <link rel="preload" href="/images/tamil-logo.svg" as="image">
+  
+  <% if (pageType === 'home' || typeof seo === 'undefined') { %>
+  <!-- Structured Data - WebApplication (Home page only) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "WebApplication",
-    "name": "ProofTamil - Free Tamil Typing & Proofreading",
-    "alternateName": ["Tamil Typing Online", "Free Tamil Keyboard", "Tamil Proofreader"],
+    "name": "ProofTamil - Tamil Grammar Checker & Proofreading Tool",
+    "alternateName": ["Tamil Grammar Checker", "Tamil Proofreader Online", "Tamil Spell Checker", "Tamil Writing Assistant", "Tamil AI Grammar Tool", "Tamil Grammar Corrector"],
     "applicationCategory": "UtilitiesApplication",
-    "applicationSubCategory": "Text Editor",
+    "applicationSubCategory": "Grammar Checker",
     "operatingSystem": "Web Browser",
     "browserRequirements": "Requires JavaScript",
-    "url": "https://prooftamil.com",
+    "url": "<%= baseUrl %>",
     "offers": {
       "@type": "Offer",
       "price": "0",
       "priceCurrency": "USD",
       "availability": "https://schema.org/InStock"
     },
-    "description": "Free online Tamil typing tool with AI-powered grammar checking, spell check, and English to Tamil phonetic transliteration. Type Tamil online without downloading any software.",
+    "description": "Free online Tamil grammar checker and proofreading tool with AI-powered corrections. Check Tamil spelling, fix grammar errors, and improve your Tamil writing instantly. Best Tamil writing assistant - no download needed!",
     "featureList": [
-      "Free Tamil Typing Online",
-      "AI Grammar Checking",
-      "Tamil Spell Check",
-      "English to Tamil Phonetic Conversion",
+      "Tamil Grammar Checker",
+      "Tamil Spell Check Online",
+      "Tamil Proofreading Tool",
+      "AI Tamil Writing Correction",
+      "Tamil Grammar Corrector",
+      "Tamil Spelling Correction",
+      "Tamil Sentence Correction",
+      "Tamil Article Proofreading",
+      "Tamil Content Writing Correction",
+      "Tamil Blog Writing Checker",
+      "Tamil Story Writing Assistant",
+      "Phonetic Tamil Typing",
       "Tanglish to Tamil Converter",
-      "Tamil Autocomplete Suggestions",
-      "Real-time Proofreading",
-      "No Download Required",
-      "Mobile Friendly Tamil Keyboard"
+      "Real-time Grammar Suggestions",
+      "Free Tamil Writing Tool"
     ],
-    "screenshot": "https://prooftamil.com/images/tamil-logo.svg",
+    "screenshot": "<%= baseUrl %>/images/tamil-logo.svg",
     "softwareVersion": "2.0",
     "aggregateRating": {
       "@type": "AggregateRating",
@@ -102,9 +135,9 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "ProofTamil",
-    "url": "https://prooftamil.com",
-    "logo": "https://prooftamil.com/images/tamil-logo.svg",
-    "description": "Free Tamil typing and AI proofreading platform",
+    "url": "<%= baseUrl %>",
+    "logo": "<%= baseUrl %>/images/tamil-logo.svg",
+    "description": "Free Tamil proofreading and AI grammar checking platform. Best online tool for Tamil writing correction, spell check, and grammar improvement.",
     "sameAs": [],
     "contactPoint": {
       "@type": "ContactPoint",
@@ -123,46 +156,78 @@
     "mainEntity": [
       {
         "@type": "Question",
-        "name": "How to type Tamil online free?",
+        "name": "What is the best free Tamil grammar checker online?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Use ProofTamil to type Tamil online for free. Simply type in English (phonetic) like 'vanakkam' and it automatically converts to Tamil 'வணக்கம்'. No software download required - works directly in your browser."
+          "text": "ProofTamil is the best free Tamil grammar checker online. It uses advanced AI to detect and correct Tamil grammar errors, spelling mistakes, and provides writing suggestions. It's completely free with no download required."
         }
       },
       {
         "@type": "Question",
-        "name": "Is ProofTamil free to use?",
+        "name": "How do I check Tamil grammar online for free?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes, ProofTamil is completely free to use. You can type Tamil, check grammar, and proofread your text without any cost or subscription."
+          "text": "To check Tamil grammar free: 1) Go to prooftamil.com 2) Type or paste your Tamil text 3) Click 'Check Grammar' 4) Review AI suggestions and apply corrections. It's instant and completely free!"
         }
       },
       {
         "@type": "Question",
-        "name": "Does ProofTamil work on mobile?",
+        "name": "Can ProofTamil fix Tamil spelling errors?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes, ProofTamil works on all devices including mobile phones, tablets, and computers. Just open prooftamil.com in your browser and start typing Tamil instantly."
+          "text": "Yes, ProofTamil is also a Tamil spell checker. It detects spelling errors including commonly confused letters like ல, ழ, ள and suggests the correct spelling based on context."
         }
       },
       {
         "@type": "Question",
-        "name": "How does Tamil proofreading work?",
+        "name": "Is ProofTamil a free Tamil proofreading tool?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "ProofTamil uses advanced AI (Gemini) to analyze your Tamil text for grammar errors, spelling mistakes, and punctuation issues. It provides instant suggestions to improve your writing."
+          "text": "Yes, ProofTamil is a completely free Tamil proofreading tool. You can proofread unlimited Tamil text, check grammar, fix spelling, and improve your writing without any cost or subscription."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does ProofTamil work for Tamil article proofreading?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes! ProofTamil is perfect for Tamil article proofreading, blog writing, content correction, and even Tamil story writing. It handles all types of Tamil content with AI-powered accuracy."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does Tamil AI grammar checker work?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ProofTamil's Tamil AI grammar checker uses Google's Gemini AI to analyze your Tamil text. It understands Tamil grammar rules, sandhi, verb conjugation, and context to provide accurate corrections and suggestions."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I use ProofTamil on mobile?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, ProofTamil works perfectly on mobile phones and tablets. Just open prooftamil.com in your browser to check Tamil grammar, spelling, and proofread your text on any device."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What Tamil writing errors can ProofTamil fix?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ProofTamil fixes: Tamil grammar errors, spelling mistakes, verb conjugation errors, sandhi rule violations, subject-verb agreement issues, punctuation errors, and provides sentence rewriting suggestions."
         }
       }
     ]
   }
   </script>
   
-  <!-- Structured Data - SoftwareApplication for app stores -->
+  <!-- Structured Data - SoftwareApplication -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    "name": "ProofTamil Tamil Typing Tool",
+    "name": "ProofTamil Tamil Grammar Checker",
     "operatingSystem": "Web",
     "applicationCategory": "Productivity",
     "offers": {
@@ -177,12 +242,90 @@
     }
   }
   </script>
+  <% } %>
+  
+  <% if (pageType === 'article' || pageType === 'howToUse') { %>
+  <!-- Structured Data - HowTo for tutorial pages -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to Use ProofTamil Tamil Grammar Checker",
+    "description": "Step-by-step guide to check Tamil grammar, fix spelling errors, and improve Tamil writing using ProofTamil's AI-powered proofreading tool.",
+    "step": [
+      {
+        "@type": "HowToStep",
+        "name": "Sign Up or Login",
+        "text": "Create a free account or login to access ProofTamil's full features. You can sign up with email or Google account."
+      },
+      {
+        "@type": "HowToStep",
+        "name": "Open Your Workspace",
+        "text": "Navigate to the workspace to start writing or paste your Tamil text for proofreading."
+      },
+      {
+        "@type": "HowToStep",
+        "name": "Type or Paste Tamil Text",
+        "text": "Type in English (phonetic) like 'vanakkam' and it converts to Tamil, or paste existing Tamil text."
+      },
+      {
+        "@type": "HowToStep",
+        "name": "Get AI Suggestions",
+        "text": "AI automatically analyzes your text for grammar errors, spelling mistakes, and provides correction suggestions."
+      },
+      {
+        "@type": "HowToStep",
+        "name": "Apply Corrections",
+        "text": "Click on suggestions to apply them instantly. Your text is automatically saved."
+      }
+    ]
+  }
+  </script>
+  <% } %>
+  
+  <% if (pageType === 'contact') { %>
+  <!-- Structured Data - ContactPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ContactPage",
+    "name": "Contact ProofTamil",
+    "description": "Contact ProofTamil support team for help with Tamil grammar checker, proofreading tool, or any questions.",
+    "url": "<%= baseUrl %>/contact"
+  }
+  </script>
+  <% } %>
+  
+  <!-- BreadcrumbList for better navigation in search results -->
+  <% if (pageType !== 'home' && pageType !== 'error') { %>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "<%= baseUrl %>"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "<%= seoTitle.split(' - ')[0].split(' | ')[0] %>",
+        "item": "<%= canonicalUrl %>"
+      }
+    ]
+  }
+  </script>
+  <% } %>
   
   <link rel="stylesheet" href="/css/output.css">
   <style>
     @font-face {
       font-family: 'Tamil';
       src: local('Noto Sans Tamil'), local('Lohit Tamil');
+      font-display: swap;
     }
   </style>
 </head>

@@ -1,19 +1,22 @@
-# ProofTamil - Free Tamil Typing & AI Proofreading Tool
+# ProofTamil - Tamil Grammar Checker & AI Proofreading Tool
 # https://prooftamil.com
-# Best Free Tamil Keyboard Online
+# Best Free Tamil Proofreading Tool Online
 
 User-agent: *
 Allow: /
-Allow: /workspace
+
+# Public pages - fully crawlable (SEO optimized)
+Allow: /
 Allow: /how-to-use
-Allow: /login
-Allow: /register
 Allow: /contact
 Allow: /privacy
 Allow: /terms
+Allow: /login
+Allow: /register
 
 # Disallow private/authenticated pages from indexing
 Disallow: /dashboard
+Disallow: /workspace
 Disallow: /account
 Disallow: /archive
 Disallow: /analytics
@@ -22,17 +25,26 @@ Disallow: /admin/
 
 # Sitemap location
 Sitemap: https://prooftamil.com/sitemap.xml
-Sitemap: https://www.prooftamil.com/sitemap.xml
 
 # Crawl delay (be gentle with the server)
 Crawl-delay: 1
 
-# Google specific
+# Google specific - no delay for faster indexing
 User-agent: Googlebot
 Allow: /
 Crawl-delay: 0
 
 # Bing specific
 User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+# DuckDuckGo
+User-agent: DuckDuckBot
+Allow: /
+Crawl-delay: 1
+
+# Yandex
+User-agent: Yandex
 Allow: /
 Crawl-delay: 1

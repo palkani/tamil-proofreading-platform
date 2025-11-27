@@ -3,6 +3,7 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const { trackPageView } = require('./middleware/analytics');
+const { getSeoData } = require('./config/seo');
 
 const app = express();
 const PORT = 5000; // Express frontend always runs on 5000
@@ -29,16 +30,55 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: false, // Set to true in production with HTTPS
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    secure: false,
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
 // Analytics tracking middleware (track all page views)
 app.use(trackPageView);
 
-// Static files
-app.use(express.static(path.join(__dirname, 'public')));
+// Static files with cache headers for performance
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1d',
+  etag: true
+}));
+
+// XML Sitemap route
+app.get('/sitemap.xml', (req, res) => {
+  const baseUrl = 'https://prooftamil.com';
+  const currentDate = new Date().toISOString().split('T')[0];
+  
+  const pages = [
+    { url: '/', priority: '1.0', changefreq: 'daily' },
+    { url: '/how-to-use', priority: '0.9', changefreq: 'weekly' },
+    { url: '/contact', priority: '0.7', changefreq: 'monthly' },
+    { url: '/login', priority: '0.6', changefreq: 'monthly' },
+    { url: '/register', priority: '0.6', changefreq: 'monthly' },
+    { url: '/privacy', priority: '0.4', changefreq: 'yearly' },
+    { url: '/terms', priority: '0.4', changefreq: 'yearly' }
+  ];
+
+  let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n';
+  sitemap += '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n';
+  sitemap += '        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9\n';
+  sitemap += '        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">\n';
+
+  pages.forEach(page => {
+    sitemap += '  <url>\n';
+    sitemap += `    <loc>${baseUrl}${page.url}</loc>\n`;
+    sitemap += `    <lastmod>${currentDate}</lastmod>\n`;
+    sitemap += `    <changefreq>${page.changefreq}</changefreq>\n`;
+    sitemap += `    <priority>${page.priority}</priority>\n`;
+    sitemap += '  </url>\n';
+  });
+
+  sitemap += '</urlset>';
+
+  res.header('Content-Type', 'application/xml');
+  res.send(sitemap);
+});
 
 // Routes
 const indexRouter = require('./routes/index');
@@ -49,15 +89,22 @@ app.use('/', indexRouter);
 app.use('/workspace', workspaceRouter);
 app.use('/api', apiRouter);
 
-// Error handling
+// Error handling - 404
 app.use((req, res, next) => {
-  res.status(404).render('pages/404', { title: 'Page Not Found' });
+  const seo = getSeoData('notFound');
+  res.status(404).render('pages/404', { 
+    title: seo.title,
+    seo: seo
+  });
 });
 
+// Error handling - 500
 app.use((err, req, res, next) => {
   console.error(err.stack);
+  const seo = getSeoData('error');
   res.status(500).render('pages/error', { 
-    title: 'Server Error',
+    title: seo.title,
+    seo: seo,
     error: process.env.NODE_ENV === 'development' ? err : {}
   });
 });
