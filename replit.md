@@ -4,6 +4,18 @@
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database. tamil
 
 ## Recent Updates (Nov 27, 2025)
+- **English-to-Tamil Translation Feature:**
+  - New "Translate" button in workspace toolbar to translate English paragraphs to Tamil
+  - Uses Gemini 2.5 Flash AI for accurate translations
+  - Shows translation alternatives in AI Assistant panel with apply option
+  - Smart language detection: allows short phrases (1-2 words), only blocks clear Tamil text
+  - First-occurrence replacement prevents corrupting repeated text
+- **Gemini API Authentication Fix:**
+  - Backend now uses AI_INTEGRATIONS_GEMINI_API_KEY from Replit integration
+  - Added fallback base URL for Gemini API when environment variable not set
+- **Enhanced Autocomplete:**
+  - Increased backend autocomplete limit from 10 to 20 (max 500)
+  - Better support for English-to-Tamil word conversion on space press
 - **API Routing Fix:** Fixed duplicated `/api/v1/v1/submit` path by updating frontend to call `/api/submit` instead of `/api/v1/submit`. The Express proxy already adds `/api/v1` prefix.
 - **Phase 1 SEO Implementation:**
   - **Dynamic Page-Specific Meta Tags:** Each page now has optimized title, description, keywords, canonical URL, and robots directives
