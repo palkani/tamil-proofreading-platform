@@ -153,28 +153,22 @@ func (h *Handlers) Register(c *gin.Context) {
                 "user_id":    user.ID,
         })
 
-        // Create email verification OTP and send email
-        _, otp, err := h.authService.CreateEmailVerification(user.ID, user.Email)
+        // Create session and issue tokens
+        tokenPair, err := h.authService.IssueSession(user, sessionMetadataFromContext(c))
         if err != nil {
-                auditlog.Error(c, "email_verification_create_failed", map[string]any{
-                        "user_id": user.ID,
-                        "error":   err.Error(),
-                })
-        } else {
-                // Send verification email
-                if sendErr := h.emailService.SendVerificationEmail(user.Email, otp); sendErr != nil {
-                        auditlog.Error(c, "email_send_failed", map[string]any{
-                                "user_id": user.ID,
-                                "error":   sendErr.Error(),
-                        })
-                }
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
+                return
         }
 
-        // Return response without session (user needs to verify email first)
+        h.setRefreshCookie(c, tokenPair.RefreshToken, tokenPair.RefreshExpiresAt)
+
+        // Return response with session tokens
         c.JSON(http.StatusCreated, gin.H{
-                "user":                   user,
-                "message":                "Registration successful. Please check your email for verification code.",
-                "requires_verification":  true,
+                "user":                    user,
+                "access_token":            tokenPair.AccessToken,
+                "access_token_expires_at": tokenPair.AccessExpiresAt.UTC(),
+                "refresh_expires_at":      tokenPair.RefreshExpiresAt.UTC(),
+                "message":                 "Registration successful. Welcome to ProofTamil!",
         })
 }
 

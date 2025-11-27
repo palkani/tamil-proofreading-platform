@@ -134,14 +134,14 @@ document.getElementById('register-form')?.addEventListener('submit', async (e) =
       throw new Error(data.error || 'Registration failed');
     }
     
-    // Check if verification is required
-    if (data.requires_verification) {
-      registeredEmail = email;
-      showVerificationStep(email);
-    } else {
-      // Direct login (e.g., for Google OAuth users)
-      window.location.href = '/dashboard';
+    // Registration successful - user is immediately logged in
+    // Store access token if provided
+    if (data.access_token) {
+      localStorage.setItem('access_token', data.access_token);
     }
+    
+    // Redirect to dashboard
+    window.location.href = '/dashboard';
   } catch (error) {
     errorDiv.textContent = error.message;
     errorDiv.classList.remove('hidden');
