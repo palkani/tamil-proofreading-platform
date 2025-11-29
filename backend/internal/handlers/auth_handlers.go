@@ -439,8 +439,17 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
                 return
         }
 
+        // Get the origin/scheme from request headers for proper redirect URI
+        scheme := "http"
+        if c.GetHeader("X-Forwarded-Proto") == "https" {
+                scheme = "https"
+        } else if c.Request.TLS != nil {
+                scheme = "https"
+        }
+        origin := scheme + "://" + c.Request.Host
+
         // Exchange authorization code for ID token
-        idToken, err := h.exchangeCodeForToken(c.Request.Context(), code, c.Request.Host)
+        idToken, err := h.exchangeCodeForToken(c.Request.Context(), code, origin)
         if err != nil {
                 c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=token_exchange_failed")
                 return
@@ -468,11 +477,9 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
         c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
-func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, host string) (string, error) {
-        redirectURI := "http://localhost:5000/api/v1/auth/google/callback"
-        if strings.Contains(host, "prooftamil.com") {
-                redirectURI = "https://prooftamil.com/api/v1/auth/google/callback"
-        }
+func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, origin string) (string, error) {
+        // origin is already in format: "http://host" or "https://host"
+        redirectURI := origin + "/api/v1/auth/google/callback"
 
         tokenURL := "https://oauth2.googleapis.com/token"
         data := url.Values{
