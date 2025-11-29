@@ -10,27 +10,28 @@ import (
 )
 
 type Config struct {
-        DatabaseURL           string
-        Port                  string
-        FrontendURL           string
-        JWTSecret             string
-        RefreshTokenSecret    string
-        AccessTokenTTLMinutes int
-        RefreshTokenTTLDays   int
-        RefreshCookieKey      []byte
-        OpenAIAPIKey          string
-        GoogleGenAIKey        string
-        StripeSecretKey       string
-        StripeWebhookSecret   string
-        RazorpayKeyID         string
-        RazorpayKeySecret     string
-        GoogleClientID        string
-        GoogleClientSecret    string
-        FacebookClientID      string
-        FacebookClientSecret  string
-        TwilioAccountSID      string
-        TwilioAuthToken       string
-        TwilioPhoneNumber     string
+        DatabaseURL                  string
+        Port                         string
+        FrontendURL                  string
+        GoogleOAuthRedirectDomain    string
+        JWTSecret                    string
+        RefreshTokenSecret           string
+        AccessTokenTTLMinutes        int
+        RefreshTokenTTLDays          int
+        RefreshCookieKey             []byte
+        OpenAIAPIKey                 string
+        GoogleGenAIKey               string
+        StripeSecretKey              string
+        StripeWebhookSecret          string
+        RazorpayKeyID                string
+        RazorpayKeySecret            string
+        GoogleClientID               string
+        GoogleClientSecret           string
+        FacebookClientID             string
+        FacebookClientSecret         string
+        TwilioAccountSID             string
+        TwilioAuthToken              string
+        TwilioPhoneNumber            string
 }
 
 func Load() *Config {
@@ -47,27 +48,28 @@ func Load() *Config {
         }
 
         return &Config{
-                DatabaseURL:           getEnv("DATABASE_URL", "postgres://user:password@localhost:5432/tamil_proofreading?sslmode=disable"),
-                Port:                  getEnv("PORT", "8080"),
-                FrontendURL:           getEnv("FRONTEND_URL", "http://localhost:3000"),
-                JWTSecret:             getEnv("JWT_SECRET", "change-this-secret-key-in-production"),
-                RefreshTokenSecret:    getEnv("REFRESH_TOKEN_SECRET", ""),
-                AccessTokenTTLMinutes: getEnvAsInt("ACCESS_TOKEN_TTL_MINUTES", 60),
-                RefreshTokenTTLDays:   getEnvAsInt("REFRESH_TOKEN_TTL_DAYS", 7),
-                RefreshCookieKey:      refreshCookieKey,
-                OpenAIAPIKey:          getEnv("OPENAI_API_KEY", ""),
-                GoogleGenAIKey:        getEnvWithFallback("AI_INTEGRATIONS_GEMINI_API_KEY", "GOOGLE_GENAI_API_KEY", ""),
-                StripeSecretKey:       getEnv("STRIPE_SECRET_KEY", ""),
-                StripeWebhookSecret:   getEnv("STRIPE_WEBHOOK_SECRET", ""),
-                RazorpayKeyID:         getEnv("RAZORPAY_KEY_ID", ""),
-                RazorpayKeySecret:     getEnv("RAZORPAY_KEY_SECRET", ""),
-                GoogleClientID:        getEnv("GOOGLE_CLIENT_ID", ""),
-                GoogleClientSecret:    getEnv("GOOGLE_CLIENT_SECRET", ""),
-                FacebookClientID:      getEnv("FACEBOOK_CLIENT_ID", ""),
-                FacebookClientSecret:  getEnv("FACEBOOK_CLIENT_SECRET", ""),
-                TwilioAccountSID:      getEnv("TWILIO_ACCOUNT_SID", ""),
-                TwilioAuthToken:       getEnv("TWILIO_AUTH_TOKEN", ""),
-                TwilioPhoneNumber:     getEnv("TWILIO_PHONE_NUMBER", ""),
+                DatabaseURL:                getEnv("DATABASE_URL", "postgres://user:password@localhost:5432/tamil_proofreading?sslmode=disable"),
+                Port:                       getEnv("PORT", "8080"),
+                FrontendURL:                getEnv("FRONTEND_URL", "http://localhost:3000"),
+                GoogleOAuthRedirectDomain:  getEnv("GOOGLE_OAUTH_REDIRECT_DOMAIN", "https://prooftamil.com"),
+                JWTSecret:                  getEnv("JWT_SECRET", "change-this-secret-key-in-production"),
+                RefreshTokenSecret:         getEnv("REFRESH_TOKEN_SECRET", ""),
+                AccessTokenTTLMinutes:      getEnvAsInt("ACCESS_TOKEN_TTL_MINUTES", 60),
+                RefreshTokenTTLDays:        getEnvAsInt("REFRESH_TOKEN_TTL_DAYS", 7),
+                RefreshCookieKey:           refreshCookieKey,
+                OpenAIAPIKey:               getEnv("OPENAI_API_KEY", ""),
+                GoogleGenAIKey:             getEnvWithFallback("AI_INTEGRATIONS_GEMINI_API_KEY", "GOOGLE_GENAI_API_KEY", ""),
+                StripeSecretKey:            getEnv("STRIPE_SECRET_KEY", ""),
+                StripeWebhookSecret:        getEnv("STRIPE_WEBHOOK_SECRET", ""),
+                RazorpayKeyID:              getEnv("RAZORPAY_KEY_ID", ""),
+                RazorpayKeySecret:          getEnv("RAZORPAY_KEY_SECRET", ""),
+                GoogleClientID:             getEnv("GOOGLE_CLIENT_ID", ""),
+                GoogleClientSecret:         getEnv("GOOGLE_CLIENT_SECRET", ""),
+                FacebookClientID:           getEnv("FACEBOOK_CLIENT_ID", ""),
+                FacebookClientSecret:       getEnv("FACEBOOK_CLIENT_SECRET", ""),
+                TwilioAccountSID:           getEnv("TWILIO_ACCOUNT_SID", ""),
+                TwilioAuthToken:            getEnv("TWILIO_AUTH_TOKEN", ""),
+                TwilioPhoneNumber:          getEnv("TWILIO_PHONE_NUMBER", ""),
         }
 }
 

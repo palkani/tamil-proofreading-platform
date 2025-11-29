@@ -478,8 +478,8 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 }
 
 func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, origin string) (string, error) {
-        // origin is already in format: "http://host" or "https://host"
-        redirectURI := origin + "/api/v1/auth/google/callback"
+        // Use configured OAuth redirect domain (must match Google Cloud Console)
+        redirectURI := h.cfg.GoogleOAuthRedirectDomain + "/api/v1/auth/google/callback"
 
         tokenURL := "https://oauth2.googleapis.com/token"
         data := url.Values{
