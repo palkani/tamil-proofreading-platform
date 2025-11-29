@@ -33,9 +33,8 @@ function triggerGoogleSignIn() {
   }
   
   try {
-    // Use prooftamil.com for OAuth redirect (must match Google Cloud Console config)
-    // This works for both development and production
-    const redirectUri = 'https://prooftamil.com/api/v1/auth/google/callback';
+    // Use current domain for OAuth redirect (must match Google Cloud Console config)
+    const redirectUri = `${window.location.origin}/api/v1/auth/google/callback`;
     
     console.log('[GOOGLE-AUTH] Redirect URI:', redirectUri);
     console.log('[GOOGLE-AUTH] Client ID:', googleClientId.substring(0, 20) + '...');
