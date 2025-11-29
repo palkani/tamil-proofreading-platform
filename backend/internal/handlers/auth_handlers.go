@@ -2,8 +2,11 @@ package handlers
 
 import (
         "context"
+        "encoding/json"
         "errors"
+        "io"
         "net/http"
+        "net/url"
         "strings"
         "time"
 
@@ -414,4 +417,99 @@ func (h *Handlers) googleOAuthLogin(ctx context.Context, token string) (*models.
         name, _ := payload.Claims["name"].(string)
 
         return h.authService.EnsureOAuthUser(email, name)
+}
+
+// GoogleCallback handles the OAuth2 callback from Google
+func (h *Handlers) GoogleCallback(c *gin.Context) {
+        code := c.Query("code")
+        errParam := c.Query("error")
+
+        if errParam != "" {
+                c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error="+errParam)
+                return
+        }
+
+        if code == "" {
+                c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=missing_code")
+                return
+        }
+
+        if h.cfg.GoogleClientID == "" || h.cfg.GoogleClientSecret == "" {
+                c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_not_configured")
+                return
+        }
+
+        // Exchange authorization code for ID token
+        idToken, err := h.exchangeCodeForToken(c.Request.Context(), code, c.Request.Host)
+        if err != nil {
+                c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=token_exchange_failed")
+                return
+        }
+
+        // Get or create user
+        user, err := h.googleOAuthLogin(c.Request.Context(), idToken)
+        if err != nil {
+                c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_login_failed")
+                return
+        }
+
+        // Create session
+        tokenPair, err := h.authService.IssueSession(user, sessionMetadataFromContext(c))
+        if err != nil {
+                c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=session_creation_failed")
+                return
+        }
+
+        // Set refresh token cookie
+        h.setRefreshCookie(c, tokenPair.RefreshToken, tokenPair.RefreshExpiresAt)
+
+        // Redirect to workspace with access token
+        redirectURL := h.cfg.FrontendURL + "/workspace?access_token=" + tokenPair.AccessToken
+        c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+}
+
+func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, host string) (string, error) {
+        redirectURI := "http://localhost:5000/api/v1/auth/google/callback"
+        if strings.Contains(host, "prooftamil.com") {
+                redirectURI = "https://prooftamil.com/api/v1/auth/google/callback"
+        }
+
+        tokenURL := "https://oauth2.googleapis.com/token"
+        data := url.Values{
+                "code":           {code},
+                "client_id":      {h.cfg.GoogleClientID},
+                "client_secret":  {h.cfg.GoogleClientSecret},
+                "redirect_uri":   {redirectURI},
+                "grant_type":     {"authorization_code"},
+        }.Encode()
+
+        req, err := http.NewRequestWithContext(ctx, "POST", tokenURL, strings.NewReader(data))
+        if err != nil {
+                return "", err
+        }
+
+        req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+        resp, err := http.DefaultClient.Do(req)
+        if err != nil {
+                return "", err
+        }
+        defer resp.Body.Close()
+
+        body, err := io.ReadAll(resp.Body)
+        if err != nil {
+                return "", err
+        }
+
+        var tokenResp map[string]interface{}
+        if err := json.Unmarshal(body, &tokenResp); err != nil {
+                return "", err
+        }
+
+        idToken, ok := tokenResp["id_token"].(string)
+        if !ok || idToken == "" {
+                return "", errors.New("id_token not in response")
+        }
+
+        return idToken, nil
 }

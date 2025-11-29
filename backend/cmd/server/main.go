@@ -116,6 +116,7 @@ func main() {
                 api.POST("/auth/otp/send", h.SendOTP)
                 api.POST("/auth/otp/verify", h.VerifyOTP)
                 api.POST("/auth/social", h.SocialLogin)
+                api.GET("/auth/google/callback", h.GoogleCallback)
                 api.POST("/auth/password-strength", h.CheckPasswordStrength)
                 api.GET("/autocomplete", h.AutocompleteTamil)
                 api.POST("/tamil-words", h.AddTamilWord)
