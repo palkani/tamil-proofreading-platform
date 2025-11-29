@@ -287,21 +287,3 @@ document.getElementById('back-to-register')?.addEventListener('click', showRegis
 document.getElementById('otp')?.addEventListener('input', (e) => {
   e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
 });
-
-// Google signup button
-document.getElementById('google-signup-btn')?.addEventListener('click', () => {
-  console.log('Google signup button clicked');
-  console.log('triggerGoogleSignIn function exists:', typeof window.triggerGoogleSignIn);
-  
-  if (window.triggerGoogleSignIn) {
-    console.log('Calling triggerGoogleSignIn...');
-    window.triggerGoogleSignIn();
-  } else {
-    console.error('triggerGoogleSignIn not found on window object');
-    const errorDiv = document.getElementById('error-message');
-    if (errorDiv) {
-      errorDiv.textContent = 'Google Sign-In is still loading. Please wait a moment and try again.';
-      errorDiv.classList.remove('hidden');
-    }
-  }
-});
