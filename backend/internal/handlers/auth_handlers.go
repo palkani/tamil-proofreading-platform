@@ -489,6 +489,9 @@ func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, origin
                 "redirect_uri":   {redirectURI},
                 "grant_type":     {"authorization_code"},
         }.Encode()
+        
+        // Debug logging
+        log.Printf("[OAUTH-DEBUG] Exchanging code with redirect_uri=%s", redirectURI)
 
         req, err := http.NewRequestWithContext(ctx, "POST", tokenURL, strings.NewReader(data))
         if err != nil {
