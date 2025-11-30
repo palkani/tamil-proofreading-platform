@@ -311,15 +311,26 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     
-    // CRITICAL: Use hardcoded production URI to match Google Cloud Console
-    // This MUST be exactly what's registered in Google Cloud Console
-    const hostname = req.get('host');
-    const isProduction = hostname && hostname.includes('prooftamil.com');
+    // CRITICAL: When behind a proxy (Firebase → Cloud Run), use X-Forwarded headers
+    // X-Forwarded-Host: the original domain user accessed (e.g., prooftamil.com)
+    // Host: the internal Cloud Run service domain (e.g., prooftamil-frontend-xxx.run.app)
+    
+    // Get original hostname from proxy headers or fall back to Host header
+    const xForwardedHost = req.get('x-forwarded-host');
+    const xForwardedProto = req.get('x-forwarded-proto') || 'https';
+    const hostname = xForwardedHost || req.get('host');
+    const protocol = xForwardedProto === 'http' ? 'http' : 'https';
+    
+    // Always use hardcoded production URI when we detect production environment
+    const isProduction = hostname && (hostname.includes('prooftamil.com') || hostname.includes('run.app'));
     const redirectUri = isProduction
       ? 'https://prooftamil.com/api/v1/auth/google/callback'
-      : `${req.protocol}://${hostname}/api/v1/auth/google/callback`;
+      : `${protocol}://${hostname}/api/v1/auth/google/callback`;
     
     console.log('[EXPRESS-OAUTH-CALLBACK] Config loaded');
+    console.log('[EXPRESS-OAUTH-CALLBACK] X-Forwarded-Host:', xForwardedHost);
+    console.log('[EXPRESS-OAUTH-CALLBACK] Host header:', req.get('host'));
+    console.log('[EXPRESS-OAUTH-CALLBACK] X-Forwarded-Proto:', xForwardedProto);
     console.log('[EXPRESS-OAUTH-CALLBACK] Is Production:', isProduction);
     console.log('[EXPRESS-OAUTH-CALLBACK] Redirect URI:', redirectUri);
     console.log('[EXPRESS-OAUTH-CALLBACK] Client ID available:', !!clientId);
