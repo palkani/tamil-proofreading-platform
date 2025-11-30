@@ -395,9 +395,28 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     console.log('[EXPRESS-OAUTH-CALLBACK] Session ID:', req.sessionID);
     
     // CRITICAL FIX: Manually set the session cookie since express-session's automatic mechanism
-    // doesn't work properly behind the Firebase proxy. This ensures the browser receives the
-    // session cookie and can maintain the session across instances via PostgreSQL store.
+    // doesn't work properly behind the Firebase proxy. We MUST set the domain to the PUBLIC domain
+    // (prooftamil.com) not the internal Cloud Run domain, so the browser sends the cookie back.
+    const xForwardedHostCookie = req.get('x-forwarded-host');
+    const publicDomain = xForwardedHostCookie || req.get('host');
+    
+    // Extract just the domain (remove port if present, remove internal cloud run domains)
+    let cookieDomain = publicDomain;
+    if (cookieDomain.includes('run.app')) {
+      // Internal Cloud Run domain - use prooftamil.com for production
+      cookieDomain = 'prooftamil.com';
+    } else if (cookieDomain.includes(':')) {
+      // Remove port for development
+      cookieDomain = cookieDomain.split(':')[0];
+    }
+    
+    // For subdomains like www.prooftamil.com, use .prooftamil.com so it works for all subdomains
+    if (cookieDomain.startsWith('www.')) {
+      cookieDomain = '.' + cookieDomain.substring(4);
+    }
+    
     const cookieOptions = {
+      domain: cookieDomain,
       path: '/',
       httpOnly: true,
       sameSite: 'lax',
@@ -410,12 +429,14 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       cookieOptions.secure = true;
     }
     
-    // Set the session cookie explicitly
+    // Set the session cookie explicitly with correct domain
     res.cookie('connect.sid', req.sessionID, cookieOptions);
     
     console.log('[EXPRESS-OAUTH-CALLBACK] Session cookie set manually:');
     console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie name: connect.sid');
     console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie value:', req.sessionID);
+    console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie domain:', cookieDomain);
+    console.log('[EXPRESS-OAUTH-CALLBACK] - Public domain from headers:', publicDomain);
     console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie options:', JSON.stringify(cookieOptions));
     console.log('[EXPRESS-OAUTH-CALLBACK] - Is Secure Connection:', isSecureConnection);
     
