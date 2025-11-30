@@ -393,26 +393,28 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     console.log('[EXPRESS-OAUTH-CALLBACK] Session ID:', req.sessionID);
     
     // Save session to database and redirect
-    // Express session middleware will automatically send Set-Cookie header after save
     req.session.save((err) => {
       if (err) {
         console.error('[EXPRESS-OAUTH-CALLBACK] Session save error:', err);
         return res.redirect(`/login?error=${encodeURIComponent('Session creation failed')}`);
       }
       
-      console.log('[EXPRESS-OAUTH-CALLBACK] Session saved to database successfully');
-      console.log('[EXPRESS-OAUTH-CALLBACK] Session ID after save:', req.sessionID);
+      // CRITICAL: Explicitly set the session cookie - don't rely on Express middleware
+      const isSecure = req.get('x-forwarded-proto') === 'https' || process.env.NODE_ENV === 'production';
+      res.cookie('connect.sid', req.sessionID, {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000,
+        secure: isSecure
+      });
       
-      // Redirect to dashboard on the SAME INTERNAL domain where cookie was set
-      const internalHost = req.get('host'); // Always the internal Cloud Run domain here
+      const internalHost = req.get('host');
       const dashboardUrl = `${protocol}://${internalHost}/dashboard`;
       
-      console.log('[EXPRESS-OAUTH-CALLBACK] Response headers BEFORE redirect:');
-      console.log('[EXPRESS-OAUTH-CALLBACK] Headers:', JSON.stringify(res.getHeaders()));
-      console.log('[EXPRESS-OAUTH-CALLBACK] Set-Cookie header:', res.get('Set-Cookie'));
+      console.log('[EXPRESS-OAUTH-CALLBACK] Session saved and cookie set');
       console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to:', dashboardUrl);
       
-      // Perform redirect - Express middleware should have set Set-Cookie by now
       res.redirect(dashboardUrl);
     });
     
