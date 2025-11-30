@@ -392,43 +392,8 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     console.log('[EXPRESS-OAUTH-CALLBACK] Session object created:', JSON.stringify(req.session.user));
     console.log('[EXPRESS-OAUTH-CALLBACK] Session ID:', req.sessionID);
     
-    // publicDomain already has xForwardedHost from earlier in the function
-    // (defined at line 321 as: const hostname = xForwardedHost || req.get('host');)
-    // Use the hostname variable for redirect URL
-    
-    // CRITICAL FIX: Don't specify domain - let browser make it host-only for current domain
-    // Problem: We're on internal Cloud Run domain, can't set cookie for public domain (browser rejects)
-    // Solution: Set cookie as host-only (no domain param), it'll work for internal domain
-    //          When user navigates to public domain, Firebase proxies back to internal domain
-    //          Cookie gets sent, session works!
-    
-    const cookieOptions = {
-      // NO domain specified - makes it host-only cookie for current request domain
-      path: '/',
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    };
-    
-    // Add secure flag only in production to allow HTTPS enforcement
-    const isSecureConnection = req.get('x-forwarded-proto') === 'https' || process.env.NODE_ENV === 'production';
-    if (isSecureConnection) {
-      cookieOptions.secure = true;
-    }
-    
-    // Set the session cookie without domain - host-only for current request domain
-    res.cookie('connect.sid', req.sessionID, cookieOptions);
-    
-    console.log('[EXPRESS-OAUTH-CALLBACK] Session cookie set (host-only):');
-    console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie name: connect.sid');
-    console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie value:', req.sessionID);
-    console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie domain: (host-only, no domain specified)');
-    console.log('[EXPRESS-OAUTH-CALLBACK] - X-Forwarded-Host:', req.get('x-forwarded-host'));
-    console.log('[EXPRESS-OAUTH-CALLBACK] - Host header:', req.get('host'));
-    console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie options:', JSON.stringify(cookieOptions));
-    console.log('[EXPRESS-OAUTH-CALLBACK] - Is Secure Connection:', isSecureConnection);
-    
     // Save session to database and redirect
+    // Express session middleware will automatically send Set-Cookie header after save
     req.session.save((err) => {
       if (err) {
         console.error('[EXPRESS-OAUTH-CALLBACK] Session save error:', err);
@@ -436,30 +401,16 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       }
       
       console.log('[EXPRESS-OAUTH-CALLBACK] Session saved to database successfully');
+      console.log('[EXPRESS-OAUTH-CALLBACK] Session cookie will be set by Express middleware');
       
-      // CRITICAL: Session cookie is set on the INTERNAL domain (where this callback is running)
-      // To send the cookie with the next request, redirect to the SAME INTERNAL domain
-      // Firebase proxy will make it appear as prooftamil.com to the user, but internally it's on the Cloud Run domain
+      // Redirect to dashboard on the SAME INTERNAL domain where cookie was set
+      // Firefox proxy makes it appear as prooftamil.com to user, but internally routes to Cloud Run domain
       const internalHost = req.get('host'); // Always the internal Cloud Run domain here
       const dashboardUrl = `${protocol}://${internalHost}/dashboard`;
-      console.log('[EXPRESS-OAUTH-CALLBACK] Session cookie set on domain:', internalHost);
       console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to dashboard on same domain:', dashboardUrl);
       
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Redirecting...</title>
-          <script>
-            window.location.href = '${dashboardUrl}';
-          </script>
-        </head>
-        <body>
-          <p>Redirecting to dashboard...</p>
-          <p><a href="${dashboardUrl}">Click here if not redirected</a></p>
-        </body>
-        </html>
-      `);
+      // Simple server-side redirect - let Express handle cookie setting
+      res.redirect(dashboardUrl);
     });
     
   } catch (error) {
