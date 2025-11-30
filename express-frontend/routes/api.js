@@ -305,13 +305,23 @@ router.get('/v1/auth/google/callback', async (req, res) => {
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = `${req.protocol}://${req.get('host')}/api/v1/auth/google/callback`;
+    
+    // CRITICAL: Use hardcoded production URI to match Google Cloud Console and frontend
+    // The frontend sends this exact URI, so we must exchange with the same URI
+    // regardless of whether user accessed via www.prooftamil.com or prooftamil.com
+    const hostname = req.get('host');
+    const isProduction = hostname && hostname.includes('prooftamil.com');
+    const redirectUri = isProduction
+      ? 'https://prooftamil.com/api/v1/auth/google/callback'
+      : `${req.protocol}://${hostname}/api/v1/auth/google/callback`;
     
     if (!clientId || !clientSecret) {
       throw new Error('Google OAuth not configured');
     }
     
     console.log('[GOOGLE-OAUTH] Exchanging code for token...');
+    console.log('[GOOGLE-OAUTH] Redirect URI:', redirectUri);
+    console.log('[GOOGLE-OAUTH] Host:', hostname);
     
     // Exchange authorization code for ID token
     const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
