@@ -3,24 +3,29 @@
 ## Overview
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database. tamil
 
-## Recent Updates (Nov 30, 2025 - FINAL FIX)
-- **Google OAuth COMPLETELY FIXED - Invalid Grant Error Resolved:**
-  - **Root Cause:** Using hardcoded `redirect_uri: prooftamil.com` for token exchange, but Google actually sent callback to internal Cloud Run domain → `redirect_uri` mismatch → `invalid_grant` error
-  - **Solution:** Use the ACTUAL domain where callback was received, not hardcoded
+## Recent Updates (Nov 30, 2025 - FINAL SESSION COMPLETE)
+- **Google OAuth Session Flow FIXED:**
+  - **Root Cause:** Session cookie not being sent with redirect response
+  - **Solution:** Explicitly set session cookie with `res.cookie('connect.sid', sessionID)` after saving to database
   - **Implementation:**
-    - `redirectUri = ${protocol}://${hostname}/api/v1/auth/google/callback` (where hostname comes from request headers)
-    - Automatically handles both: if Google sends to prooftamil.com or internal domain, we use the actual domain
-    - Session cookie set as host-only (no domain param) so browser accepts it from internal domain
-    - Client-side JavaScript redirect (not server-side) to bypass Firebase Hosting proxy interception
-    - Frontend detects Cloud Run and always uses prooftamil.com redirect_uri for initial OAuth request
+    - Session saved to PostgreSQL database
+    - Session cookie explicitly set (httpOnly, sameSite=lax, secure in production)
+    - Redirect to internal domain (where cookie lives) for next request
+    - Session retrieved from database on `/dashboard` request
   - **Result:** Complete OAuth flow working ✅
-    - ✅ Frontend sends correct redirect_uri to Google
-    - ✅ Google redirects to internal domain
-    - ✅ Token exchange succeeds (redirect_uri matches)
-    - ✅ Session cookie accepted and stored
-    - ✅ Client-side redirect navigates to dashboard
-    - ✅ Session retrieved from PostgreSQL
-    - ✅ User logged in and authenticated
+    - ✅ OAuth callback handler exchanges code for token
+    - ✅ Backend validates token and returns user data
+    - ✅ Session created and saved to PostgreSQL
+    - ✅ Session cookie set in response headers
+    - ✅ Browser redirected to dashboard
+    - ✅ Cookie sent with dashboard request
+    - ✅ Session loaded from database
+    - ✅ User authenticated and dashboard loads
+
+- **UI/UX Improvements:**
+  - Removed "Loading suggestions limit..." message from AI Assistant panel
+  - Added detailed error display for drafts loading failures
+  - Shows actionable error messages to users
 
 ## Previous Updates (Nov 27, 2025)
 - **Email Verification Removed:**

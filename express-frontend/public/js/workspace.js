@@ -678,11 +678,11 @@ class WorkspaceController {
       const response = await fetch('/api/submissions?limit=50');
       
       if (!response.ok) {
-        throw new Error('Failed to load drafts');
+        throw new Error(`Server error: ${response.status}`);
       }
       
       const data = await response.json();
-      this.drafts = data.submissions || [];
+      this.drafts = data.submissions || data.data || [];
       
       if (loadingEl) loadingEl.classList.add('hidden');
       
@@ -694,7 +694,20 @@ class WorkspaceController {
     } catch (error) {
       console.error('Error loading drafts:', error);
       if (loadingEl) loadingEl.classList.add('hidden');
-      this.showNotification('Failed to load drafts', 'error');
+      
+      // Show error message in container
+      if (containerEl) {
+        containerEl.innerHTML = `
+          <div class="text-center py-12 text-red-600">
+            <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="font-semibold mb-2">Failed to load drafts</p>
+            <p class="text-sm text-gray-500 mb-4">${error.message}</p>
+            <button onclick="location.reload()" class="text-blue-600 hover:text-blue-700 text-sm font-medium">Reload page</button>
+          </div>
+        `;
+      }
     }
   }
 
