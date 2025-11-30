@@ -17,6 +17,8 @@
     "ejs": "^3.1.9",
     "cookie-parser": "^1.4.6",
     "express-session": "^1.17.3",
+    "connect-pg-simple": "^7.0.0",
+    "pg": "^8.11.3",
     "axios": "^1.6.2"
   },
   "devDependencies": {

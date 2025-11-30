@@ -9,11 +9,15 @@ This project is a full-stack AI-powered Tamil text proofreading platform, aimed 
   - **Scenario:** Request 1 (OAuth) hits Instance A, Request 2 (dashboard) hits Instance B → session lost
   - **Solution:** Switched to PostgreSQL-backed session storage using `connect-pg-simple`
   - **Implementation:**
+    - Added `pg` and `connect-pg-simple` to package.json dependencies
     - Sessions stored in PostgreSQL `session` table (auto-created by connect-pg-simple)
     - All Cloud Run instances access same session database
+    - Made database pool initialization non-blocking (app starts immediately, connections lazy-loaded)
     - Added `app.set('trust proxy', true)` for Firebase proxy header support
     - Session config: secure cookies, httpOnly, sameSite=lax for OAuth flow
+    - Fallback to memory store if DATABASE_URL not available
   - **Result:** Sessions now persist across all Cloud Run instances ✅
+  - **Deployment:** Updated package.json, package-lock.json with new dependencies and security fixes
   
 - **Google OAuth Redirect URI Mismatch RESOLVED (Prior Fix):**
   - **Root Cause:** Both backend and Express were trying to handle the same `/api/v1/auth/google/callback` endpoint
