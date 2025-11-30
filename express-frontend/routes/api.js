@@ -383,7 +383,7 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     const user = authResponse.data.user;
     console.log('[EXPRESS-OAUTH-CALLBACK] Backend authentication successful:', user.email);
     
-    // Create session and save it
+    // Create session - set user data
     req.session.user = {
       id: user.id,
       email: user.email,
@@ -394,19 +394,40 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     console.log('[EXPRESS-OAUTH-CALLBACK] Session object created:', JSON.stringify(req.session.user));
     console.log('[EXPRESS-OAUTH-CALLBACK] Session ID:', req.sessionID);
     
-    // Save session explicitly and then redirect
+    // CRITICAL FIX: Manually set the session cookie since express-session's automatic mechanism
+    // doesn't work properly behind the Firebase proxy. This ensures the browser receives the
+    // session cookie and can maintain the session across instances via PostgreSQL store.
+    const cookieOptions = {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    };
+    
+    // Add secure flag only in production to allow HTTPS enforcement
+    const isSecureConnection = req.get('x-forwarded-proto') === 'https' || process.env.NODE_ENV === 'production';
+    if (isSecureConnection) {
+      cookieOptions.secure = true;
+    }
+    
+    // Set the session cookie explicitly
+    res.cookie('connect.sid', req.sessionID, cookieOptions);
+    
+    console.log('[EXPRESS-OAUTH-CALLBACK] Session cookie set manually:');
+    console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie name: connect.sid');
+    console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie value:', req.sessionID);
+    console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie options:', JSON.stringify(cookieOptions));
+    console.log('[EXPRESS-OAUTH-CALLBACK] - Is Secure Connection:', isSecureConnection);
+    
+    // Save session to database and redirect
     req.session.save((err) => {
       if (err) {
         console.error('[EXPRESS-OAUTH-CALLBACK] Session save error:', err);
         return res.redirect(`/login?error=${encodeURIComponent('Session creation failed')}`);
       }
       
-      console.log('[EXPRESS-OAUTH-CALLBACK] Session saved successfully');
-      console.log('[EXPRESS-OAUTH-CALLBACK] Session cookie headers:');
-      console.log('[EXPRESS-OAUTH-CALLBACK] - Set-Cookie header:', res.get('Set-Cookie'));
-      console.log('[EXPRESS-OAUTH-CALLBACK] - Session ID:', req.sessionID);
-      console.log('[EXPRESS-OAUTH-CALLBACK] - Session data:', JSON.stringify(req.session));
-      console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to dashboard...');
+      console.log('[EXPRESS-OAUTH-CALLBACK] Session saved to database successfully');
+      console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to /dashboard...');
       res.redirect('/dashboard');
     });
     

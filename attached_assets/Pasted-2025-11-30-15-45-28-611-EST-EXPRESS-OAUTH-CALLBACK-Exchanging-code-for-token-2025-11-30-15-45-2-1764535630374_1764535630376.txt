@@ -1,0 +1,40 @@
+2025-11-30 15:45:28.611 EST
+[EXPRESS-OAUTH-CALLBACK] Exchanging code for token...
+2025-11-30 15:45:28.611 EST
+[EXPRESS-OAUTH-CALLBACK] Posting to Google token endpoint...
+2025-11-30 15:45:28.611 EST
+[EXPRESS-OAUTH-CALLBACK] Request body keys: client_id, client_secret, code, grant_type, redirect_uri
+2025-11-30 15:45:28.611 EST
+[EXPRESS-OAUTH-CALLBACK] Redirect URI in request: https://prooftamil.com/api/v1/auth/google/callback
+2025-11-30 15:45:28.851 EST
+[EXPRESS-OAUTH-CALLBACK] Token response received
+2025-11-30 15:45:28.851 EST
+[EXPRESS-OAUTH-CALLBACK] Response status: 200
+2025-11-30 15:45:28.851 EST
+[EXPRESS-OAUTH-CALLBACK] ID Token received successfully
+2025-11-30 15:45:28.851 EST
+[EXPRESS-OAUTH-CALLBACK] Verifying token with backend...
+2025-11-30 15:45:29.009 EST
+[EXPRESS-OAUTH-CALLBACK] Backend response received
+2025-11-30 15:45:29.009 EST
+[EXPRESS-OAUTH-CALLBACK] Backend authentication successful: palkani.r@gmail.com
+2025-11-30 15:45:29.009 EST
+[EXPRESS-OAUTH-CALLBACK] Session object created: {"id":1,"email":"palkani.r@gmail.com","name":"Palkani Rajendren","role":"writer"}
+2025-11-30 15:45:29.009 EST
+[EXPRESS-OAUTH-CALLBACK] Session ID: 9GELE2GXEHng48NEuV-cuDXY1ZrcoRdF
+2025-11-30 15:45:29.010 EST
+[EXPRESS-OAUTH-CALLBACK] Session saved successfully
+2025-11-30 15:45:29.010 EST
+[EXPRESS-OAUTH-CALLBACK] Session cookie headers:
+2025-11-30 15:45:29.010 EST
+[EXPRESS-OAUTH-CALLBACK] - Set-Cookie header: undefined
+2025-11-30 15:45:29.010 EST
+[EXPRESS-OAUTH-CALLBACK] - Session ID: 9GELE2GXEHng48NEuV-cuDXY1ZrcoRdF
+2025-11-30 15:45:29.010 EST
+[EXPRESS-OAUTH-CALLBACK] - Session data: {"cookie":{"originalMaxAge":86400000,"expires":"2025-12-01T20:45:28.609Z","secure":true,"httpOnly":true,"path":"/","sameSite":"lax"},"user":{"id":1,"email":"palkani.r@gmail.com","name":"Palkani Rajendren","role":"writer"}}
+2025-11-30 15:45:29.010 EST
+[EXPRESS-OAUTH-CALLBACK] Redirecting to dashboard...
+2025-11-30 15:45:29.650 EST
+GET302491 B13 msChrome 142 https://prooftamil-frontend-aspwcdiala-el.a.run.app/dashboard
+2025-11-30 15:45:30.311 EST
+GET20011.94 KB10 msChrome 142 https://prooftamil-frontend-aspwcdiala-el.a.run.app/login?error=Please+login+to+access+this+page
