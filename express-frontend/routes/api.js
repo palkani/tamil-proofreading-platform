@@ -394,29 +394,14 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     console.log('[EXPRESS-OAUTH-CALLBACK] Session object created:', JSON.stringify(req.session.user));
     console.log('[EXPRESS-OAUTH-CALLBACK] Session ID:', req.sessionID);
     
-    // CRITICAL FIX: Manually set the session cookie since express-session's automatic mechanism
-    // doesn't work properly behind the Firebase proxy. We MUST set the domain to the PUBLIC domain
-    // (prooftamil.com) not the internal Cloud Run domain, so the browser sends the cookie back.
-    const xForwardedHostCookie = req.get('x-forwarded-host');
-    const publicDomain = xForwardedHostCookie || req.get('host');
-    
-    // Extract just the domain (remove port if present, remove internal cloud run domains)
-    let cookieDomain = publicDomain;
-    if (cookieDomain.includes('run.app')) {
-      // Internal Cloud Run domain - use prooftamil.com for production
-      cookieDomain = 'prooftamil.com';
-    } else if (cookieDomain.includes(':')) {
-      // Remove port for development
-      cookieDomain = cookieDomain.split(':')[0];
-    }
-    
-    // For subdomains like www.prooftamil.com, use .prooftamil.com so it works for all subdomains
-    if (cookieDomain.startsWith('www.')) {
-      cookieDomain = '.' + cookieDomain.substring(4);
-    }
+    // CRITICAL FIX: Don't specify domain - let browser make it host-only for current domain
+    // Problem: We're on internal Cloud Run domain, can't set cookie for public domain (browser rejects)
+    // Solution: Set cookie as host-only (no domain param), it'll work for internal domain
+    //          When user navigates to public domain, Firebase proxies back to internal domain
+    //          Cookie gets sent, session works!
     
     const cookieOptions = {
-      domain: cookieDomain,
+      // NO domain specified - makes it host-only cookie for current request domain
       path: '/',
       httpOnly: true,
       sameSite: 'lax',
@@ -429,14 +414,15 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       cookieOptions.secure = true;
     }
     
-    // Set the session cookie explicitly with correct domain
+    // Set the session cookie without domain - host-only for current request domain
     res.cookie('connect.sid', req.sessionID, cookieOptions);
     
-    console.log('[EXPRESS-OAUTH-CALLBACK] Session cookie set manually:');
+    console.log('[EXPRESS-OAUTH-CALLBACK] Session cookie set (host-only):');
     console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie name: connect.sid');
     console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie value:', req.sessionID);
-    console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie domain:', cookieDomain);
-    console.log('[EXPRESS-OAUTH-CALLBACK] - Public domain from headers:', publicDomain);
+    console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie domain: (host-only, no domain specified)');
+    console.log('[EXPRESS-OAUTH-CALLBACK] - X-Forwarded-Host:', req.get('x-forwarded-host'));
+    console.log('[EXPRESS-OAUTH-CALLBACK] - Host header:', req.get('host'));
     console.log('[EXPRESS-OAUTH-CALLBACK] - Cookie options:', JSON.stringify(cookieOptions));
     console.log('[EXPRESS-OAUTH-CALLBACK] - Is Secure Connection:', isSecureConnection);
     

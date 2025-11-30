@@ -1,0 +1,143 @@
+2025-11-30 16:44:16.627
+
+GET
+
+200
+
+11.78 KiB
+
+111 ms
+
+Chrome 142.0.0.0
+https://prooftamil-frontend-aspwcdiala-el.a.run.app/login
+2025-11-30 16:44:33.706
+
+GET
+
+200
+
+959 B
+
+413 ms
+
+Chrome 142.0.0.0
+https://prooftamil-frontend-aspwcdiala-el.a.run.app/api/v1/auth/google/callback?authuser=1&code=4%2F0Ab32j93H4DIhM_ryWtzUV5eKFw52GrQ8XwNp3ZGPERD0XEan38xPob1vjiYUm6JRrm0JZw&prompt=none&scope=email+profile+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile+openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email
+2025-11-30 16:44:33.713
+=====================================
+2025-11-30 16:44:33.714
+[EXPRESS-OAUTH-CALLBACK] HANDLER TRIGGERED
+2025-11-30 16:44:33.714
+[EXPRESS-OAUTH-CALLBACK] Full URL: /api/v1/auth/google/callback?authuser=1&code=4%2F0Ab32j93H4DIhM_ryWtzUV5eKFw52GrQ8XwNp3ZGPERD0XEan38xPob1vjiYUm6JRrm0JZw&prompt=none&scope=email+profile+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile+openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email
+2025-11-30 16:44:33.714
+[EXPRESS-OAUTH-CALLBACK] Code received: YES
+2025-11-30 16:44:33.714
+[EXPRESS-OAUTH-CALLBACK] Error: NONE
+2025-11-30 16:44:33.714
+=====================================
+2025-11-30 16:44:33.714
+[EXPRESS-OAUTH-CALLBACK] Config loaded
+2025-11-30 16:44:33.714
+[EXPRESS-OAUTH-CALLBACK] X-Forwarded-Host: prooftamil.com
+2025-11-30 16:44:33.714
+[EXPRESS-OAUTH-CALLBACK] Host header: prooftamil-frontend-aspwcdiala-el.a.run.app
+2025-11-30 16:44:33.714
+[EXPRESS-OAUTH-CALLBACK] X-Forwarded-Proto: https
+2025-11-30 16:44:33.715
+[EXPRESS-OAUTH-CALLBACK] Is Production: true
+2025-11-30 16:44:33.715
+[EXPRESS-OAUTH-CALLBACK] Redirect URI: https://prooftamil.com/api/v1/auth/google/callback
+2025-11-30 16:44:33.715
+[EXPRESS-OAUTH-CALLBACK] Client ID available: true
+2025-11-30 16:44:33.715
+[EXPRESS-OAUTH-CALLBACK] Client Secret available: true
+2025-11-30 16:44:33.715
+[EXPRESS-OAUTH-CALLBACK] Exchanging code for token...
+2025-11-30 16:44:33.715
+[EXPRESS-OAUTH-CALLBACK] Posting to Google token endpoint...
+2025-11-30 16:44:33.715
+[EXPRESS-OAUTH-CALLBACK] Request body keys: client_id, client_secret, code, grant_type, redirect_uri
+2025-11-30 16:44:33.715
+[EXPRESS-OAUTH-CALLBACK] Redirect URI in request: https://prooftamil.com/api/v1/auth/google/callback
+2025-11-30 16:44:33.955
+[EXPRESS-OAUTH-CALLBACK] Token response received
+2025-11-30 16:44:33.955
+[EXPRESS-OAUTH-CALLBACK] Response status: 200
+2025-11-30 16:44:33.955
+[EXPRESS-OAUTH-CALLBACK] ID Token received successfully
+2025-11-30 16:44:33.955
+[EXPRESS-OAUTH-CALLBACK] Verifying token with backend...
+2025-11-30 16:44:34.116
+[EXPRESS-OAUTH-CALLBACK] Backend response received
+2025-11-30 16:44:34.116
+[EXPRESS-OAUTH-CALLBACK] Backend authentication successful: palkani.r@gmail.com
+2025-11-30 16:44:34.116
+[EXPRESS-OAUTH-CALLBACK] Session object created: {"id":1,"email":"palkani.r@gmail.com","name":"Palkani Rajendren","role":"writer"}
+2025-11-30 16:44:34.116
+[EXPRESS-OAUTH-CALLBACK] Session ID: lea-kjA1of_h2DK2YLpM_ysCluqzKIsY
+2025-11-30 16:44:34.117
+[EXPRESS-OAUTH-CALLBACK] Session cookie set manually:
+2025-11-30 16:44:34.117
+[EXPRESS-OAUTH-CALLBACK] - Cookie name: connect.sid
+2025-11-30 16:44:34.117
+[EXPRESS-OAUTH-CALLBACK] - Cookie value: lea-kjA1of_h2DK2YLpM_ysCluqzKIsY
+2025-11-30 16:44:34.117
+[EXPRESS-OAUTH-CALLBACK] - Cookie domain: prooftamil.com
+2025-11-30 16:44:34.117
+[EXPRESS-OAUTH-CALLBACK] - Public domain from headers: prooftamil.com
+2025-11-30 16:44:34.117
+[EXPRESS-OAUTH-CALLBACK] - Cookie options: {"domain":"prooftamil.com","path":"/","httpOnly":true,"sameSite":"lax","maxAge":86400000,"secure":true}
+2025-11-30 16:44:34.117
+[EXPRESS-OAUTH-CALLBACK] - Is Secure Connection: true
+2025-11-30 16:44:34.118
+[EXPRESS-OAUTH-CALLBACK] Session saved to database successfully
+2025-11-30 16:44:34.118
+[EXPRESS-OAUTH-CALLBACK] Sending client-side redirect to: https://prooftamil.com/dashboard
+2025-11-30 16:44:34.643
+
+GET
+
+302
+
+495 B
+
+11 ms
+
+Chrome 142.0.0.0
+https://prooftamil-frontend-aspwcdiala-el.a.run.app/dashboard
+2025-11-30 16:44:35.064
+
+GET
+
+200
+
+11.94 KiB
+
+11 ms
+
+Chrome 142.0.0.0
+https://prooftamil-frontend-aspwcdiala-el.a.run.app/login?error=Please+login+to+access+this+page
+2025-11-30 16:44:44.268
+
+GET
+
+404
+
+7.78 KiB
+
+13 ms
+
+Chrome 142.0.0.0
+https://prooftamil-frontend-aspwcdiala-el.a.run.app/wordpress/wp-admin/setup-config.php
+
+2025-11-30 16:45:40.582
+
+GET
+
+404
+
+7.78 KiB
+
+13 ms
+
+Chrome 142.0.0.0
+https://prooftamil-frontend-aspwcdiala-el.a.run.app/wp-admin/setup-config.php
