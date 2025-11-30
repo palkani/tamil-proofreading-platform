@@ -449,12 +449,27 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       
       console.log('[EXPRESS-OAUTH-CALLBACK] Session saved to database successfully');
       
-      // CRITICAL: Redirect to absolute URL (not relative) so browser goes to prooftamil.com, not internal Cloud Run domain
-      // This ensures the browser sends the cookie we just set (which is for prooftamil.com domain)
+      // CRITICAL FIX: Firebase Hosting intercepts server-side redirects and rewrites them to internal domain
+      // Solution: Return HTML with JavaScript client-side redirect - browser handles it, Firebase can't intercept
       const xForwardedProto = req.get('x-forwarded-proto') || 'https';
       const dashboardUrl = `${xForwardedProto}://${publicDomain}/dashboard`;
-      console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to absolute URL:', dashboardUrl);
-      res.redirect(dashboardUrl);
+      console.log('[EXPRESS-OAUTH-CALLBACK] Sending client-side redirect to:', dashboardUrl);
+      
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Redirecting...</title>
+          <script>
+            window.location.href = '${dashboardUrl}';
+          </script>
+        </head>
+        <body>
+          <p>Redirecting to dashboard...</p>
+          <p><a href="${dashboardUrl}">Click here if not redirected</a></p>
+        </body>
+        </html>
+      `);
     });
     
   } catch (error) {
