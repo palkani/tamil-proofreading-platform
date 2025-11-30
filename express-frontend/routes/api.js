@@ -401,15 +401,18 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       }
       
       console.log('[EXPRESS-OAUTH-CALLBACK] Session saved to database successfully');
-      console.log('[EXPRESS-OAUTH-CALLBACK] Session cookie will be set by Express middleware');
+      console.log('[EXPRESS-OAUTH-CALLBACK] Session ID after save:', req.sessionID);
       
       // Redirect to dashboard on the SAME INTERNAL domain where cookie was set
-      // Firefox proxy makes it appear as prooftamil.com to user, but internally routes to Cloud Run domain
       const internalHost = req.get('host'); // Always the internal Cloud Run domain here
       const dashboardUrl = `${protocol}://${internalHost}/dashboard`;
-      console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to dashboard on same domain:', dashboardUrl);
       
-      // Simple server-side redirect - let Express handle cookie setting
+      console.log('[EXPRESS-OAUTH-CALLBACK] Response headers BEFORE redirect:');
+      console.log('[EXPRESS-OAUTH-CALLBACK] Headers:', JSON.stringify(res.getHeaders()));
+      console.log('[EXPRESS-OAUTH-CALLBACK] Set-Cookie header:', res.get('Set-Cookie'));
+      console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to:', dashboardUrl);
+      
+      // Perform redirect - Express middleware should have set Set-Cookie by now
       res.redirect(dashboardUrl);
     });
     

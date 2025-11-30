@@ -113,8 +113,16 @@ router.get('/api/config/google-client-id', (req, res) => {
 });
 
 // Dashboard page - requires authentication
-router.get('/dashboard', requireAuth, (req, res) => {
+router.get('/dashboard', (req, res, next) => {
+  console.log('[DASHBOARD-DEBUG] Dashboard request received');
+  console.log('[DASHBOARD-DEBUG] Session ID:', req.sessionID);
+  console.log('[DASHBOARD-DEBUG] Cookies received:', req.cookies);
+  console.log('[DASHBOARD-DEBUG] Session object:', JSON.stringify(req.session));
+  console.log('[DASHBOARD-DEBUG] Session.user:', req.session?.user);
+  next();
+}, requireAuth, (req, res) => {
   const seo = getSeoData('dashboard');
+  console.log('[DASHBOARD-DEBUG] User authenticated - rendering dashboard');
   res.render('pages/dashboard', { 
     title: seo.title,
     seo: seo,
