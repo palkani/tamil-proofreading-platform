@@ -116,7 +116,10 @@ func main() {
                 api.POST("/auth/otp/send", h.SendOTP)
                 api.POST("/auth/otp/verify", h.VerifyOTP)
                 api.POST("/auth/social", h.SocialLogin)
-                api.GET("/auth/google/callback", h.GoogleCallback)
+                // NOTE: Google OAuth callback is handled by Express frontend at /api/v1/auth/google/callback
+                // Express exchanges code for token and validates, then calls /auth/social endpoint above
+                // Do NOT handle callback here - it conflicts with Express and causes redirect_uri_mismatch
+                // api.GET("/auth/google/callback", h.GoogleCallback)
                 api.POST("/auth/password-strength", h.CheckPasswordStrength)
                 api.GET("/autocomplete", h.AutocompleteTamil)
                 api.POST("/tamil-words", h.AddTamilWord)

@@ -3,7 +3,20 @@
 ## Overview
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database. tamil
 
-## Recent Updates (Nov 27, 2025)
+## Recent Updates (Nov 30, 2025)
+- **Google OAuth Redirect URI Mismatch RESOLVED:**
+  - **Root Cause:** Both backend and Express were trying to handle the same `/api/v1/auth/google/callback` endpoint, causing confusion
+  - **Solution:** Disabled backend's GoogleCallback handler - Express now handles OAuth callback exclusively
+  - **Implementation:**
+    - Express callback handler constructs redirect_uri dynamically: `https://prooftamil.com/api/v1/auth/google/callback` for production
+    - Express exchanges code for token using EXACT same redirect_uri that frontend sends to Google
+    - Backend only validates the ID token via `/auth/social` endpoint (no code exchange)
+    - Added comprehensive logging to trace entire OAuth flow
+  - **Environment Variable:** `GOOGLE_OAUTH_REDIRECT_DOMAIN=https://prooftamil.com` set in production
+  - **Google Cloud Console:** Both `https://prooftamil.com/api/v1/auth/google/callback` and `https://www.prooftamil.com/api/v1/auth/google/callback` registered
+  - **Result:** OAuth now works regardless of www prefix access
+
+## Previous Updates (Nov 27, 2025)
 - **Email Verification Removed:**
   - Users can now sign up and immediately log in without email verification
   - Registration endpoint now directly creates a session and issues access tokens

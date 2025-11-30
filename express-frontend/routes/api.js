@@ -286,19 +286,24 @@ RULES:
   }
 });
 
-// Google OAuth callback handler
+// Google OAuth callback handler - MUST come before wildcard route!
 router.get('/v1/auth/google/callback', async (req, res) => {
   const { code, state, error } = req.query;
   
-  console.log('[GOOGLE-OAUTH] Callback received');
+  console.log('=====================================');
+  console.log('[EXPRESS-OAUTH-CALLBACK] HANDLER TRIGGERED');
+  console.log('[EXPRESS-OAUTH-CALLBACK] Full URL:', req.originalUrl);
+  console.log('[EXPRESS-OAUTH-CALLBACK] Code received:', code ? 'YES' : 'NO');
+  console.log('[EXPRESS-OAUTH-CALLBACK] Error:', error || 'NONE');
+  console.log('=====================================');
   
   if (error) {
-    console.error('[GOOGLE-OAUTH] Error from Google:', error);
+    console.error('[EXPRESS-OAUTH-CALLBACK] Error from Google:', error);
     return res.redirect(`/login?error=${encodeURIComponent(error)}`);
   }
   
   if (!code) {
-    console.error('[GOOGLE-OAUTH] No authorization code received');
+    console.error('[EXPRESS-OAUTH-CALLBACK] No authorization code received');
     return res.redirect('/login?error=Missing authorization code');
   }
   
@@ -306,24 +311,31 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     
-    // CRITICAL: Use hardcoded production URI to match Google Cloud Console and frontend
-    // The frontend sends this exact URI, so we must exchange with the same URI
-    // regardless of whether user accessed via www.prooftamil.com or prooftamil.com
+    // CRITICAL: Use hardcoded production URI to match Google Cloud Console
+    // This MUST be exactly what's registered in Google Cloud Console
     const hostname = req.get('host');
     const isProduction = hostname && hostname.includes('prooftamil.com');
     const redirectUri = isProduction
       ? 'https://prooftamil.com/api/v1/auth/google/callback'
       : `${req.protocol}://${hostname}/api/v1/auth/google/callback`;
     
+    console.log('[EXPRESS-OAUTH-CALLBACK] Config loaded');
+    console.log('[EXPRESS-OAUTH-CALLBACK] Is Production:', isProduction);
+    console.log('[EXPRESS-OAUTH-CALLBACK] Redirect URI:', redirectUri);
+    console.log('[EXPRESS-OAUTH-CALLBACK] Client ID available:', !!clientId);
+    console.log('[EXPRESS-OAUTH-CALLBACK] Client Secret available:', !!clientSecret);
+    
     if (!clientId || !clientSecret) {
       throw new Error('Google OAuth not configured');
     }
     
-    console.log('[GOOGLE-OAUTH] Exchanging code for token...');
-    console.log('[GOOGLE-OAUTH] Redirect URI:', redirectUri);
-    console.log('[GOOGLE-OAUTH] Host:', hostname);
+    console.log('[EXPRESS-OAUTH-CALLBACK] Exchanging code for token...');
     
     // Exchange authorization code for ID token
+    console.log('[EXPRESS-OAUTH-CALLBACK] Posting to Google token endpoint...');
+    console.log('[EXPRESS-OAUTH-CALLBACK] Request body keys: client_id, client_secret, code, grant_type, redirect_uri');
+    console.log('[EXPRESS-OAUTH-CALLBACK] Redirect URI in request:', redirectUri);
+    
     const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
       client_id: clientId,
       client_secret: clientSecret,
@@ -332,26 +344,33 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       redirect_uri: redirectUri
     });
     
+    console.log('[EXPRESS-OAUTH-CALLBACK] Token response received');
+    console.log('[EXPRESS-OAUTH-CALLBACK] Response status:', tokenResponse.status);
+    
     const idToken = tokenResponse.data.id_token;
     if (!idToken) {
+      console.error('[EXPRESS-OAUTH-CALLBACK] No ID token in response:', tokenResponse.data);
       throw new Error('No ID token in response');
     }
     
-    console.log('[GOOGLE-OAUTH] Token received, authenticating with backend...');
+    console.log('[EXPRESS-OAUTH-CALLBACK] ID Token received successfully');
     
     // Send ID token to backend for verification
+    console.log('[EXPRESS-OAUTH-CALLBACK] Verifying token with backend...');
     const backendUrl = getBackendApiUrl();
     const authResponse = await axios.post(`${backendUrl}/auth/social`, {
       provider: 'google',
       token: idToken
     });
     
+    console.log('[EXPRESS-OAUTH-CALLBACK] Backend response received');
+    
     if (!authResponse.data.user) {
       throw new Error('No user data in backend response');
     }
     
     const user = authResponse.data.user;
-    console.log('[GOOGLE-OAUTH] Backend authentication successful:', user.email);
+    console.log('[EXPRESS-OAUTH-CALLBACK] Backend authentication successful:', user.email);
     
     // Create session
     req.session.user = {
@@ -361,12 +380,23 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       role: user.role || 'user'
     };
     
-    console.log('[GOOGLE-OAUTH] Session created, redirecting to dashboard');
+    console.log('[EXPRESS-OAUTH-CALLBACK] Session created for:', user.email);
+    console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to dashboard...');
     res.redirect('/dashboard');
     
   } catch (error) {
-    console.error('[GOOGLE-OAUTH] Error:', error.message);
-    console.error('[GOOGLE-OAUTH] Details:', error.response?.data || error.stack);
+    console.error('=====================================');
+    console.error('[EXPRESS-OAUTH-CALLBACK] ERROR OCCURRED');
+    console.error('[EXPRESS-OAUTH-CALLBACK] Error message:', error.message);
+    console.error('[EXPRESS-OAUTH-CALLBACK] Error type:', error.code);
+    if (error.response?.data) {
+      console.error('[EXPRESS-OAUTH-CALLBACK] Response data:', JSON.stringify(error.response.data));
+    }
+    if (error.response?.status) {
+      console.error('[EXPRESS-OAUTH-CALLBACK] Status code:', error.response.status);
+    }
+    console.error('[EXPRESS-OAUTH-CALLBACK] Stack:', error.stack);
+    console.error('=====================================');
     
     const errorMessage = error.response?.data?.error || error.message || 'Authentication failed';
     res.redirect(`/login?error=${encodeURIComponent(errorMessage)}`);
