@@ -131,7 +131,8 @@ document.getElementById('register-form')?.addEventListener('submit', async (e) =
     const data = await response.json();
     
     if (!response.ok) {
-      throw new Error(data.error || 'Registration failed');
+      const errorMessage = data?.error || data?.message || 'Registration failed';
+      throw new Error(String(errorMessage));
     }
     
     // Registration successful - user is immediately logged in
@@ -143,7 +144,8 @@ document.getElementById('register-form')?.addEventListener('submit', async (e) =
     // Redirect to dashboard
     window.location.href = '/dashboard';
   } catch (error) {
-    errorDiv.textContent = error.message;
+    const errorMessage = error?.message || 'An unexpected error occurred';
+    errorDiv.textContent = errorMessage;
     errorDiv.classList.remove('hidden');
     submitBtn.disabled = false;
     submitBtn.textContent = 'Create free account';
