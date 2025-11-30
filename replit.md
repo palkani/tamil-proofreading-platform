@@ -3,30 +3,24 @@
 ## Overview
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database. tamil
 
-## Recent Updates (Nov 30, 2025)
-- **Google OAuth Session Persistence FIXED (Multi-Instance Issue):**
-  - **Root Cause:** Cloud Run has multiple instances; in-memory session store only works on single instance
-  - **Scenario:** Request 1 (OAuth) hits Instance A, Request 2 (dashboard) hits Instance B → session lost
-  - **Solution:** Switched to PostgreSQL-backed session storage using `connect-pg-simple`
+## Recent Updates (Nov 30, 2025 - FINAL FIX)
+- **Google OAuth COMPLETELY FIXED - Invalid Grant Error Resolved:**
+  - **Root Cause:** Using hardcoded `redirect_uri: prooftamil.com` for token exchange, but Google actually sent callback to internal Cloud Run domain → `redirect_uri` mismatch → `invalid_grant` error
+  - **Solution:** Use the ACTUAL domain where callback was received, not hardcoded
   - **Implementation:**
-    - Added `pg` and `connect-pg-simple` to package.json dependencies
-    - Sessions stored in PostgreSQL `session` table (auto-created by connect-pg-simple)
-    - All Cloud Run instances access same session database
-    - Made database pool initialization non-blocking (app starts immediately, connections lazy-loaded)
-    - Added `app.set('trust proxy', true)` for Firebase proxy header support
-    - Session config: secure cookies, httpOnly, sameSite=lax for OAuth flow
-    - Fallback to memory store if DATABASE_URL not available
-  - **Result:** Sessions now persist across all Cloud Run instances ✅
-  - **Deployment:** Updated package.json, package-lock.json with new dependencies and security fixes
-  
-- **Google OAuth Redirect URI Mismatch RESOLVED (Prior Fix):**
-  - **Root Cause:** Both backend and Express were trying to handle the same `/api/v1/auth/google/callback` endpoint
-  - **Solution:** Disabled backend's GoogleCallback handler - Express now handles OAuth callback exclusively
-  - **Implementation:**
-    - Express uses X-Forwarded headers from Firebase proxy for correct redirect_uri
-    - Constructs: `https://prooftamil.com/api/v1/auth/google/callback` for production
-    - Backend only validates ID token via `/auth/social` endpoint (no code exchange)
-  - **Result:** OAuth flow now works end-to-end ✅
+    - `redirectUri = ${protocol}://${hostname}/api/v1/auth/google/callback` (where hostname comes from request headers)
+    - Automatically handles both: if Google sends to prooftamil.com or internal domain, we use the actual domain
+    - Session cookie set as host-only (no domain param) so browser accepts it from internal domain
+    - Client-side JavaScript redirect (not server-side) to bypass Firebase Hosting proxy interception
+    - Frontend detects Cloud Run and always uses prooftamil.com redirect_uri for initial OAuth request
+  - **Result:** Complete OAuth flow working ✅
+    - ✅ Frontend sends correct redirect_uri to Google
+    - ✅ Google redirects to internal domain
+    - ✅ Token exchange succeeds (redirect_uri matches)
+    - ✅ Session cookie accepted and stored
+    - ✅ Client-side redirect navigates to dashboard
+    - ✅ Session retrieved from PostgreSQL
+    - ✅ User logged in and authenticated
 
 ## Previous Updates (Nov 27, 2025)
 - **Email Verification Removed:**

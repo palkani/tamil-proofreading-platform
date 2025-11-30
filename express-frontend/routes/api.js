@@ -321,11 +321,10 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     const hostname = xForwardedHost || req.get('host');
     const protocol = xForwardedProto === 'http' ? 'http' : 'https';
     
-    // Always use hardcoded production URI when we detect production environment
-    const isProduction = hostname && (hostname.includes('prooftamil.com') || hostname.includes('run.app'));
-    const redirectUri = isProduction
-      ? 'https://prooftamil.com/api/v1/auth/google/callback'
-      : `${protocol}://${hostname}/api/v1/auth/google/callback`;
+    // CRITICAL: Use the ACTUAL domain where we received the request for token exchange
+    // Google redirected the callback to this domain, so we MUST use the same domain for the redirect_uri
+    // in the token exchange, or Google will reject it with invalid_grant
+    const redirectUri = `${protocol}://${hostname}/api/v1/auth/google/callback`;
     
     console.log('[EXPRESS-OAUTH-CALLBACK] Config loaded');
     console.log('[EXPRESS-OAUTH-CALLBACK] X-Forwarded-Host:', xForwardedHost);
