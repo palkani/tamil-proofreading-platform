@@ -402,6 +402,10 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       }
       
       console.log('[EXPRESS-OAUTH-CALLBACK] Session saved successfully');
+      console.log('[EXPRESS-OAUTH-CALLBACK] Session cookie headers:');
+      console.log('[EXPRESS-OAUTH-CALLBACK] - Set-Cookie header:', res.get('Set-Cookie'));
+      console.log('[EXPRESS-OAUTH-CALLBACK] - Session ID:', req.sessionID);
+      console.log('[EXPRESS-OAUTH-CALLBACK] - Session data:', JSON.stringify(req.session));
       console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to dashboard...');
       res.redirect('/dashboard');
     });
