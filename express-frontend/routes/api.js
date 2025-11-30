@@ -330,7 +330,6 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     console.log('[EXPRESS-OAUTH-CALLBACK] X-Forwarded-Host:', xForwardedHost);
     console.log('[EXPRESS-OAUTH-CALLBACK] Host header:', req.get('host'));
     console.log('[EXPRESS-OAUTH-CALLBACK] X-Forwarded-Proto:', xForwardedProto);
-    console.log('[EXPRESS-OAUTH-CALLBACK] Is Production:', isProduction);
     console.log('[EXPRESS-OAUTH-CALLBACK] Redirect URI:', redirectUri);
     console.log('[EXPRESS-OAUTH-CALLBACK] Client ID available:', !!clientId);
     console.log('[EXPRESS-OAUTH-CALLBACK] Client Secret available:', !!clientSecret);
