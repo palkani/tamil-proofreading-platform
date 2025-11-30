@@ -67,3 +67,8 @@ externalPort = 4200
 deploymentTarget = "vm"
 run = ["bash", "-c", "export FRONTEND_URL=https://${REPLIT_DOMAINS} && ./server & cd frontend && npm run start"]
 build = ["bash", "-c", "cd backend && go build -o ../server cmd/server/main.go && cd ../frontend && npm run build"]
+
+[userenv]
+
+[userenv.shared]
+GOOGLE_OAUTH_REDIRECT_DOMAIN = "https://prooftamil.com"
