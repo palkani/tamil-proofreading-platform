@@ -36,15 +36,38 @@ const isProduction = process.env.NODE_ENV === 'production' ||
                      (process.env.BACKEND_URL && process.env.BACKEND_URL.includes('run.app'));
 
 // Create PostgreSQL session store - persists sessions across instances
-const pgPool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://localhost:5432/tamil_proofreading'
-});
+let pgPool;
+let sessionStore;
 
-app.use(session({
-  store: new PgSession({
-    pool: pgPool,
-    tableName: 'session'
-  }),
+// Initialize PostgreSQL pool (non-blocking)
+if (process.env.DATABASE_URL) {
+  try {
+    pgPool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+    });
+    
+    sessionStore = new PgSession({
+      pool: pgPool,
+      tableName: 'session'
+    });
+    
+    console.log('[SESSION] PostgreSQL session store configured');
+    
+    // Handle pool errors without crashing
+    pgPool.on('error', (err) => {
+      console.error('[SESSION-POOL] Error:', err.message);
+    });
+  } catch (error) {
+    console.error('[SESSION] PostgreSQL pool initialization failed:', error.message);
+    console.log('[SESSION] Falling back to memory store');
+  }
+}
+
+// Session configuration - use PostgreSQL if available, otherwise memory
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'tamil-proofreading-secret-key',
   resave: false,
   saveUninitialized: false,
@@ -54,13 +77,20 @@ app.use(session({
     httpOnly: true,       // Don't expose to JavaScript
     maxAge: 24 * 60 * 60 * 1000
   }
-}));
+};
+
+// Add store only if PostgreSQL is available
+if (sessionStore) {
+  sessionConfig.store = sessionStore;
+}
+
+app.use(session(sessionConfig));
 
 console.log('[SESSION] Configuration:');
 console.log('[SESSION] Is Production:', isProduction);
 console.log('[SESSION] Secure cookies:', isProduction);
 console.log('[SESSION] SameSite:', 'lax');
-console.log('[SESSION] Store: PostgreSQL (persistent across instances)');
+console.log('[SESSION] Store:', sessionStore ? 'PostgreSQL (persistent)' : 'Memory (session lost on restart)');
 
 // Analytics tracking middleware (track all page views)
 app.use(trackPageView);
