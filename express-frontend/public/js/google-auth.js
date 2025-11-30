@@ -33,19 +33,19 @@ function triggerGoogleSignIn() {
   }
   
   try {
-    // CRITICAL: Both frontend AND backend must use EXACT same redirect_uri
-    // For production: https://prooftamil.com/api/v1/auth/google/callback (NO www)
-    // For development: use current domain
-    const hostname = window.location.hostname;
-    const isProduction = hostname.includes('prooftamil.com');
+    // CRITICAL: Always use prooftamil.com in production/Cloud Run
+    // Even if browser shows internal domain due to proxy, redirect_uri must match Google OAuth config
+    const isCloudRun = window.location.hostname.includes('run.app');
+    const isProduction = window.location.hostname.includes('prooftamil.com');
     
-    // Use consistent URI without www prefix for production
-    const redirectUri = isProduction 
+    // Use consistent URI - ALWAYS prooftamil.com for production/Cloud Run
+    const redirectUri = (isProduction || isCloudRun)
       ? 'https://prooftamil.com/api/v1/auth/google/callback'
       : `${window.location.origin}/api/v1/auth/google/callback`;
     
     console.log('[GOOGLE-AUTH] Production Mode:', isProduction);
-    console.log('[GOOGLE-AUTH] Hostname:', hostname);
+    console.log('[GOOGLE-AUTH] Cloud Run:', isCloudRun);
+    console.log('[GOOGLE-AUTH] Hostname:', window.location.hostname);
     console.log('[GOOGLE-AUTH] Redirect URI:', redirectUri);
     console.log('[GOOGLE-AUTH] Client ID:', googleClientId.substring(0, 20) + '...');
     
