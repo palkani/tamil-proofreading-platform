@@ -437,11 +437,13 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       
       console.log('[EXPRESS-OAUTH-CALLBACK] Session saved to database successfully');
       
-      // CRITICAL FIX: Firebase Hosting intercepts server-side redirects and rewrites them to internal domain
-      // Solution: Return HTML with JavaScript client-side redirect - browser handles it, Firebase can't intercept
-      // hostname is already defined at line 321 in the try block
-      const dashboardUrl = `${protocol}://${hostname}/dashboard`;
-      console.log('[EXPRESS-OAUTH-CALLBACK] Sending client-side redirect to:', dashboardUrl);
+      // CRITICAL: Session cookie is set on the INTERNAL domain (where this callback is running)
+      // To send the cookie with the next request, redirect to the SAME INTERNAL domain
+      // Firebase proxy will make it appear as prooftamil.com to the user, but internally it's on the Cloud Run domain
+      const internalHost = req.get('host'); // Always the internal Cloud Run domain here
+      const dashboardUrl = `${protocol}://${internalHost}/dashboard`;
+      console.log('[EXPRESS-OAUTH-CALLBACK] Session cookie set on domain:', internalHost);
+      console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to dashboard on same domain:', dashboardUrl);
       
       res.send(`
         <!DOCTYPE html>
