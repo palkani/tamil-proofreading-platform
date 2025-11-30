@@ -2,6 +2,8 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
+const PgSession = require('connect-pg-simple')(session);
+const { Pool } = require('pg');
 const { trackPageView } = require('./middleware/analytics');
 const { getSeoData } = require('./config/seo');
 
@@ -33,7 +35,16 @@ app.use(cookieParser());
 const isProduction = process.env.NODE_ENV === 'production' || 
                      (process.env.BACKEND_URL && process.env.BACKEND_URL.includes('run.app'));
 
+// Create PostgreSQL session store - persists sessions across instances
+const pgPool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://localhost:5432/tamil_proofreading'
+});
+
 app.use(session({
+  store: new PgSession({
+    pool: pgPool,
+    tableName: 'session'
+  }),
   secret: process.env.SESSION_SECRET || 'tamil-proofreading-secret-key',
   resave: false,
   saveUninitialized: false,
@@ -49,6 +60,7 @@ console.log('[SESSION] Configuration:');
 console.log('[SESSION] Is Production:', isProduction);
 console.log('[SESSION] Secure cookies:', isProduction);
 console.log('[SESSION] SameSite:', 'lax');
+console.log('[SESSION] Store: PostgreSQL (persistent across instances)');
 
 // Analytics tracking middleware (track all page views)
 app.use(trackPageView);

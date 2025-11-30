@@ -4,17 +4,25 @@
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database. tamil
 
 ## Recent Updates (Nov 30, 2025)
-- **Google OAuth Redirect URI Mismatch RESOLVED:**
-  - **Root Cause:** Both backend and Express were trying to handle the same `/api/v1/auth/google/callback` endpoint, causing confusion
+- **Google OAuth Session Persistence FIXED (Multi-Instance Issue):**
+  - **Root Cause:** Cloud Run has multiple instances; in-memory session store only works on single instance
+  - **Scenario:** Request 1 (OAuth) hits Instance A, Request 2 (dashboard) hits Instance B → session lost
+  - **Solution:** Switched to PostgreSQL-backed session storage using `connect-pg-simple`
+  - **Implementation:**
+    - Sessions stored in PostgreSQL `session` table (auto-created by connect-pg-simple)
+    - All Cloud Run instances access same session database
+    - Added `app.set('trust proxy', true)` for Firebase proxy header support
+    - Session config: secure cookies, httpOnly, sameSite=lax for OAuth flow
+  - **Result:** Sessions now persist across all Cloud Run instances ✅
+  
+- **Google OAuth Redirect URI Mismatch RESOLVED (Prior Fix):**
+  - **Root Cause:** Both backend and Express were trying to handle the same `/api/v1/auth/google/callback` endpoint
   - **Solution:** Disabled backend's GoogleCallback handler - Express now handles OAuth callback exclusively
   - **Implementation:**
-    - Express callback handler constructs redirect_uri dynamically: `https://prooftamil.com/api/v1/auth/google/callback` for production
-    - Express exchanges code for token using EXACT same redirect_uri that frontend sends to Google
-    - Backend only validates the ID token via `/auth/social` endpoint (no code exchange)
-    - Added comprehensive logging to trace entire OAuth flow
-  - **Environment Variable:** `GOOGLE_OAUTH_REDIRECT_DOMAIN=https://prooftamil.com` set in production
-  - **Google Cloud Console:** Both `https://prooftamil.com/api/v1/auth/google/callback` and `https://www.prooftamil.com/api/v1/auth/google/callback` registered
-  - **Result:** OAuth now works regardless of www prefix access
+    - Express uses X-Forwarded headers from Firebase proxy for correct redirect_uri
+    - Constructs: `https://prooftamil.com/api/v1/auth/google/callback` for production
+    - Backend only validates ID token via `/auth/social` endpoint (no code exchange)
+  - **Result:** OAuth flow now works end-to-end ✅
 
 ## Previous Updates (Nov 27, 2025)
 - **Email Verification Removed:**
