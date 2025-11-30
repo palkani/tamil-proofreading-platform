@@ -448,8 +448,13 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       }
       
       console.log('[EXPRESS-OAUTH-CALLBACK] Session saved to database successfully');
-      console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to /dashboard...');
-      res.redirect('/dashboard');
+      
+      // CRITICAL: Redirect to absolute URL (not relative) so browser goes to prooftamil.com, not internal Cloud Run domain
+      // This ensures the browser sends the cookie we just set (which is for prooftamil.com domain)
+      const xForwardedProto = req.get('x-forwarded-proto') || 'https';
+      const dashboardUrl = `${xForwardedProto}://${publicDomain}/dashboard`;
+      console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to absolute URL:', dashboardUrl);
+      res.redirect(dashboardUrl);
     });
     
   } catch (error) {
