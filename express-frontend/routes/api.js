@@ -394,6 +394,10 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     console.log('[EXPRESS-OAUTH-CALLBACK] Session object created:', JSON.stringify(req.session.user));
     console.log('[EXPRESS-OAUTH-CALLBACK] Session ID:', req.sessionID);
     
+    // publicDomain already has xForwardedHost from earlier in the function
+    // (defined at line 321 as: const hostname = xForwardedHost || req.get('host');)
+    // Use the hostname variable for redirect URL
+    
     // CRITICAL FIX: Don't specify domain - let browser make it host-only for current domain
     // Problem: We're on internal Cloud Run domain, can't set cookie for public domain (browser rejects)
     // Solution: Set cookie as host-only (no domain param), it'll work for internal domain
@@ -437,8 +441,8 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       
       // CRITICAL FIX: Firebase Hosting intercepts server-side redirects and rewrites them to internal domain
       // Solution: Return HTML with JavaScript client-side redirect - browser handles it, Firebase can't intercept
-      const xForwardedProto = req.get('x-forwarded-proto') || 'https';
-      const dashboardUrl = `${xForwardedProto}://${publicDomain}/dashboard`;
+      // hostname is already defined at line 321 in the try block
+      const dashboardUrl = `${protocol}://${hostname}/dashboard`;
       console.log('[EXPRESS-OAUTH-CALLBACK] Sending client-side redirect to:', dashboardUrl);
       
       res.send(`
