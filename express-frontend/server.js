@@ -25,15 +25,26 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+// Session configuration - MUST work in development AND Cloud Run
+const isProduction = process.env.NODE_ENV === 'production' || 
+                     (process.env.BACKEND_URL && process.env.BACKEND_URL.includes('run.app'));
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'tamil-proofreading-secret-key',
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: false,
+    secure: isProduction, // true in production (HTTPS only), false in dev (HTTP)
+    sameSite: 'lax',      // Allow cross-site redirects from OAuth
+    httpOnly: true,       // Don't expose to JavaScript
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
+
+console.log('[SESSION] Configuration:');
+console.log('[SESSION] Is Production:', isProduction);
+console.log('[SESSION] Secure cookies:', isProduction);
+console.log('[SESSION] SameSite:', 'lax');
 
 // Analytics tracking middleware (track all page views)
 app.use(trackPageView);

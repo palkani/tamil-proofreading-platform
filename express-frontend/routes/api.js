@@ -383,7 +383,7 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     const user = authResponse.data.user;
     console.log('[EXPRESS-OAUTH-CALLBACK] Backend authentication successful:', user.email);
     
-    // Create session
+    // Create session and save it
     req.session.user = {
       id: user.id,
       email: user.email,
@@ -391,9 +391,20 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       role: user.role || 'user'
     };
     
-    console.log('[EXPRESS-OAUTH-CALLBACK] Session created for:', user.email);
-    console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to dashboard...');
-    res.redirect('/dashboard');
+    console.log('[EXPRESS-OAUTH-CALLBACK] Session object created:', JSON.stringify(req.session.user));
+    console.log('[EXPRESS-OAUTH-CALLBACK] Session ID:', req.sessionID);
+    
+    // Save session explicitly and then redirect
+    req.session.save((err) => {
+      if (err) {
+        console.error('[EXPRESS-OAUTH-CALLBACK] Session save error:', err);
+        return res.redirect(`/login?error=${encodeURIComponent('Session creation failed')}`);
+      }
+      
+      console.log('[EXPRESS-OAUTH-CALLBACK] Session saved successfully');
+      console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to dashboard...');
+      res.redirect('/dashboard');
+    });
     
   } catch (error) {
     console.error('=====================================');
