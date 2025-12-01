@@ -426,20 +426,12 @@ class HomeEditor {
   convertWordToTamil(word) {
     const lower = word.toLowerCase();
     
-    // First check local dictionary for common words
+    // ONLY check local dictionary - API handles anything not here
     if (this.tamilDict[lower]) {
       return this.tamilDict[lower];
     }
     
-    // Use global transliteration function if available
-    if (typeof transliterateToTamil === 'function') {
-      const result = transliterateToTamil(word);
-      // Only return if conversion was successful (different from input)
-      if (result && result !== lower && result !== word) {
-        return result;
-      }
-    }
-    
+    // Return null to trigger API call for words not in dict
     return null;
   }
   
