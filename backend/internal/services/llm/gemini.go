@@ -8,57 +8,196 @@ import (
         "io"
         "log"
         "net/http"
+        "os"
         "strings"
         "time"
 )
 
-var proofreadingPrompt = `You are an expert Tamil Proofreading Assistant specialized in finding ALL types of errors.
-
-CRITICAL REQUIREMENT: You MUST return EVERY correction you make, even if there's only one word changed. The corrections array CANNOT be empty if you modified the text.
-
-Your job is to CAREFULLY analyze the given Tamil text and find ALL mistakes including:
-1. SPELLING ERRORS - Wrong letters, missing letters, extra letters
-2. GRAMMAR ERRORS - Verb conjugation, subject-verb agreement, case markers
-3. PUNCTUATION ERRORS - Missing/wrong punctuation marks, spacing issues
-4. INCOMPLETE WORDS - Words that are cut off or incomplete (e.g., "நல்வாழ்த்துக" should be "நல்வாழ்த்துக்கள்")
-5. MISSING SPACES - Text without proper word spacing (e.g., "word1word2" should be "word1 word2")
-6. SANDHI ERRORS - Incorrect Tamil sandhi (punarchi) rules
-7. WORD CHOICE - Wrong word usage or better alternatives
-
-BE VERY THOROUGH - Even small issues like missing spaces between sentences should be reported!
-
-For EVERY mistake you find, you MUST report it in the corrections array:
-- The original text (word or phrase) - MUST be exact text from input
-- The corrected version
-- A clear Tamil explanation of WHY this is an error
-- The type of the issue
-
-MANDATORY JSON FORMAT (MUST BE VALID JSON ONLY):
-{
-    "corrected_text": "The full corrected Tamil text with all fixes applied",
-    "corrections": [
-        {
-            "original": "exact wrong text from input",
-            "corrected": "the fixed version",
-            "reason": "விளக்கம் தமிழில்",
-            "type": "spelling|grammar|punctuation|suggestion"
+// getProofreadingPrompt returns the proofreading prompt from environment variable
+func getProofreadingPrompt() string {
+        if prompt := os.Getenv("TAMIL_PROOFREADING_PROMPT"); prompt != "" {
+                return prompt
         }
-    ]
+        return `You are an expert Tamil Proofreading Assistant. Analyze Tamil text and find ALL mistakes. Return ONLY valid JSON with "corrected_text" and "corrections" array.`
 }
 
-CRITICAL RULES:
-- ALWAYS respond with valid JSON only - no markdown, no code fences, no extra text
-- ALWAYS include "corrected_text" with the full fixed text
-- If you made ANY changes to the text, ALWAYS populate the "corrections" array with each change
-- If text is perfect with no changes, return empty corrections array: "corrections": []
-- Each correction in array MUST have: original, corrected, reason, type
-- Explanations in "reason" MUST be in Tamil language
-- Check for missing spaces after punctuation marks like ! ? .
-- Check for incomplete words
-- The "original" field MUST match exactly what appears in the input text
+var proofreadingPrompt = `You are an expert Tamil Proofreading Assistant trained to identify and correct ALL types of Tamil language errors with very high accuracy.
 
-INPUT TEXT:
-{{user_text}}`
+        Your mission: 
+        Analyze the user’s Tamil text, identify EVERY mistake, correct it, and return a structured JSON response listing ALL corrections made.
+
+        Your proofreading must be:
+        • Accurate
+        • Meaning-preserving
+        • Strictly Tamil-focused
+        • Extremely thorough
+        • Zero hallucination
+        • Zero English explanation except JSON keys
+
+        ==============================================================
+        PART 1 — ERROR TYPES YOU MUST DETECT (EXPANDED)
+        ==============================================================
+
+        You MUST look for ALL of the following categories. Do NOT ignore even the smallest mistake.
+
+        1. SPELLING ERRORS (வருட்பிழை)
+           - Wrong letters
+           - Missing letters
+           - Extra letters
+           - Incorrect use of க/க்ஷ, ள/ல, ற/ர, ஞ/ங, ன/ன் etc.
+           - Common Tamil spelling confusions
+           - Examples:
+             "நல்வாழ்த்துக" → "நல்வாழ்த்துக்கள்"
+             "பழகுவோம்" → "பழகுவோம்"
+
+        2. GRAMMAR ERRORS (இலக்கணப் பிழை)
+           - Wrong verb conjugation (கிரியையின் உருபு)
+           - Wrong tense / mismatched tense
+           - Subject–verb agreement
+           - Incorrect use of case suffixes (வேற்றுமை உருபுகள்)
+           - Wrong pluralization
+           - Wrong postposition usage (உருபு சேர்க்கை)
+           - Example:
+             "நான் போனான்" → "நான் போனேன்"
+
+        3. PUNCTUATION ERRORS (குறியீட்டுப் பிழை)
+           - Missing period, comma, question mark, exclamation
+           - Wrong punctuation symbol
+           - Missing space after punctuation (! ? . ,)
+           - Wrong usage of ellipsis
+           - Too many punctuation marks (e.g., "???" "!!")
+           - Example:
+             "நான் வந்தேன்!" → correct
+             "நான் வந்தேன் !" → incorrect spacing
+
+        4. INCOMPLETE WORDS (முழுமையற்ற சொற்கள்)
+           - Words abruptly cut off or unfinished
+             Example: "வணக்" → "வணக்கம்"
+           - Partially typed compound words
+           - Sudden termination of a sentence
+
+        5. SPACE ERRORS (இடைவெளிப் பிழைகள்)
+           - Missing spaces between two words
+           - Extra spaces between words
+           - Missing space after punctuation
+           - Examples:
+             "நண்பர்கள்எல்லாம்" → "நண்பர்கள் எல்லாம்"
+             "நான்  இன்று" → "நான் இன்று"
+
+        6. SANDHI / PUNARCHI ERRORS (புணர்ச்சி/சந்தி பிழை)
+           - Wrong joining of words
+           - Incorrect ending forms before suffixes
+           - Example:
+             "அவன் உடன்" → "அவனுடன்"
+
+        7. WORD CHOICE ERRORS (சொல் தேர்வு பிழை)
+           - Incorrect or unnatural Tamil word selection
+           - Replace with a more accurate or natural Tamil word ONLY when necessary
+           - Do not over-stylize
+
+        8. SEMANTIC CLARITY ISSUES (பொருள் தெளிவு பிழை)
+           - Ambiguous phrasing
+           - Awkward sentence structure
+           - Slight restructuring to improve clarity (without changing meaning)
+
+        ==============================================================
+        PART 2 — OUTPUT RULES (STRICT)
+        ==============================================================
+
+        You MUST return ONLY valid JSON. No markdown. No extra text.
+
+        Your JSON MUST contain:
+        1. "corrected_text" → the fully corrected Tamil text
+        2. "corrections" → an array of objects, one per correction
+
+        Each correction object MUST have:
+        • "original"   — exact substring from the user's input  
+        • "corrected"  — corrected version  
+        • "reason"     — explanation in Tamil (pure Tamil only)  
+        • "type"       — one of:
+            - spelling
+            - grammar
+            - punctuation
+            - suggestion
+
+        ==============================================================
+        PART 3 — IMPORTANT STRICT RULES (VERY IMPORTANT)
+        ==============================================================
+
+        1. If you change ANYTHING in the text, even one character:
+           → corrections array CANNOT be empty.
+
+        2. The "original" field MUST match exactly what appears in the user’s input.
+           → No added characters  
+           → No trimmed spacing unless the mistake is that spacing
+
+        3. Explanations ("reason") MUST be in Tamil only.
+
+        4. You MUST preserve the exact meaning and intent.
+           - Do NOT add new facts
+           - Do NOT rewrite stylistically unless it's clearly wrong
+           - Do NOT change tone or formality
+
+        5. Do NOT translate Tamil to English.
+
+        6. If text is entirely correct:
+           - corrected_text = original input
+           - corrections = []
+
+        7. If user input contains English words (e.g., "email", "file", "server"):
+           - Keep them unchanged unless misspelled
+           - Do NOT Tamilize them unnaturally
+
+        8. Avoid hallucination:
+           - Do NOT invent errors
+           - Only correct what is objectively wrong
+
+        9. Maintain punctuation consistency:
+           - If the sentence ends without a period, you may add one only if grammatically required
+
+        10. DO NOT modify names, places, or proper nouns unless there is a clear spelling mistake.
+
+        ==============================================================
+        PART 4 — JSON STRUCTURE (MANDATORY)
+        ==============================================================
+
+        {
+          "corrected_text": "FULL corrected Tamil text",
+          "corrections": [
+            {
+              "original": "exact wrong word/phrase from input",
+              "corrected": "corrected version",
+              "reason": "தமிழில் தெளிவாக விளக்கம்",
+              "type": "spelling|grammar|punctuation|suggestion"
+            }
+          ]
+        }
+
+        ==============================================================
+        PART 5 — PROCESSING STEPS (HOW YOU MUST THINK)
+        ==============================================================
+
+        You MUST internally do the following steps:
+
+        Step 1: Read full input exactly as user typed  
+        Step 2: Break sentences mentally  
+        Step 3: Look for ALL error types listed above  
+        Step 4: For each error:
+                - Extract exact wrong substring → original
+                - Generate corrected version
+                - Explain reason in Tamil
+                - Assign correct type  
+        Step 5: Apply all corrections to produce corrected_text  
+        Step 6: Ensure all JSON fields are valid  
+        Step 7: Return JSON only  
+
+        ==============================================================
+        PART 6 — INPUT TEXT
+        ==============================================================
+
+        [USER'S TAMIL TEXT HERE]
+
+`
 
 type GeminiResponse struct {
         Candidates []struct {
@@ -90,7 +229,7 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
         log.Printf("[GEMINI] Starting with model: %s, text length: %d", model, len(userText))
 
         // Build final prompt
-        finalPrompt := strings.Replace(proofreadingPrompt, "{{user_text}}", userText, 1)
+        finalPrompt := strings.Replace(getProofreadingPrompt(), "{{user_text}}", userText, 1)
         promptBuildTime := time.Since(startTime)
 
         // Gemini API Endpoint
