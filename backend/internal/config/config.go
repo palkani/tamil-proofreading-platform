@@ -3,6 +3,7 @@ package config
 import (
         "crypto/sha256"
         "encoding/base64"
+        "log"
         "os"
         "strconv"
 
@@ -47,6 +48,13 @@ func Load() *Config {
                 refreshCookieKey = deriveKey(base)
         }
 
+        geminiKey := getEnvWithFallback("AI_INTEGRATIONS_GEMINI_API_KEY", "GOOGLE_GENAI_API_KEY", "")
+        if geminiKey != "" {
+                log.Printf("[CONFIG] Gemini API key found: %s***%s (length: %d)", geminiKey[:8], geminiKey[len(geminiKey)-4:], len(geminiKey))
+        } else {
+                log.Printf("[CONFIG] WARNING: Gemini API key is empty - AI proofreading will fail")
+        }
+
         return &Config{
                 DatabaseURL:                getEnv("DATABASE_URL", "postgres://user:password@localhost:5432/tamil_proofreading?sslmode=disable"),
                 Port:                       getEnv("PORT", "8080"),
@@ -58,7 +66,7 @@ func Load() *Config {
                 RefreshTokenTTLDays:        getEnvAsInt("REFRESH_TOKEN_TTL_DAYS", 7),
                 RefreshCookieKey:           refreshCookieKey,
                 OpenAIAPIKey:               getEnv("OPENAI_API_KEY", ""),
-                GoogleGenAIKey:             getEnvWithFallback("AI_INTEGRATIONS_GEMINI_API_KEY", "GOOGLE_GENAI_API_KEY", ""),
+                GoogleGenAIKey:             geminiKey,
                 StripeSecretKey:            getEnv("STRIPE_SECRET_KEY", ""),
                 StripeWebhookSecret:        getEnv("STRIPE_WEBHOOK_SECRET", ""),
                 RazorpayKeyID:              getEnv("RAZORPAY_KEY_ID", ""),
