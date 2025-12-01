@@ -191,6 +191,8 @@ class TamilEditor {
     let currentPartialWord = ''; // Store current partial word being typed
     this.savedCursorPos = null; // Store cursor position for autocomplete
     this.currentEnglishWord = ''; // Track current English word for Google-style typing
+    let autocompleteTimeout = null; // Debounce timer for autocomplete
+    const AUTOCOMPLETE_DELAY = 300; // ms delay before showing suggestions
     
     // Helper to remove autocomplete
     const removeAutocomplete = () => {
@@ -301,6 +303,9 @@ class TamilEditor {
         return;
       }
 
+      // Clear existing debounce timer
+      if (autocompleteTimeout) clearTimeout(autocompleteTimeout);
+
       const selection = window.getSelection();
       if (!selection.rangeCount) {
         removeAutocomplete();
@@ -313,34 +318,49 @@ class TamilEditor {
       const currentWord = words[words.length - 1];
 
       // If word is too short or empty, hide autocomplete
-      if (!currentWord || currentWord.length < 2) {
+      if (!currentWord || currentWord.length < 1) {
         removeAutocomplete();
         return;
       }
 
-      let suggestions = [];
+      // Debounce autocomplete with delay for better performance
+      autocompleteTimeout = setTimeout(async () => {
+        let suggestions = [];
 
-      // Check if typing in Tamil (2+ characters)
-      if (currentWord.length >= 2 && /[\u0B80-\u0BFF]/.test(currentWord)) {
-        suggestions = getAutocompleteSuggestions(currentWord);
-      } 
-      // Check if typing in English (2+ characters) - show Tamil suggestions
-      else if (currentWord.length >= 2 && /^[a-zA-Z]+$/.test(currentWord)) {
-        suggestions = getTamilSuggestionsFromEnglish(currentWord, tamilDictionary);
-      }
-      
-      if (suggestions.length > 0) {
-        // Save cursor position and current state before showing autocomplete
-        this.savedCursorPos = this.getCursorPosition();
-        currentSuggestions = suggestions;
-        currentPartialWord = currentWord;
-        selectedIndex = 0; // Reset selection to first item
-        this.showAutocomplete(suggestions, currentWord, autocompleteBox);
-        autocompleteBox = document.querySelector('.autocomplete-box');
-        updateSelection(); // Highlight first item
-      } else {
-        removeAutocomplete();
-      }
+        // Check if typing in Tamil (1+ character)
+        if (/[\u0B80-\u0BFF]/.test(currentWord)) {
+          try {
+            const response = await fetch(`/api/autocomplete?prefix=${encodeURIComponent(currentWord)}&limit=8`);
+            if (response.ok) {
+              const data = await response.json();
+              suggestions = data.suggestions || [];
+            }
+          } catch (err) {
+            console.log('Autocomplete API error:', err);
+          }
+        } 
+        // Check if typing in English - show Tamil suggestions
+        else if (/^[a-zA-Z]+$/.test(currentWord) && currentWord.length >= 2) {
+          // For English, show transliteration suggestions
+          const tamilVersion = this.convertWordToTamil(currentWord);
+          if (tamilVersion && tamilVersion !== currentWord) {
+            suggestions = [tamilVersion];
+          }
+        }
+        
+        if (suggestions.length > 0) {
+          // Save cursor position and current state before showing autocomplete
+          this.savedCursorPos = this.getCursorPosition();
+          currentSuggestions = suggestions;
+          currentPartialWord = currentWord;
+          selectedIndex = 0; // Reset selection to first item
+          this.showAutocomplete(suggestions, currentWord, autocompleteBox);
+          autocompleteBox = document.querySelector('.autocomplete-box');
+          updateSelection(); // Highlight first item
+        } else {
+          removeAutocomplete();
+        }
+      }, AUTOCOMPLETE_DELAY);
     });
   }
 
