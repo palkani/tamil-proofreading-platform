@@ -3,7 +3,24 @@
 ## Overview
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database. tamil
 
-## Recent Updates (Nov 30, 2025 - FINAL SESSION COMPLETE)
+## Recent Updates (Dec 1, 2025)
+- **Complete Logging & Monitoring System Created:**
+  - New `/internal/logger/logger.go` package with structured logging functions
+  - Functions: `LogRequest()`, `LogResponseTime()`, `LogError()`, `LogAIError()`, `LogValidationError()`, `LogRateLimitViolation()`
+  - New `/internal/handlers/process.go` handler with request validation and AI processing
+  - New `/internal/services/ai/client.go` mock AI client ready for Gemini integration
+  - All files compile successfully and follow production patterns
+  - Tracks: request text length, mode, client IP, response time, AI errors
+  - Output format: `[REQUEST] ip=x.x.x.x mode=correct length=120` `[RESPONSE] mode=correct duration_ms=412` `[ERROR] mode=correct error=...`
+
+- **CRITICAL BLOCKER - Gemini API Key Issue in Dev Preview:**
+  - Backend loads dummy key `_DUMMY_A***KEY_` instead of real key from Replit integration
+  - Cause: Go backend in Replit dev preview doesn't get secrets from Replit integration automatically
+  - Result: Gemini API returns 400 error, no suggestions shown to user
+  - Frontend correctly sends text → Backend receives it → Issue is API authentication only
+  - **Solution**: Either (1) Deploy to Cloud Run where secrets work perfectly, OR (2) Provide Gemini API key to set manually for dev testing
+
+## Previous Updates (Nov 30, 2025)
 - **Google OAuth Session Flow FIXED:**
   - **Root Cause:** Session cookie not being sent with redirect response
   - **Solution:** Explicitly set session cookie with `res.cookie('connect.sid', sessionID)` after saving to database

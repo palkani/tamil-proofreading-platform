@@ -1,0 +1,119 @@
+I need you to generate a COMPLETE logging & monitoring system for my backend.
+
+Please create production-ready Go code that includes:
+
+==========================================================
+REQUIREMENTS — LOGGING SYSTEM
+==========================================================
+
+I need a simple and clean logging system that tracks:
+
+1. Request text length  
+2. Request type (mode)  
+3. Client IP  
+4. Response time for AI processing  
+5. AI errors (Gemini API errors, JSON parsing errors, validation errors)  
+6. Optional: rate limit violations  
+
+The logging must work in Replit and later in Google Cloud Run (log.Printf is enough).
+
+==========================================================
+FOLDER STRUCTURE (GENERATE ALL FILES)
+==========================================================
+
+/internal/logger/logger.go
+/internal/handlers/process.go
+/internal/ai/client.go
+/cmd/server.go
+
+Please generate ALL files with complete code.
+
+==========================================================
+FILE #1 — internal/logger/logger.go
+==========================================================
+
+Create a logger package with the following exported functions:
+
+• LogRequest(ip string, mode string, textLen int)
+• LogResponseTime(mode string, duration time.Duration)
+• LogError(mode string, err error)
+
+Each function should use log.Printf and include structured messages like:
+
+[REQUEST] ip=1.1.1.1 mode=correct length=120  
+[RESPONSE] mode=rewrite duration_ms=412  
+[ERROR] mode=correct error=AI timeout  
+
+==========================================================
+FILE #2 — internal/handlers/process.go
+==========================================================
+
+Create an HTTP handler named ProcessHandler with:
+
+1. Parse JSON request:
+   {
+      "text": "Tamil text",
+      "mode": "correct|rewrite|shorten|lengthen"
+   }
+
+2. Validate:
+   • text is not empty  
+   • mode must be one of the valid modes  
+   • text length < 3000 char  
+
+3. Log the request using logger.LogRequest
+
+4. Capture time.Now() at start  
+   After AI processing, compute duration and call logger.LogResponseTime
+
+5. Call ai.ProcessText(mode, text)  
+   If AI fails → log using logger.LogError and return 500
+
+6. Respond with valid JSON
+
+Include proper error handling.
+
+==========================================================
+FILE #3 — internal/ai/client.go
+==========================================================
+
+Create a mock AI client for now:
+
+• Function: ProcessText(mode string, text string) (map[string]any, error)
+• Simulate:
+   - building prompt
+   - sending fake response
+   - returning corrected_text + corrections[]
+• If any error occurs → call logger.LogError
+
+Make this ready so I can later replace the mock with actual Gemini API calls.
+
+==========================================================
+FILE #4 — cmd/server.go
+==========================================================
+
+Create a runnable Go HTTP server:
+
+• Create a router using net/http  
+• Route:
+   POST /api/process → handlers.ProcessHandler  
+• Add CORS headers (allow all for now)
+• Start server on port 8080
+• Print startup log
+
+==========================================================
+EXPECTED OUTPUT FORMAT
+==========================================================
+
+I expect the response to show ALL 4 files with complete Go code:
+
+1. internal/logger/logger.go  
+2. internal/handlers/process.go  
+3. internal/ai/client.go  
+4. cmd/server.go  
+
+Everything must compile and run immediately in Replit.
+
+DO NOT write explanations.  
+DO NOT summarize.  
+ONLY output the complete code for all files.
