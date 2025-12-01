@@ -81,58 +81,52 @@
         
         <!-- Interactive Editor (Only for non-logged-in users) -->
         <% if (!user) { %>
-        <div class="mt-16 max-w-7xl mx-auto">
-          <div class="flex flex-col lg:flex-row gap-6">
-            <!-- Editor Panel -->
-            <div class="flex-1 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
-              <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <div class="w-3 h-3 rounded-full bg-red-400"></div>
-                  <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
-                  <div class="w-3 h-3 rounded-full bg-green-400"></div>
-                  <span class="ml-2 text-sm font-semibold text-gray-700">Try it now!</span>
-                </div>
-                <span class="text-xs text-gray-500" id="home-char-count">0 / 200 words</span>
+        <div class="mt-16 max-w-6xl mx-auto px-4">
+          <!-- Full Width Editor -->
+          <div class="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+            <div class="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                <span class="ml-2 text-sm font-semibold text-gray-700">Try it now!</span>
               </div>
-              <!-- Toolbar -->
-              <div class="bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-1">
-                <button id="home-bold-btn" class="px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-100 rounded transition" title="Bold (Ctrl+B)">B</button>
-                <button id="home-italic-btn" class="px-3 py-1.5 text-sm italic text-gray-700 hover:bg-gray-100 rounded transition" title="Italic (Ctrl+I)">I</button>
-                <button id="home-underline-btn" class="px-3 py-1.5 text-sm underline text-gray-700 hover:bg-gray-100 rounded transition" title="Underline (Ctrl+U)">U</button>
-              </div>
-              <div class="p-8 relative">
-                <div 
-                  id="home-editor" 
-                  contenteditable="true"
-                  class="min-h-[320px] text-gray-900 text-xl leading-relaxed focus:outline-none"
-                  placeholder="Type in English (e.g., vanakkam) or paste Tamil text..."
-                ></div>
-                <!-- Autocomplete Dropdown -->
-                <div id="home-autocomplete-dropdown" class="hidden absolute top-16 left-8 right-8 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto z-50">
-                  <div class="p-3 space-y-2"></div>
-                  <div class="px-4 py-2 text-xs text-gray-500 border-t">Press <strong>Space</strong> to select first option</div>
-                </div>
+              <span class="text-xs text-gray-500" id="home-char-count">0 / 200 words</span>
+            </div>
+            <!-- Toolbar -->
+            <div class="bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-1">
+              <button id="home-bold-btn" class="px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-100 rounded transition" title="Bold (Ctrl+B)">B</button>
+              <button id="home-italic-btn" class="px-3 py-1.5 text-sm italic text-gray-700 hover:bg-gray-100 rounded transition" title="Italic (Ctrl+I)">I</button>
+              <button id="home-underline-btn" class="px-3 py-1.5 text-sm underline text-gray-700 hover:bg-gray-100 rounded transition" title="Underline (Ctrl+U)">U</button>
+            </div>
+            <div class="p-8 relative">
+              <div 
+                id="home-editor" 
+                contenteditable="true"
+                class="min-h-screen lg:min-h-[700px] text-gray-900 text-2xl leading-relaxed focus:outline-none w-full"
+                placeholder="Type in English (e.g., vanakkam) or paste Tamil text..."
+              ></div>
+              <!-- Autocomplete Dropdown -->
+              <div id="home-autocomplete-dropdown" class="hidden absolute top-24 left-8 right-8 bg-white border-2 border-gray-300 rounded-xl shadow-2xl max-h-80 overflow-y-auto z-50">
+                <div class="p-4 space-y-3"></div>
+                <div class="px-4 py-3 text-sm text-gray-600 border-t bg-gray-50">Press <strong>Space</strong> to select first option or click any suggestion</div>
               </div>
             </div>
+          </div>
 
-            <!-- AI Assistant Panel -->
-            <div class="lg:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
-              <div class="bg-orange-50 border-b border-orange-200 px-6 py-4">
-                <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <svg class="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                  </svg>
-                  AI Assistant
-                </h3>
-              </div>
-              <div id="home-suggestions-container" class="p-6">
-                <div class="text-center text-gray-500 py-8">
-                  <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                  </svg>
-                  <p class="text-sm">Type or paste Tamil text in the editor</p>
-                  <p class="text-xs text-gray-400 mt-2">AI suggestions appear automatically as you type</p>
-                </div>
+          <!-- AI Assistant Info Panel Below -->
+          <div class="mt-6 bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
+            <div class="bg-orange-50 border border-orange-200 px-6 py-4 rounded-lg">
+              <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
+                <svg class="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                AI Assistant Tips
+              </h3>
+              <div id="home-suggestions-container" class="text-center text-gray-600">
+                <p class="text-base mb-2">📝 Type English words (like "hello", "good", "thanks")</p>
+                <p class="text-base mb-2">💡 View 5 ranked Tamil suggestions in real-time</p>
+                <p class="text-base">✨ Click any suggestion or press Space for the top choice</p>
               </div>
             </div>
           </div>
@@ -612,7 +606,7 @@
 
 <% if (!user) { %>
 <script src="/js/transliteration.js?v=20251127b"></script>
-<script src="/js/home-editor.js?v=1764611193"></script>
+<script src="/js/home-editor.js?v=1764611552"></script>
 <% } %>
 
 <%- include('../partials/footer') %>
