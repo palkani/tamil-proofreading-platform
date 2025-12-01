@@ -437,6 +437,28 @@ router.get('/v1/auth/google/callback', async (req, res) => {
   }
 });
 
+// Transliteration endpoint - proxies to Go backend
+router.post('/transliterate', async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+    
+    const url = `${BACKEND_URL}/transliterate`;
+    console.log(`[TRANSLITERATE] POST ${url} with text: ${text}`);
+    
+    const response = await axios.post(url, { text });
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error(`[TRANSLITERATE-ERROR] ${error.message}`);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || 'Transliteration failed'
+    });
+  }
+});
+
 // Proxy other API calls to Go backend
 router.all('/*', async (req, res) => {
   try {
