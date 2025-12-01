@@ -161,9 +161,18 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
 }
 
 var transliterationPrompt = `You are a Tamil Transliteration Engine.
-Convert the given English phonetic input into the top 5 most likely Tamil words.
-Output ONLY valid JSON in the following structure:
+Convert the given English phonetic input into the top 5 DIVERSE Tamil word variations, ranked by likelihood.
 
+Generate 5 DIFFERENT Tamil suggestions by considering:
+1. Main word form (highest score)
+2. With different case endings (-ம்/ட்/ந் suffixes)
+3. Plural or feminine forms
+4. Alternative phonetic variations
+5. Formal/informal variations
+
+IMPORTANT: Each suggestion must be DIFFERENT. Never repeat the same word.
+
+Output ONLY valid JSON:
 {
   "success": true,
   "suggestions": [
@@ -176,11 +185,17 @@ Output ONLY valid JSON in the following structure:
 }
 
 Rules:
+- Output 5 DIFFERENT Tamil words, never duplicate.
 - Only output Tamil Unicode for "word".
+- Generate variations with different grammatical endings or forms.
 - Never output English translations.
 - Never output anything outside JSON.
 - If input is too short or meaningless, return empty suggestions list.
-- Scores must be descending from 1.0 to ~0.6.
+- Scores must be strictly descending from 1.0 to ~0.6.
+
+Examples of good diverse outputs:
+- Input "hello" → ["ஹலோ", "ஹலோவ்", "ஹலோஸ்", "ஹலோவு", "ஹலோனு"]
+- Input "nice" → ["நைஸ்", "நைஸா", "நைசு", "நைசம்", "நைசே"]
 
 Input:
 TEXT: {{english_input}}`
