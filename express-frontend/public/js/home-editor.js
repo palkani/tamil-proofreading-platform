@@ -84,10 +84,13 @@ class HomeEditor {
   }
   
   handleInput() {
-    // Check if the last character added was a space
     const fullText = this.editor.textContent || '';
+    console.log('[INPUT-EVENT] Text:', JSON.stringify(fullText), 'Ends with space:', fullText.endsWith(' '));
+    
+    // Check if the last character added was a space
     if (fullText.endsWith(' ')) {
       // A space was just typed - check if we should transliterate the word
+      console.log('[INPUT-EVENT] Detected space, calling handleSpaceInInput');
       this.handleSpaceInInput();
       this.enforceWordLimit();
       this.updateWordCount();
