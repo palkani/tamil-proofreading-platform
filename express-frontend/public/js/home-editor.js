@@ -73,7 +73,6 @@ class HomeEditor {
     this.editor.addEventListener('paste', (e) => this.handlePaste(e));
     
     // Handle space key for English-to-Tamil conversion
-    this.editor.addEventListener('keydown', (e) => this.handleKeyDown(e));
     
     // Update word count on load
     this.updateWordCount();
@@ -85,11 +84,83 @@ class HomeEditor {
   }
   
   handleInput() {
+    // Check if the last character added was a space
+    const fullText = this.editor.textContent || '';
+    if (fullText.endsWith(' ')) {
+      // A space was just typed - check if we should transliterate the word
+      this.handleSpaceInInput();
+      this.enforceWordLimit();
+      this.updateWordCount();
+      return; // Skip auto-analysis for space key - transliterator will handle it
+    }
+    
     this.enforceWordLimit();
     this.updateWordCount();
     this.scheduleAutoAnalysis();
-    // Note: Autocomplete transliteration disabled for now - use space-key translation instead
-    // this.handleTransliterationAutocomplete();
+  }
+  
+  handleSpaceInInput() {
+    const fullText = (this.editor.textContent || '').trimEnd();
+    const words = fullText.split(/\s+/);
+    const lastWord = words[words.length - 1] || '';
+    
+    console.log('[SPACE-INPUT] Space typed after word:', lastWord);
+    
+    // If last word is English, try translation
+    if (lastWord && /^[a-zA-Z]+$/.test(lastWord)) {
+      // Try local dict first
+      const tamilWord = this.convertWordToTamil(lastWord);
+      console.log('[SPACE-INPUT] Local dict result:', tamilWord);
+      
+      if (tamilWord && tamilWord !== lastWord) {
+        // Replace in editor
+        const beforeLastWord = fullText.substring(0, fullText.length - lastWord.length);
+        this.editor.textContent = beforeLastWord + tamilWord + ' ';
+        console.log('[SPACE-INPUT] Used local translation:', lastWord, '->', tamilWord);
+        this.updateWordCount();
+        return; // Don't call autoAnalyze for local translations
+      } else {
+        // Call API
+        console.log('[SPACE-INPUT] Calling API for:', lastWord);
+        this.transliterateFromInput(lastWord);
+        return; // Don't call autoAnalyze yet, wait for API
+      }
+    }
+  }
+  
+  async transliterateFromInput(englishWord) {
+    console.log('[API-INPUT] Transliterating:', englishWord);
+    try {
+      const response = await fetch('/api/transliterate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: englishWord })
+      });
+      
+      console.log('[API-INPUT] Status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[API-INPUT] Response:', data);
+        
+        if (data.suggestions?.[0]) {
+          const tamilWord = data.suggestions[0];
+          const fullText = (this.editor.textContent || '').trimEnd();
+          const beforeLastWord = fullText.substring(0, fullText.length - englishWord.length);
+          this.editor.textContent = beforeLastWord + tamilWord + ' ';
+          console.log('[API-INPUT] Inserted Tamil:', englishWord, '->', tamilWord);
+          this.updateWordCount();
+          // Now analyze the Tamil text
+          this.scheduleAutoAnalysis();
+          return;
+        }
+      }
+    } catch (err) {
+      console.log('[API-INPUT] Error:', err);
+    }
+    
+    // Fallback: just leave the space there and analyze
+    this.scheduleAutoAnalysis();
   }
   
   handleTransliterationAutocomplete() {
@@ -241,82 +312,6 @@ class HomeEditor {
     
     this.updateWordCount();
     this.scheduleAutoAnalysis();
-  }
-  
-  handleKeyDown(e) {
-    console.log('[KEY] Pressed:', e.key, 'Code:', e.code);
-    
-    if (e.key !== ' ') return;
-    
-    console.log('[SPACE-KEY] Space pressed');
-    e.preventDefault();
-    
-    // Get text directly from editor
-    const fullText = (this.editor.textContent || '').trimEnd();
-    console.log('[SPACE-KEY] Full text:', fullText);
-    
-    // Find last word
-    const words = fullText.split(/\s+/);
-    const lastWord = words[words.length - 1] || '';
-    
-    console.log('[SPACE-KEY] Last word:', lastWord, 'Is English:', /^[a-zA-Z]+$/.test(lastWord));
-    
-    // If last word is English, try translation
-    if (lastWord && /^[a-zA-Z]+$/.test(lastWord)) {
-      // Try local dict first
-      const tamilWord = this.convertWordToTamil(lastWord);
-      console.log('[SPACE-KEY] Local dict result:', tamilWord);
-      
-      if (tamilWord && tamilWord !== lastWord) {
-        // Replace in editor
-        const beforeLastWord = fullText.substring(0, fullText.length - lastWord.length);
-        this.editor.textContent = beforeLastWord + tamilWord + ' ';
-        this.updateWordCount();
-        this.scheduleAutoAnalysis();
-      } else {
-        // Call API
-        console.log('[SPACE-KEY] Calling API for:', lastWord);
-        this.transliterateAndInsert(lastWord);
-      }
-    } else {
-      // Just insert space
-      document.execCommand('insertText', false, ' ');
-    }
-  }
-  
-  async transliterateAndInsert(englishWord) {
-    console.log('[API-CALL] Transliterating:', englishWord);
-    try {
-      const response = await fetch('/api/transliterate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: englishWord })
-      });
-      
-      console.log('[API-CALL] Status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[API-CALL] Response:', data);
-        
-        if (data.suggestions?.[0]) {
-          const tamilWord = data.suggestions[0];
-          const fullText = (this.editor.textContent || '').trimEnd();
-          const beforeLastWord = fullText.substring(0, fullText.length - englishWord.length);
-          this.editor.textContent = beforeLastWord + tamilWord + ' ';
-          this.updateWordCount();
-          this.scheduleAutoAnalysis();
-          return;
-        }
-      }
-    } catch (err) {
-      console.log('[API-CALL] Error:', err);
-    }
-    
-    // Fallback: just insert space
-    const fullText = (this.editor.textContent || '').trimEnd();
-    this.editor.textContent = fullText + ' ';
-    this.updateWordCount();
   }
   
   convertWordToTamil(word) {
