@@ -69,10 +69,15 @@ class HomeEditor {
     }
     
     // Handle input events
+    this.editor.addEventListener('keydown', (e) => {
+      console.log('[EVENT-DEBUG] keydown fired, key:', e.key, 'code:', e.code);
+      if (e.key === ' ' || e.code === 'Space' || e.keyCode === 32) {
+        console.log('[EVENT-DEBUG] Space key detected in keydown');
+        this.handleKeyDown(e);
+      }
+    });
     this.editor.addEventListener('input', () => this.handleInput());
     this.editor.addEventListener('paste', (e) => this.handlePaste(e));
-    
-    // Handle space key for English-to-Tamil conversion
     
     // Update word count on load
     this.updateWordCount();
@@ -83,23 +88,63 @@ class HomeEditor {
     this.editor.focus();
   }
   
+  handleKeyDown(e) {
+    // Detect space key press BEFORE text is inserted
+    if (e.key === ' ' || e.code === 'Space') {
+      console.log('[KEYDOWN] Space key detected');
+      // Get current text before space is inserted
+      const fullText = (this.editor.textContent || '').trimEnd();
+      const words = fullText.split(/\s+/);
+      const lastWord = words[words.length - 1] || '';
+      
+      console.log('[KEYDOWN] Last word before space:', lastWord);
+      
+      // Check if we should prevent default and handle transliteration
+      if (lastWord && /^[a-zA-Z]+$/.test(lastWord)) {
+        // Try local dict first
+        const tamilWord = this.convertWordToTamil(lastWord);
+        console.log('[KEYDOWN] Local dict result:', tamilWord);
+        
+        if (tamilWord && tamilWord !== lastWord) {
+          // Replace in editor and add space
+          e.preventDefault();
+          const beforeLastWord = fullText.substring(0, fullText.length - lastWord.length);
+          this.editor.textContent = beforeLastWord + tamilWord + ' ';
+          this.moveCursorToEnd();
+          console.log('[KEYDOWN] Used local translation:', lastWord, '->', tamilWord);
+          this.updateWordCount();
+          this.scheduleAutoAnalysis();
+          return;
+        } else {
+          // Call API for transliteration
+          console.log('[KEYDOWN] Calling API for:', lastWord);
+          e.preventDefault();
+          const beforeLastWord = fullText.substring(0, fullText.length - lastWord.length);
+          this.lastEditedWord = { word: lastWord, before: beforeLastWord };
+          this.transliterateFromKeypress(lastWord);
+          return;
+        }
+      }
+    }
+  }
+
   handleInput() {
     const fullText = this.editor.textContent || '';
-    console.log('[INPUT-EVENT] Text:', JSON.stringify(fullText), 'Ends with space:', fullText.endsWith(' '));
+    console.log('[INPUT-HANDLER] Current text length:', fullText.length, 'Previous length:', this.previousText.length);
     
-    // Check if the last character added was a space
-    if (fullText.endsWith(' ')) {
-      // A space was just typed - check if we should transliterate the word
-      console.log('[INPUT-EVENT] Detected space, calling handleSpaceInInput');
+    // Detect if space was just added
+    const hasSpaceNow = fullText.length > this.previousText.length && fullText[fullText.length - 1] === ' ';
+    
+    if (hasSpaceNow) {
+      console.log('[INPUT-HANDLER] Space detected! Calling handleSpaceInInput');
       this.handleSpaceInInput();
+    } else {
       this.enforceWordLimit();
       this.updateWordCount();
-      return; // Skip auto-analysis for space key - transliterator will handle it
+      this.scheduleAutoAnalysis();
     }
     
-    this.enforceWordLimit();
-    this.updateWordCount();
-    this.scheduleAutoAnalysis();
+    this.previousText = fullText; // Update previous text for next comparison
   }
   
   handleSpaceInInput() {
@@ -180,6 +225,49 @@ class HomeEditor {
     }
     
     // Fallback: just leave the space there and analyze
+    this.scheduleAutoAnalysis();
+  }
+  
+  async transliterateFromKeypress(englishWord) {
+    console.log('[KEYPRESS] Calling transliteration API for:', englishWord);
+    try {
+      const response = await fetch('/api/transliterate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: englishWord })
+      });
+      
+      console.log('[KEYPRESS] Status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[KEYPRESS] Response:', data);
+        
+        if (data.success && data.suggestions?.[0]) {
+          const tamilWord = data.suggestions[0];
+          // Use the stored word info if available, otherwise fallback
+          if (this.lastEditedWord) {
+            this.editor.textContent = this.lastEditedWord.before + tamilWord + ' ';
+          }
+          this.moveCursorToEnd();
+          console.log('[KEYPRESS] Inserted Tamil:', englishWord, '->', tamilWord);
+          this.updateWordCount();
+          this.scheduleAutoAnalysis();
+          return;
+        } else {
+          console.log('[KEYPRESS] No suggestions or error:', data.error || 'empty suggestions');
+        }
+      }
+    } catch (err) {
+      console.log('[KEYPRESS] Error:', err);
+    }
+    
+    // Fallback: just add space and analyze
+    if (this.lastEditedWord) {
+      this.editor.textContent = this.lastEditedWord.before + englishWord + ' ';
+      this.moveCursorToEnd();
+    }
+    this.updateWordCount();
     this.scheduleAutoAnalysis();
   }
   
