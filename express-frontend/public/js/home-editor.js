@@ -201,23 +201,31 @@ class HomeEditor {
   }
 
   async showAutocomplete() {
-    if (!this.autocompleteBox) return;
+    if (!this.autocompleteBox) {
+      console.warn('[AUTOCOMPLETE] Dropdown not found');
+      return;
+    }
     
     const fullText = (this.editor.textContent || '').trimEnd();
     const words = fullText.split(/\s+/);
     const lastWord = words[words.length - 1] || '';
     
-    // Only show for English words >= 3 chars
+    // Only show for English words >= 2 chars
     if (!lastWord || !/^[a-z]+$/i.test(lastWord) || lastWord.length < 2) {
       this.autocompleteBox.classList.add('hidden');
       return;
     }
 
+    console.log('[AUTOCOMPLETE] Checking word:', lastWord);
+
     // Check cache first
     if (this.autocompleteCache[lastWord]) {
+      console.log('[AUTOCOMPLETE] Using cached suggestions for:', lastWord);
       this.renderSuggestions(this.autocompleteCache[lastWord]);
       return;
     }
+
+    console.log('[AUTOCOMPLETE] Fetching suggestions for:', lastWord);
 
     // Debounced API call
     if (this.translitTimeout) clearTimeout(this.translitTimeout);
@@ -229,36 +237,58 @@ class HomeEditor {
           body: JSON.stringify({ text: lastWord })
         });
         
+        console.log('[AUTOCOMPLETE] API response status:', response.status);
+        
         if (response.ok) {
           const data = await response.json();
+          console.log('[AUTOCOMPLETE] API response:', data);
           if (data.success && data.suggestions?.length > 0) {
             this.autocompleteCache[lastWord] = data.suggestions;
             this.currentSuggestions = data.suggestions;
             this.renderSuggestions(data.suggestions);
+          } else {
+            console.warn('[AUTOCOMPLETE] No suggestions in response');
           }
+        } else {
+          console.warn('[AUTOCOMPLETE] API error status:', response.status);
         }
       } catch (err) {
-        console.error('[AUTOCOMPLETE] Error:', err);
+        console.error('[AUTOCOMPLETE] Fetch error:', err);
       }
     }, 300); // 300ms debounce
   }
 
   renderSuggestions(suggestions) {
-    if (!this.autocompleteBox || !suggestions?.length) {
+    if (!this.autocompleteBox) {
+      console.error('[AUTOCOMPLETE] Dropdown element not found!');
+      return;
+    }
+    
+    if (!suggestions?.length) {
       this.autocompleteBox.classList.add('hidden');
       return;
     }
 
-    const container = this.autocompleteBox.querySelector('.p-3');
-    container.innerHTML = suggestions.map((word, idx) => `
-      <div class="p-3 rounded cursor-pointer transition ${idx === 0 ? 'bg-purple-100 border border-purple-400' : 'hover:bg-gray-100'}" 
-           data-index="${idx}" onclick="homeEditor.insertSuggestion(${idx})">
-        <span class="text-lg font-semibold ${idx === 0 ? 'text-purple-600' : 'text-gray-500'}">${idx + 1}</span>
-        <span class="ml-3 text-lg text-gray-900">${word}</span>
-      </div>
-    `).join('');
-    
-    this.autocompleteBox.classList.remove('hidden');
+    try {
+      const container = this.autocompleteBox.querySelector('.p-3');
+      if (!container) {
+        console.error('[AUTOCOMPLETE] Container .p-3 not found in dropdown');
+        return;
+      }
+      
+      container.innerHTML = suggestions.map((word, idx) => `
+        <div class="p-3 rounded cursor-pointer transition ${idx === 0 ? 'bg-purple-100 border border-purple-400' : 'hover:bg-gray-100'}" 
+             data-index="${idx}" onclick="homeEditor.insertSuggestion(${idx})">
+          <span class="text-lg font-semibold ${idx === 0 ? 'text-purple-600' : 'text-gray-500'}">${idx + 1}</span>
+          <span class="ml-3 text-lg text-gray-900">${word}</span>
+        </div>
+      `).join('');
+      
+      console.log('[AUTOCOMPLETE] Showing dropdown with', suggestions.length, 'suggestions');
+      this.autocompleteBox.classList.remove('hidden');
+    } catch (err) {
+      console.error('[AUTOCOMPLETE] Render error:', err);
+    }
   }
 
   insertSuggestion(index) {
