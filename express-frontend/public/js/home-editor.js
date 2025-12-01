@@ -83,7 +83,8 @@ class HomeEditor {
     this.enforceWordLimit();
     this.updateWordCount();
     this.scheduleAutoAnalysis();
-    this.handleTransliterationAutocomplete();
+    // Note: Autocomplete transliteration disabled for now - use space-key translation instead
+    // this.handleTransliterationAutocomplete();
   }
   
   handleTransliterationAutocomplete() {
@@ -97,6 +98,8 @@ class HomeEditor {
     const words = textBeforeCursor.split(/\s/);
     const currentWord = words[words.length - 1];
     
+    console.log('[TRANSLIT-DEBUG] Current word:', currentWord, 'Length:', currentWord?.length, 'Is English:', /^[a-zA-Z]+$/.test(currentWord || ''));
+    
     // Only trigger for English words (2+ chars)
     if (!currentWord || currentWord.length < 2 || !/^[a-zA-Z]+$/.test(currentWord)) {
       this.removeTranslitAutocomplete();
@@ -105,6 +108,7 @@ class HomeEditor {
     
     // Debounce transliteration API call
     this.translitTimeout = setTimeout(async () => {
+      console.log('[TRANSLIT-DEBUG] Calling API with word:', currentWord);
       try {
         const response = await fetch('/api/transliterate', {
           method: 'POST',
@@ -112,14 +116,17 @@ class HomeEditor {
           body: JSON.stringify({ text: currentWord })
         });
         
+        console.log('[TRANSLIT-DEBUG] API response status:', response.status);
         if (response.ok) {
           const data = await response.json();
+          console.log('[TRANSLIT-DEBUG] API response data:', data);
           if (data.suggestions && data.suggestions.length > 0) {
+            console.log('[TRANSLIT-DEBUG] Showing autocomplete with', data.suggestions.length, 'suggestions');
             this.showTranslitAutocomplete(data.suggestions);
           }
         }
       } catch (err) {
-        console.log('Transliteration API error:', err);
+        console.log('[TRANSLIT-DEBUG] Transliteration API error:', err);
       }
     }, 300);
   }
@@ -158,21 +165,38 @@ class HomeEditor {
   }
   
   insertTransliteratedWord(tamilWord) {
+    // Use the more reliable approach: select the English word and replace it
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
     
     const range = selection.getRangeAt(0);
-    const textBeforeCursor = range.startContainer.textContent?.substring(0, range.startOffset) || '';
+    const fullText = this.editor.textContent;
+    const textBeforeCursor = fullText.substring(0, range.startOffset);
+    
+    // Extract current English word
     const words = textBeforeCursor.split(/\s/);
     const currentWord = words[words.length - 1];
     
-    // Replace English word with Tamil
-    const fullText = this.editor.textContent;
-    const beforeWord = textBeforeCursor.substring(0, textBeforeCursor.length - currentWord.length);
-    const newText = beforeWord + tamilWord;
+    // Only replace if it's an English word
+    if (!currentWord || !/^[a-zA-Z]+$/.test(currentWord)) {
+      return;
+    }
     
-    this.editor.textContent = newText;
+    // Position range to select the English word backwards
+    const wordStartOffset = range.startOffset - currentWord.length;
+    
+    // Create a new range to select the English word
+    const newRange = document.createRange();
+    newRange.setStart(range.startContainer, wordStartOffset);
+    newRange.setEnd(range.startContainer, range.startOffset);
+    
+    // Replace the selection with Tamil word using execCommand
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+    document.execCommand('insertText', false, tamilWord);
+    
     this.updateWordCount();
+    this.scheduleAutoAnalysis();
   }
   
   removeTranslitAutocomplete() {
@@ -226,21 +250,54 @@ class HomeEditor {
       
       // If typing English word, convert to Tamil on space
       if (currentWord && /^[a-zA-Z]+$/.test(currentWord)) {
-        const tamilWord = this.convertWordToTamil(currentWord);
+        e.preventDefault();
+        
+        // First try local dictionary
+        let tamilWord = this.convertWordToTamil(currentWord);
         
         if (tamilWord && tamilWord !== currentWord) {
-          e.preventDefault();
-          
-          // Replace English with Tamil
+          // Use local conversion
           const newRange = range.cloneRange();
           newRange.setStart(range.startContainer, range.startOffset - currentWord.length);
           newRange.setEnd(range.startContainer, range.startOffset);
           newRange.deleteContents();
+          document.execCommand('insertText', false, tamilWord + ' ');
+        } else {
+          // Try Gemini API if local dictionary doesn't have it
+          this.transliterateWordOnSpace(currentWord);
+        }
+      }
+    }
+  }
+  
+  async transliterateWordOnSpace(englishWord) {
+    try {
+      const response = await fetch('/api/transliterate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: englishWord })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.suggestions && data.suggestions[0]) {
+          const selection = window.getSelection();
+          if (!selection.rangeCount) return;
           
-          // Insert Tamil word + space
+          const range = selection.getRangeAt(0);
+          const tamilWord = data.suggestions[0];
+          
+          // Replace English with Tamil + space
+          const newRange = range.cloneRange();
+          newRange.setStart(range.startContainer, range.startOffset - englishWord.length);
+          newRange.setEnd(range.startContainer, range.startOffset);
+          newRange.deleteContents();
+          
           document.execCommand('insertText', false, tamilWord + ' ');
         }
       }
+    } catch (err) {
+      console.log('Transliteration API error:', err);
     }
   }
   
