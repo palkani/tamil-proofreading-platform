@@ -407,7 +407,8 @@ func toSuggestionSlice(val any) ([]Suggestion, bool) {
                 if v, ok := getIntInsensitive(obj, "end_index"); ok {
                         suggestion.EndIndex = v
                 }
-                if suggestion.Original != "" && suggestion.Corrected != "" {
+                // FILTER RULE: Only include suggestions where original ≠ corrected (as per Gemini prompt rule #7)
+                if suggestion.Original != "" && suggestion.Corrected != "" && suggestion.Original != suggestion.Corrected {
                         suggestions = append(suggestions, suggestion)
                 }
         }
