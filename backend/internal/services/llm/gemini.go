@@ -161,16 +161,16 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
 }
 
 var transliterationPrompt = `You are a Tamil Transliteration Engine.
-Convert the given English phonetic input into the top 5 DIVERSE Tamil word variations, ranked by likelihood.
+Convert the given English phonetic input into 5 completely DIFFERENT Tamil words/meanings, ranked by likelihood.
 
-Generate 5 DIFFERENT Tamil suggestions by considering:
-1. Main word form (highest score)
-2. With different case endings (-ம்/ட்/ந் suffixes)
-3. Plural or feminine forms
-4. Alternative phonetic variations
-5. Formal/informal variations
+The 5 suggestions should be:
+1. Most likely direct transliteration
+2. Alternative word meaning (different but related)
+3. Another alternative interpretation
+4. Yet another alternative
+5. Least likely but valid alternative
 
-IMPORTANT: Each suggestion must be DIFFERENT. Never repeat the same word.
+CRITICAL: Each of the 5 suggestions must be a COMPLETELY DIFFERENT TAMIL WORD/MEANING, not variations of the same word with case endings.
 
 Output ONLY valid JSON:
 {
@@ -185,17 +185,18 @@ Output ONLY valid JSON:
 }
 
 Rules:
-- Output 5 DIFFERENT Tamil words, never duplicate.
+- Each of 5 suggestions MUST be a COMPLETELY DIFFERENT word, never variations of the same word.
+- Do NOT output grammatical case variations like -ம्, -ै, -ी of the same base word.
+- Output 5 entirely different Tamil words based on phonetic similarity or alternative meanings.
 - Only output Tamil Unicode for "word".
-- Generate variations with different grammatical endings or forms.
 - Never output English translations.
 - Never output anything outside JSON.
 - If input is too short or meaningless, return empty suggestions list.
 - Scores must be strictly descending from 1.0 to ~0.6.
 
-Examples of good diverse outputs:
-- Input "hello" → ["ஹலோ", "ஹலோவ்", "ஹலோஸ்", "ஹலோவு", "ஹலோனு"]
-- Input "nice" → ["நைஸ்", "நைஸா", "நைசு", "நைசம்", "நைசே"]
+Examples of GOOD diverse outputs (5 DIFFERENT words):
+- Input "hello" → ["ஹலோ" (direct), "ஹலுவ" (variant), "நல்ல" (meaning good), "வணக்கம்" (greeting), "ஹாய்" (informal)]
+- Input "nice" → ["நைஸ்" (direct), "நன்றி" (good), "சுந்தரம்" (beautiful), "அழகு" (pretty), "நல்ல" (nice)]
 
 Input:
 TEXT: {{english_input}}`
