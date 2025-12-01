@@ -126,6 +126,15 @@ type SocialLoginRequest struct {
         Token    string `json:"token" binding:"required"`
 }
 
+type ForgotPasswordRequest struct {
+        Email string `json:"email" binding:"required,email"`
+}
+
+type ResetPasswordRequest struct {
+        Token    string `json:"token" binding:"required"`
+        Password string `json:"password" binding:"required,min=8"`
+}
+
 // CheckPasswordStrength validates password strength without registration
 func (h *Handlers) CheckPasswordStrength(c *gin.Context) {
         var req PasswordStrengthRequest
@@ -523,4 +532,63 @@ func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, origin
         }
 
         return idToken, nil
+}
+
+// ForgotPassword handles forgotten password requests
+func (h *Handlers) ForgotPassword(c *gin.Context) {
+        var req ForgotPasswordRequest
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+        }
+
+        // Create reset token (returns nil if user not found - prevents user enumeration)
+        _, rawToken, err := h.authService.CreatePasswordResetToken(req.Email)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process request"})
+                return
+        }
+
+        // Send email if token was created (user exists)
+        if rawToken != "" {
+                if err := auth.SendPasswordResetEmail(req.Email, rawToken); err != nil {
+                        log.Printf("[RESET] Failed to send email to %s: %v", req.Email, err)
+                }
+        }
+
+        // Always return success to prevent user enumeration
+        auditlog.Info(c, "auth_forgot_password", map[string]any{
+                "email": req.Email,
+        })
+
+        c.JSON(http.StatusOK, gin.H{
+                "success": true,
+                "message": "Password reset email sent if the account exists.",
+        })
+}
+
+// ResetPassword handles password reset with token
+func (h *Handlers) ResetPassword(c *gin.Context) {
+        var req ResetPasswordRequest
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+        }
+
+        // Reset password
+        err := h.authService.ResetPassword(req.Token, req.Password)
+        if err != nil {
+                auditlog.Warn(c, "auth_reset_password_failed", map[string]any{
+                        "error": err.Error(),
+                })
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+        }
+
+        auditlog.Info(c, "auth_reset_password_success", nil)
+
+        c.JSON(http.StatusOK, gin.H{
+                "success": true,
+                "message": "Password has been reset successfully.",
+        })
 }

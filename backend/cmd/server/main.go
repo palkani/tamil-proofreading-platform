@@ -93,6 +93,7 @@ func main() {
                                 &models.DailyVisitStats{},
                                 &models.DailyActivityStats{},
                                 &models.EmailVerification{},
+                                &models.PasswordResetToken{},
                         )
                         if err != nil {
                                 log.Printf("[ERROR] Database migration failed: %v", err)
@@ -121,6 +122,8 @@ func main() {
                 // Do NOT handle callback here - it conflicts with Express and causes redirect_uri_mismatch
                 // api.GET("/auth/google/callback", h.GoogleCallback)
                 api.POST("/auth/password-strength", h.CheckPasswordStrength)
+                api.POST("/auth/forgot-password", h.ForgotPassword)
+                api.POST("/auth/reset-password", h.ResetPassword)
                 api.GET("/autocomplete", h.AutocompleteTamil)
                 api.POST("/tamil-words", h.AddTamilWord)
                 api.POST("/tamil-words/confirm", h.ConfirmTamilWord)
