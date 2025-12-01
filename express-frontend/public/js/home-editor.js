@@ -116,19 +116,34 @@ class HomeEditor {
       console.log('[SPACE-INPUT] Local dict result:', tamilWord);
       
       if (tamilWord && tamilWord !== lastWord) {
-        // Replace in editor
+        // Replace in editor and move cursor to end
         const beforeLastWord = fullText.substring(0, fullText.length - lastWord.length);
         this.editor.textContent = beforeLastWord + tamilWord + ' ';
+        this.moveCursorToEnd();
         console.log('[SPACE-INPUT] Used local translation:', lastWord, '->', tamilWord);
         this.updateWordCount();
-        return; // Don't call autoAnalyze for local translations
+        this.scheduleAutoAnalysis();
+        return;
       } else {
         // Call API
         console.log('[SPACE-INPUT] Calling API for:', lastWord);
         this.transliterateFromInput(lastWord);
-        return; // Don't call autoAnalyze yet, wait for API
+        return;
       }
     }
+    
+    // No transliteration needed, just schedule analysis
+    this.scheduleAutoAnalysis();
+  }
+  
+  moveCursorToEnd() {
+    const range = document.createRange();
+    const sel = window.getSelection();
+    range.selectNodeContents(this.editor);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    this.editor.focus();
   }
   
   async transliterateFromInput(englishWord) {
@@ -146,16 +161,18 @@ class HomeEditor {
         const data = await response.json();
         console.log('[API-INPUT] Response:', data);
         
-        if (data.suggestions?.[0]) {
+        if (data.success && data.suggestions?.[0]) {
           const tamilWord = data.suggestions[0];
           const fullText = (this.editor.textContent || '').trimEnd();
           const beforeLastWord = fullText.substring(0, fullText.length - englishWord.length);
           this.editor.textContent = beforeLastWord + tamilWord + ' ';
+          this.moveCursorToEnd();
           console.log('[API-INPUT] Inserted Tamil:', englishWord, '->', tamilWord);
           this.updateWordCount();
-          // Now analyze the Tamil text
           this.scheduleAutoAnalysis();
           return;
+        } else {
+          console.log('[API-INPUT] No suggestions or error:', data.error || 'empty suggestions');
         }
       }
     } catch (err) {
