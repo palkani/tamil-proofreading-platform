@@ -4,6 +4,16 @@
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database. tamil
 
 ## Recent Updates (Dec 1, 2025 - PROD READY)
+- **✅ GEMINI API FIXES & SPELLING UNDERLINES:**
+  - Fixed critical bug: Gemini prompt placeholder mismatch (`{{user_text}}` → `[USER'S TAMIL TEXT HERE]`)
+  - Added strict Gemini prompt rules: Only return REAL errors, NOT alternatives for correct words
+  - Backend filter: Excludes suggestions where `original === corrected`
+  - Frontend filter: Double-checks `original !== corrected` before displaying
+  - New: **Spelling mistakes now underlined in editor** with red wavy line
+  - New methods in TamilEditor: `highlightSpellingMistakes()`, `addHighlight()`, `clearHighlights()`
+  - Seamless integration: Auto-underlines spelling errors when suggestions arrive
+  - Result: Only actual corrections shown, no confusing alternatives
+
 - **✅ COMPLETE SECURE PASSWORD RESET SYSTEM:**
   - New `/internal/models/reset_token.go` PasswordResetToken model
   - New `/internal/services/auth/reset.go` with: `GenerateResetToken()`, `CreatePasswordResetToken()`, `ValidateResetToken()`, `ResetPassword()`

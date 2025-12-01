@@ -604,6 +604,88 @@ class TamilEditor {
       this.onChange();
     }
   }
+
+  highlightSpellingMistakes(suggestions) {
+    // Clear previous highlights
+    this.clearHighlights();
+    
+    // Filter only spelling mistakes
+    const spellingMistakes = suggestions.filter(s => s.type === 'spelling');
+    
+    if (spellingMistakes.length === 0) {
+      return;
+    }
+
+    const plainText = this.getPlainText();
+    
+    spellingMistakes.forEach(mistake => {
+      const { original } = mistake;
+      if (!original) return;
+      
+      // Find and highlight the word
+      const regex = new RegExp(`\\b${original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
+      let match;
+      
+      while ((match = regex.exec(plainText)) !== null) {
+        this.addHighlight(match.index, match.index + original.length, 'spelling-mistake');
+        break; // Only highlight first occurrence
+      }
+    });
+  }
+
+  addHighlight(start, end, className) {
+    const range = document.createRange();
+    const selection = window.getSelection();
+    
+    // Find text nodes containing the range
+    const walker = document.createTreeWalker(
+      this.editor,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    let textNode = walker.nextNode();
+    let charCount = 0;
+    let startNode = null, startOffset = 0;
+    let endNode = null, endOffset = 0;
+    
+    while (textNode) {
+      const nextCharCount = charCount + textNode.textContent.length;
+      
+      if (start >= charCount && start < nextCharCount && !startNode) {
+        startNode = textNode;
+        startOffset = start - charCount;
+      }
+      
+      if (end > charCount && end <= nextCharCount) {
+        endNode = textNode;
+        endOffset = end - charCount;
+      }
+      
+      charCount = nextCharCount;
+      textNode = walker.nextNode();
+    }
+    
+    if (startNode && endNode) {
+      range.setStart(startNode, startOffset);
+      range.setEnd(endNode, endOffset);
+      
+      const span = document.createElement('span');
+      span.className = `${className} spelling-error-underline`;
+      range.surroundContents(span);
+    }
+  }
+
+  clearHighlights() {
+    const highlights = this.editor.querySelectorAll('.spelling-error-underline');
+    highlights.forEach(highlight => {
+      while (highlight.firstChild) {
+        highlight.parentNode.insertBefore(highlight.firstChild, highlight);
+      }
+      highlight.parentNode.removeChild(highlight);
+    });
+  }
 }
 
 // Make it globally available

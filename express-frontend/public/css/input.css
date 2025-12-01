@@ -134,3 +134,10 @@
 .editor-btn {
   @apply toolbar-btn;
 }
+
+/* Spelling mistake underline styling */
+.spelling-error-underline {
+  text-decoration: underline wavy #ef4444;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}

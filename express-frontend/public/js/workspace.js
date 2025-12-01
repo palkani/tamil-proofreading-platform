@@ -221,6 +221,9 @@ class WorkspaceController {
       this.suggestionsPanel.clearSuggestions();
       this.suggestionsPanel.addSuggestions(geminiSuggestions);
       
+      // Highlight spelling mistakes in editor
+      this.editor.highlightSpellingMistakes(geminiSuggestions);
+      
       console.log('[AI Debug] Panel suggestions count:', this.suggestionsPanel.suggestions.length);
       
       if (geminiSuggestions.length === 0) {
