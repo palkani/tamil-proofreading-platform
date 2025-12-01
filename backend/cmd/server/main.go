@@ -125,6 +125,7 @@ func main() {
                 api.POST("/auth/forgot-password", h.ForgotPassword)
                 api.POST("/auth/reset-password", h.ResetPassword)
                 api.GET("/autocomplete", h.AutocompleteTamil)
+                api.POST("/transliterate", h.Transliterate)
                 api.POST("/tamil-words", h.AddTamilWord)
                 api.POST("/tamil-words/confirm", h.ConfirmTamilWord)
                 api.POST("/events/visit", h.LogVisit)

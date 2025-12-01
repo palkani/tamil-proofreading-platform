@@ -4,6 +4,18 @@
 This project is a full-stack AI-powered Tamil text proofreading platform, aimed at assisting users in writing accurate and fluent Tamil. It offers features like smart typing, phonetic transliteration, and detailed grammar explanations, positioning itself as an "AI Writing Partner for Tamil that Shines." The platform targets a broad audience and utilizes a Go backend, an Express.js frontend with EJS, and a PostgreSQL database. tamil
 
 ## Recent Updates (Dec 1, 2025 - PROD READY)
+- **✅ GEMINI-POWERED ENGLISH-TO-TAMIL TRANSLITERATION API:**
+  - New endpoint: `POST /api/v1/transliterate` for English phonetic → Tamil conversion
+  - Uses Gemini 2.5 Flash with custom transliteration prompt
+  - Returns 5 ranked Tamil word suggestions with confidence scores (1.0 to 0.6)
+  - Backend handler: `backend/internal/handlers/transliteration_handlers.go`
+  - Backend service: `CallGeminiTransliterate()` in `backend/internal/services/llm/gemini.go`
+  - Frontend integration: Automatically called when user types English words in editor
+  - 300ms debouncing prevents excessive API calls while typing
+  - Shows Tamil suggestions in autocomplete dropdown seamlessly
+  - Example: typing "vanakam" → suggests "வணக்கம்"
+
+## Previous Updates (Dec 1, 2025 - PROD READY)
 - **✅ FIXED GEMINI API TOKEN OVERFLOW BUG:**
   - **Root Cause**: Gemini prompt was 1985 tokens, maxOutputTokens only 2048 → response cut off mid-JSON
   - **Error Effect**: "finishReason: MAX_TOKENS" → JSON parse error → fallback to NO suggestions

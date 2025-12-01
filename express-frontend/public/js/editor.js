@@ -339,12 +339,20 @@ class TamilEditor {
             console.log('Autocomplete API error:', err);
           }
         } 
-        // Check if typing in English - show Tamil suggestions
+        // Check if typing in English - call Gemini transliteration API
         else if (/^[a-zA-Z]+$/.test(currentWord) && currentWord.length >= 2) {
-          // For English, show transliteration suggestions
-          const tamilVersion = this.convertWordToTamil(currentWord);
-          if (tamilVersion && tamilVersion !== currentWord) {
-            suggestions = [tamilVersion];
+          try {
+            const response = await fetch('/api/transliterate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: currentWord })
+            });
+            if (response.ok) {
+              const data = await response.json();
+              suggestions = data.suggestions || [];
+            }
+          } catch (err) {
+            console.log('Transliteration API error:', err);
           }
         }
         

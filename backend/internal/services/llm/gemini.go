@@ -2,14 +2,14 @@
 package llm
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"strings"
-	"time"
+        "bytes"
+        "encoding/json"
+        "fmt"
+        "io"
+        "log"
+        "net/http"
+        "strings"
+        "time"
 )
 
 var proofreadingPrompt = `You are a Tamil Proofreading Assistant. Identify and correct ALL Tamil language errors.
@@ -45,117 +45,203 @@ TEXT TO PROOFREAD:
 `
 
 type GeminiResponse struct {
-	Candidates []struct {
-		Content struct {
-			Parts []struct {
-				Text string `json:"text"`
-			} `json:"parts"`
-		} `json:"content"`
-	} `json:"candidates"`
+        Candidates []struct {
+                Content struct {
+                        Parts []struct {
+                                Text string `json:"text"`
+                        } `json:"parts"`
+                } `json:"content"`
+        } `json:"candidates"`
 }
 
 // Reusable HTTP client with connection pooling for better performance
 var geminiClient = &http.Client{
-	Timeout: 25 * time.Second,
-	Transport: &http.Transport{
-		MaxIdleConns:        10,
-		MaxIdleConnsPerHost: 5,
-		IdleConnTimeout:     90 * time.Second,
-	},
+        Timeout: 25 * time.Second,
+        Transport: &http.Transport{
+                MaxIdleConns:        10,
+                MaxIdleConnsPerHost: 5,
+                IdleConnTimeout:     90 * time.Second,
+        },
 }
 
 // CallGeminiProofread calls Gemini 2.5 Flash with the proofreading prompt
 func CallGeminiProofread(userText string, model string, apiKey string) (string, error) {
-	if apiKey == "" {
-		return "", fmt.Errorf("API key not provided")
-	}
+        if apiKey == "" {
+                return "", fmt.Errorf("API key not provided")
+        }
 
-	startTime := time.Now()
-	log.Printf("[GEMINI] Starting with model: %s, text length: %d", model, len(userText))
+        startTime := time.Now()
+        log.Printf("[GEMINI] Starting with model: %s, text length: %d", model, len(userText))
 
-	// Build final prompt - CRITICAL: Replace the actual placeholder in the prompt template
-	finalPrompt := strings.Replace(proofreadingPrompt, "[USER'S TAMIL TEXT HERE]", userText, 1)
-	promptBuildTime := time.Since(startTime)
+        // Build final prompt - CRITICAL: Replace the actual placeholder in the prompt template
+        finalPrompt := strings.Replace(proofreadingPrompt, "[USER'S TAMIL TEXT HERE]", userText, 1)
+        promptBuildTime := time.Since(startTime)
 
-	// Gemini API Endpoint
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
-		model, apiKey)
+        // Gemini API Endpoint
+        url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
+                model, apiKey)
 
-	// Request payload with optimized settings for faster response
-	// - maxOutputTokens increased to 4096 (from 2048) to handle long responses
-	// - Lower temperature for more deterministic output
-	payload := map[string]interface{}{
-		"contents": []map[string]interface{}{
-			{
-				"parts": []map[string]string{
-					{
-						"text": finalPrompt,
-					},
-				},
-			},
-		},
-		"generationConfig": map[string]interface{}{
-			"temperature":      0.1,
-			"topP":             0.8,
-			"topK":             40,
-			"maxOutputTokens":  4096,
-			"responseMimeType": "application/json",
-		},
-	}
+        // Request payload with optimized settings for faster response
+        // - maxOutputTokens increased to 4096 (from 2048) to handle long responses
+        // - Lower temperature for more deterministic output
+        payload := map[string]interface{}{
+                "contents": []map[string]interface{}{
+                        {
+                                "parts": []map[string]string{
+                                        {
+                                                "text": finalPrompt,
+                                        },
+                                },
+                        },
+                },
+                "generationConfig": map[string]interface{}{
+                        "temperature":      0.1,
+                        "topP":             0.8,
+                        "topK":             40,
+                        "maxOutputTokens":  4096,
+                        "responseMimeType": "application/json",
+                },
+        }
 
-	jsonBody, _ := json.Marshal(payload)
-	prepTime := time.Since(startTime)
-	log.Printf("[GEMINI] Prep time: %v (prompt build: %v)", prepTime, promptBuildTime)
+        jsonBody, _ := json.Marshal(payload)
+        prepTime := time.Since(startTime)
+        log.Printf("[GEMINI] Prep time: %v (prompt build: %v)", prepTime, promptBuildTime)
 
-	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
-	if err != nil {
-		log.Printf("[GEMINI] Request build error: %v", err)
-		return "", err
-	}
+        req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
+        if err != nil {
+                log.Printf("[GEMINI] Request build error: %v", err)
+                return "", err
+        }
 
-	req.Header.Set("Content-Type", "application/json")
+        req.Header.Set("Content-Type", "application/json")
 
-	apiStartTime := time.Now()
-	resp, err := geminiClient.Do(req)
-	if err != nil {
-		log.Printf("[GEMINI] Request error after %v: %v", time.Since(apiStartTime), err)
-		return "", err
-	}
-	defer resp.Body.Close()
+        apiStartTime := time.Now()
+        resp, err := geminiClient.Do(req)
+        if err != nil {
+                log.Printf("[GEMINI] Request error after %v: %v", time.Since(apiStartTime), err)
+                return "", err
+        }
+        defer resp.Body.Close()
 
-	apiTime := time.Since(apiStartTime)
-	log.Printf("[GEMINI] Response status: %d, API time: %v", resp.StatusCode, apiTime)
+        apiTime := time.Since(apiStartTime)
+        log.Printf("[GEMINI] Response status: %d, API time: %v", resp.StatusCode, apiTime)
 
-	// Read full response body
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("[GEMINI] Error reading response body: %v", err)
-		return "", err
-	}
+        // Read full response body
+        bodyBytes, err := io.ReadAll(resp.Body)
+        if err != nil {
+                log.Printf("[GEMINI] Error reading response body: %v", err)
+                return "", err
+        }
 
-	bodyStr := string(bodyBytes)
-	log.Printf("[GEMINI] Raw response: %s", bodyStr)
+        bodyStr := string(bodyBytes)
+        log.Printf("[GEMINI] Raw response: %s", bodyStr)
 
-	// Parse response
-	var geminiResp GeminiResponse
-	if err := json.Unmarshal(bodyBytes, &geminiResp); err != nil {
-		log.Printf("[GEMINI] JSON parse error: %v", err)
-		return "", err
-	}
+        // Parse response
+        var geminiResp GeminiResponse
+        if err := json.Unmarshal(bodyBytes, &geminiResp); err != nil {
+                log.Printf("[GEMINI] JSON parse error: %v", err)
+                return "", err
+        }
 
-	// Extract final text
-	if len(geminiResp.Candidates) == 0 {
-		log.Printf("[GEMINI] No candidates in response")
-		return "", fmt.Errorf("no candidates returned from Gemini")
-	}
+        // Extract final text
+        if len(geminiResp.Candidates) == 0 {
+                log.Printf("[GEMINI] No candidates in response")
+                return "", fmt.Errorf("no candidates returned from Gemini")
+        }
 
-	if len(geminiResp.Candidates[0].Content.Parts) == 0 {
-		log.Printf("[GEMINI] No parts in candidates")
-		return "", fmt.Errorf("no content returned from Gemini")
-	}
+        if len(geminiResp.Candidates[0].Content.Parts) == 0 {
+                log.Printf("[GEMINI] No parts in candidates")
+                return "", fmt.Errorf("no content returned from Gemini")
+        }
 
-	result := geminiResp.Candidates[0].Content.Parts[0].Text
-	totalTime := time.Since(startTime)
-	log.Printf("[GEMINI] SUCCESS - Total time: %v, API time: %v, Result length: %d", totalTime, apiTime, len(result))
-	return result, nil
+        result := geminiResp.Candidates[0].Content.Parts[0].Text
+        totalTime := time.Since(startTime)
+        log.Printf("[GEMINI] SUCCESS - Total time: %v, API time: %v, Result length: %d", totalTime, apiTime, len(result))
+        return result, nil
+}
+
+var transliterationPrompt = `You are a Tamil transliteration engine.
+Task: Convert English text (Tamil phonetic typing) into 5 most likely Tamil words.
+Rules: Output only valid Tamil Unicode words, ranked by probability.
+Return EXACTLY this JSON:
+{
+  "success": true,
+  "suggestions": [
+    { "word": "WORD1", "score": 1 },
+    { "word": "WORD2", "score": 0.9 },
+    { "word": "WORD3", "score": 0.8 },
+    { "word": "WORD4", "score": 0.7 },
+    { "word": "WORD5", "score": 0.6 }
+  ]
+}
+Input: {{english_input}}
+`
+
+type TransliterationResponse struct {
+        Success      bool `json:"success"`
+        Suggestions  []struct {
+                Word  string  `json:"word"`
+                Score float64 `json:"score"`
+        } `json:"suggestions"`
+}
+
+// CallGeminiTransliterate transliterates English to Tamil
+func CallGeminiTransliterate(englishText string, apiKey string) ([]string, error) {
+        if apiKey == "" {
+                return nil, fmt.Errorf("API key not provided")
+        }
+
+        finalPrompt := strings.Replace(transliterationPrompt, "{{english_input}}", englishText, 1)
+        url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=%s", apiKey)
+
+        payload := map[string]interface{}{
+                "contents": []map[string]interface{}{{
+                        "parts": []map[string]string{{
+                                "text": finalPrompt,
+                        }},
+                }},
+                "generationConfig": map[string]interface{}{
+                        "temperature":      0.1,
+                        "topP":             0.8,
+                        "topK":             40,
+                        "maxOutputTokens":  1024,
+                        "responseMimeType": "application/json",
+                },
+        }
+
+        jsonBody, _ := json.Marshal(payload)
+        req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
+        if err != nil {
+                return nil, err
+        }
+        req.Header.Set("Content-Type", "application/json")
+
+        resp, err := geminiClient.Do(req)
+        if err != nil {
+                return nil, err
+        }
+        defer resp.Body.Close()
+
+        bodyBytes, _ := io.ReadAll(resp.Body)
+        var geminiResp GeminiResponse
+        if err := json.Unmarshal(bodyBytes, &geminiResp); err != nil {
+                return nil, err
+        }
+
+        if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
+                return nil, fmt.Errorf("no suggestions")
+        }
+
+        var translitResp TransliterationResponse
+        if err := json.Unmarshal([]byte(geminiResp.Candidates[0].Content.Parts[0].Text), &translitResp); err != nil {
+                return nil, err
+        }
+
+        suggestions := make([]string, 0)
+        for _, sugg := range translitResp.Suggestions {
+                if sugg.Word != "" {
+                        suggestions = append(suggestions, sugg.Word)
+                }
+        }
+        return suggestions, nil
 }
