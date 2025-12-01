@@ -276,13 +276,15 @@ class HomeEditor {
         return;
       }
       
-      container.innerHTML = suggestions.map((word, idx) => `
+      container.innerHTML = suggestions.map((item, idx) => {
+        const tamilWord = typeof item === 'string' ? item : item.word;
+        return `
         <div class="p-3 rounded cursor-pointer transition ${idx === 0 ? 'bg-purple-100 border border-purple-400' : 'hover:bg-gray-100'}" 
              data-index="${idx}" onclick="homeEditor.insertSuggestion(${idx})">
           <span class="text-lg font-semibold ${idx === 0 ? 'text-purple-600' : 'text-gray-500'}">${idx + 1}</span>
-          <span class="ml-3 text-lg text-gray-900">${word}</span>
+          <span class="ml-3 text-lg text-gray-900">${tamilWord}</span>
         </div>
-      `).join('');
+      `}).join('');
       
       console.log('[AUTOCOMPLETE] Showing dropdown with', suggestions.length, 'suggestions');
       this.autocompleteBox.classList.remove('hidden');
@@ -294,7 +296,8 @@ class HomeEditor {
   insertSuggestion(index) {
     if (!this.currentSuggestions?.[index]) return;
     
-    const tamilWord = this.currentSuggestions[index];
+    const suggestion = this.currentSuggestions[index];
+    const tamilWord = typeof suggestion === 'string' ? suggestion : suggestion.word;
     const fullText = (this.editor.textContent || '').trimEnd();
     const words = fullText.split(/\s+/);
     const lastWord = words[words.length - 1] || '';
@@ -323,7 +326,8 @@ class HomeEditor {
         console.log('[API-INPUT] Response:', data);
         
         if (data.success && data.suggestions?.[0]) {
-          const tamilWord = data.suggestions[0];
+          const suggestion = data.suggestions[0];
+          const tamilWord = typeof suggestion === 'string' ? suggestion : suggestion.word;
           const fullText = (this.editor.textContent || '').trimEnd();
           const beforeLastWord = fullText.substring(0, fullText.length - englishWord.length);
           this.editor.textContent = beforeLastWord + tamilWord + ' ';
@@ -360,7 +364,8 @@ class HomeEditor {
         console.log('[KEYPRESS] Response:', data);
         
         if (data.success && data.suggestions?.[0]) {
-          const tamilWord = data.suggestions[0];
+          const suggestion = data.suggestions[0];
+          const tamilWord = typeof suggestion === 'string' ? suggestion : suggestion.word;
           // Use the stored word info if available, otherwise fallback
           if (this.lastEditedWord) {
             this.editor.textContent = this.lastEditedWord.before + tamilWord + ' ';
