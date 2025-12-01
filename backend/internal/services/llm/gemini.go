@@ -8,18 +8,9 @@ import (
         "io"
         "log"
         "net/http"
-        "os"
         "strings"
         "time"
 )
-
-// getProofreadingPrompt returns the proofreading prompt from environment variable
-func getProofreadingPrompt() string {
-        if prompt := os.Getenv("TAMIL_PROOFREADING_PROMPT"); prompt != "" {
-                return prompt
-        }
-        return `You are an expert Tamil Proofreading Assistant. Analyze Tamil text and find ALL mistakes. Return ONLY valid JSON with "corrected_text" and "corrections" array.`
-}
 
 var proofreadingPrompt = `You are an expert Tamil Proofreading Assistant trained to identify and correct ALL types of Tamil language errors with very high accuracy.
 
@@ -229,7 +220,7 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
         log.Printf("[GEMINI] Starting with model: %s, text length: %d", model, len(userText))
 
         // Build final prompt
-        finalPrompt := strings.Replace(getProofreadingPrompt(), "{{user_text}}", userText, 1)
+        finalPrompt := strings.Replace(proofreadingPrompt, "{{user_text}}", userText, 1)
         promptBuildTime := time.Since(startTime)
 
         // Gemini API Endpoint
