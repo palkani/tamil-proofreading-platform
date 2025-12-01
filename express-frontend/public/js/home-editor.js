@@ -50,7 +50,12 @@ class HomeEditor {
   }
   
   init() {
-    if (!this.editor) return;
+    console.log('[INIT] HomeEditor init called, editor element:', this.editor ? 'FOUND' : 'NOT FOUND');
+    if (!this.editor) {
+      console.log('[INIT] ERROR: home-editor element not found! Cannot initialize.');
+      return;
+    }
+    console.log('[INIT] Editor element found, attaching event listeners');
     
     // Setup toolbar buttons
     if (this.boldBtn) {
@@ -239,6 +244,8 @@ class HomeEditor {
   }
   
   handleKeyDown(e) {
+    console.log('[KEY] Pressed:', e.key, 'Code:', e.code);
+    
     if (e.key !== ' ') return;
     
     console.log('[SPACE-KEY] Space pressed');
