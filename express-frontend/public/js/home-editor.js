@@ -19,8 +19,10 @@ class HomeEditor {
     
     // Transliteration autocomplete state
     this.translitTimeout = null;
-    this.autocompleteBox = null;
+    this.autocompleteBox = document.getElementById('home-autocomplete-dropdown');
+    this.autocompleteCache = {}; // Cache API responses
     this.previousText = ''; // Track previous text for space detection
+    this.currentSuggestions = [];
     
     // Tamil conversion dictionary (simplified version)
     this.tamilDict = {
@@ -75,9 +77,15 @@ class HomeEditor {
       if (e.key === ' ' || e.code === 'Space' || e.keyCode === 32) {
         console.log('[EVENT-DEBUG] Space key detected in keydown');
         this.handleKeyDown(e);
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        // Allow arrow key navigation in suggestions
+        e.preventDefault();
       }
     });
-    this.editor.addEventListener('input', () => this.handleInput());
+    this.editor.addEventListener('input', () => {
+      this.handleInput();
+      this.showAutocomplete();
+    });
     this.editor.addEventListener('paste', (e) => this.handlePaste(e));
     
     // Update word count on load
@@ -190,6 +198,83 @@ class HomeEditor {
     sel.removeAllRanges();
     sel.addRange(range);
     this.editor.focus();
+  }
+
+  async showAutocomplete() {
+    if (!this.autocompleteBox) return;
+    
+    const fullText = (this.editor.textContent || '').trimEnd();
+    const words = fullText.split(/\s+/);
+    const lastWord = words[words.length - 1] || '';
+    
+    // Only show for English words >= 3 chars
+    if (!lastWord || !/^[a-z]+$/i.test(lastWord) || lastWord.length < 2) {
+      this.autocompleteBox.classList.add('hidden');
+      return;
+    }
+
+    // Check cache first
+    if (this.autocompleteCache[lastWord]) {
+      this.renderSuggestions(this.autocompleteCache[lastWord]);
+      return;
+    }
+
+    // Debounced API call
+    if (this.translitTimeout) clearTimeout(this.translitTimeout);
+    this.translitTimeout = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/transliterate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: lastWord })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.suggestions?.length > 0) {
+            this.autocompleteCache[lastWord] = data.suggestions;
+            this.currentSuggestions = data.suggestions;
+            this.renderSuggestions(data.suggestions);
+          }
+        }
+      } catch (err) {
+        console.error('[AUTOCOMPLETE] Error:', err);
+      }
+    }, 300); // 300ms debounce
+  }
+
+  renderSuggestions(suggestions) {
+    if (!this.autocompleteBox || !suggestions?.length) {
+      this.autocompleteBox.classList.add('hidden');
+      return;
+    }
+
+    const container = this.autocompleteBox.querySelector('.p-3');
+    container.innerHTML = suggestions.map((word, idx) => `
+      <div class="p-3 rounded cursor-pointer transition ${idx === 0 ? 'bg-purple-100 border border-purple-400' : 'hover:bg-gray-100'}" 
+           data-index="${idx}" onclick="homeEditor.insertSuggestion(${idx})">
+        <span class="text-lg font-semibold ${idx === 0 ? 'text-purple-600' : 'text-gray-500'}">${idx + 1}</span>
+        <span class="ml-3 text-lg text-gray-900">${word}</span>
+      </div>
+    `).join('');
+    
+    this.autocompleteBox.classList.remove('hidden');
+  }
+
+  insertSuggestion(index) {
+    if (!this.currentSuggestions?.[index]) return;
+    
+    const tamilWord = this.currentSuggestions[index];
+    const fullText = (this.editor.textContent || '').trimEnd();
+    const words = fullText.split(/\s+/);
+    const lastWord = words[words.length - 1] || '';
+    
+    const beforeLastWord = fullText.substring(0, fullText.length - lastWord.length);
+    this.editor.textContent = beforeLastWord + tamilWord + ' ';
+    this.moveCursorToEnd();
+    this.autocompleteBox.classList.add('hidden');
+    this.updateWordCount();
+    this.scheduleAutoAnalysis();
   }
   
   async transliterateFromInput(englishWord) {

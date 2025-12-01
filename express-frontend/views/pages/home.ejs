@@ -100,13 +100,18 @@
                 <button id="home-italic-btn" class="px-3 py-1.5 text-sm italic text-gray-700 hover:bg-gray-100 rounded transition" title="Italic (Ctrl+I)">I</button>
                 <button id="home-underline-btn" class="px-3 py-1.5 text-sm underline text-gray-700 hover:bg-gray-100 rounded transition" title="Underline (Ctrl+U)">U</button>
               </div>
-              <div class="p-8">
+              <div class="p-8 relative">
                 <div 
                   id="home-editor" 
                   contenteditable="true"
                   class="min-h-[320px] text-gray-900 text-xl leading-relaxed focus:outline-none"
                   placeholder="Type in English (e.g., vanakkam) or paste Tamil text..."
                 ></div>
+                <!-- Autocomplete Dropdown -->
+                <div id="home-autocomplete-dropdown" class="hidden absolute top-16 left-8 right-8 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto z-50">
+                  <div class="p-3 space-y-2"></div>
+                  <div class="px-4 py-2 text-xs text-gray-500 border-t">Press <strong>Space</strong> to select first option</div>
+                </div>
               </div>
             </div>
 
@@ -607,7 +612,7 @@
 
 <% if (!user) { %>
 <script src="/js/transliteration.js?v=20251127b"></script>
-<script src="/js/home-editor.js?v=1764595555"></script>
+<script src="/js/home-editor.js?v=1764611193"></script>
 <% } %>
 
 <%- include('../partials/footer') %>
