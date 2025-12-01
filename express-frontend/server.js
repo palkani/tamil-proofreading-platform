@@ -141,10 +141,12 @@ app.get('/sitemap.xml', (req, res) => {
 const indexRouter = require('./routes/index');
 const workspaceRouter = require('./routes/workspace');
 const apiRouter = require('./routes/api');
+const processRouter = require('./routes/process');
 
 app.use('/', indexRouter);
 app.use('/workspace', workspaceRouter);
 app.use('/api', apiRouter);
+app.use('/api/process', processRouter);
 
 // Error handling - 404
 app.use((req, res, next) => {
