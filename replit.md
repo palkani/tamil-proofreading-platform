@@ -41,6 +41,7 @@ The platform utilizes a Go backend (port 8080) and an Express.js frontend with E
 - **CORS:** Configured for local development.
 - **SEO Implementation:** Dynamic page-specific meta tags, centralized SEO configuration, `robots.txt`, dynamic XML sitemap, structured data (JSON-LD), and PWA support.
 - **Smart AI Model Selection:** Uses `gemini-2.5-flash-lite` for short texts (<200 chars) and `gemini-2.5-flash` for longer texts.
+- **Transliteration API:** Uses `gemini-2.0-flash-lite` for fast phonetic transliteration with comprehensive logging, proper error handling (400 for invalid input, 500 for API failures), and a 40-character input limit.
 
 ## External Dependencies
 - **Database:** PostgreSQL (Neon)
