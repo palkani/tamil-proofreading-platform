@@ -1,0 +1,216 @@
+I am building a SaaS backend in Go.  
+Generate a COMPLETE, PRODUCTION-READY authentication system with the following requirements:
+
+=========================================================
+GOAL — SECURE LOGIN & SIGNUP FOR MY APP
+=========================================================
+
+I need you to generate:
+
+1. Secure Signup  
+2. Secure Login  
+3. Secure Logout  
+4. JWT generation  
+5. Password hashing using bcrypt  
+6. Auth middleware to protect private routes  
+7. All responses in JSON  
+8. HTTPOnly secure cookie for storing JWT  
+9. FULL folder structure and ALL files  
+10. Safe input validation  
+11. Safe error handling  
+12. Logging for login attempts  
+
+This code must compile and run directly in Replit.
+
+=========================================================
+FOLDER STRUCTURE TO GENERATE
+=========================================================
+
+/cmd/server.go  
+/internal/database/database.go  
+/internal/auth/jwt.go  
+/internal/auth/middleware.go  
+/internal/auth/handlers.go  
+/internal/models/user.go  
+
+=========================================================
+DATABASE REQUIREMENTS
+=========================================================
+
+Create a PostgreSQL-ready database layer, but also allow mock (Replit SQLite).
+
+User table fields:
+
+id (SERIAL or TEXT UUID)  
+name TEXT  
+email TEXT UNIQUE  
+password_hash TEXT  
+created_at TIMESTAMP  
+
+=========================================================
+SIGNUP ENDPOINT — /api/auth/signup
+=========================================================
+
+Flow:
+
+1. Read JSON body:
+   {
+     "name": "...",
+     "email": "...",
+     "password": "..."
+   }
+
+2. Validate:
+   - email format
+   - password >= 8 chars
+   - email not already used
+
+3. Hash password using:
+   bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+
+4. Insert user into DB
+
+5. Create JWT token containing:
+   {
+     "id": userID,
+     "email": email,
+     "exp": <30 days>
+   }
+
+6. Set token in SECURE, HTTPONLY cookie:
+   - Name: auth_token
+   - HttpOnly: true
+   - Secure: true
+   - SameSite: Lax
+   - MaxAge: 30 days
+
+7. Return JSON:
+   {
+     "success": true,
+     "message": "Account created",
+     "user": { "id": ..., "email": ..., "name": ... }
+   }
+
+=========================================================
+LOGIN ENDPOINT — /api/auth/login
+=========================================================
+
+Flow:
+
+1. Read JSON:
+   {
+     "email": "...",
+     "password": "..."
+   }
+
+2. Validate input
+
+3. Look up user by email
+
+4. Compare hash:
+   bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+
+5. If valid:
+   - Generate new JWT
+   - Set cookie (same settings as signup)
+
+6. Return JSON:
+   {
+     "success": true,
+     "message": "Logged in",
+     "user": { ... }
+   }
+
+7. Log incorrect login attempts using log.Printf
+
+=========================================================
+LOGOUT ENDPOINT — /api/auth/logout
+=========================================================
+
+Flow:
+- Overwrite cookie with MaxAge: -1
+- Return JSON:
+  { "success": true }
+
+=========================================================
+AUTH MIDDLEWARE — JWT VALIDATION
+=========================================================
+
+Create middleware:
+
+1. Read cookie named "auth_token"  
+2. Validate JWT signature  
+3. Check expiration  
+4. Inject userID into context  
+5. If invalid → return 401 JSON
+
+=========================================================
+JWT REQUIREMENTS
+=========================================================
+
+- Use HS256  
+- Secret loaded from environment variable: JWT_SECRET  
+- Token expiration: 30 days  
+- Return JSON errors for:
+  - Expired token  
+  - Invalid signature  
+  - Missing token  
+
+=========================================================
+PROTECTED ROUTE EXAMPLE
+=========================================================
+
+Create route:
+
+GET /api/auth/me  
+→ Requires JWT  
+→ Returns:
+{
+  "success": true,
+  "user": {
+     "id": "...",
+     "email": "...",
+     "name": "..."
+  }
+}
+
+=========================================================
+LOGGING (MANDATORY)
+=========================================================
+
+Log:
+
+- Signup attempts  
+- Login attempts  
+- Login failures  
+- Missing/invalid JWT  
+- Token expiry  
+
+Use:
+
+log.Printf("[AUTH] %s", "...message...")
+
+=========================================================
+FINAL EXPECTATION
+=========================================================
+
+You MUST generate ALL files:
+
+1. /cmd/server.go  
+2. /internal/database/database.go  
+3. /internal/auth/jwt.go  
+4. /internal/auth/middleware.go  
+5. /internal/auth/handlers.go  
+6. /internal/models/user.go  
+
+The code MUST:
+- Compile immediately  
+- Start HTTP server on port 8080  
+- Provide working signup/login/logout/auth  
+- Use secure cookies  
+- Use bcrypt  
+- Use JWT  
+- Use modular clean structure  
+
+Do NOT output explanations.  
+ONLY output full code for ALL files.
