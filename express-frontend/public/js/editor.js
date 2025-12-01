@@ -342,7 +342,7 @@ class TamilEditor {
         // Check if typing in English - call Gemini transliteration API
         else if (/^[a-zA-Z]+$/.test(currentWord) && currentWord.length >= 2) {
           try {
-            const response = await fetch('/api/transliterate', {
+            const response = await fetch('/api/v1/transliterate', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ text: currentWord })

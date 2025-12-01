@@ -56,6 +56,8 @@ The platform utilizes a Go backend (port 8080) and an Express.js frontend with E
 - **Email Service:** Resend API (for password reset)
 
 ## Recent Updates (Dec 1, 2025)
+- **Fixed API Endpoint Mismatch:** Updated frontend API calls from `/api/transliterate` to `/api/v1/transliterate` in home-editor.js and editor.js (5 total occurrences) to match backend routes and eliminate 404 errors.
+- **Fixed [object Object] Bug:** Corrected suggestion handling in frontend - API returns `{word: "...", score: ...}` objects, not strings. Updated renderSuggestions, insertSuggestion, transliterateFromInput, and transliterateFromKeypress to properly extract `.word` property.
 - **Replaced Gemini Transliteration with In-Memory Lexicon:** Transliteration API now uses a local JSON lexicon for instant lookups (~0.3ms response time) instead of making expensive Gemini API calls (16-23s latency). Supports exact matching, prefix-based matching, and fuzzy matching with Levenshtein distance for typos and unknown words.
 - **Fuzzy Matching Algorithm:** Implemented Levenshtein distance-based fuzzy matching as fallback when exact/prefix matches fail. Allows up to 2 edits for short words (≤6 chars) and 3 for longer words. Users now get suggestions even for typos or words not exactly in the lexicon.
 - **Fixed Autocomplete Dropdown UI:** Enhanced editor to full-screen height (700px minimum on desktop) with larger text (2xl), improved autocomplete dropdown positioning, better error handling, and debug logging.
@@ -69,4 +71,5 @@ The platform utilizes a Go backend (port 8080) and an Express.js frontend with E
   - `backend/cmd/server/main.go` - Added lexicon loading at startup
   - `backend/internal/handlers/transliteration_handlers.go` - Replaced Gemini calls with in-memory lookups
   - `express-frontend/views/pages/home.ejs` - Enlarged editor layout
-  - `express-frontend/public/js/home-editor.js` - Fixed autocomplete dropdown and added better error handling
+  - `express-frontend/public/js/home-editor.js` - Fixed API endpoints, corrected object/string handling, and added better error handling
+  - `express-frontend/public/js/editor.js` - Fixed API endpoint from /api/transliterate to /api/v1/transliterate

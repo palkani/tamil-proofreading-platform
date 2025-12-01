@@ -231,7 +231,7 @@ class HomeEditor {
     if (this.translitTimeout) clearTimeout(this.translitTimeout);
     this.translitTimeout = setTimeout(async () => {
       try {
-        const response = await fetch('/api/transliterate', {
+        const response = await fetch('/api/v1/transliterate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: lastWord })
@@ -313,7 +313,7 @@ class HomeEditor {
   async transliterateFromInput(englishWord) {
     console.log('[API-INPUT] Transliterating:', englishWord);
     try {
-      const response = await fetch('/api/transliterate', {
+      const response = await fetch('/api/v1/transliterate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: englishWord })
@@ -351,7 +351,7 @@ class HomeEditor {
   async transliterateFromKeypress(englishWord) {
     console.log('[KEYPRESS] Calling transliteration API for:', englishWord);
     try {
-      const response = await fetch('/api/transliterate', {
+      const response = await fetch('/api/v1/transliterate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: englishWord })
@@ -415,7 +415,7 @@ class HomeEditor {
     this.translitTimeout = setTimeout(async () => {
       console.log('[TRANSLIT-DEBUG] Calling API with word:', currentWord);
       try {
-        const response = await fetch('/api/transliterate', {
+        const response = await fetch('/api/v1/transliterate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: currentWord })
