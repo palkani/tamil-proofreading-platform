@@ -17,6 +17,10 @@ class HomeEditor {
     this.isAnalyzing = false;
     this.pendingAnalysis = false;
     
+    // Transliteration autocomplete state
+    this.translitTimeout = null;
+    this.autocompleteBox = null;
+    
     // Tamil conversion dictionary (simplified version)
     this.tamilDict = {
       'a': 'அ', 'aa': 'ஆ', 'i': 'இ', 'ii': 'ஈ', 'u': 'உ', 'uu': 'ஊ',
@@ -79,6 +83,103 @@ class HomeEditor {
     this.enforceWordLimit();
     this.updateWordCount();
     this.scheduleAutoAnalysis();
+    this.handleTransliterationAutocomplete();
+  }
+  
+  handleTransliterationAutocomplete() {
+    if (this.translitTimeout) clearTimeout(this.translitTimeout);
+    
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    
+    const range = selection.getRangeAt(0);
+    const textBeforeCursor = range.startContainer.textContent?.substring(0, range.startOffset) || '';
+    const words = textBeforeCursor.split(/\s/);
+    const currentWord = words[words.length - 1];
+    
+    // Only trigger for English words (2+ chars)
+    if (!currentWord || currentWord.length < 2 || !/^[a-zA-Z]+$/.test(currentWord)) {
+      this.removeTranslitAutocomplete();
+      return;
+    }
+    
+    // Debounce transliteration API call
+    this.translitTimeout = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/transliterate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: currentWord })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.suggestions && data.suggestions.length > 0) {
+            this.showTranslitAutocomplete(data.suggestions);
+          }
+        }
+      } catch (err) {
+        console.log('Transliteration API error:', err);
+      }
+    }, 300);
+  }
+  
+  showTranslitAutocomplete(suggestions) {
+    this.removeTranslitAutocomplete();
+    
+    const box = document.createElement('div');
+    box.className = 'autocomplete-box bg-white border-2 border-orange-200 rounded-lg shadow-xl z-50';
+    box.style.cssText = 'position: fixed; max-height: 200px; overflow-y: auto; min-width: 150px;';
+    
+    suggestions.slice(0, 5).forEach((word) => {
+      const item = document.createElement('div');
+      item.className = 'px-3 py-2 cursor-pointer tamil-text hover:bg-orange-100';
+      item.textContent = word;
+      item.style.fontSize = '1rem';
+      
+      item.addEventListener('click', () => {
+        this.insertTransliteratedWord(word);
+        this.removeTranslitAutocomplete();
+      });
+      
+      box.appendChild(item);
+    });
+    
+    const selection = window.getSelection();
+    if (selection.rangeCount) {
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      box.style.left = rect.left + 'px';
+      box.style.top = (rect.bottom + 5) + 'px';
+    }
+    
+    document.body.appendChild(box);
+    this.autocompleteBox = box;
+  }
+  
+  insertTransliteratedWord(tamilWord) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    
+    const range = selection.getRangeAt(0);
+    const textBeforeCursor = range.startContainer.textContent?.substring(0, range.startOffset) || '';
+    const words = textBeforeCursor.split(/\s/);
+    const currentWord = words[words.length - 1];
+    
+    // Replace English word with Tamil
+    const fullText = this.editor.textContent;
+    const beforeWord = textBeforeCursor.substring(0, textBeforeCursor.length - currentWord.length);
+    const newText = beforeWord + tamilWord;
+    
+    this.editor.textContent = newText;
+    this.updateWordCount();
+  }
+  
+  removeTranslitAutocomplete() {
+    if (this.autocompleteBox) {
+      this.autocompleteBox.remove();
+      this.autocompleteBox = null;
+    }
   }
   
   handlePaste(e) {
