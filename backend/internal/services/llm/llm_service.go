@@ -85,6 +85,60 @@ func (s *LLMService) selectOptimalModel(text string, wordCount int) models.Model
         return models.ModelType(models.ModelGeminiFlash)
 }
 
+// detectChangesFromText auto-generates suggestions by finding differences between original and corrected text
+// This is a fallback when Gemini doesn't return explicit corrections array
+func detectChangesFromText(original, corrected string) []Suggestion {
+        if original == corrected {
+                return []Suggestion{}
+        }
+
+        var suggestions []Suggestion
+
+        // Split into words for comparison
+        origWords := strings.Fields(original)
+        corrWords := strings.Fields(corrected)
+
+        // Simple word-by-word comparison
+        minLen := len(origWords)
+        if len(corrWords) < minLen {
+                minLen = len(corrWords)
+        }
+
+        for i := 0; i < minLen; i++ {
+                if origWords[i] != corrWords[i] {
+                        // Find the position in the original text
+                        pos := strings.Index(original, origWords[i])
+                        if pos >= 0 {
+                                suggestions = append(suggestions, Suggestion{
+                                        Original:   origWords[i],
+                                        Corrected:  corrWords[i],
+                                        Reason:     "சரி செய்யப்பட்ட சொல்", // "Corrected word" in Tamil
+                                        Type:       "correction",
+                                        StartIndex: pos,
+                                        EndIndex:   pos + len(origWords[i]),
+                                })
+                        }
+                }
+        }
+
+        // If different lengths, capture the extra/missing content
+        if len(corrWords) > len(origWords) {
+                remaining := strings.Join(corrWords[len(origWords):], " ")
+                if remaining != "" {
+                        suggestions = append(suggestions, Suggestion{
+                                Original:   "",
+                                Corrected:  remaining,
+                                Reason:     "சேர்க்கப்பட்ட வார்த்தைகள்", // "Added words" in Tamil
+                                Type:       "addition",
+                                StartIndex: len(original),
+                                EndIndex:   len(corrected),
+                        })
+                }
+        }
+
+        return suggestions
+}
+
 func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, requestID string, includeAlternatives bool) (*ProofreadResult, error) {
         start := time.Now()
 
@@ -127,6 +181,12 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
 
         if corrected == "" {
                 corrected = cleaned
+        }
+
+        // Fallback: If suggestions array is empty but text was corrected, auto-detect changes
+        if len(suggestions) == 0 && corrected != cleaned {
+                log.Printf("[FALLBACK] Auto-detecting changes (request_id=%s)", requestID)
+                suggestions = detectChangesFromText(cleaned, corrected)
         }
 
         return &ProofreadResult{
@@ -172,6 +232,13 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
                                 if corrected == "" {
                                         corrected = cleaned
                                 }
+                                
+                                // Fallback: If suggestions array is empty but text was corrected, auto-detect changes
+                                if len(suggestions) == 0 && corrected != cleaned {
+                                        log.Printf("[FALLBACK] Auto-detecting changes (request_id=%s)", requestID)
+                                        suggestions = detectChangesFromText(cleaned, corrected)
+                                }
+                                
                                 return &ProofreadResult{
                                         CorrectedText:  corrected,
                                         Suggestions:    suggestions,
