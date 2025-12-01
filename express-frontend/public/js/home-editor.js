@@ -239,38 +239,46 @@ class HomeEditor {
   }
   
   handleKeyDown(e) {
-    if (e.key === ' ') {
-      const selection = window.getSelection();
-      if (!selection.rangeCount) return;
+    if (e.key !== ' ') return;
+    
+    console.log('[SPACE-KEY] Space pressed');
+    e.preventDefault();
+    
+    // Get text directly from editor
+    const fullText = (this.editor.textContent || '').trimEnd();
+    console.log('[SPACE-KEY] Full text:', fullText);
+    
+    // Find last word
+    const words = fullText.split(/\s+/);
+    const lastWord = words[words.length - 1] || '';
+    
+    console.log('[SPACE-KEY] Last word:', lastWord, 'Is English:', /^[a-zA-Z]+$/.test(lastWord));
+    
+    // If last word is English, try translation
+    if (lastWord && /^[a-zA-Z]+$/.test(lastWord)) {
+      // Try local dict first
+      const tamilWord = this.convertWordToTamil(lastWord);
+      console.log('[SPACE-KEY] Local dict result:', tamilWord);
       
-      const range = selection.getRangeAt(0);
-      const textBeforeCursor = range.startContainer.textContent?.substring(0, range.startOffset) || '';
-      const words = textBeforeCursor.split(/\s/);
-      const currentWord = words[words.length - 1];
-      
-      // If typing English word, convert to Tamil on space
-      if (currentWord && /^[a-zA-Z]+$/.test(currentWord)) {
-        e.preventDefault();
-        
-        // First try local dictionary
-        let tamilWord = this.convertWordToTamil(currentWord);
-        
-        if (tamilWord && tamilWord !== currentWord) {
-          // Use local conversion
-          const newRange = range.cloneRange();
-          newRange.setStart(range.startContainer, range.startOffset - currentWord.length);
-          newRange.setEnd(range.startContainer, range.startOffset);
-          newRange.deleteContents();
-          document.execCommand('insertText', false, tamilWord + ' ');
-        } else {
-          // Try Gemini API if local dictionary doesn't have it
-          this.transliterateWordOnSpace(currentWord);
-        }
+      if (tamilWord && tamilWord !== lastWord) {
+        // Replace in editor
+        const beforeLastWord = fullText.substring(0, fullText.length - lastWord.length);
+        this.editor.textContent = beforeLastWord + tamilWord + ' ';
+        this.updateWordCount();
+        this.scheduleAutoAnalysis();
+      } else {
+        // Call API
+        console.log('[SPACE-KEY] Calling API for:', lastWord);
+        this.transliterateAndInsert(lastWord);
       }
+    } else {
+      // Just insert space
+      document.execCommand('insertText', false, ' ');
     }
   }
   
-  async transliterateWordOnSpace(englishWord) {
+  async transliterateAndInsert(englishWord) {
+    console.log('[API-CALL] Transliterating:', englishWord);
     try {
       const response = await fetch('/api/transliterate', {
         method: 'POST',
@@ -278,27 +286,30 @@ class HomeEditor {
         body: JSON.stringify({ text: englishWord })
       });
       
+      console.log('[API-CALL] Status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
-        if (data.suggestions && data.suggestions[0]) {
-          const selection = window.getSelection();
-          if (!selection.rangeCount) return;
-          
-          const range = selection.getRangeAt(0);
+        console.log('[API-CALL] Response:', data);
+        
+        if (data.suggestions?.[0]) {
           const tamilWord = data.suggestions[0];
-          
-          // Replace English with Tamil + space
-          const newRange = range.cloneRange();
-          newRange.setStart(range.startContainer, range.startOffset - englishWord.length);
-          newRange.setEnd(range.startContainer, range.startOffset);
-          newRange.deleteContents();
-          
-          document.execCommand('insertText', false, tamilWord + ' ');
+          const fullText = (this.editor.textContent || '').trimEnd();
+          const beforeLastWord = fullText.substring(0, fullText.length - englishWord.length);
+          this.editor.textContent = beforeLastWord + tamilWord + ' ';
+          this.updateWordCount();
+          this.scheduleAutoAnalysis();
+          return;
         }
       }
     } catch (err) {
-      console.log('Transliteration API error:', err);
+      console.log('[API-CALL] Error:', err);
     }
+    
+    // Fallback: just insert space
+    const fullText = (this.editor.textContent || '').trimEnd();
+    this.editor.textContent = fullText + ' ';
+    this.updateWordCount();
   }
   
   convertWordToTamil(word) {
