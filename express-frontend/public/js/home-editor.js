@@ -20,6 +20,7 @@ class HomeEditor {
     // Transliteration autocomplete state
     this.translitTimeout = null;
     this.autocompleteBox = null;
+    this.previousText = ''; // Track previous text for space detection
     
     // Tamil conversion dictionary (simplified version)
     this.tamilDict = {
