@@ -56,13 +56,17 @@ The platform utilizes a Go backend (port 8080) and an Express.js frontend with E
 - **Email Service:** Resend API (for password reset)
 
 ## Recent Updates (Dec 1, 2025)
-- **Replaced Gemini Transliteration with In-Memory Lexicon:** Transliteration API now uses a local JSON lexicon for instant lookups (~0.3ms response time) instead of making expensive Gemini API calls (16-23s latency). Supports exact matching and prefix-based suggestions with frequency scoring.
+- **Replaced Gemini Transliteration with In-Memory Lexicon:** Transliteration API now uses a local JSON lexicon for instant lookups (~0.3ms response time) instead of making expensive Gemini API calls (16-23s latency). Supports exact matching, prefix-based matching, and fuzzy matching with Levenshtein distance for typos and unknown words.
+- **Fuzzy Matching Algorithm:** Implemented Levenshtein distance-based fuzzy matching as fallback when exact/prefix matches fail. Allows up to 2 edits for short words (≤6 chars) and 3 for longer words. Users now get suggestions even for typos or words not exactly in the lexicon.
 - **Fixed Autocomplete Dropdown UI:** Enhanced editor to full-screen height (700px minimum on desktop) with larger text (2xl), improved autocomplete dropdown positioning, better error handling, and debug logging.
+- **Expanded Tamil Lexicon:** Grew from 20 to 269 Tamil-English phonetic mappings with frequency scoring for relevance ranking.
 - **Files Created:** 
-  - `data/tamil_lexicon.json` - In-memory Tamil lexicon (20 entries)
+  - `data/tamil_lexicon.json` - In-memory Tamil lexicon (269 entries with frequency weighting)
   - `backend/internal/translit/lexicon.go` - Lexicon loading and normalization
-  - `backend/internal/translit/search.go` - Suggestion search algorithm
+  - `backend/internal/translit/search.go` - Suggestion search algorithm (exact, prefix, and fuzzy matching)
   - `backend/internal/translit/handler.go` - HTTP handler for transliteration
 - **Files Modified:**
   - `backend/cmd/server/main.go` - Added lexicon loading at startup
   - `backend/internal/handlers/transliteration_handlers.go` - Replaced Gemini calls with in-memory lookups
+  - `express-frontend/views/pages/home.ejs` - Enlarged editor layout
+  - `express-frontend/public/js/home-editor.js` - Fixed autocomplete dropdown and added better error handling
