@@ -81,15 +81,16 @@ var proofreadingPrompt = `You are an expert Tamil Proofreading Assistant trained
            - Example:
              "அவன் உடன்" → "அவனுடன்"
 
-        7. WORD CHOICE ERRORS (சொல் தேர்வு பிழை)
-           - Incorrect or unnatural Tamil word selection
-           - Replace with a more accurate or natural Tamil word ONLY when necessary
-           - Do not over-stylize
+        7. WORD CHOICE ERRORS (சொல் தேர்வு பிழை) - ONLY IF INCORRECT
+           - Only suggest if the word is OBJECTIVELY WRONG or grammatically incorrect
+           - DO NOT suggest "better" or "more natural" alternatives for correct words
+           - DO NOT suggest synonyms for words that are already correct
+           - Example: Do NOT suggest "நல்லது" as alternative to correct "நன்றாக"
 
-        8. SEMANTIC CLARITY ISSUES (பொருள் தெளிவு பிழை)
-           - Ambiguous phrasing
-           - Awkward sentence structure
-           - Slight restructuring to improve clarity (without changing meaning)
+        8. SEMANTIC CLARITY ISSUES (பொருள் தெளிவு பிழை) - ONLY IF ACTUAL ERROR
+           - Ambiguous phrasing that causes confusion
+           - Actual awkward sentence structure (not just "could be better")
+           - Only restructure if the original is incomprehensible
 
         ==============================================================
         PART 2 — OUTPUT RULES (STRICT)
@@ -148,12 +149,21 @@ var proofreadingPrompt = `You are an expert Tamil Proofreading Assistant trained
 
         9. Avoid hallucination:
            - Do NOT invent errors
-           - Only correct what is objectively wrong
+           - Do NOT suggest alternatives for correct words
+           - Only correct what is objectively wrong or contains an actual error
+           - If a word is spelled correctly and used correctly, DO NOT include it
 
-        10. Maintain punctuation consistency:
+        10. STRICT FILTERING FOR THIS RUN:
+           - For EVERY item you include in corrections array, ask yourself:
+             "Is this word/phrase ACTUALLY WRONG in the user's original text?"
+           - If the answer is NO → DO NOT include it in corrections
+           - Correct words with proper spelling and grammar → DO NOT return them
+           - Alternative phrasings that are still correct → DO NOT return them
+
+        11. Maintain punctuation consistency:
            - If the sentence ends without a period, you may add one only if grammatically required
 
-        11. DO NOT modify names, places, or proper nouns unless there is a clear spelling mistake.
+        12. DO NOT modify names, places, or proper nouns unless there is a clear spelling mistake.
 
         ==============================================================
         PART 4 — JSON STRUCTURE (MANDATORY)
@@ -226,8 +236,8 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
         startTime := time.Now()
         log.Printf("[GEMINI] Starting with model: %s, text length: %d", model, len(userText))
 
-        // Build final prompt
-        finalPrompt := strings.Replace(proofreadingPrompt, "{{user_text}}", userText, 1)
+        // Build final prompt - CRITICAL: Replace the actual placeholder in the prompt template
+        finalPrompt := strings.Replace(proofreadingPrompt, "[USER'S TAMIL TEXT HERE]", userText, 1)
         promptBuildTime := time.Since(startTime)
 
         // Gemini API Endpoint
