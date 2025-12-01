@@ -1,0 +1,22 @@
+[
+  { "tam": "என்பது", "eng": "enbathu", "freq": 8500 },
+  { "tam": "எண்பது", "eng": "enbathu", "freq": 1200 },
+  { "tam": "என்னை", "eng": "ennai", "freq": 9200 },
+  { "tam": "என்று", "eng": "endru", "freq": 15000 },
+  { "tam": "வணக்கம்", "eng": "vanakkam", "freq": 12000 },
+  { "tam": "நன்றி", "eng": "nandri", "freq": 11500 },
+  { "tam": "தமிழ்", "eng": "tamil", "freq": 14000 },
+  { "tam": "எப்படி", "eng": "eppadi", "freq": 8900 },
+  { "tam": "இருக்கிறது", "eng": "irukkirathu", "freq": 13000 },
+  { "tam": "நல்லது", "eng": "nallathu", "freq": 7600 },
+  { "tam": "சரி", "eng": "sari", "freq": 10200 },
+  { "tam": "பொதுவாக", "eng": "pothuvaga", "freq": 6500 },
+  { "tam": "மிகவும்", "eng": "migavum", "freq": 9800 },
+  { "tam": "ஆம்", "eng": "aam", "freq": 11000 },
+  { "tam": "இல்லை", "eng": "illai", "freq": 10500 },
+  { "tam": "ஆகிவிட்டது", "eng": "aagividittadhu", "freq": 5200 },
+  { "tam": "செய்யக்கூடும்", "eng": "seyyakkudum", "freq": 4800 },
+  { "tam": "எனக்கு", "eng": "enakku", "freq": 9600 },
+  { "tam": "உனக்கு", "eng": "unakku", "freq": 8100 },
+  { "tam": "அவனுக்கு", "eng": "avanukku", "freq": 7200 }
+]

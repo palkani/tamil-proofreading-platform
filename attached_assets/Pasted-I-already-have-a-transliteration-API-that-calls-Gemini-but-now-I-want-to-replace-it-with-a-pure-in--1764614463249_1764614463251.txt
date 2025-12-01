@@ -1,0 +1,199 @@
+I already have a transliteration API that calls Gemini, but now I want to replace it with a pure in-memory implementation in Go.
+
+Please generate COMPLETE, PRODUCTION-READY Go code for a fast Tamil transliteration API based on a local lexicon, with this behavior:
+
+===========================================================
+GOAL — IN-MEMORY TAMIL TRANSLITERATION API (NO AI CALLS)
+===========================================================
+
+We have an API endpoint:
+
+POST /api/transliterate
+
+Request JSON:
+{
+  "text": "enbathu"
+}
+
+Response JSON:
+{
+  "success": true,
+  "suggestions": [
+    { "word": "என்பது",  "score": 1   },
+    { "word": "எண்பது", "score": 0.9 },
+    { "word": "எண்பத்து", "score": 0.8 }
+  ]
+}
+
+You must implement this API WITHOUT calling Gemini or any other external AI at runtime.
+
+Instead, we will use an in-memory phonetic lexicon.
+
+===========================================================
+LEXICON FORMAT
+===========================================================
+
+Create a file:
+data/tamil_lexicon.json
+
+with example content (I will later expand it):
+
+[
+  { "tam": "என்பது",  "eng": "enbathu", "freq": 5000 },
+  { "tam": "எண்பது", "eng": "enbathu", "freq": 800 },
+  { "tam": "என்னை",  "eng": "ennai",   "freq": 9000 },
+  { "tam": "என்று",  "eng": "endru",   "freq": 15000 }
+]
+
+Fields:
+- tam  : Tamil word (UTF-8)
+- eng  : phonetic English key
+- freq : relative frequency (integer, larger = more common)
+
+===========================================================
+DATA STRUCTURES (GO)
+===========================================================
+
+Create types:
+
+type Entry struct {
+    Tamil     string
+    Phonetic  string
+    Frequency int
+}
+
+type Suggestion struct {
+    Word  string  `json:"word"`
+    Score float64 `json:"score"`
+}
+
+Globals (in transliteration package):
+
+var exactMap  map[string][]Entry
+var prefixMap map[string][]Entry
+var maxFreq   int
+
+===========================================================
+LEXICON LOADING
+===========================================================
+
+On server startup:
+
+1. Read data/tamil_lexicon.json
+2. Unmarshal into []Entry
+3. Normalize each entry.Phonetic
+4. Fill:
+   - exactMap[normalizedPhonetic] = append(...)
+   - for each prefix of normalizedPhonetic (1..len), fill prefixMap[prefix]
+5. Track maxFreq for scoring
+
+Normalization function:
+
+func normalize(s string) string {
+    // lower-case, trim spaces, basic phonetic rules
+    // e.g. "Yenbathu" -> "enbathu"
+}
+
+===========================================================
+SUGGESTION SEARCH FUNCTION
+===========================================================
+
+Create:
+
+func GetSuggestions(input string) []Suggestion
+
+Algorithm:
+
+1. key := normalize(input)
+2. If key is empty → return empty slice
+3. If exactMap[key] exists:
+      candidates := exactMap[key]
+   else if prefixMap[key] exists:
+      candidates := prefixMap[key]
+   else:
+      return empty slice
+4. For each candidate Entry:
+   - Compute phonetic similarity between key and entry.Phonetic (0–1).
+     You can implement a simple similarity:
+       • common prefix length / max(len(key), len(entry.Phonetic))
+       OR a simple Levenshtein distance normalized to 0–1.
+   - Compute freqScore := float64(entry.Frequency) / float64(maxFreq)
+   - finalScore := 0.7 * simScore + 0.3 * freqScore
+5. Deduplicate by Tamil word (if same Tamil appears multiple times).
+6. Sort candidates by finalScore descending.
+7. Take top 5.
+8. Return []Suggestion {Word, Score}.
+
+===========================================================
+HTTP HANDLER
+===========================================================
+
+Create handler:
+
+POST /api/transliterate
+
+- Parse JSON: { "text": "..." }
+- If text is empty → return { "success": false, "error": "text required" }
+- Call GetSuggestions(text)
+- Respond with:
+
+{
+  "success": true,
+  "suggestions": [ ... ]
+}
+
+===========================================================
+SERVER & FOLDER STRUCTURE
+===========================================================
+
+Create the following files:
+
+/cmd/server.go
+- main() function
+- call LoadLexicon() at startup
+- set up HTTP router using net/http
+- register POST /api/transliterate → translit.TransliterateHandler
+- listen on port 8080
+
+/internal/translit/lexicon.go
+- Entry, Suggestion structs
+- exactMap, prefixMap, maxFreq
+- LoadLexicon() to load data/tamil_lexicon.json
+- normalize() function
+
+/internal/translit/search.go
+- GetSuggestions()
+- phoneticSimilarity() function
+- any sorting helpers
+
+/internal/translit/handler.go
+- TransliterateHandler(w http.ResponseWriter, r *http.Request)
+
+and create the example JSON file:
+
+/data/tamil_lexicon.json  (with 4–10 entries as shown above)
+
+===========================================================
+REQUIREMENTS
+===========================================================
+
+- No external AI calls; all lookups must be in-memory.
+- No database calls; only read JSON file at startup.
+- Must be concurrency-safe for HTTP requests.
+- Must be efficient enough for < 5ms lookup per request.
+- Must compile and run on Replit as-is.
+
+===========================================================
+OUTPUT FORMAT
+===========================================================
+
+Please output the COMPLETE Go code for:
+
+1. /cmd/server.go
+2. /internal/translit/lexicon.go
+3. /internal/translit/search.go
+4. /internal/translit/handler.go
+5. /data/tamil_lexicon.json (example entries)
+
+Do NOT include explanations.
+ONLY output the code and JSON.

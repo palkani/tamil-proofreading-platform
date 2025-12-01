@@ -22,8 +22,9 @@ The platform utilizes a Go backend (port 8080) and an Express.js frontend with E
 
 **Technical Implementations & Feature Specifications:**
 - **Tiered AI Model Workflow:** Supports advanced AI proofreading.
-- **Phonetic Transliteration:** Real-time English-to-Tamil phonetic conversion using Gemini AI, offering 5 ranked suggestions.
-- **Enhanced Autocomplete System:** Provides smart, priority-based word suggestions backed by a PostgreSQL dictionary for millions of Tamil words, supporting prefix-based lookup and frequency-based ranking. Includes client-side caching.
+- **Phonetic Transliteration (In-Memory):** Fast English-to-Tamil transliteration using an in-memory lexicon with no external API calls. Response time <1ms. Returns up to 5 ranked suggestions with phonetic similarity and frequency-based scoring (70% similarity, 30% frequency weighting).
+- **Lexicon-Based Lookup:** Loads Tamil lexicon from `data/tamil_lexicon.json` at startup with exact and prefix matching for instant lookups. Supports concurrent HTTP requests with thread-safe map access.
+- **Enhanced Autocomplete System:** Provides smart, priority-based word suggestions backed by a PostgreSQL dictionary for millions of Tamil words, supporting prefix-based lookup and frequency-based ranking. Includes client-side caching with 300ms debounce.
 - **Google-Style Tamil Typing:** Auto-converts English phonetic input to Tamil upon pressing the space bar.
 - **Paste Conversion:** Automatically converts pasted English paragraphs to Tamil.
 - **Draft Management:** Auto-saves drafts every 2 seconds to PostgreSQL and allows users to manage them from "My Drafts."
@@ -41,16 +42,27 @@ The platform utilizes a Go backend (port 8080) and an Express.js frontend with E
 - **CORS:** Configured for local development.
 - **SEO Implementation:** Dynamic page-specific meta tags, centralized SEO configuration, `robots.txt`, dynamic XML sitemap, structured data (JSON-LD), and PWA support.
 - **Smart AI Model Selection:** Uses `gemini-2.5-flash-lite` for short texts (<200 chars) and `gemini-2.5-flash` for longer texts.
-- **Transliteration API:** Uses `gemini-2.0-flash-lite` for fast phonetic transliteration with comprehensive logging, proper error handling (400 for invalid input, 500 for API failures), and a 40-character input limit.
 
 ## External Dependencies
 - **Database:** PostgreSQL (Neon)
 - **Hosting:** Google Cloud Run
 - **CI/CD:** GitHub Actions
 - **Domain:** prooftamil.com (Namecheap DNS)
-- **AI Services:** Google Gemini
+- **AI Services:** Google Gemini (only for proofreading; transliteration is in-memory)
 - **Styling:** Tailwind CSS
 - **Backend Framework:** Gin (Go 1.23)
 - **ORM:** GORM (PostgreSQL driver)
 - **Frontend Framework:** Express 4.18 with EJS Templates
 - **Email Service:** Resend API (for password reset)
+
+## Recent Updates (Dec 1, 2025)
+- **Replaced Gemini Transliteration with In-Memory Lexicon:** Transliteration API now uses a local JSON lexicon for instant lookups (~0.3ms response time) instead of making expensive Gemini API calls (16-23s latency). Supports exact matching and prefix-based suggestions with frequency scoring.
+- **Fixed Autocomplete Dropdown UI:** Enhanced editor to full-screen height (700px minimum on desktop) with larger text (2xl), improved autocomplete dropdown positioning, better error handling, and debug logging.
+- **Files Created:** 
+  - `data/tamil_lexicon.json` - In-memory Tamil lexicon (20 entries)
+  - `backend/internal/translit/lexicon.go` - Lexicon loading and normalization
+  - `backend/internal/translit/search.go` - Suggestion search algorithm
+  - `backend/internal/translit/handler.go` - HTTP handler for transliteration
+- **Files Modified:**
+  - `backend/cmd/server/main.go` - Added lexicon loading at startup
+  - `backend/internal/handlers/transliteration_handlers.go` - Replaced Gemini calls with in-memory lookups

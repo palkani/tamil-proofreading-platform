@@ -13,6 +13,7 @@ import (
         "tamil-proofreading-platform/backend/internal/handlers"
         "tamil-proofreading-platform/backend/internal/middleware"
         "tamil-proofreading-platform/backend/internal/models"
+        "tamil-proofreading-platform/backend/internal/translit"
 )
 
 func main() {
@@ -24,6 +25,15 @@ func main() {
         log.Printf("========================================")
         log.Printf("[INIT] Tamil Proofreading Backend starting on port %s", port)
         log.Printf("========================================")
+
+        // Load in-memory Tamil lexicon for transliteration
+        lexiconPath := "data/tamil_lexicon.json"
+        if err := translit.LoadLexicon(lexiconPath); err != nil {
+                log.Printf("[ERROR] Failed to load Tamil lexicon: %v", err)
+                log.Printf("[INFO] Transliteration will not work without lexicon")
+        } else {
+                log.Printf("[SUCCESS] Tamil lexicon loaded from %s", lexiconPath)
+        }
 
         // Create router immediately
         router := gin.New()

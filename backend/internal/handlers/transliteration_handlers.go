@@ -5,7 +5,7 @@ import (
         "net/http"
         "strings"
 
-        "tamil-proofreading-platform/backend/internal/services/llm"
+        "tamil-proofreading-platform/backend/internal/translit"
 
         "github.com/gin-gonic/gin"
 )
@@ -15,9 +15,9 @@ type TransliterateRequest struct {
 }
 
 type TransliterateResponse struct {
-        Success     bool     `json:"success"`
-        Suggestions []string `json:"suggestions"`
-        Error       string   `json:"error,omitempty"`
+        Success     bool                   `json:"success"`
+        Suggestions []translit.Suggestion  `json:"suggestions"`
+        Error       string                 `json:"error,omitempty"`
 }
 
 // Transliterate handles English to Tamil transliteration
@@ -55,13 +55,13 @@ func (h *Handlers) Transliterate(c *gin.Context) {
                 return
         }
 
-        // Call Gemini transliteration
-        suggestions, err := llm.CallGeminiTransliterate(englishText, h.cfg.GoogleGenAIKey)
-        if err != nil {
-                log.Printf("[TRANSLIT-HANDLER] ERROR: Transliteration failed: %v", err)
-                c.JSON(http.StatusInternalServerError, TransliterateResponse{
-                        Success: false,
-                        Error:   "Transliteration failed: " + err.Error(),
+        // Get in-memory transliteration suggestions
+        suggestions := translit.GetSuggestions(englishText)
+        if len(suggestions) == 0 {
+                log.Printf("[TRANSLIT-HANDLER] No suggestions found for %q", englishText)
+                c.JSON(http.StatusOK, TransliterateResponse{
+                        Success:     true,
+                        Suggestions: []translit.Suggestion{},
                 })
                 return
         }
