@@ -69,7 +69,7 @@ async function resetPassword(req, res, email) {
   const supabase = createClient(req, res);
   
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.BASE_URL || 'https://prooftamil.com'}/auth/reset-password`
+    redirectTo: `${process.env.BASE_URL || 'https://www.prooftamil.com'}/auth/reset-password`
   });
   
   if (error) {
@@ -99,7 +99,7 @@ async function signInWithGoogle(req, res) {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: `${process.env.BASE_URL || 'https://prooftamil.com'}/auth/callback`
+      redirectTo: `${process.env.BASE_URL || 'https://www.prooftamil.com'}/auth/callback`
     }
   });
   
