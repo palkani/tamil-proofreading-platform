@@ -154,31 +154,31 @@ router.post('/logout', async (req, res) => {
 });
 
 router.get('/callback', async (req, res) => {
-  const code = req.query.code;
+  res.render('pages/auth-callback', {
+    title: 'Signing in... - ProofTamil'
+  });
+});
+
+router.post('/sync-session', async (req, res) => {
+  const { user, access_token } = req.body;
   
-  if (!code) {
-    return res.redirect('/login?error=No authorization code provided');
+  if (!user || !user.id) {
+    return res.status(400).json({ success: false, error: 'Invalid user data' });
   }
   
   try {
-    const result = await auth.exchangeCodeForSession(req, res, code);
-    
-    if (!result.success) {
-      return res.redirect('/login?error=' + encodeURIComponent(result.error));
-    }
-    
     req.session.user = {
-      id: result.user.id,
-      email: result.user.email,
-      name: result.user.user_metadata?.name || result.user.user_metadata?.full_name || result.user.email.split('@')[0],
-      role: result.user.email === 'prooftamil@gmail.com' ? 'admin' : 'user',
+      id: user.id,
+      email: user.email,
+      name: user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0],
+      role: user.email === 'prooftamil@gmail.com' ? 'admin' : 'user',
       supabase: true
     };
     
-    res.redirect('/dashboard');
+    res.json({ success: true });
   } catch (err) {
-    console.error('[Auth] OAuth callback error:', err);
-    res.redirect('/login?error=Authentication failed');
+    console.error('[Auth] Sync session error:', err);
+    res.status(500).json({ success: false, error: 'Failed to sync session' });
   }
 });
 

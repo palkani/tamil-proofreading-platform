@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signing in... - ProofTamil</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+    }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid #fed7aa;
+      border-top-color: #ea580c;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    h1 { color: #ea580c; font-size: 1.5rem; margin-bottom: 0.5rem; }
+    p { color: #666; }
+    .error { color: #dc2626; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <h1>Signing you in...</h1>
+    <p id="status">Please wait while we complete your authentication.</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    (async function() {
+      const statusEl = document.getElementById('status');
+      
+      try {
+        const SUPABASE_URL = '<%= process.env.VITE_SUPABASE_URL || "" %>';
+        const SUPABASE_ANON_KEY = '<%= process.env.VITE_SUPABASE_ANON_KEY || "" %>';
+        
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+          throw new Error('Supabase configuration missing');
+        }
+        
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const queryParams = new URLSearchParams(window.location.search);
+        
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const code = queryParams.get('code');
+        const error = queryParams.get('error') || hashParams.get('error');
+        const errorDescription = queryParams.get('error_description') || hashParams.get('error_description');
+        
+        if (error) {
+          throw new Error(errorDescription || error);
+        }
+        
+        let session = null;
+        
+        if (code) {
+          statusEl.textContent = 'Exchanging authorization code...';
+          const { data, error: exchangeError } = await supabaseClient.auth.exchangeCodeForSession(code);
+          if (exchangeError) throw exchangeError;
+          session = data.session;
+        } else if (accessToken && refreshToken) {
+          statusEl.textContent = 'Setting up your session...';
+          const { data, error: setError } = await supabaseClient.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          if (setError) throw setError;
+          session = data.session;
+        } else {
+          const { data } = await supabaseClient.auth.getSession();
+          session = data.session;
+        }
+        
+        if (session) {
+          statusEl.textContent = 'Session established, syncing...';
+          
+          const response = await fetch('/auth/sync-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user: session.user,
+              access_token: session.access_token
+            })
+          });
+          
+          if (response.ok) {
+            statusEl.textContent = 'Success! Redirecting...';
+            window.location.href = '/dashboard';
+          } else {
+            window.location.href = '/dashboard';
+          }
+        } else {
+          throw new Error('No session established');
+        }
+        
+      } catch (err) {
+        console.error('Auth callback error:', err);
+        statusEl.innerHTML = '<span class="error">Authentication failed: ' + (err.message || 'Unknown error') + '</span>';
+        setTimeout(() => {
+          window.location.href = '/login?error=' + encodeURIComponent(err.message || 'Authentication failed');
+        }, 2000);
+      }
+    })();
+  </script>
+</body>
+</html>
