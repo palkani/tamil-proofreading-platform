@@ -35,7 +35,14 @@ The platform utilizes a Go backend (port 8080) and an Express.js frontend with E
     - Configured for deterministic results (`temperature: 0`, `topP: 0.1`).
     - Provides error titles and descriptions exclusively in Tamil.
     - Spelling mistakes are underlined in the editor.
-- **Authentication:** Session-based authentication with Express sessions and integrated Google OAuth 2.0. Includes a secure password reset system with token generation, hashing, expiration, and one-time use.
+- **Authentication (Supabase):** Migrated from session-based auth to Supabase Auth with SSR support using `@supabase/ssr`. Features:
+    - Email/password signup and login via Supabase
+    - Google OAuth integration via Supabase
+    - JWT-based authentication with automatic token refresh
+    - Secure cookie-based session management
+    - Password reset flow with email verification
+    - Go backend JWT verification middleware using JWKS from Supabase
+    - Session cleanup when Supabase tokens expire (security enhancement)
 - **Analytics & Visitor Tracking:** Tracks page views and user activities in PostgreSQL, with an admin-only dashboard (`/analytics`) providing visualizations.
 - **Backend API:** Provides endpoints for AI proofreading, draft persistence, and user management.
 - **Frontend Controllers:** Vanilla JavaScript modules manage features.
@@ -54,8 +61,21 @@ The platform utilizes a Go backend (port 8080) and an Express.js frontend with E
 - **ORM:** GORM (PostgreSQL driver)
 - **Frontend Framework:** Express 4.18 with EJS Templates
 - **Email Service:** Resend API (for password reset)
+- **Authentication Provider:** Supabase Auth (email/password + Google OAuth)
 
-## Recent Updates (Dec 1, 2025)
+## Recent Updates (Dec 3, 2025)
+- **Supabase Auth Integration:** Complete migration from session-based auth to Supabase Auth with SSR support.
+  - Added `@supabase/supabase-js` and `@supabase/ssr` packages
+  - Created Express.js Supabase client helper (`express-frontend/lib/supabase.js`)
+  - Created auth module with signup/login/logout/password reset (`express-frontend/lib/auth.js`)
+  - Created Cloud Run API client with JWT token forwarding (`express-frontend/lib/cloudrunClient.js`)
+  - Updated auth middleware for Supabase session validation with automatic cleanup on token expiry
+  - Created Supabase JWT verification middleware for Go backend (`backend/internal/middleware/supabase_jwt.go`)
+  - Updated login/register/reset-password pages to use Supabase auth
+  - Created client-side Supabase helper (`express-frontend/public/js/supabaseClient.js`)
+  - Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` in `.env.local`
+
+## Previous Updates (Dec 1, 2025)
 - **Fixed API Endpoint Mismatch:** Updated frontend API calls from `/api/transliterate` to `/api/v1/transliterate` in home-editor.js and editor.js (5 total occurrences) to match backend routes and eliminate 404 errors.
 - **Fixed [object Object] Bug:** Corrected suggestion handling in frontend - API returns `{word: "...", score: ...}` objects, not strings. Updated renderSuggestions, insertSuggestion, transliterateFromInput, and transliterateFromKeypress to properly extract `.word` property.
 - **Replaced Gemini Transliteration with In-Memory Lexicon:** Transliteration API now uses a local JSON lexicon for instant lookups (~0.3ms response time) instead of making expensive Gemini API calls (16-23s latency). Supports exact matching, prefix-based matching, and fuzzy matching with Levenshtein distance for typos and unknown words.

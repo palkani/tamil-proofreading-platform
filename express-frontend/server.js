@@ -137,12 +137,21 @@ app.get('/sitemap.xml', (req, res) => {
   res.send(sitemap);
 });
 
+// Load Supabase .env.local
+require('dotenv').config({ path: '.env.local' });
+
+// Supabase auth middleware
+const { supabaseAuthMiddleware } = require('./middleware/auth');
+app.use(supabaseAuthMiddleware);
+
 // Routes
 const indexRouter = require('./routes/index');
 const workspaceRouter = require('./routes/workspace');
 const apiRouter = require('./routes/api');
 const processRouter = require('./routes/process');
+const authRouter = require('./routes/auth');
 
+app.use('/auth', authRouter);
 app.use('/', indexRouter);
 app.use('/workspace', workspaceRouter);
 app.use('/api', apiRouter);

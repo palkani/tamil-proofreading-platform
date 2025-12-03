@@ -183,17 +183,81 @@
   </div>
 </div>
 
-<script src="/js/register.js?v=20251126d"></script>
-<script src="/js/google-auth.js?v=20251126d"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-document.getElementById('google-signup-btn')?.addEventListener('click', () => {
-  if (window.triggerGoogleSignIn) {
-    window.triggerGoogleSignIn();
-  } else {
-    const errorDiv = document.getElementById('error-message');
-    errorDiv.textContent = 'Google Sign-In is loading. Please wait a moment and try again.';
-    errorDiv.classList.remove('hidden');
-  }
-});
+window.SUPABASE_CONFIG = {
+  url: '<%= process.env.VITE_SUPABASE_URL || "" %>',
+  anonKey: '<%= process.env.VITE_SUPABASE_ANON_KEY || "" %>'
+};
+</script>
+<script src="/js/supabaseClient.js?v=20251203"></script>
+<script src="/js/register.js?v=20251203"></script>
+<script>
+(function() {
+  const googleBtn = document.getElementById('google-signup-btn');
+  const errorDiv = document.getElementById('error-message');
+  const form = document.getElementById('register-form');
+  
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const name = document.getElementById('name').value;
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const submitBtn = document.getElementById('submit-btn');
+    
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating account...';
+    errorDiv.classList.add('hidden');
+    
+    try {
+      const response = await fetch('/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        if (data.needsConfirmation) {
+          const successDiv = document.getElementById('verification-success') || errorDiv;
+          successDiv.textContent = 'Check your email to confirm your account!';
+          successDiv.classList.remove('hidden', 'bg-red-50', 'border-red-500/40', 'text-red-700');
+          successDiv.classList.add('bg-green-50', 'border-green-500/40', 'text-green-700');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Create free account';
+        } else {
+          window.location.href = data.redirect || '/dashboard';
+        }
+      } else {
+        errorDiv.textContent = data.error || 'Registration failed. Please try again.';
+        errorDiv.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create free account';
+      }
+    } catch (err) {
+      errorDiv.textContent = 'Connection error. Please try again.';
+      errorDiv.classList.remove('hidden');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create free account';
+    }
+  });
+  
+  googleBtn?.addEventListener('click', async () => {
+    try {
+      const result = await SupabaseAuth.signInWithGoogle();
+      if (result.success && result.url) {
+        window.location.href = result.url;
+      } else {
+        errorDiv.textContent = result.error || 'Google Sign-Up failed';
+        errorDiv.classList.remove('hidden');
+      }
+    } catch (err) {
+      errorDiv.textContent = 'Google Sign-Up failed. Please try again.';
+      errorDiv.classList.remove('hidden');
+    }
+  });
+})();
 </script>
 <%- include('../partials/footer') %>

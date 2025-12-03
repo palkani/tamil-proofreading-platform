@@ -1,0 +1,272 @@
+const express = require('express');
+const router = express.Router();
+const auth = require('../lib/auth');
+const { createClient } = require('../lib/supabase');
+const { getSeoData } = require('../config/seo');
+
+router.post('/signup', async (req, res) => {
+  const { email, password, name } = req.body;
+  
+  if (!email || !password) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Email and password are required' 
+    });
+  }
+  
+  try {
+    const result = await auth.signup(req, res, email, password, name);
+    
+    if (!result.success) {
+      if (req.xhr || req.headers.accept?.includes('application/json')) {
+        return res.status(400).json(result);
+      }
+      const seo = getSeoData('register');
+      return res.render('pages/register', {
+        title: seo.title,
+        seo: seo,
+        error: result.error,
+        googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+      });
+    }
+    
+    if (result.needsConfirmation) {
+      if (req.xhr || req.headers.accept?.includes('application/json')) {
+        return res.json({
+          success: true,
+          message: 'Please check your email to confirm your account',
+          needsConfirmation: true
+        });
+      }
+      const seo = getSeoData('login');
+      return res.render('pages/login', {
+        title: seo.title,
+        seo: seo,
+        message: 'Registration successful! Please check your email to confirm your account.',
+        googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+      });
+    }
+    
+    req.session.user = {
+      id: result.user.id,
+      email: result.user.email,
+      name: name || result.user.email.split('@')[0],
+      role: email === 'prooftamil@gmail.com' ? 'admin' : 'user',
+      supabase: true
+    };
+    
+    if (req.xhr || req.headers.accept?.includes('application/json')) {
+      return res.json({ success: true, redirect: '/dashboard' });
+    }
+    res.redirect('/dashboard');
+  } catch (err) {
+    console.error('[Auth] Signup error:', err);
+    if (req.xhr || req.headers.accept?.includes('application/json')) {
+      return res.status(500).json({ success: false, error: 'Registration failed' });
+    }
+    const seo = getSeoData('register');
+    res.render('pages/register', {
+      title: seo.title,
+      seo: seo,
+      error: 'Registration failed. Please try again.',
+      googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+    });
+  }
+});
+
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  if (!email || !password) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Email and password are required' 
+    });
+  }
+  
+  try {
+    const result = await auth.login(req, res, email, password);
+    
+    if (!result.success) {
+      if (req.xhr || req.headers.accept?.includes('application/json')) {
+        return res.status(401).json(result);
+      }
+      const seo = getSeoData('login');
+      return res.render('pages/login', {
+        title: seo.title,
+        seo: seo,
+        error: result.error,
+        googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+      });
+    }
+    
+    req.session.user = {
+      id: result.user.id,
+      email: result.user.email,
+      name: result.user.user_metadata?.name || result.user.email.split('@')[0],
+      role: email === 'prooftamil@gmail.com' ? 'admin' : 'user',
+      supabase: true
+    };
+    
+    const redirectTo = req.session.returnTo || '/dashboard';
+    delete req.session.returnTo;
+    
+    if (req.xhr || req.headers.accept?.includes('application/json')) {
+      return res.json({ success: true, redirect: redirectTo });
+    }
+    res.redirect(redirectTo);
+  } catch (err) {
+    console.error('[Auth] Login error:', err);
+    if (req.xhr || req.headers.accept?.includes('application/json')) {
+      return res.status(500).json({ success: false, error: 'Login failed' });
+    }
+    const seo = getSeoData('login');
+    res.render('pages/login', {
+      title: seo.title,
+      seo: seo,
+      error: 'Login failed. Please try again.',
+      googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+    });
+  }
+});
+
+router.post('/logout', async (req, res) => {
+  try {
+    await auth.logout(req, res);
+    
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('[Auth] Session destroy error:', err);
+      }
+      res.clearCookie('auth_token');
+      
+      if (req.xhr || req.headers.accept?.includes('application/json')) {
+        return res.json({ success: true, redirect: '/' });
+      }
+      res.redirect('/');
+    });
+  } catch (err) {
+    console.error('[Auth] Logout error:', err);
+    req.session.destroy(() => {
+      res.redirect('/');
+    });
+  }
+});
+
+router.get('/callback', async (req, res) => {
+  const code = req.query.code;
+  
+  if (!code) {
+    return res.redirect('/login?error=No authorization code provided');
+  }
+  
+  try {
+    const result = await auth.exchangeCodeForSession(req, res, code);
+    
+    if (!result.success) {
+      return res.redirect('/login?error=' + encodeURIComponent(result.error));
+    }
+    
+    req.session.user = {
+      id: result.user.id,
+      email: result.user.email,
+      name: result.user.user_metadata?.name || result.user.user_metadata?.full_name || result.user.email.split('@')[0],
+      role: result.user.email === 'prooftamil@gmail.com' ? 'admin' : 'user',
+      supabase: true
+    };
+    
+    res.redirect('/dashboard');
+  } catch (err) {
+    console.error('[Auth] OAuth callback error:', err);
+    res.redirect('/login?error=Authentication failed');
+  }
+});
+
+router.get('/google', async (req, res) => {
+  try {
+    const result = await auth.signInWithGoogle(req, res);
+    
+    if (!result.success) {
+      return res.redirect('/login?error=' + encodeURIComponent(result.error));
+    }
+    
+    res.redirect(result.url);
+  } catch (err) {
+    console.error('[Auth] Google OAuth error:', err);
+    res.redirect('/login?error=Google authentication failed');
+  }
+});
+
+router.post('/reset-password', async (req, res) => {
+  const { email } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({ success: false, error: 'Email is required' });
+  }
+  
+  try {
+    const result = await auth.resetPassword(req, res, email);
+    
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Password reset email sent. Please check your inbox.' 
+    });
+  } catch (err) {
+    console.error('[Auth] Reset password error:', err);
+    res.status(500).json({ success: false, error: 'Failed to send reset email' });
+  }
+});
+
+router.get('/reset-password', (req, res) => {
+  const seo = getSeoData('resetPassword') || { title: 'Reset Password - ProofTamil' };
+  res.render('pages/reset-password', {
+    title: seo.title,
+    seo: seo
+  });
+});
+
+router.post('/update-password', async (req, res) => {
+  const { password } = req.body;
+  
+  if (!password) {
+    return res.status(400).json({ success: false, error: 'Password is required' });
+  }
+  
+  try {
+    const result = await auth.updatePassword(req, res, password);
+    
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('[Auth] Update password error:', err);
+    res.status(500).json({ success: false, error: 'Failed to update password' });
+  }
+});
+
+router.get('/confirm', async (req, res) => {
+  const { token_hash, type } = req.query;
+  const supabase = createClient(req, res);
+  
+  if (token_hash && type) {
+    try {
+      const { error } = await supabase.auth.verifyOtp({ token_hash, type });
+      
+      if (error) {
+        return res.redirect('/login?error=' + encodeURIComponent(error.message));
+      }
+    } catch (err) {
+      return res.redirect('/login?error=Verification failed');
+    }
+  }
+  
+  res.redirect('/login?message=Email confirmed! Please login.');
+});
+
+module.exports = router;
