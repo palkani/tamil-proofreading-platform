@@ -96,16 +96,22 @@
           const response = await fetch('/auth/sync-session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
               user: session.user,
-              access_token: session.access_token
+              access_token: session.access_token,
+              refresh_token: session.refresh_token
             })
           });
           
           if (response.ok) {
             statusEl.textContent = 'Success! Redirecting...';
-            window.location.href = '/dashboard';
+            setTimeout(() => {
+              window.location.href = '/dashboard';
+            }, 100);
           } else {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Sync failed:', errorData);
             window.location.href = '/dashboard';
           }
         } else {

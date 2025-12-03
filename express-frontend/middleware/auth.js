@@ -11,13 +11,22 @@ async function supabaseAuthMiddleware(req, res, next) {
         email: user.email,
         name: user.user_metadata?.name || user.user_metadata?.full_name || user.email.split('@')[0],
         role: user.email === 'prooftamil@gmail.com' ? 'admin' : 'user',
-        supabase: true
+        supabase: true,
+        syncedAt: Date.now()
       };
       res.locals.user = req.session.user;
     } else if (req.session?.user?.supabase) {
-      console.log('[Auth Middleware] Supabase session expired, clearing session');
-      delete req.session.user;
-      res.locals.user = null;
+      const syncedAt = req.session.user.syncedAt || 0;
+      const timeSinceSync = Date.now() - syncedAt;
+      const GRACE_PERIOD = 60 * 60 * 1000;
+      
+      if (timeSinceSync < GRACE_PERIOD) {
+        res.locals.user = req.session.user;
+      } else {
+        console.log('[Auth Middleware] Supabase session expired, clearing session');
+        delete req.session.user;
+        res.locals.user = null;
+      }
     } else if (req.session?.user) {
       res.locals.user = req.session.user;
     } else {
@@ -29,11 +38,10 @@ async function supabaseAuthMiddleware(req, res, next) {
     next();
   } catch (err) {
     console.error('[Auth Middleware] Error:', err.message);
-    if (req.session?.user?.supabase) {
-      delete req.session.user;
-      res.locals.user = null;
+    if (req.session?.user) {
+      res.locals.user = req.session.user;
     } else {
-      res.locals.user = req.session?.user || null;
+      res.locals.user = null;
     }
     next();
   }

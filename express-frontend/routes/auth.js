@@ -160,21 +160,43 @@ router.get('/callback', async (req, res) => {
 });
 
 router.post('/sync-session', async (req, res) => {
-  const { user, access_token } = req.body;
+  const { user, access_token, refresh_token } = req.body;
   
   if (!user || !user.id) {
     return res.status(400).json({ success: false, error: 'Invalid user data' });
   }
   
   try {
+    if (access_token && refresh_token) {
+      const cookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 365 * 24 * 60 * 60 * 1000,
+        path: '/'
+      };
+      
+      const supabaseProjectId = (process.env.VITE_SUPABASE_URL || '').match(/https:\/\/([^.]+)/)?.[1] || 'project';
+      res.cookie(`sb-${supabaseProjectId}-auth-token`, JSON.stringify({
+        access_token,
+        refresh_token,
+        token_type: 'bearer',
+        expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        user
+      }), cookieOptions);
+    }
+    
     req.session.user = {
       id: user.id,
       email: user.email,
       name: user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0],
       role: user.email === 'prooftamil@gmail.com' ? 'admin' : 'user',
-      supabase: true
+      supabase: true,
+      syncedAt: Date.now()
     };
     
+    console.log('[Auth] Session synced for user:', user.email);
     res.json({ success: true });
   } catch (err) {
     console.error('[Auth] Sync session error:', err);
