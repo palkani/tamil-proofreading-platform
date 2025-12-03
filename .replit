@@ -5,7 +5,7 @@ integrations = ["javascript_gemini_ai_integrations:1.0.0"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["go", "google-cloud-sdk-gce"]
+packages = ["go", "google-cloud-sdk-gce", "nano"]
 
 [workflows]
 runButton = "Project"
