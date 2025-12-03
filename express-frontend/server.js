@@ -75,7 +75,8 @@ const sessionConfig = {
     secure: isProduction, // true in production (HTTPS only), false in dev (HTTP)
     sameSite: 'lax',      // Allow cross-site redirects from OAuth
     httpOnly: true,       // Don't expose to JavaScript
-    maxAge: 24 * 60 * 60 * 1000
+    maxAge: 24 * 60 * 60 * 1000,
+    domain: isProduction ? '.prooftamil.com' : undefined // Share cookie across www and apex
   }
 };
 

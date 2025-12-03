@@ -167,13 +167,17 @@ router.post('/sync-session', async (req, res) => {
   }
   
   try {
+    const isProduction = process.env.NODE_ENV === 'production' || 
+                         (process.env.BACKEND_URL && process.env.BACKEND_URL.includes('run.app'));
+    
     if (access_token && refresh_token) {
       const cookieOptions = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProduction,
         sameSite: 'lax',
         maxAge: 365 * 24 * 60 * 60 * 1000,
-        path: '/'
+        path: '/',
+        domain: isProduction ? '.prooftamil.com' : undefined
       };
       
       const supabaseProjectId = (process.env.VITE_SUPABASE_URL || '').match(/https:\/\/([^.]+)/)?.[1] || 'project';
