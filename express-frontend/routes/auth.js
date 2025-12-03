@@ -168,7 +168,10 @@ router.post('/sync-session', async (req, res) => {
   
   try {
     const isProduction = process.env.NODE_ENV === 'production' || 
-                         (process.env.BACKEND_URL && process.env.BACKEND_URL.includes('run.app'));
+                         (process.env.BACKEND_URL && process.env.BACKEND_URL.includes('run.app')) ||
+                         (req.get('host') && req.get('host').includes('prooftamil.com'));
+    
+    console.log('[Auth] Sync session - isProduction:', isProduction, 'host:', req.get('host'));
     
     if (access_token && refresh_token) {
       const cookieOptions = {
@@ -189,6 +192,7 @@ router.post('/sync-session', async (req, res) => {
         expires_at: Math.floor(Date.now() / 1000) + 3600,
         user
       }), cookieOptions);
+      console.log('[Auth] Supabase cookie set with domain:', cookieOptions.domain);
     }
     
     req.session.user = {
@@ -200,8 +204,14 @@ router.post('/sync-session', async (req, res) => {
       syncedAt: Date.now()
     };
     
-    console.log('[Auth] Session synced for user:', user.email);
-    res.json({ success: true });
+    req.session.save((err) => {
+      if (err) {
+        console.error('[Auth] Session save error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to save session' });
+      }
+      console.log('[Auth] Session saved for user:', user.email, 'session ID:', req.sessionID);
+      res.json({ success: true, sessionId: req.sessionID });
+    });
   } catch (err) {
     console.error('[Auth] Sync session error:', err);
     res.status(500).json({ success: false, error: 'Failed to sync session' });

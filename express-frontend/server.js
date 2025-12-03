@@ -32,8 +32,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 // Session configuration - MUST work in development AND Cloud Run
+// Check multiple signals for production environment
 const isProduction = process.env.NODE_ENV === 'production' || 
-                     (process.env.BACKEND_URL && process.env.BACKEND_URL.includes('run.app'));
+                     (process.env.BACKEND_URL && process.env.BACKEND_URL.includes('run.app')) ||
+                     process.env.K_SERVICE; // K_SERVICE is set by Cloud Run
 
 // Create PostgreSQL session store - persists sessions across instances
 let pgPool;
