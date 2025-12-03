@@ -1,17 +1,43 @@
 const { createServerClient } = require('@supabase/ssr');
-require('dotenv').config({ path: '.env.local' });
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+try {
+  require('dotenv').config({ path: '.env.local' });
+} catch (e) {
+  // dotenv not available or .env.local doesn't exist - ok in production
+}
+
+function getSupabaseConfig() {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  return { url, key };
+}
+
+const { url: SUPABASE_URL, key: SUPABASE_ANON_KEY } = getSupabaseConfig();
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn('[Supabase] Warning: Missing SUPABASE_URL or SUPABASE_ANON_KEY');
+  console.warn('[Supabase] Warning: Missing SUPABASE_URL or SUPABASE_ANON_KEY - auth features disabled');
 }
 
 function createClient(req, res) {
+  const { url, key } = getSupabaseConfig();
+  
+  if (!url || !key) {
+    return {
+      auth: {
+        getUser: async () => ({ data: { user: null }, error: { message: 'Supabase not configured' } }),
+        getSession: async () => ({ data: { session: null }, error: { message: 'Supabase not configured' } }),
+        signInWithPassword: async () => ({ data: null, error: { message: 'Supabase not configured' } }),
+        signUp: async () => ({ data: null, error: { message: 'Supabase not configured' } }),
+        signOut: async () => ({ error: null }),
+        resetPasswordForEmail: async () => ({ error: { message: 'Supabase not configured' } }),
+        signInWithOAuth: async () => ({ data: null, error: { message: 'Supabase not configured' } }),
+      }
+    };
+  }
+  
   return createServerClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
+    url,
+    key,
     {
       cookies: {
         get(name) {

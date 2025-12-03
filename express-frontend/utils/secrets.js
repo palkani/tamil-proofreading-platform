@@ -79,6 +79,8 @@ async function loadAllSecrets() {
     { name: 'GOOGLE_CLIENT_SECRET', env: 'GOOGLE_CLIENT_SECRET' },
     { name: 'RESEND_API_KEY', env: 'RESEND_API_KEY' },
     { name: 'SESSION_SECRET', env: 'SESSION_SECRET' },
+    { name: 'VITE_SUPABASE_URL', env: 'VITE_SUPABASE_URL' },
+    { name: 'VITE_SUPABASE_ANON_KEY', env: 'VITE_SUPABASE_ANON_KEY' },
   ];
   
   try {
