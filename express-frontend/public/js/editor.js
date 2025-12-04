@@ -1,12 +1,13 @@
-// Rich Text Editor with Tamil Support
-
 class TamilEditor {
   constructor(editorElement) {
     this.editor = editorElement;
     this.maxWords = 2000;
+    this.translitHelper = null;
+    this.autocompleteDropdown = null;
+    
     this.setupEditor();
     this.setupToolbar();
-    this.setupAutocomplete();
+    this.initTransliterationHelper();
   }
   
   countWords(text) {
@@ -22,19 +23,11 @@ class TamilEditor {
       const wordsArray = text.split(/\s+/);
       const truncated = wordsArray.slice(0, this.maxWords).join(' ');
       this.editor.textContent = truncated;
-      
-      // Move cursor to end
-      const range = document.createRange();
-      const sel = window.getSelection();
-      range.selectNodeContents(this.editor);
-      range.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(range);
+      this.moveCursorToEnd();
     }
   }
 
   setupEditor() {
-    // Set up placeholder behavior
     this.editor.addEventListener('focus', () => {
       if (this.editor.textContent.trim() === '') {
         this.editor.innerHTML = '';
@@ -47,37 +40,421 @@ class TamilEditor {
       }
     });
 
-    // Track content changes
     this.editor.addEventListener('input', () => {
       this.enforceWordLimit();
       this.onContentChange();
+      
+      if (this.translitHelper) {
+        this.translitHelper.triggerAutocomplete();
+      }
     });
 
-    // Handle paste events - Convert English to Tamil
     this.editor.addEventListener('paste', (e) => {
       e.preventDefault();
       const text = e.clipboardData.getData('text/plain');
       
-      // Check if text contains mostly English characters
       const englishRatio = (text.match(/[a-zA-Z]/g) || []).length / text.length;
       
       if (englishRatio > 0.5) {
-        // Text is mostly English, convert to Tamil
         const tamilText = this.convertEnglishParagraphToTamil(text);
         document.execCommand('insertText', false, tamilText);
-        console.log('Converted English to Tamil:', { original: text, converted: tamilText });
       } else {
-        // Keep as is (already Tamil or mixed)
         document.execCommand('insertText', false, text);
       }
       
-      // Explicitly trigger content change for paste events
       this.onContentChange();
+    });
+    
+    this.editor.addEventListener('keydown', (e) => this.handleKeyDown(e));
+  }
+  
+  handleKeyDown(e) {
+    if (this.translitHelper && this.translitHelper.isVisible) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Escape') {
+        return;
+      }
+    }
+    
+    if (e.key >= '1' && e.key <= '5') {
+      if (this.translitHelper && this.translitHelper.isVisible) {
+        const index = parseInt(e.key) - 1;
+        if (index < this.translitHelper.currentSuggestions.length) {
+          e.preventDefault();
+          this.translitHelper.selectByIndex(index);
+          return;
+        }
+      }
+    }
+    
+    if (e.key === ' ') {
+      if (this.translitHelper && this.translitHelper.isVisible) {
+        this.translitHelper.hide();
+      }
+      
+      const handled = this.handleSpaceConversion(e);
+      if (handled) {
+        e.preventDefault();
+      }
+    }
+  }
+  
+  handleSpaceConversion(e) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return false;
+    
+    const range = selection.getRangeAt(0);
+    
+    let currentWord = '';
+    let wordStart = 0;
+    let caretOffset = 0;
+    let textNode = null;
+    
+    if (range.startContainer.nodeType === Node.TEXT_NODE) {
+      textNode = range.startContainer;
+      const text = textNode.textContent || '';
+      caretOffset = range.startOffset;
+      
+      wordStart = caretOffset;
+      while (wordStart > 0 && !/\s/.test(text[wordStart - 1])) {
+        wordStart--;
+      }
+      currentWord = text.substring(wordStart, caretOffset);
+    } else {
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(this.editor);
+      preCaretRange.setEnd(range.startContainer, range.startOffset);
+      const textBefore = preCaretRange.toString();
+      
+      wordStart = textBefore.length;
+      while (wordStart > 0 && !/\s/.test(textBefore[wordStart - 1])) {
+        wordStart--;
+      }
+      currentWord = textBefore.substring(wordStart);
+      caretOffset = textBefore.length;
+    }
+    
+    if (!currentWord || !/^[a-zA-Z]+$/.test(currentWord)) {
+      return false;
+    }
+    
+    const tamilWord = this.convertWordToTamil(currentWord);
+    
+    if (tamilWord && tamilWord !== currentWord) {
+      this.replaceWordWithExecCommand(currentWord, tamilWord);
+      return true;
+    }
+    
+    if (this.translitHelper && this.translitHelper.cache.has(currentWord)) {
+      const suggestions = this.translitHelper.cache.get(currentWord);
+      if (suggestions && suggestions.length > 0) {
+        this.replaceWordWithExecCommand(currentWord, suggestions[0]);
+        return true;
+      }
+    }
+    
+    this.fetchAndReplaceWord(currentWord);
+    return true;
+  }
+  
+  replaceWordWithExecCommand(englishWord, tamilWord) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) {
+      this.editor.focus();
+      document.execCommand('insertText', false, tamilWord + ' ');
+      this.onContentChange();
+      return;
+    }
+    
+    const range = selection.getRangeAt(0);
+    
+    const preCaretRange = range.cloneRange();
+    preCaretRange.selectNodeContents(this.editor);
+    preCaretRange.setEnd(range.startContainer, range.startOffset);
+    const textBefore = preCaretRange.toString();
+    
+    const wordStart = textBefore.lastIndexOf(englishWord);
+    
+    if (wordStart === -1 || textBefore.length === 0) {
+      if (range.startContainer.nodeType === Node.TEXT_NODE) {
+        const text = range.startContainer.textContent || '';
+        const caretOffset = range.startOffset;
+        
+        let localWordStart = caretOffset;
+        while (localWordStart > 0 && !/\s/.test(text[localWordStart - 1])) {
+          localWordStart--;
+        }
+        
+        const localWord = text.substring(localWordStart, caretOffset);
+        if (localWord === englishWord) {
+          const newRange = document.createRange();
+          newRange.setStart(range.startContainer, localWordStart);
+          newRange.setEnd(range.startContainer, caretOffset);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+          document.execCommand('insertText', false, tamilWord + ' ');
+          this.onContentChange();
+          return;
+        }
+      }
+      
+      document.execCommand('insertText', false, tamilWord + ' ');
+      this.onContentChange();
+      return;
+    }
+    
+    this.selectTextRange(wordStart, wordStart + englishWord.length);
+    document.execCommand('insertText', false, tamilWord + ' ');
+    this.onContentChange();
+  }
+  
+  selectTextRange(start, end) {
+    const walker = document.createTreeWalker(
+      this.editor,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    let charCount = 0;
+    let startNode = null, startOffset = 0;
+    let endNode = null, endOffset = 0;
+    let textNode = walker.nextNode();
+    
+    while (textNode) {
+      const nodeLength = textNode.textContent.length;
+      const nextCharCount = charCount + nodeLength;
+      
+      if (!startNode && start >= charCount && start < nextCharCount) {
+        startNode = textNode;
+        startOffset = start - charCount;
+      }
+      
+      if (end >= charCount && end <= nextCharCount) {
+        endNode = textNode;
+        endOffset = end - charCount;
+        break;
+      }
+      
+      charCount = nextCharCount;
+      textNode = walker.nextNode();
+    }
+    
+    if (startNode && endNode) {
+      const range = document.createRange();
+      range.setStart(startNode, startOffset);
+      range.setEnd(endNode, endOffset);
+      
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  }
+  
+  async fetchAndReplaceWord(englishWord) {
+    try {
+      const response = await fetch('/api/v1/transliterate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: englishWord })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.suggestions?.[0]) {
+          const suggestion = data.suggestions[0];
+          const tamilWord = typeof suggestion === 'string' ? suggestion : suggestion.word;
+          
+          if (this.translitHelper) {
+            this.translitHelper.addToCache(englishWord, data.suggestions.map(s => 
+              typeof s === 'string' ? s : s.word
+            ));
+          }
+          
+          this.replaceWordWithExecCommand(englishWord, tamilWord);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('[TamilEditor] Fetch error:', err);
+    }
+    
+    document.execCommand('insertText', false, ' ');
+    this.onContentChange();
+  }
+  
+  createAutocompleteDropdown() {
+    let dropdown = document.getElementById('workspace-translit-dropdown');
+    if (!dropdown) {
+      dropdown = document.createElement('div');
+      dropdown.id = 'workspace-translit-dropdown';
+      dropdown.className = 'hidden bg-white border-2 border-orange-200 rounded-lg shadow-xl overflow-hidden';
+      dropdown.style.cssText = 'min-width: 220px; max-height: 280px; overflow-y: auto;';
+      dropdown.innerHTML = '<div class="suggestions-list"></div>';
+      document.body.appendChild(dropdown);
+    }
+    this.autocompleteDropdown = dropdown;
+    return dropdown;
+  }
+  
+  initTransliterationHelper() {
+    if (typeof TransliterationHelper === 'undefined') {
+      console.warn('[TamilEditor] TransliterationHelper not loaded, using fallback autocomplete');
+      this.setupFallbackAutocomplete();
+      return;
+    }
+    
+    this.createAutocompleteDropdown();
+    
+    this.translitHelper = new TransliterationHelper({
+      debounceMs: 250,
+      apiEndpoint: '/api/v1/transliterate',
+      maxSuggestions: 6,
+      minWordLength: 2
+    });
+    
+    this.translitHelper.attach(
+      this.editor,
+      this.autocompleteDropdown,
+      (tamilWord) => {
+        this.onContentChange();
+      }
+    );
+  }
+  
+  setupFallbackAutocomplete() {
+    let autocompleteBox = null;
+    let selectedIndex = 0;
+    let currentSuggestions = [];
+    let currentPartialWord = '';
+    this.savedCursorPos = null;
+    let autocompleteTimeout = null;
+    const AUTOCOMPLETE_DELAY = 300;
+    
+    const removeAutocomplete = () => {
+      if (autocompleteBox) {
+        autocompleteBox.remove();
+        autocompleteBox = null;
+        currentSuggestions = [];
+        currentPartialWord = '';
+        selectedIndex = 0;
+      }
+    };
+    
+    const updateSelection = () => {
+      if (!autocompleteBox) return;
+      const items = autocompleteBox.querySelectorAll('div.px-4');
+      items.forEach((item, idx) => {
+        if (idx === selectedIndex) {
+          item.style.backgroundColor = '#ea580c';
+          item.style.color = '#ffffff';
+          item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+          item.style.backgroundColor = '';
+          item.style.color = '';
+        }
+      });
+    };
+    
+    this.editor.addEventListener('keydown', (e) => {
+      if (autocompleteBox && currentSuggestions.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          selectedIndex = (selectedIndex + 1) % currentSuggestions.length;
+          updateSelection();
+          return;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          selectedIndex = (selectedIndex - 1 + currentSuggestions.length) % currentSuggestions.length;
+          updateSelection();
+          return;
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          const selectedSuggestion = currentSuggestions[selectedIndex];
+          if (selectedSuggestion && currentPartialWord) {
+            this.insertSuggestion(currentPartialWord, selectedSuggestion);
+            removeAutocomplete();
+          }
+          return;
+        }
+      }
+      
+      if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Escape') {
+        removeAutocomplete();
+        if (e.key === 'Escape') return;
+      }
+    });
+    
+    this.editor.addEventListener('keyup', (e) => {
+      if (['Escape', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) {
+        return;
+      }
+
+      if (autocompleteTimeout) clearTimeout(autocompleteTimeout);
+
+      const selection = window.getSelection();
+      if (!selection.rangeCount) {
+        removeAutocomplete();
+        return;
+      }
+
+      const range = selection.getRangeAt(0);
+      const textBeforeCursor = range.startContainer.textContent?.substring(0, range.startOffset) || '';
+      const words = textBeforeCursor.split(/\s/);
+      const currentWord = words[words.length - 1];
+
+      if (!currentWord || currentWord.length < 1) {
+        removeAutocomplete();
+        return;
+      }
+
+      autocompleteTimeout = setTimeout(async () => {
+        let suggestions = [];
+
+        if (/[\u0B80-\u0BFF]/.test(currentWord)) {
+          try {
+            const response = await fetch(`/api/autocomplete?prefix=${encodeURIComponent(currentWord)}&limit=8`);
+            if (response.ok) {
+              const data = await response.json();
+              suggestions = data.suggestions || [];
+            }
+          } catch (err) {
+            console.log('Autocomplete API error:', err);
+          }
+        } 
+        else if (/^[a-zA-Z]+$/.test(currentWord) && currentWord.length >= 2) {
+          try {
+            const response = await fetch('/api/v1/transliterate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: currentWord })
+            });
+            if (response.ok) {
+              const data = await response.json();
+              if (data.suggestions) {
+                suggestions = data.suggestions.map(s => typeof s === 'string' ? s : s.word);
+              }
+            }
+          } catch (err) {
+            console.log('Transliteration API error:', err);
+          }
+        }
+        
+        if (suggestions.length > 0) {
+          this.savedCursorPos = this.getCursorPosition();
+          currentSuggestions = suggestions;
+          currentPartialWord = currentWord;
+          selectedIndex = 0;
+          this.showAutocomplete(suggestions, currentWord);
+          autocompleteBox = document.querySelector('.autocomplete-box');
+          updateSelection();
+        } else {
+          removeAutocomplete();
+        }
+      }, AUTOCOMPLETE_DELAY);
     });
   }
 
   setupToolbar() {
-    // All toolbar buttons
     const toolbarButtons = document.querySelectorAll('.toolbar-btn[data-command]');
     toolbarButtons.forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -85,14 +462,12 @@ class TamilEditor {
         const command = btn.getAttribute('data-command');
         this.executeCommand(command);
         
-        // Toggle active state for formatting buttons
         if (['bold', 'italic', 'underline', 'strikeThrough'].includes(command)) {
           btn.classList.toggle('active');
         }
       });
     });
     
-    // Font size selector
     const fontSizeSelect = document.getElementById('font-size-select');
     if (fontSizeSelect) {
       fontSizeSelect.addEventListener('change', (e) => {
@@ -107,7 +482,6 @@ class TamilEditor {
       });
     }
     
-    // Alignment dropdown
     const alignBtn = document.getElementById('align-dropdown-btn');
     const alignDropdown = document.getElementById('align-dropdown');
     if (alignBtn && alignDropdown) {
@@ -116,12 +490,10 @@ class TamilEditor {
         alignDropdown.classList.toggle('hidden');
       });
       
-      // Close dropdown when clicking outside
       document.addEventListener('click', () => {
         alignDropdown.classList.add('hidden');
       });
       
-      // Dropdown items
       const dropdownItems = alignDropdown.querySelectorAll('.dropdown-item');
       dropdownItems.forEach(item => {
         item.addEventListener('click', (e) => {
@@ -133,7 +505,6 @@ class TamilEditor {
       });
     }
     
-    // Insert link button
     const insertLinkBtn = document.getElementById('insert-link-btn');
     if (insertLinkBtn) {
       insertLinkBtn.addEventListener('click', (e) => {
@@ -146,7 +517,6 @@ class TamilEditor {
       });
     }
     
-    // Search button (placeholder functionality)
     const searchBtn = document.getElementById('search-btn');
     if (searchBtn) {
       searchBtn.addEventListener('click', (e) => {
@@ -158,7 +528,6 @@ class TamilEditor {
       });
     }
     
-    // Language toggle (placeholder - can be extended for actual Tamil/English switching)
     const languageToggle = document.getElementById('language-toggle-btn');
     if (languageToggle) {
       let isTamilMode = true;
@@ -183,193 +552,15 @@ class TamilEditor {
     document.execCommand(command, false, null);
     this.editor.focus();
   }
-
-  setupAutocomplete() {
-    let autocompleteBox = null;
-    let selectedIndex = 0; // Track selected autocomplete item
-    let currentSuggestions = []; // Store current suggestions
-    let currentPartialWord = ''; // Store current partial word being typed
-    this.savedCursorPos = null; // Store cursor position for autocomplete
-    this.currentEnglishWord = ''; // Track current English word for Google-style typing
-    let autocompleteTimeout = null; // Debounce timer for autocomplete
-    const AUTOCOMPLETE_DELAY = 300; // ms delay before showing suggestions
-    
-    // Helper to remove autocomplete
-    const removeAutocomplete = () => {
-      if (autocompleteBox) {
-        autocompleteBox.remove();
-        autocompleteBox = null;
-        currentSuggestions = [];
-        currentPartialWord = '';
-        selectedIndex = 0;
-      }
-    };
-    
-    // Helper to update selected item highlighting
-    const updateSelection = () => {
-      if (!autocompleteBox) return;
-      const items = autocompleteBox.querySelectorAll('div.px-4');
-      items.forEach((item, idx) => {
-        if (idx === selectedIndex) {
-          item.style.backgroundColor = '#ea580c'; // Blue-500
-          item.style.color = '#ffffff';
-          item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        } else {
-          item.style.backgroundColor = '';
-          item.style.color = '';
-        }
-      });
-    };
-    
-    // Google-style typing: Convert on Space key
-    this.editor.addEventListener('keydown', (e) => {
-      // Handle autocomplete keyboard navigation
-      if (autocompleteBox && currentSuggestions.length > 0) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          selectedIndex = (selectedIndex + 1) % currentSuggestions.length;
-          updateSelection();
-          return;
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          selectedIndex = (selectedIndex - 1 + currentSuggestions.length) % currentSuggestions.length;
-          updateSelection();
-          return;
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
-          // Insert the selected suggestion
-          const selectedSuggestion = currentSuggestions[selectedIndex];
-          if (selectedSuggestion && currentPartialWord) {
-            this.insertSuggestion(currentPartialWord, selectedSuggestion);
-            removeAutocomplete();
-          }
-          return;
-        }
-      }
-      
-      // Hide autocomplete on Backspace, Delete, or Escape
-      if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Escape') {
-        removeAutocomplete();
-        if (e.key === 'Escape') return;
-      }
-      
-      if (e.key === ' ') {
-        const selection = window.getSelection();
-        if (!selection.rangeCount) return;
-        
-        const range = selection.getRangeAt(0);
-        const textBeforeCursor = range.startContainer.textContent?.substring(0, range.startOffset) || '';
-        const words = textBeforeCursor.split(/\s/);
-        const currentWord = words[words.length - 1];
-        
-        // If typing English word, convert to Tamil on space
-        if (currentWord && /^[a-zA-Z]+$/.test(currentWord)) {
-          e.preventDefault();
-          
-          // Convert to Tamil
-          const tamilWord = this.convertWordToTamil(currentWord);
-          
-          if (tamilWord && tamilWord !== currentWord) {
-            // Replace English with Tamil
-            const cursorPos = this.getCursorPosition();
-            const fullText = this.editor.textContent || '';
-            let wordStart = cursorPos;
-            while (wordStart > 0 && fullText[wordStart - 1] && !/[\s\n]/.test(fullText[wordStart - 1])) {
-              wordStart--;
-            }
-            
-            const before = fullText.substring(0, wordStart);
-            const after = fullText.substring(cursorPos);
-            this.editor.textContent = before + tamilWord + ' ' + after;
-            
-            // Set cursor after the Tamil word and space
-            this.setCursorPosition(wordStart + tamilWord.length + 1);
-            this.onContentChange();
-            
-            // Close autocomplete
-            removeAutocomplete();
-          } else {
-            // No Tamil conversion, just add space normally
-            document.execCommand('insertText', false, ' ');
-            removeAutocomplete();
-          }
-        }
-      }
-    });
-    
-    this.editor.addEventListener('keyup', (e) => {
-      // Skip for special keys and Enter (to prevent reopening autocomplete after selection)
-      if (['Escape', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) {
-        return;
-      }
-
-      // Clear existing debounce timer
-      if (autocompleteTimeout) clearTimeout(autocompleteTimeout);
-
-      const selection = window.getSelection();
-      if (!selection.rangeCount) {
-        removeAutocomplete();
-        return;
-      }
-
-      const range = selection.getRangeAt(0);
-      const textBeforeCursor = range.startContainer.textContent?.substring(0, range.startOffset) || '';
-      const words = textBeforeCursor.split(/\s/);
-      const currentWord = words[words.length - 1];
-
-      // If word is too short or empty, hide autocomplete
-      if (!currentWord || currentWord.length < 1) {
-        removeAutocomplete();
-        return;
-      }
-
-      // Debounce autocomplete with delay for better performance
-      autocompleteTimeout = setTimeout(async () => {
-        let suggestions = [];
-
-        // Check if typing in Tamil (1+ character)
-        if (/[\u0B80-\u0BFF]/.test(currentWord)) {
-          try {
-            const response = await fetch(`/api/autocomplete?prefix=${encodeURIComponent(currentWord)}&limit=8`);
-            if (response.ok) {
-              const data = await response.json();
-              suggestions = data.suggestions || [];
-            }
-          } catch (err) {
-            console.log('Autocomplete API error:', err);
-          }
-        } 
-        // Check if typing in English - call Gemini transliteration API
-        else if (/^[a-zA-Z]+$/.test(currentWord) && currentWord.length >= 2) {
-          try {
-            const response = await fetch('/api/v1/transliterate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: currentWord })
-            });
-            if (response.ok) {
-              const data = await response.json();
-              suggestions = data.suggestions || [];
-            }
-          } catch (err) {
-            console.log('Transliteration API error:', err);
-          }
-        }
-        
-        if (suggestions.length > 0) {
-          // Save cursor position and current state before showing autocomplete
-          this.savedCursorPos = this.getCursorPosition();
-          currentSuggestions = suggestions;
-          currentPartialWord = currentWord;
-          selectedIndex = 0; // Reset selection to first item
-          this.showAutocomplete(suggestions, currentWord, autocompleteBox);
-          autocompleteBox = document.querySelector('.autocomplete-box');
-          updateSelection(); // Highlight first item
-        } else {
-          removeAutocomplete();
-        }
-      }, AUTOCOMPLETE_DELAY);
-    });
+  
+  moveCursorToEnd() {
+    const range = document.createRange();
+    const sel = window.getSelection();
+    range.selectNodeContents(this.editor);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    this.editor.focus();
   }
 
   getCursorPosition() {
@@ -377,9 +568,7 @@ class TamilEditor {
     if (!selection.rangeCount) return 0;
     
     const range = selection.getRangeAt(0);
-    const fullText = this.editor.textContent || '';
     
-    // Calculate actual cursor position in the text
     let cursorPos = 0;
     const walker = document.createTreeWalker(
       this.editor,
@@ -402,7 +591,6 @@ class TamilEditor {
   }
 
   showAutocomplete(suggestions, partialWord) {
-    // Remove existing autocomplete
     const existing = document.querySelector('.autocomplete-box');
     if (existing) existing.remove();
 
@@ -416,9 +604,8 @@ class TamilEditor {
       item.textContent = suggestion;
       item.style.fontSize = '1.1rem';
       
-      // Add hover effect with theme color
       item.addEventListener('mouseenter', () => {
-        item.style.backgroundColor = '#ea580c'; // Blue-500
+        item.style.backgroundColor = '#ea580c';
         item.style.color = '#ffffff';
         item.style.transform = 'translateX(4px)';
       });
@@ -434,15 +621,13 @@ class TamilEditor {
         box.remove();
       });
       
-      // Auto-select first item
       if (index === 0) {
-        item.style.backgroundColor = '#fed7aa'; // Blue-100
+        item.style.backgroundColor = '#fed7aa';
       }
       
       box.appendChild(item);
     });
 
-    // Position the autocomplete box near the cursor
     const selection = window.getSelection();
     if (selection.rangeCount) {
       const range = selection.getRangeAt(0);
@@ -455,46 +640,29 @@ class TamilEditor {
   }
 
   insertSuggestion(partialWord, fullWord) {
-    console.log('Inserting suggestion:', { partialWord, fullWord });
-    
     try {
-      // Get the entire text content
       const fullText = this.editor.textContent || '';
-      console.log('Full text before:', fullText);
       
-      // Use saved cursor position (captured before click)
       const cursorPos = this.savedCursorPos !== null ? this.savedCursorPos : this.getCursorPosition();
-      console.log('Cursor position (saved):', cursorPos);
       
-      // Find the start of the current word (going backwards from cursor)
       let wordStart = cursorPos;
       while (wordStart > 0 && fullText[wordStart - 1] && !/[\s\n]/.test(fullText[wordStart - 1])) {
         wordStart--;
       }
       
-      console.log('Word starts at:', wordStart, 'Word to replace:', fullText.substring(wordStart, cursorPos));
-      
-      // Build new text with the Tamil word replacing the English word
       const before = fullText.substring(0, wordStart);
       const after = fullText.substring(cursorPos);
       const newText = before + fullWord + ' ' + after;
       
-      console.log('New text:', newText);
-      
-      // Clear and set new content
       this.editor.textContent = newText;
       
-      // Set cursor position after the inserted word
       const newCursorPos = wordStart + fullWord.length + 1;
       
-      // Focus editor and set cursor position
       this.editor.focus();
       
-      // Create new range at the correct position
       const newRange = document.createRange();
       const newSelection = window.getSelection();
       
-      // Find the text node and position for the new cursor
       const newWalker = document.createTreeWalker(
         this.editor,
         NodeFilter.SHOW_TEXT,
@@ -521,12 +689,8 @@ class TamilEditor {
       newSelection.removeAllRanges();
       newSelection.addRange(newRange);
       
-      console.log('Insertion complete');
-      
-      // Clear saved cursor position
       this.savedCursorPos = null;
       
-      // Trigger change event
       this.onContentChange();
       
     } catch (error) {
@@ -535,16 +699,12 @@ class TamilEditor {
   }
 
   convertEnglishParagraphToTamil(englishText) {
-    // Convert an entire English paragraph to Tamil word by word
-    const words = englishText.split(/(\s+)/); // Keep whitespace
+    const words = englishText.split(/(\s+)/);
     
     return words.map(word => {
-      // Skip whitespace
       if (/^\s+$/.test(word)) return word;
       
-      // Check if word is English
       if (/[a-zA-Z]/.test(word)) {
-        // Extract punctuation
         const match = word.match(/^([a-zA-Z]+)([\s\S]*)$/);
         if (match) {
           const englishPart = match[1];
@@ -554,7 +714,6 @@ class TamilEditor {
         }
       }
       
-      // Return as is (numbers, Tamil text, punctuation)
       return word;
     }).join('');
   }
@@ -562,12 +721,10 @@ class TamilEditor {
   convertWordToTamil(englishWord) {
     if (!englishWord) return '';
     
-    // Use transliteration function from transliteration.js
     if (typeof transliterateToTamil === 'function') {
       return transliterateToTamil(englishWord);
     }
     
-    // Fallback: return original
     return englishWord;
   }
 
@@ -577,7 +734,6 @@ class TamilEditor {
     const range = document.createRange();
     const selection = window.getSelection();
     
-    // Find the text node and offset for the position
     const walker = document.createTreeWalker(
       this.editor,
       NodeFilter.SHOW_TEXT,
@@ -627,17 +783,14 @@ class TamilEditor {
   }
 
   onContentChange() {
-    // This will be overridden by the workspace controller
     if (this.onChange) {
       this.onChange();
     }
   }
 
   highlightSpellingMistakes(suggestions) {
-    // Clear previous highlights
     this.clearHighlights();
     
-    // Filter only spelling mistakes
     const spellingMistakes = suggestions.filter(s => s.type === 'spelling');
     
     if (spellingMistakes.length === 0) {
@@ -650,22 +803,19 @@ class TamilEditor {
       const { original } = mistake;
       if (!original) return;
       
-      // Find and highlight the word
       const regex = new RegExp(`\\b${original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
       let match;
       
       while ((match = regex.exec(plainText)) !== null) {
         this.addHighlight(match.index, match.index + original.length, 'spelling-mistake');
-        break; // Only highlight first occurrence
+        break;
       }
     });
   }
 
   addHighlight(start, end, className) {
     const range = document.createRange();
-    const selection = window.getSelection();
     
-    // Find text nodes containing the range
     const walker = document.createTreeWalker(
       this.editor,
       NodeFilter.SHOW_TEXT,
@@ -716,7 +866,6 @@ class TamilEditor {
   }
 }
 
-// Make it globally available
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = TamilEditor;
 }

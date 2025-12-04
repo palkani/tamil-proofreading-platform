@@ -1,0 +1,136 @@
+I already have a working frontend with a Rich Text Editor in TWO places:
+1) Home page (landing/editor area)
+2) Workspace screen (main writing area)
+
+I want you to ENHANCE those existing editors with an efficient Tamil transliteration feature that talks to my backend API:
+
+POST /api/transliterate
+Body:  { "text": "<english phonetic word>" }
+Response:
+{
+  "success": true,
+  "suggestions": [
+    { "word": "என்பது",  "score": 1.0 },
+    { "word": "எண்பது", "score": 0.9 }
+  ]
+}
+
+IMPORTANT:
+- Do NOT replace my editor library.
+- Do NOT create a new plain <textarea>.
+- Reuse the existing rich text editor components on the home page and workspace.
+- Integrate transliteration as a behavior on top.
+
+======================================================
+ GOAL
+======================================================
+
+When the user types in English (phonetic Tamil) inside the editor, I want:
+
+- The system to detect the CURRENT WORD (last word before caret).
+- Debounced API calls to /api/transliterate with ONLY that word.
+- Show a suggestions dropdown near/under the editor (or caret position if easy).
+- When the user selects a suggestion, replace ONLY the last word with the chosen Tamil word.
+- Spacebar should "commit" the word and hide suggestions (NOT trigger new API).
+- Typing must NEVER freeze, even when the API is slow.
+- It must work in BOTH places where the editor exists:
+  - Home page editor
+  - Workspace editor
+
+======================================================
+ WHAT YOU MUST DO
+======================================================
+
+1. **Scan the codebase** and identify the two rich text editor components:
+   - The one used on the home (landing) page.
+   - The one used on the workspace/screen page.
+   They might be using something like Draft.js, Slate, ProseMirror, TipTap, React-Quill, or a custom editor.
+   Detect which library is used and work with that.
+
+2. For EACH editor component:
+   - Add logic to:
+     a) Extract the current full plain text content.
+     b) From that, derive the "last word" before the caret.
+     c) On content change, trigger a debounced transliteration request for the last word.
+
+3. **Last-word extraction behavior**:
+   - From the current editor content (plain text form), split by whitespace.
+   - The last token is the transliteration target.
+   - If last token is empty or only punctuation, skip calling the API.
+
+4. **Debounce logic**:
+   - Use a 150–250 ms debounce before calling /api/transliterate.
+   - If the user keeps typing, reset the debounce timer.
+   - Only call the API once the user pauses briefly on that word.
+
+5. **Request versioning / stale response protection**:
+   - Use a `latestReqId` ref or similar:
+       - Increment an ID each time a new transliteration request is made.
+       - Include that ID in the closure of the fetch promise.
+       - When the response returns, only apply it if it matches the current latestReqId.
+   - This prevents older, slower responses from overwriting newer suggestions.
+
+6. **API call details**:
+   - Endpoint: POST /api/transliterate
+   - Body: `{ "text": "<lastWord>" }`
+   - Headers: `"Content-Type": "application/json"`
+   - On success: if `data.success` and `data.suggestions` exist, show the suggestions dropdown.
+
+7. **UI for suggestions**:
+   - Reuse existing UI components if you have a dropdown / menu / list already.
+   - Otherwise, create a simple suggestion dropdown:
+       - Positioned under the editor or near caret if easy; under editor is acceptable.
+       - A list of clickable options showing each Tamil suggestion (e.g., suggestion.word).
+   - Keyboard support:
+       - Up/Down arrows to navigate suggestions (optional but nice).
+       - Enter to accept currently highlighted suggestion.
+       - Esc to close suggestions.
+   - Mouse support:
+       - Clicking a suggestion should apply it.
+
+8. **Applying a suggestion**:
+   - When a suggestion is chosen:
+       - Replace ONLY the last word of the current editor content with the selected Tamil word.
+       - Preserve the rest of the sentence/content intact.
+       - Preserve caret position after the inserted word (ideally after the word with a trailing space).
+   - Implementation detail depends on the editor library:
+       - For Draft.js/Slate/TipTap/Quill, use their APIs to:
+           - Get current selection
+           - Find the range of the last word
+           - Replace that range with new text (Tamil word + trailing space if appropriate).
+
+9. **Spacebar behavior**:
+   - On keydown:
+       - If the user presses space:
+           - Hide the suggestions dropdown.
+           - DO NOT trigger a new /api/transliterate call specifically for the space.
+       - Space should effectively "commit" whatever is currently typed.
+   - Make sure keydown handler does not block normal typing.
+
+10. **Non-blocking UI**:
+    - All network calls MUST be async and must not block the editor UI.
+    - The user must be able to keep typing even while a transliteration request is in-flight.
+    - Do NOT use any synchronous operations that lock the render loop.
+
+11. **Shared logic**:
+    - If possible, factor out common transliteration logic into a shared hook or helper:
+      Example: `useTransliteration(editorContent, onSuggestionApply)` or similar.
+    - Then use that hook in both:
+      - Home page editor
+      - Workspace editor
+
+======================================================
+ EXPECTED OUTPUT
+======================================================
+
+- Update the existing editor components (both home & workspace) to integrate transliteration behavior as described.
+- Create any needed React hooks/helpers for:
+    - Debounced transliteration calls
+    - Suggestions state management
+    - Last-word extraction
+- Make sure TypeScript/JS types are correct for the existing codebase.
+- Show me the modified editor components and any new hooks/helpers you create.
+
+DO NOT remove my rich text editor.
+DO NOT replace it with a simple textarea.
+ONLY enhance the existing editors with this transliteration feature.
