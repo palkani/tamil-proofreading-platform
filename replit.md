@@ -63,7 +63,23 @@ The platform utilizes a Go backend (port 8080) and an Express.js frontend with E
 - **Email Service:** Resend API (for password reset)
 - **Authentication Provider:** Supabase Auth (email/password + Google OAuth)
 
-## Recent Updates (Dec 3, 2025)
+## Recent Updates (Dec 4, 2025)
+- **Enhanced Transliteration System:** Major improvements to transliteration autocomplete and word replacement:
+  - Created shared `TransliterationHelper` class for consistent behavior across HomeEditor and TamilEditor
+  - Implemented 300ms debouncing to prevent excessive API calls during rapid typing
+  - Added request versioning with `fromCache` flag to prevent stale API responses from overwriting newer suggestions
+  - Fixed caret handling for empty editors and non-text nodes (bold/italic formatted spans)
+  - Implemented `execCommand`-based word replacement to preserve HTML formatting
+  - Added fallback to local text node manipulation when global text search fails
+  - Fresh caret info is now re-read after fetch to ensure proper dropdown positioning
+  - Keyboard navigation (↑↓ arrows, Enter, Escape) and spacebar-to-commit functionality
+  - Client-side caching reduces redundant API calls
+- **Files Modified:**
+  - `express-frontend/public/js/transliteration-helper.js` - Shared transliteration logic
+  - `express-frontend/public/js/home-editor.js` - Enhanced with new helper integration
+  - `express-frontend/public/js/editor.js` - Enhanced with new helper integration
+
+## Previous Updates (Dec 3, 2025)
 - **Supabase Auth Integration:** Complete migration from session-based auth to Supabase Auth with SSR support.
   - Added `@supabase/supabase-js` and `@supabase/ssr` packages
   - Created Express.js Supabase client helper (`express-frontend/lib/supabase.js`)
