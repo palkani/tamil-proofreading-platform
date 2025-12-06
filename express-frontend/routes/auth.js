@@ -166,6 +166,8 @@ router.post('/sync-session', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Invalid user data' });
   }
   
+  let responseSent = false;
+  
   try {
     const isProduction = process.env.NODE_ENV === 'production' || 
                          (process.env.BACKEND_URL && process.env.BACKEND_URL.includes('run.app')) ||
@@ -205,16 +207,23 @@ router.post('/sync-session', async (req, res) => {
     };
     
     req.session.save((err) => {
+      if (responseSent) return;
+      
       if (err) {
         console.error('[Auth] Session save error:', err);
+        responseSent = true;
         return res.status(500).json({ success: false, error: 'Failed to save session' });
       }
       console.log('[Auth] Session saved for user:', user.email, 'session ID:', req.sessionID);
+      responseSent = true;
       res.json({ success: true, sessionId: req.sessionID });
     });
   } catch (err) {
-    console.error('[Auth] Sync session error:', err);
-    res.status(500).json({ success: false, error: 'Failed to sync session' });
+    if (!responseSent) {
+      console.error('[Auth] Sync session error:', err);
+      responseSent = true;
+      res.status(500).json({ success: false, error: 'Failed to sync session' });
+    }
   }
 });
 
