@@ -108,7 +108,9 @@ jobs:
           --update-secrets GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest \
           --update-secrets SESSION_SECRET=SESSION_SECRET:latest \
           --update-secrets VITE_SUPABASE_URL=VITE_SUPABASE_URL:latest \
-          --update-secrets VITE_SUPABASE_ANON_KEY=VITE_SUPABASE_ANON_KEY:latest
+          --update-secrets VITE_SUPABASE_ANON_KEY=VITE_SUPABASE_ANON_KEY:latest \
+          --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
+          --update-secrets DATABASE_URL=DATABASE_URL:latest
 
     - name: Deploy to Firebase Hosting
       run: |
