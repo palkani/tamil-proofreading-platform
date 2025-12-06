@@ -1,0 +1,218 @@
+
+
+5. /login and /dashboard Route Code
+File: express-frontend/routes/index.js
+"const express = require('express');
+const router = express.Router();
+const { requireAuth, redirectIfAuth, getCurrentUser } = require('../middleware/auth');
+const { seoConfig, getSeoData } = require('../config/seo');
+
+// Homepage - accessible to everyone
+router.get('/', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('home');
+  res.render('pages/home', { 
+    title: seo.title,
+    seo: seo,
+    user: user
+  });
+});
+
+// How to Use page - accessible to everyone
+router.get('/how-to-use', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('howToUse');
+  res.render('pages/how-to-use', { 
+    title: seo.title,
+    seo: seo,
+    user: user
+  });
+});
+
+// Login page - redirect if already logged in
+router.get('/login', redirectIfAuth, (req, res) => {
+  const seo = getSeoData('login');
+  res.render('pages/login', { 
+    title: seo.title,
+    seo: seo,
+    error: req.query.error || null,
+    googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+  });
+});
+
+// Register page - redirect if already logged in
+router.get('/register', redirectIfAuth, (req, res) => {
+  const seo = getSeoData('register');
+  res.render('pages/register', { 
+    title: seo.title,
+    seo: seo,
+    googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+  });
+});
+
+// Handle login form submission
+router.post('/login', (req, res) => {
+  const { email, password } = req.body;
+  
+  // Set admin role for prooftamil@gmail.com
+  const role = (email === 'prooftamil@gmail.com') ? 'admin' : 'user';
+  
+  // For now, accept any email/password and create a session
+  // In production, validate against database
+  req.session.user = {
+    id: 1,
+    email: email || 'user@example.com',
+    name: email ? email.split('@')[0] : 'User',
+    role: role
+  };
+  
+  // Redirect to the page they were trying to access, or dashboard
+  const redirectTo = req.session.returnTo || '/dashboard';
+  delete req.session.returnTo;
+  res.redirect(redirectTo);
+});
+
+// Handle registration form submission
+router.post('/register', (req, res) => {
+  const { email, password, name } = req.body;
+  
+  // Set admin role for prooftamil@gmail.com
+  const role = (email === 'prooftamil@gmail.com') ? 'admin' : 'user';
+  
+  // For now, accept any registration and create a session
+  // In production, validate and save to database
+  req.session.user = {
+    id: 1,
+    email: email || 'user@example.com',
+    name: name || email.split('@')[0],
+    role: role
+  };
+  
+  res.redirect('/dashboard');
+});
+
+// Handle Google OAuth callback from frontend
+router.post('/auth/google-callback', (req, res) => {
+  const { id, email, name, role } = req.body;
+  
+  // Set admin role for prooftamil@gmail.com
+  const userRole = (email === 'prooftamil@gmail.com') ? 'admin' : (role || 'user');
+  
+  // Create session for Google authenticated user
+  req.session.user = {
+    id: id || 1,
+    email: email,
+    name: name,
+    role: userRole
+  };
+  
+  res.json({ success: true });
+});
+
+// Provide Google Client ID to frontend
+router.get('/api/config/google-client-id', (req, res) => {
+  res.json({ 
+    clientId: process.env.GOOGLE_CLIENT_ID || '' 
+  });
+});
+
+// Dashboard page - requires authentication
+router.get('/dashboard', requireAuth, (req, res) => {
+  const seo = getSeoData('dashboard');
+  res.render('pages/dashboard', { 
+    title: seo.title,
+    seo: seo,
+    user: req.session.user
+  });
+});
+
+// Account page - requires authentication
+router.get('/account', requireAuth, (req, res) => {
+  const seo = getSeoData('account');
+  res.render('pages/account', { 
+    title: seo.title,
+    seo: seo,
+    user: req.session.user
+  });
+});
+
+// Analytics dashboard - requires admin role
+router.get('/analytics', requireAuth, (req, res) => {
+  // Check if user is admin (prooftamil@gmail.com)
+  const user = req.session.user;
+  if (user.email !== 'prooftamil@gmail.com' && user.role !== 'admin') {
+    const seo = getSeoData('error');
+    return res.status(403).render('pages/error', {
+      title: 'Access Denied',
+      seo: seo,
+      message: 'You do not have permission to view this page.',
+      user: user
+    });
+  }
+  
+  const seo = getSeoData('analytics');
+  res.render('pages/analytics', { 
+    title: seo.title,
+    seo: seo,
+    user: user
+  });
+});
+
+// Archive page - requires authentication
+router.get('/archive', requireAuth, (req, res) => {
+  const seo = getSeoData('archive');
+  res.render('pages/archive', { 
+    title: seo.title,
+    seo: seo,
+    user: req.session.user
+  });
+});
+
+// Contact page - accessible to everyone
+router.get('/contact', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('contact');
+  res.render('pages/contact', { 
+    title: seo.title,
+    seo: seo,
+    user: user
+  });
+});
+
+// Privacy Policy page - accessible to everyone
+router.get('/privacy', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('privacy');
+  res.render('pages/privacy', { 
+    title: seo.title,
+    seo: seo,
+    user: user
+  });
+});
+
+// Terms of Service page - accessible to everyone
+router.get('/terms', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('terms');
+  res.render('pages/terms', { 
+    title: seo.title,
+    seo: seo,
+    user: user
+  });
+});
+
+// Logout
+router.post('/logout', (req, res) => {
+  let responseSent = false;
+  req.session.destroy((err) => {
+    if (responseSent) return;
+    if (err) {
+      console.error('Logout error:', err);
+    }
+    responseSent = true;
+    res.clearCookie('auth_token');
+    res.redirect('/');
+  });
+});
+
+module.exports = router;"
