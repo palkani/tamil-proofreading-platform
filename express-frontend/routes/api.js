@@ -438,6 +438,7 @@ router.get('/v1/auth/google/callback', async (req, res) => {
 });
 
 // Transliteration endpoint - proxies to Go backend
+// Handles both /api/transliterate and /api/v1/transliterate
 router.post('/transliterate', async (req, res) => {
   try {
     const { text } = req.body;
@@ -456,6 +457,89 @@ router.post('/transliterate', async (req, res) => {
     res.status(error.response?.status || 500).json({
       error: error.response?.data || 'Transliteration failed'
     });
+  }
+});
+
+// Alias for /api/v1/transliterate - frontend uses this path
+router.post('/v1/transliterate', async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+    
+    const url = `${BACKEND_URL}/transliterate`;
+    console.log(`[TRANSLITERATE-V1] POST ${url} with text: ${text}`);
+    
+    const response = await axios.post(url, { text });
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error(`[TRANSLITERATE-V1-ERROR] ${error.message}`);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || 'Transliteration failed'
+    });
+  }
+});
+
+// Proofread endpoint - uses Gemini AI for grammar checking
+router.post('/proofread', async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+    const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
+    
+    if (!apiKey) {
+      return res.status(500).json({ error: 'AI service not configured' });
+    }
+
+    const response = await axios.post(
+      `${baseUrl}/models/gemini-2.5-flash:generateContent`,
+      {
+        systemInstruction: {
+          parts: [{
+            text: `You are a Tamil language expert. Analyze Tamil text for grammar errors, spelling mistakes, and provide corrections.
+Return JSON array with corrections. Each item: { "original": "wrong text", "suggestion": "corrected text", "type": "grammar|spelling|style", "description": "explanation in Tamil" }
+If text is correct, return empty array [].`
+          }]
+        },
+        contents: [{
+          role: "user",
+          parts: [{ text: `Proofread this Tamil text:\n\n${text}` }]
+        }],
+        generationConfig: {
+          temperature: 0,
+          topP: 0.1,
+          maxOutputTokens: 1024,
+          responseMimeType: "application/json"
+        }
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        timeout: 15000
+      }
+    );
+
+    const aiText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    let corrections = [];
+    try {
+      corrections = JSON.parse(aiText.trim());
+    } catch (e) {
+      corrections = [];
+    }
+
+    res.json({ success: true, corrections });
+  } catch (error) {
+    console.error('[PROOFREAD-ERROR]', error.message);
+    res.status(500).json({ error: 'Proofreading failed', details: error.message });
   }
 });
 
