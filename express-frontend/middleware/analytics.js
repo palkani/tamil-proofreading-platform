@@ -73,8 +73,8 @@ function trackPageView(req, res, next) {
       return;
     }
 
-    // Get user ID from session if logged in
-    const userId = req.session?.user?.id || null;
+    // Get user ID from authenticated request if available
+    const userId = req.user?.id || null;
 
     // Fire and forget - don't wait for analytics to complete
     const visitData = {

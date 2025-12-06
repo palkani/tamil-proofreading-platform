@@ -1,11 +1,14 @@
 const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
-const session = require('express-session');
-const PgSession = require('connect-pg-simple')(session);
-const { Pool } = require('pg');
+const cors = require('cors');
+const passport = require('passport');
 const { trackPageView } = require('./middleware/analytics');
 const { getSeoData } = require('./config/seo');
+const configurePassport = require('./config/passport');
+const { initDb } = require('./db');
+const authRoutes = require('./routes/auth');
+const { attachUser } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 5000; // allow overriding for local conflicts
@@ -27,70 +30,33 @@ async function initializeApp() {
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+const allowedOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.length === 0) {
+        return callback(null, true);
+      }
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+  })
+);
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-// Session configuration - MUST work in development AND Cloud Run
-const isProduction = process.env.NODE_ENV === 'production' || 
-                     (process.env.BACKEND_URL && process.env.BACKEND_URL.includes('run.app'));
-
-// Create PostgreSQL session store - persists sessions across instances
-let pgPool;
-let sessionStore;
-
-// Initialize PostgreSQL pool (non-blocking)
-if (process.env.DATABASE_URL) {
-  try {
-    pgPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
-    });
-    
-    sessionStore = new PgSession({
-      pool: pgPool,
-      tableName: 'session'
-    });
-    
-    console.log('[SESSION] PostgreSQL session store configured');
-    
-    // Handle pool errors without crashing
-    pgPool.on('error', (err) => {
-      console.error('[SESSION-POOL] Error:', err.message);
-    });
-  } catch (error) {
-    console.error('[SESSION] PostgreSQL pool initialization failed:', error.message);
-    console.log('[SESSION] Falling back to memory store');
-  }
-}
-
-// Session configuration - use PostgreSQL if available, otherwise memory
-const sessionConfig = {
-  secret: process.env.SESSION_SECRET || 'tamil-proofreading-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { 
-    secure: isProduction, // true in production (HTTPS only), false in dev (HTTP)
-    sameSite: 'lax',      // Allow cross-site redirects from OAuth
-    httpOnly: true,       // Don't expose to JavaScript
-    maxAge: 24 * 60 * 60 * 1000
-  }
-};
-
-// Add store only if PostgreSQL is available
-if (sessionStore) {
-  sessionConfig.store = sessionStore;
-}
-
-app.use(session(sessionConfig));
-
-console.log('[SESSION] Configuration:');
-console.log('[SESSION] Is Production:', isProduction);
-console.log('[SESSION] Secure cookies:', isProduction);
-console.log('[SESSION] SameSite:', 'lax');
-console.log('[SESSION] Store:', sessionStore ? 'PostgreSQL (persistent)' : 'Memory (session lost on restart)');
+configurePassport();
+app.use(passport.initialize());
+app.use(attachUser);
 
 // Analytics tracking middleware (track all page views)
 app.use(trackPageView);
@@ -143,6 +109,7 @@ const workspaceRouter = require('./routes/workspace');
 const apiRouter = require('./routes/api');
 const processRouter = require('./routes/process');
 
+app.use('/auth', authRoutes);
 app.use('/', indexRouter);
 app.use('/workspace', workspaceRouter);
 app.use('/api', apiRouter);
@@ -168,15 +135,24 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server immediately, load secrets in background
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Express server running on http://0.0.0.0:${PORT}`);
-  
-  initializeApp().then(() => {
-    console.log(`GOOGLE_CLIENT_ID available: ${!!process.env.GOOGLE_CLIENT_ID}`);
-  }).catch(error => {
-    console.log('Secrets loading error (non-fatal):', error.message);
+// Initialize database and start server
+initDb()
+  .then(() => {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Express server running on http://0.0.0.0:${PORT}`);
+
+      initializeApp()
+        .then(() => {
+          console.log(`GOOGLE_CLIENT_ID available: ${!!process.env.GOOGLE_CLIENT_ID}`);
+        })
+        .catch((error) => {
+          console.log('Secrets loading error (non-fatal):', error.message);
+        });
+    });
+  })
+  .catch((err) => {
+    console.error('[SERVER] Failed to initialize database:', err.message);
+    process.exit(1);
   });
-});
 
 module.exports = app;

@@ -9,7 +9,7 @@ router.get('/', requireAuth, (req, res) => {
   res.render('pages/workspace', { 
     title: seo.title,
     seo: seo,
-    user: req.session.user
+    user: req.user
   });
 });
 

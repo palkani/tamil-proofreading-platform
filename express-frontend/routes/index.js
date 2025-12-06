@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, redirectIfAuth, getCurrentUser } = require('../middleware/auth');
-const { seoConfig, getSeoData } = require('../config/seo');
+const { getSeoData } = require('../config/seo');
+const { revokeRefreshToken, clearAuthCookies } = require('../services/authService');
 
 // Homepage - accessible to everyone
 router.get('/', (req, res) => {
@@ -32,7 +33,8 @@ router.get('/login', redirectIfAuth, (req, res) => {
     title: seo.title,
     seo: seo,
     error: req.query.error || null,
-    googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    redirectTo: req.query.redirect || '/dashboard'
   });
 });
 
@@ -42,67 +44,19 @@ router.get('/register', redirectIfAuth, (req, res) => {
   res.render('pages/register', { 
     title: seo.title,
     seo: seo,
-    googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    redirectTo: req.query.redirect || '/dashboard'
   });
 });
 
 // Handle login form submission
 router.post('/login', (req, res) => {
-  const { email, password } = req.body;
-  
-  // Set admin role for prooftamil@gmail.com
-  const role = (email === 'prooftamil@gmail.com') ? 'admin' : 'user';
-  
-  // For now, accept any email/password and create a session
-  // In production, validate against database
-  req.session.user = {
-    id: 1,
-    email: email || 'user@example.com',
-    name: email ? email.split('@')[0] : 'User',
-    role: role
-  };
-  
-  // Redirect to the page they were trying to access, or dashboard
-  const redirectTo = req.session.returnTo || '/dashboard';
-  delete req.session.returnTo;
-  res.redirect(redirectTo);
+  res.redirect('/login?error=Email%20and%20password%20login%20are%20no%20longer%20supported.%20Use%20Google%20Sign-In.');
 });
 
 // Handle registration form submission
 router.post('/register', (req, res) => {
-  const { email, password, name } = req.body;
-  
-  // Set admin role for prooftamil@gmail.com
-  const role = (email === 'prooftamil@gmail.com') ? 'admin' : 'user';
-  
-  // For now, accept any registration and create a session
-  // In production, validate and save to database
-  req.session.user = {
-    id: 1,
-    email: email || 'user@example.com',
-    name: name || email.split('@')[0],
-    role: role
-  };
-  
-  res.redirect('/dashboard');
-});
-
-// Handle Google OAuth callback from frontend
-router.post('/auth/google-callback', (req, res) => {
-  const { id, email, name, role } = req.body;
-  
-  // Set admin role for prooftamil@gmail.com
-  const userRole = (email === 'prooftamil@gmail.com') ? 'admin' : (role || 'user');
-  
-  // Create session for Google authenticated user
-  req.session.user = {
-    id: id || 1,
-    email: email,
-    name: name,
-    role: userRole
-  };
-  
-  res.json({ success: true });
+  res.redirect('/register?error=Registration%20is%20handled%20via%20Google%20Sign-In.');
 });
 
 // Provide Google Client ID to frontend
@@ -118,7 +72,7 @@ router.get('/dashboard', requireAuth, (req, res) => {
   res.render('pages/dashboard', { 
     title: seo.title,
     seo: seo,
-    user: req.session.user
+    user: req.user
   });
 });
 
@@ -128,14 +82,14 @@ router.get('/account', requireAuth, (req, res) => {
   res.render('pages/account', { 
     title: seo.title,
     seo: seo,
-    user: req.session.user
+    user: req.user
   });
 });
 
 // Analytics dashboard - requires admin role
 router.get('/analytics', requireAuth, (req, res) => {
   // Check if user is admin (prooftamil@gmail.com)
-  const user = req.session.user;
+  const user = req.user;
   if (user.email !== 'prooftamil@gmail.com' && user.role !== 'admin') {
     const seo = getSeoData('error');
     return res.status(403).render('pages/error', {
@@ -160,7 +114,7 @@ router.get('/archive', requireAuth, (req, res) => {
   res.render('pages/archive', { 
     title: seo.title,
     seo: seo,
-    user: req.session.user
+    user: req.user
   });
 });
 
@@ -198,14 +152,11 @@ router.get('/terms', (req, res) => {
 });
 
 // Logout
-router.post('/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      console.error('Logout error:', err);
-    }
-    res.clearCookie('auth_token');
-    res.redirect('/');
-  });
+router.post('/logout', async (req, res) => {
+  const refreshToken = req.cookies.refresh_token || req.body.refreshToken;
+  await revokeRefreshToken(refreshToken);
+  clearAuthCookies(res);
+  res.redirect('/');
 });
 
 module.exports = router;
