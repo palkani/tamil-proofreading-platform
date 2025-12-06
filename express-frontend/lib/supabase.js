@@ -35,6 +35,10 @@ function createClient(req, res) {
     };
   }
   
+  const isProduction = process.env.NODE_ENV === 'production' || 
+                       process.env.K_SERVICE || 
+                       (req.get && req.get('x-forwarded-proto') === 'https');
+  
   return createServerClient(
     url,
     key,
@@ -47,13 +51,17 @@ function createClient(req, res) {
           res.cookie(name, value, {
             ...options,
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: isProduction,
             sameSite: 'lax',
-            maxAge: options.maxAge || 365 * 24 * 60 * 60 * 1000
+            maxAge: options.maxAge || 365 * 24 * 60 * 60 * 1000,
+            domain: isProduction ? '.prooftamil.com' : undefined
           });
         },
         remove(name, options) {
-          res.clearCookie(name, options);
+          res.clearCookie(name, {
+            ...options,
+            domain: isProduction ? '.prooftamil.com' : undefined
+          });
         },
       },
     }

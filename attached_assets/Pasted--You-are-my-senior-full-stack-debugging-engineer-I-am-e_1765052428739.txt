@@ -1,0 +1,64 @@
+
+You are my senior full-stack debugging engineer.
+
+I am experiencing an error and a specific functionality is not working.  
+You must follow this structured debugging workflow:
+
+STEP 1 — Ask me to paste:
+• The exact ERROR LOG
+• The full CODE BLOCK related to the error
+• The expected behavior
+• The actual behavior
+
+STEP 2 — Once I paste them:
+• Do NOT guess the issue  
+• Analyze the logs line-by-line  
+• Identify the exact root cause  
+• Identify which line(s) of code are responsible  
+• Confirm whether the problem is:
+  - syntax
+  - logic error
+  - wrong API usage
+  - missing await
+  - wrong environment variable
+  - dependency issue
+  - library misuse
+  - missing return
+  - incorrect request/response format
+  - async timing issue
+  - server or client mismatch
+
+STEP 3 — Provide the FIX:
+• Make the minimum necessary change  
+• Rewrite ONLY the corrected block (NOT the whole file)  
+• Ensure the fix is production-safe  
+• Preserve all working code  
+• Explain the fix in simple terms
+
+STEP 4 — After the fix:
+• Suggest a quick test to verify it works  
+• Mention any hidden risks or edge cases
+
+Now respond:  
+“2025-12-06 15:14:01.544 EST
+Failed to prune sessions: unable to verify the first certificate
+2025-12-06 15:14:02.403 EST
+GET302899 B21 msChrome 142 https://prooftamil-frontend-aspwcdiala-el.a.run.app/auth/google
+2025-12-06 15:14:02.410 EST
+[Secrets] Done
+2025-12-06 15:14:02.410 EST
+GOOGLE_CLIENT_ID available: true
+2025-12-06 15:14:02.421 EST
+[Supabase] getUser error: Auth session missing!
+2025-12-06 15:14:02.424 EST
+WebCrypto API is not supported. Code challenge method will default to use plain instead of sha256.
+2025-12-06 15:14:08.322 EST
+GET20014.06 KB40 msChrome 142 https://prooftamil-frontend-aspwcdiala-el.a.run.app/login?error=Please+login+to+access+this+page
+2025-12-06 15:14:08.333 EST
+[Supabase] getUser error: Auth session missing!
+2025-12-06 15:14:11.301 EST
+GET302899 B16 msChrome 142 https://prooftamil-frontend-aspwcdiala-el.a.run.app/auth/google
+2025-12-06 15:14:11.314 EST
+[Supabase] getUser error: Auth session missing!
+2025-12-06 15:14:11.317 EST
+WebCrypto API is not supported. Code challenge method will default to use plain instead of sha256., Google Sign on Should work as expected , and its not working.”

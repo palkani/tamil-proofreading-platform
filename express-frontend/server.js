@@ -49,6 +49,7 @@ if (process.env.DATABASE_URL) {
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
+      ssl: isProduction ? { rejectUnauthorized: false } : false
     });
     
     sessionStore = new PgSession({
