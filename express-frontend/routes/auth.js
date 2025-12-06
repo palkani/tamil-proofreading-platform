@@ -131,13 +131,16 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/logout', async (req, res) => {
+  let responseSent = false;
   try {
     await auth.logout(req, res);
     
     req.session.destroy((err) => {
+      if (responseSent) return;
       if (err) {
         console.error('[Auth] Session destroy error:', err);
       }
+      responseSent = true;
       res.clearCookie('auth_token');
       
       if (req.xhr || req.headers.accept?.includes('application/json')) {
@@ -146,10 +149,16 @@ router.post('/logout', async (req, res) => {
       res.redirect('/');
     });
   } catch (err) {
-    console.error('[Auth] Logout error:', err);
-    req.session.destroy(() => {
-      res.redirect('/');
-    });
+    if (!responseSent) {
+      console.error('[Auth] Logout error:', err);
+      responseSent = true;
+      req.session.destroy(() => {
+        if (!responseSent) {
+          responseSent = true;
+          res.redirect('/');
+        }
+      });
+    }
   }
 });
 

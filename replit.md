@@ -63,14 +63,21 @@ The platform utilizes a Go backend (port 8080) and an Express.js frontend with E
 - **Email Service:** Resend API (for password reset)
 - **Authentication Provider:** Supabase Auth (email/password + Google OAuth)
 
-## Recent Updates (Dec 6, 2025)
-- **Production Fixes & Node.js 20 Upgrade:**
+## Recent Updates (Dec 6, 2025 - Session Management Fixes)
+- **Session Handler Double-Response Fixes:**
+  - Fixed `ERR_HTTP_HEADERS_SENT` errors by adding `responseSent` boolean guards to all session handlers
+  - Fixed `/auth/sync-session` endpoint - prevents multiple responses during Supabase session syncing
+  - Fixed `/auth/logout` endpoint - prevents multiple responses during session destruction
+  - Fixed `/logout` endpoint in index routes - prevents multiple responses during session destruction
+  - Fixed `/api/oauth-callback` endpoint - prevents multiple responses after OAuth flow completion
+  - Disabled automatic session pruning (`pruneSessionInterval: false`) to eliminate SSL certificate verification errors from connect-pg-simple
+  - All session handlers now safely handle callback race conditions
+- **Node.js 20 Upgrade:**
   - Upgraded frontend Dockerfile from Node.js 18 to Node.js 20 (fixes Supabase deprecation warning)
-  - Fixed PostgreSQL SSL certificate verification issues
-  - Improved production environment detection in Supabase client
-  - Added cookie domain configuration for `prooftamil.com`
-  - Fixed API routing: Added explicit `/api/v1/transliterate` and `/api/proofread` endpoints
-  - Added missing secrets to frontend deployment (GOOGLE_GENAI_API_KEY, DATABASE_URL)
+  - Fixed PostgreSQL SSL certificate verification (disabled rejectUnauthorized in production)
+  - Improved production environment detection using K_SERVICE and x-forwarded-proto headers
+  - Added cookie domain configuration for `.prooftamil.com` to share sessions across www and apex domains
+  - Fixed API routing with explicit `/api/v1/transliterate` and `/api/proofread` endpoints
   - Set `NODE_ENV=production` in Cloud Run deployment
   - Fixed session persistence across Cloud Run instances
 

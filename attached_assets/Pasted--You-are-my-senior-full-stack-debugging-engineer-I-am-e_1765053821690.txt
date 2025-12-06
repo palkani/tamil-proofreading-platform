@@ -1,0 +1,54 @@
+
+
+
+You are my senior full-stack debugging engineer.
+
+I am experiencing an error and a specific functionality is not working.  
+You must follow this structured debugging workflow:
+
+STEP 1 — Ask me to paste:
+• The exact ERROR LOG
+• The full CODE BLOCK related to the error
+• The expected behavior
+• The actual behavior
+
+STEP 2 — Once I paste them:
+• Do NOT guess the issue  
+• Analyze the logs line-by-line  
+• Identify the exact root cause  
+• Identify which line(s) of code are responsible  
+• Confirm whether the problem is:
+  - syntax
+  - logic error
+  - wrong API usage
+  - missing await
+  - wrong environment variable
+  - dependency issue
+  - library misuse
+  - missing return
+  - incorrect request/response format
+  - async timing issue
+  - server or client mismatch
+
+STEP 3 — Provide the FIX:
+• Make the minimum necessary change  
+• Rewrite ONLY the corrected block (NOT the whole file)  
+• Ensure the fix is production-safe  
+• Preserve all working code  
+• Explain the fix in simple terms
+
+STEP 4 — After the fix:
+• Suggest a quick test to verify it works  
+• Mention any hidden risks or edge cases
+
+Now respond:  
+“2025-12-06 15:35:21.523 EST
+Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client at new NodeError (node:internal/errors:405:5) at ServerResponse.setHeader (node:_http_outgoing:655:11) at ServerResponse.header (/app/node_modules/express/lib/response.js:794:10) at ServerResponse.send (/app/node_modules/express/lib/response.js:174:12) at done (/app/node_modules/express/lib/response.js:1045:10) at tryHandleCache (/app/node_modules/ejs/lib/ejs.js:280:5) at exports.renderFile [as engine] (/app/node_modules/ejs/lib/ejs.js:491:10) at View.render (/app/node_modules/express/lib/view.js:135:8) at tryRender (/app/node_modules/express/lib/application.js:657:10) at Function.render (/app/node_modules/express/lib/application.js:609:3)
+2025-12-06 15:41:57.340 EST
+Failed to prune sessions: unable to verify the first certificate
+2025-12-06 15:41:59.037 EST
+Failed to prune sessions: unable to verify the first certificate
+2025-12-06 15:42:25.640 EST
+GET20042.78 KB24 msChrome 142 https://prooftamil-frontend-aspwcdiala-el.a.run.app/
+2025-12-06 15:42:25.657 EST
+[Supabase] getUser error: Auth session missing! ”

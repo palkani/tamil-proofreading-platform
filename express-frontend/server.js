@@ -54,7 +54,8 @@ if (process.env.DATABASE_URL) {
     
     sessionStore = new PgSession({
       pool: pgPool,
-      tableName: 'session'
+      tableName: 'session',
+      pruneSessionInterval: false  // Disable automatic session pruning to avoid SSL errors
     });
     
     console.log('[SESSION] PostgreSQL session store configured');

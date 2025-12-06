@@ -393,9 +393,13 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     console.log('[EXPRESS-OAUTH-CALLBACK] Session ID:', req.sessionID);
     
     // Save session to database and redirect
+    let responseSent = false;
     req.session.save((err) => {
+      if (responseSent) return;
+      
       if (err) {
         console.error('[EXPRESS-OAUTH-CALLBACK] Session save error:', err);
+        responseSent = true;
         return res.redirect(`/login?error=${encodeURIComponent('Session creation failed')}`);
       }
       
@@ -415,6 +419,7 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       console.log('[EXPRESS-OAUTH-CALLBACK] Session saved and cookie set');
       console.log('[EXPRESS-OAUTH-CALLBACK] Redirecting to:', dashboardUrl);
       
+      responseSent = true;
       res.redirect(dashboardUrl);
     });
     

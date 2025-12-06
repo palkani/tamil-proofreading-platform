@@ -199,10 +199,13 @@ router.get('/terms', (req, res) => {
 
 // Logout
 router.post('/logout', (req, res) => {
+  let responseSent = false;
   req.session.destroy((err) => {
+    if (responseSent) return;
     if (err) {
       console.error('Logout error:', err);
     }
+    responseSent = true;
     res.clearCookie('auth_token');
     res.redirect('/');
   });
