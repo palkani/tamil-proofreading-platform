@@ -73,7 +73,10 @@ async function getUser(req, res) {
     const supabase = createClient(req, res);
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error) {
-      console.log('[Supabase] getUser error:', error.message);
+      // Only log actual errors, not expected "missing auth" on public pages
+      if (error.message !== 'Auth session missing!') {
+        console.warn('[Supabase] getUser error:', error.message);
+      }
       return null;
     }
     return user;
@@ -88,7 +91,10 @@ async function getSession(req, res) {
     const supabase = createClient(req, res);
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error) {
-      console.log('[Supabase] getSession error:', error.message);
+      // Only log actual errors, not expected "missing auth" on public pages
+      if (error.message !== 'Auth session missing!') {
+        console.warn('[Supabase] getSession error:', error.message);
+      }
       return null;
     }
     return session;

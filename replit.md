@@ -63,7 +63,7 @@ The platform utilizes a Go backend (port 8080) and an Express.js frontend with E
 - **Email Service:** Resend API (for password reset)
 - **Authentication Provider:** Supabase Auth (email/password + Google OAuth)
 
-## Recent Updates (Dec 6, 2025 - Session Management Fixes)
+## Recent Updates (Dec 6, 2025 - Complete Session & Auth Fixes)
 - **Session Handler Double-Response Fixes:**
   - Fixed `ERR_HTTP_HEADERS_SENT` errors by adding `responseSent` boolean guards to all session handlers
   - Fixed `/auth/sync-session` endpoint - prevents multiple responses during Supabase session syncing
@@ -72,6 +72,10 @@ The platform utilizes a Go backend (port 8080) and an Express.js frontend with E
   - Fixed `/api/oauth-callback` endpoint - prevents multiple responses after OAuth flow completion
   - Disabled automatic session pruning (`pruneSessionInterval: false`) to eliminate SSL certificate verification errors from connect-pg-simple
   - All session handlers now safely handle callback race conditions
+- **Supabase Auth Logging Cleanup:**
+  - Fixed noisy auth logs: Filtered "Auth session missing!" message (expected on public pages)
+  - Only actual auth errors are now logged to maintain clean production logs
+  - Applied to both `getUser()` and `getSession()` functions
 - **Node.js 20 Upgrade:**
   - Upgraded frontend Dockerfile from Node.js 18 to Node.js 20 (fixes Supabase deprecation warning)
   - Fixed PostgreSQL SSL certificate verification (disabled rejectUnauthorized in production)
