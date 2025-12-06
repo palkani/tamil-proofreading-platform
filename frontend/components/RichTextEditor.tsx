@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
@@ -141,6 +141,24 @@ export default function RichTextEditor({
       }, 50);
     },
   });
+
+  const insertSuggestion = useCallback(
+    (suggestion: string) => {
+      if (!editor) return;
+      const { from } = editor.state.selection;
+      const deleteFrom = Math.max(0, from - currentPrefix.length);
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: deleteFrom, to: from })
+        .insertContent(`${suggestion} `)
+        .run();
+      setPopupSuggestions([]);
+      setPopupCoords(null);
+      setActiveIndex(0);
+    },
+    [editor, currentPrefix]
+  );
 
   useEffect(() => {
     if (!editor) return;
@@ -389,14 +407,7 @@ export default function RichTextEditor({
 
     dom.addEventListener('keydown', keyHandler);
     return () => dom.removeEventListener('keydown', keyHandler);
-  }, [editor, popupSuggestions, activeIndex]);
-
-  useEffect(() => {
-    if (!isTamil) {
-      setPopupSuggestions([]);
-      setPopupCoords(null);
-    }
-  }, [isTamil]);
+  }, [editor, popupSuggestions, activeIndex, insertSuggestion]);
 
   if (!editor) {
     return (
@@ -405,21 +416,6 @@ export default function RichTextEditor({
       </div>
     );
   }
-
-  const insertSuggestion = (suggestion: string) => {
-    if (!editor) return;
-    const { from } = editor.state.selection;
-    const deleteFrom = Math.max(0, from - currentPrefix.length);
-    editor
-      .chain()
-      .focus()
-      .deleteRange({ from: deleteFrom, to: from })
-      .insertContent(`${suggestion} `)
-      .run();
-    setPopupSuggestions([]);
-    setPopupCoords(null);
-    setActiveIndex(0);
-  };
 
   return (
     <div className="flex h-full flex-col bg-white rounded-3xl border-2 border-[#E2E8F0] shadow-xl overflow-hidden">

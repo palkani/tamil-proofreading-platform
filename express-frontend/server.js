@@ -8,7 +8,7 @@ const { trackPageView } = require('./middleware/analytics');
 const { getSeoData } = require('./config/seo');
 
 const app = express();
-const PORT = 5000; // Express frontend always runs on 5000
+const PORT = process.env.PORT || 5000; // allow overriding for local conflicts
 
 // CRITICAL: Trust the reverse proxy (Firebase Hosting) for headers and cookies
 // This allows Express to properly set secure cookies in Cloud Run environment

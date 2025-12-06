@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 
+type GeminiGenerateContentResult = {
+  response?: {
+    text?: () => string;
+  };
+  text?: string;
+};
+
+type GeminiRawSuggestion = {
+  type?: string;
+  severity?: string;
+  title?: string;
+  description?: string;
+  original?: string;
+  suggestion?: string;
+  confidence?: number;
+};
+
+const extractResponseText = (result: GeminiGenerateContentResult): string => {
+  if (typeof result.response?.text === 'function') {
+    return result.response.text() ?? '';
+  }
+  return result.text ?? '';
+};
+
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
@@ -24,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     const ai = new GoogleGenAI({ apiKey });
-    
+
     const prompt = `You are an expert Tamil language proofreader and grammar checker. Analyze the following Tamil text and provide suggestions for improvements.
 
 Focus on:
@@ -51,15 +75,16 @@ Return ONLY the JSON array, no other text. If no issues found, return empty arra
       model: 'gemini-1.5-flash',
       contents: prompt,
     });
-    
-    let responseText = '';
-    try {
-      responseText = (result as any).response?.text?.() || (result as any).text || '';
-    } catch (err) {
-      console.warn('Failed to extract Gemini response text:', err);
-      responseText = JSON.stringify(result);
+
+    let responseText = extractResponseText(result as GeminiGenerateContentResult);
+    if (!responseText) {
+      try {
+        responseText = JSON.stringify(result);
+      } catch (err) {
+        console.warn('Failed to serialize Gemini response:', err);
+      }
     }
-    
+
     if (!responseText) {
       console.warn('Empty response from Gemini');
       return NextResponse.json({ suggestions: [], error: 'Empty response from AI' });
@@ -75,9 +100,9 @@ Return ONLY the JSON array, no other text. If no issues found, return empty arra
       });
     }
     
-    let suggestions;
+    let parsedSuggestions: unknown;
     try {
-      suggestions = JSON.parse(jsonMatch[0]);
+      parsedSuggestions = JSON.parse(jsonMatch[0]);
     } catch (parseError) {
       console.error('Failed to parse Gemini JSON response:', parseError);
       return NextResponse.json({ 
@@ -85,23 +110,32 @@ Return ONLY the JSON array, no other text. If no issues found, return empty arra
         error: 'Failed to parse AI response'
       });
     }
-    
-    const formattedSuggestions = suggestions.map((s: any, index: number) => ({
+
+    if (!Array.isArray(parsedSuggestions)) {
+      console.warn('Gemini response was not an array:', parsedSuggestions);
+      return NextResponse.json({
+        suggestions: [],
+        error: 'Invalid response format from AI',
+      });
+    }
+
+    const suggestions = parsedSuggestions as GeminiRawSuggestion[];
+    const formattedSuggestions = suggestions.map((suggestion, index) => ({
       id: `gemini-${Date.now()}-${index}`,
-      type: s.type || 'style',
-      severity: s.severity || 'suggestion',
-      title: s.title || 'Improvement suggestion',
-      description: s.description || '',
-      original: s.original || '',
-      suggestion: s.suggestion || '',
-      confidence: s.confidence || 0.7,
+      type: suggestion.type || 'style',
+      severity: suggestion.severity || 'suggestion',
+      title: suggestion.title || 'Improvement suggestion',
+      description: suggestion.description || '',
+      original: suggestion.original || '',
+      suggestion: suggestion.suggestion || '',
+      confidence: typeof suggestion.confidence === 'number' ? suggestion.confidence : 0.7,
     }));
     
     return NextResponse.json({ suggestions: formattedSuggestions });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Gemini API error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to analyze text' },
+      { error: error instanceof Error ? error.message : 'Failed to analyze text' },
       { status: 500 }
     );
   }

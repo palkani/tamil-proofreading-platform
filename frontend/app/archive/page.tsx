@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import AppHeader from '@/components/AppHeader';
 import { authAPI, submissionAPI } from '@/lib/api';
+import { extractApiErrorMessage } from '@/utils/errors';
 import type { Submission } from '@/types';
 
 const RETENTION_DAYS = 15;
@@ -36,11 +37,11 @@ export default function ArchivePage() {
         const { submissions, retention_days, message: apiMessage } = await submissionAPI.getArchivedSubmissions();
         setArchivedDrafts(submissions);
         setMessage(apiMessage ?? `Drafts are retained for ${retention_days} days before deletion.`);
-      } catch (err: any) {
+      } catch (error) {
         // Authentication disabled for testing - skip login requirement
         setUserEmail('test@example.com');
         setShowAdmin(false);
-        setError('Unable to load archived drafts. Please try again later.');
+        setError(extractApiErrorMessage(error, 'Unable to load archived drafts. Please try again later.'));
       } finally {
         setLoading(false);
       }

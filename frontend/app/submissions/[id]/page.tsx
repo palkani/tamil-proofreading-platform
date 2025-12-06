@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { submissionAPI, authAPI } from '@/lib/api';
 import type { Submission, Suggestion } from '@/types';
+import { extractApiErrorMessage } from '@/utils/errors';
 import AppHeader from '@/components/AppHeader';
 import SubmissionDiff from '@/components/SubmissionDiff';
 
@@ -44,9 +45,9 @@ export default function SubmissionDetailPage() {
       try {
         const data = await submissionAPI.getSubmission(submissionId);
         setSubmission(data);
-      } catch (err: any) {
-        console.error('Failed to load submission', err);
-        setError(err?.response?.data?.error || 'Failed to load submission.');
+      } catch (error) {
+        console.error('Failed to load submission', error);
+        setError(extractApiErrorMessage(error, 'Failed to load submission.'));
       } finally {
         setLoading(false);
       }

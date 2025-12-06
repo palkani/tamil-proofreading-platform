@@ -104,3 +104,65 @@ export interface ContactMessage {
   created_at: string;
 }
 
+export interface AdminAnalytics {
+  total_users: number;
+  active_users: number;
+  total_submissions: number;
+  revenue: {
+    total: number;
+    monthly: number;
+  };
+  model_usage: {
+    model_a: number;
+    model_b: number;
+  };
+}
+
+export interface PaginatedUsers {
+  users: User[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface PaginatedPayments {
+  payments: Payment[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface PaginatedSubmissionLogs {
+  logs: Submission[];
+  limit: number;
+  offset: number;
+}
+
+export interface StripePaymentIntent {
+  id: string;
+  amount?: number;
+  currency?: string;
+  client_secret?: string;
+  [key: string]: unknown;
+}
+
+export interface RazorpayOrder {
+  id: string;
+  amount: number;
+  currency: string;
+  receipt?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface CreatePaymentResponse {
+  payment: Payment;
+  payment_intent: StripePaymentIntent | RazorpayOrder;
+}
+
+export interface RazorpayCheckoutHandlerPayload {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature?: string;
+}
+

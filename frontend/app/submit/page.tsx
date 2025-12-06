@@ -13,6 +13,7 @@ import { analyzeContextSpelling, getContextWindow } from '@/utils/contextSpellin
 import { analyzeGrammar, getGrammarRuleExplanation } from '@/utils/tamilGrammar';
 import { analyzeClarityStyle, getClarityStyleExplanation } from '@/utils/clarityStyle';
 import { checkGrammarSegment, AISuggestion as GeminiSuggestion } from '@/utils/geminiTamilChecker';
+import { extractApiErrorMessage } from '@/utils/errors';
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 
@@ -759,9 +760,9 @@ export default function SubmitPage() {
         setSubmission(response);
         startSubmissionStream(response.id);
         setInfoMessage('Text submitted for proofreading. Suggestions will appear shortly.');
-      } catch (err: any) {
-        setError(err?.message || 'Failed to submit text for proofreading');
-        console.error('Submission error:', err);
+      } catch (error) {
+        setError(extractApiErrorMessage(error, 'Failed to submit text for proofreading'));
+        console.error('Submission error:', error);
       } finally {
         setLoading(false);
       }
@@ -897,8 +898,8 @@ export default function SubmitPage() {
         setEditorHTML('');
         setMode('list');
       }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to archive draft');
+    } catch (error) {
+      setError(extractApiErrorMessage(error, 'Failed to archive draft'));
     } finally {
       setArchivingId(null);
     }

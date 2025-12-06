@@ -20,7 +20,7 @@ export default function AccountPage() {
         setUserEmail(user.email);
         setUserName(user.name ?? '');
         setShowAdmin(user.role === 'admin');
-      } catch (err) {
+      } catch {
         // Authentication disabled for testing - skip login requirement
         setUserEmail('test@example.com');
         setUserName('Test User');

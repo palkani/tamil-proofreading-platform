@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { dashboardAPI, authAPI } from '@/lib/api';
 import AppHeader from '@/components/AppHeader';
-import type { DashboardStats } from '@/types';
+import type { DashboardStats, User } from '@/types';
 
 export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     loadDashboard();
@@ -35,7 +35,16 @@ export default function DashboardPage() {
       setUser(userData);
     } catch (err) {
       // Authentication disabled for testing - skip login requirement
-      setUser({ email: 'test@example.com', role: 'user' });
+      setUser({
+        id: 0,
+        email: 'test@example.com',
+        name: 'Test User',
+        role: 'writer',
+        subscription: 'free',
+        is_active: true,
+        created_at: '',
+        updated_at: '',
+      });
     }
   };
 

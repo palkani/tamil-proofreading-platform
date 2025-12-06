@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authAPI } from '@/lib/api';
+import { extractApiErrorMessage } from '@/utils/errors';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,8 +21,8 @@ export default function LoginPage() {
     try {
       await authAPI.login(email, password);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed');
+    } catch (error) {
+      setError(extractApiErrorMessage(error, 'Login failed'));
     } finally {
       setLoading(false);
     }
@@ -89,7 +90,7 @@ export default function LoginPage() {
 
           <div className="text-center">
             <Link href="/register" className="text-sm font-semibold text-[#4F46E5] hover:text-[#4F46E5]/80">
-              Don't have an account? Sign up
+              Don&apos;t have an account? Sign up
             </Link>
           </div>
         </form>

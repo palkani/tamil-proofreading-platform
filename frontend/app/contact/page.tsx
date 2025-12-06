@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import AppHeader from '@/components/AppHeader';
 import { authAPI, contactAPI } from '@/lib/api';
+import { extractApiErrorMessage } from '@/utils/errors';
 
 interface FormState {
   name: string;
@@ -25,7 +26,7 @@ export default function ContactPage() {
         setShowAdmin(user.role === 'admin');
         setUserEmail(user.email);
         setForm((prev) => ({ ...prev, name: user.name || prev.name, email: user.email || prev.email }));
-      } catch (err) {
+      } catch {
         // user not logged in; stay with manual inputs
       }
     };
@@ -56,8 +57,8 @@ export default function ContactPage() {
       });
       setSuccess('Thanks for reaching out! We will respond shortly.');
       setForm((prev) => ({ ...prev, message: '' }));
-    } catch (err: any) {
-      const details = err?.response?.data?.error || 'Unable to send message. Please try again.';
+    } catch (error) {
+      const details = extractApiErrorMessage(error, 'Unable to send message. Please try again.');
       setError(details);
     } finally {
       setSubmitting(false);

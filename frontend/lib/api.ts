@@ -1,5 +1,17 @@
 import apiClient from './api-client';
-import type { User, Submission, Payment, Usage, DashboardStats, ContactMessage } from '@/types';
+import type {
+  AdminAnalytics,
+  ContactMessage,
+  CreatePaymentResponse,
+  DashboardStats,
+  PaginatedPayments,
+  PaginatedSubmissionLogs,
+  PaginatedUsers,
+  Payment,
+  Submission,
+  Usage,
+  User,
+} from '@/types';
 
 // Auth API
 export const authAPI = {
@@ -110,12 +122,12 @@ export const paymentAPI = {
     payment_type: string;
     description?: string;
     submission_id?: number;
-  }) => {
+  }): Promise<CreatePaymentResponse> => {
     const response = await apiClient.post('/payments/create', data);
     return response.data;
   },
 
-  verifyPayment: async (transactionId: string, paymentId: string) => {
+  verifyPayment: async (transactionId: string, paymentId: string): Promise<{ payment: Payment }> => {
     const response = await apiClient.post('/payments/verify', {
       transaction_id: transactionId,
       payment_id: paymentId,
@@ -146,7 +158,7 @@ export const dashboardAPI = {
 
 // Admin API
 export const adminAPI = {
-  getUsers: async (limit = 20, offset = 0) => {
+  getUsers: async (limit = 20, offset = 0): Promise<PaginatedUsers> => {
     const response = await apiClient.get('/admin/users', {
       params: { limit, offset },
     });
@@ -163,19 +175,19 @@ export const adminAPI = {
     return response.data;
   },
 
-  getPayments: async (limit = 20, offset = 0) => {
+  getPayments: async (limit = 20, offset = 0): Promise<PaginatedPayments> => {
     const response = await apiClient.get('/admin/payments', {
       params: { limit, offset },
     });
     return response.data;
   },
 
-  getAnalytics: async () => {
+  getAnalytics: async (): Promise<AdminAnalytics> => {
     const response = await apiClient.get('/admin/analytics');
     return response.data;
   },
 
-  getModelLogs: async (limit = 50, offset = 0) => {
+  getModelLogs: async (limit = 50, offset = 0): Promise<PaginatedSubmissionLogs> => {
     const response = await apiClient.get('/admin/model-logs', {
       params: { limit, offset },
     });

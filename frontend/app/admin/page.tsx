@@ -1,32 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { adminAPI, authAPI } from '@/lib/api';
-import type { User, Payment } from '@/types';
+import type { AdminAnalytics, Payment, Submission, User } from '@/types';
 
 export default function AdminPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'users' | 'payments' | 'analytics' | 'logs'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [analytics, setAnalytics] = useState<any>(null);
-  const [logs, setLogs] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
+  const [logs, setLogs] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
-  useEffect(() => {
-    loadUser();
-  }, []);
-
-  useEffect(() => {
-    if (user && user.role === 'admin') {
-      loadData();
-    }
-  }, [activeTab, user]);
-
-  const loadUser = async () => {
+  const loadUser = useCallback(async () => {
     try {
       const userData = await authAPI.getCurrentUser();
       if (userData.role !== 'admin') {
@@ -34,44 +24,67 @@ export default function AdminPage() {
         return;
       }
       setUser(userData);
-    } catch (err) {
+    } catch {
       // Authentication disabled for testing - skip login requirement
-      setUser({ email: 'admin@example.com', role: 'admin' });
+      setUser({
+        id: 0,
+        email: 'admin@example.com',
+        name: 'Admin',
+        role: 'admin',
+        subscription: 'free',
+        is_active: true,
+        created_at: '',
+        updated_at: '',
+      });
     }
-  };
+  }, [router]);
 
-  const loadData = async () => {
+  useEffect(() => {
+    void loadUser();
+  }, [loadUser]);
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       switch (activeTab) {
-        case 'users':
+        case 'users': {
           const usersData = await adminAPI.getUsers();
           setUsers(usersData.users);
           break;
-        case 'payments':
+        }
+        case 'payments': {
           const paymentsData = await adminAPI.getPayments();
           setPayments(paymentsData.payments);
           break;
-        case 'analytics':
+        }
+        case 'analytics': {
           const analyticsData = await adminAPI.getAnalytics();
           setAnalytics(analyticsData);
           break;
-        case 'logs':
+        }
+        case 'logs': {
           const logsData = await adminAPI.getModelLogs();
           setLogs(logsData.logs);
           break;
+        }
       }
     } catch (err) {
       console.error('Error loading data:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      void loadData();
+    }
+  }, [activeTab, user, loadData]);
 
   const handleUpdateUser = async (userId: number, data: Partial<User>) => {
     try {
       await adminAPI.updateUser(userId, data);
-      loadData();
+      await loadData();
     } catch (err) {
       console.error('Error updating user:', err);
     }
@@ -81,7 +94,7 @@ export default function AdminPage() {
     if (!confirm('Are you sure you want to delete this user?')) return;
     try {
       await adminAPI.deleteUser(userId);
-      loadData();
+      await loadData();
     } catch (err) {
       console.error('Error deleting user:', err);
     }
@@ -261,7 +274,7 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {logs.map((log: any) => (
+                      {logs.map((log) => (
                         <tr key={log.id}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{log.id}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{log.user_id}</td>

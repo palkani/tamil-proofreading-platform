@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { authAPI } from '@/lib/api';
+import { extractApiErrorMessage } from '@/utils/errors';
 
 function GoogleIcon() {
   return (
@@ -33,8 +34,8 @@ export default function RegisterPage() {
     try {
       await authAPI.register(email, password, name);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed');
+    } catch (error) {
+      setError(extractApiErrorMessage(error, 'Registration failed'));
     } finally {
       setLoading(false);
     }
