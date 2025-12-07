@@ -1,10 +1,13 @@
 {
   "version": 2,
+  "installCommand": "npm install --prefix express-frontend",
+  "buildCommand": "npm run build:css --prefix express-frontend",
   "functions": {
     "api/index.js": {
       "runtime": "nodejs20.x",
       "memory": 1024,
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "express-frontend/**"
     }
   },
   "routes": [
