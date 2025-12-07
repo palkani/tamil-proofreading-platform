@@ -1,4 +1,4 @@
-# Tamil AI Proofreading Platform
+# Tamil AI Proofreading Platforms
 
 A web-based platform that enables Tamil writers to upload text for AI-assisted proofreading. The system uses a tiered model workflow: a lightweight model handles up to a word limit, and escalates to a deeper model for longer or complex texts. Users access services via secure login and pay per use or via .
 
