@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
@@ -15,14 +15,14 @@ RUN go mod download
 # Copy source code
 COPY backend/ .
 
-# Build application with optimizations (CGO disabled since no C dependencies used)
-RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-s -w" -o server ./cmd/server
+# Build application
+RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/server
 
 # Runtime stage
 FROM alpine:latest
 
 # Install runtime dependencies
-RUN apk --no-cache add ca-certificates libc6-compat curl
+RUN apk --no-cache add ca-certificates libc6-compat
 
 WORKDIR /root/
 
@@ -32,9 +32,9 @@ COPY --from=builder /app/server .
 # Expose port
 EXPOSE 8080
 
-# Health check using curl instead of wget
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:8080/health || exit 1
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Run server
 CMD ["./server"]
