@@ -1,15 +1,16 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "express-frontend/Dockerfile",
-      "use": "@vercel/docker"
+  "functions": {
+    "api/index.js": {
+      "runtime": "nodejs20.x",
+      "memory": 1024,
+      "maxDuration": 60
     }
-  ],
+  },
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "/$1"
+      "dest": "/api/index.js"
     }
   ]
 }
