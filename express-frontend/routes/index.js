@@ -1,8 +1,18 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
 const { requireAuth, redirectIfAuth, getCurrentUser } = require('../middleware/auth');
 const { getSeoData } = require('../config/seo');
-const { revokeRefreshToken, clearAuthCookies } = require('../services/authService');
+// Build backend API URL (matches api/auth proxy)
+function getBackendApiUrl() {
+  const baseUrl = process.env.BACKEND_URL || 'http://localhost:8080';
+  if (baseUrl.endsWith('/api/v1')) {
+    return baseUrl;
+  }
+  return baseUrl.replace(/\/$/, '') + '/api/v1';
+}
+
+const BACKEND_URL = getBackendApiUrl();
 
 // Homepage - accessible to everyone
 router.get('/', (req, res) => {
@@ -153,10 +163,30 @@ router.get('/terms', (req, res) => {
 
 // Logout
 router.post('/logout', async (req, res) => {
-  const refreshToken = req.cookies.refresh_token || req.body.refreshToken;
-  await revokeRefreshToken(refreshToken);
-  clearAuthCookies(res);
-  res.redirect('/');
+  try {
+    const backendRes = await axios({
+      method: 'post',
+      url: `${BACKEND_URL}/auth/logout`,
+      headers: {
+        cookie: req.headers.cookie,
+        authorization: req.headers.authorization,
+        host: undefined,
+        origin: undefined,
+      },
+      withCredentials: true,
+      validateStatus: () => true,
+    });
+
+    const setCookie = backendRes.headers['set-cookie'];
+    if (setCookie) {
+      res.setHeader('set-cookie', setCookie);
+    }
+
+    res.redirect('/');
+  } catch (err) {
+    console.error('[AUTH-LOGOUT] Failed to revoke session:', err.message);
+    res.redirect('/');
+  }
 });
 
 module.exports = router;

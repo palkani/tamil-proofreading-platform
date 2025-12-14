@@ -2,11 +2,8 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
-const passport = require('passport');
 const { trackPageView } = require('./middleware/analytics');
 const { getSeoData } = require('./config/seo');
-const configurePassport = require('./config/passport');
-const { initDb } = require('./db');
 const authRoutes = require('./routes/auth');
 const { attachUser } = require('./middleware/auth');
 
@@ -37,21 +34,34 @@ async function initializeAppSecrets() {
   }
 }
 
-const appReady = (async () => {
-  console.log('[Init] Starting Express app bootstrap');
-  await initDb();
-  await initializeAppSecrets();
-  console.log('[Init] Express app bootstrap complete');
-})();
-
-const ensureAppReady = (req, res, next) => {
-  appReady.then(() => next()).catch((error) => {
-    console.error('[Init] Express app failed to initialize', error);
-    next(error);
-  });
+let initPromise = null;
+const ensureAppReady = () => {
+  if (!initPromise) {
+    initPromise = (async () => {
+      console.log('[Init] Starting Express app bootstrap');
+      await initializeAppSecrets();
+      console.log('[Init] Express app bootstrap complete');
+    })().catch((error) => {
+      // Reset so a subsequent request can retry initialization
+      initPromise = null;
+      throw error;
+    });
+  }
+  return initPromise;
 };
 
-app.use(ensureAppReady);
+const appReady = ensureAppReady();
+
+const ensureAppReadyMiddleware = (req, res, next) => {
+  ensureAppReady()
+    .then(() => next())
+    .catch((error) => {
+      console.error('[Init] Express app failed to initialize', error);
+      next(error);
+    });
+};
+
+app.use(ensureAppReadyMiddleware);
 
 app.use(
   cors({
@@ -71,8 +81,6 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-configurePassport();
-app.use(passport.initialize());
 app.use(attachUser);
 app.use(trackPageView);
 app.use(

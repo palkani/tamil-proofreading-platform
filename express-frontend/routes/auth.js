@@ -1,144 +1,69 @@
 const express = require('express');
-const passport = require('passport');
+const axios = require('axios');
 const router = express.Router();
 
-const { authenticateJWT } = require('../middleware/auth');
-const {
-  setAuthCookies,
-  clearAuthCookies,
-  issueTokensForUser,
-  rotateRefreshToken,
-  revokeRefreshToken,
-} = require('../services/authService');
-const { findUserById } = require('../models/userModel');
-
-const buildStateParam = (statePayload = {}) => {
-  try {
-    return Buffer.from(JSON.stringify(statePayload)).toString('base64url');
-  } catch {
-    return '';
+// Construct backend API URL - handle both cases:
+// 1. BACKEND_URL = http://localhost:8080/api/v1 (dev)
+// 2. BACKEND_URL = https://prooftamil-backend-xxx.run.app (prod - needs /api/v1)
+function getBackendApiUrl() {
+  const baseUrl = process.env.BACKEND_URL || 'http://localhost:8080';
+  if (baseUrl.endsWith('/api/v1')) {
+    return baseUrl;
   }
-};
+  return baseUrl.replace(/\/$/, '') + '/api/v1';
+}
 
-const parseStateParam = (stateString) => {
-  if (!stateString) return {};
+const BACKEND_URL = getBackendApiUrl();
+
+const forward = async (req, res, path, method = 'post') => {
   try {
-    return JSON.parse(Buffer.from(stateString, 'base64url').toString('utf-8'));
-  } catch {
-    return {};
-  }
-};
-
-router.get('/google', (req, res, next) => {
-  const redirectPath = req.query.redirect || '/dashboard';
-  const responseMode = req.query.mode || 'redirect';
-  const state = buildStateParam({ redirect: redirectPath, mode: responseMode });
-
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    session: false,
-    prompt: 'select_account',
-    state,
-  })(req, res, next);
-});
-
-router.get(
-  '/google/callback',
-  passport.authenticate('google', {
-    session: false,
-    failureRedirect: '/login?error=Google%20authentication%20failed',
-  }),
-  async (req, res) => {
-    try {
-      const tokens = await issueTokensForUser(req.user);
-      setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-
-      const stateParams = parseStateParam(req.query.state);
-      const defaultRedirect =
-        process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}/dashboard`;
-      let redirectTarget = defaultRedirect;
-
-      if (stateParams.redirect && typeof stateParams.redirect === 'string') {
-        if (stateParams.redirect.startsWith('http')) {
-          redirectTarget = stateParams.redirect;
-        } else {
-          const url = new URL(defaultRedirect);
-          url.pathname = stateParams.redirect.startsWith('/')
-            ? stateParams.redirect
-            : `/${stateParams.redirect}`;
-          redirectTarget = url.toString();
-        }
-      }
-
-      if (stateParams.mode === 'json') {
-        return res.json({
-          access_token: tokens.accessToken,
-          refresh_token: tokens.refreshToken,
-          token_type: 'Bearer',
-          expires_in: 15 * 60,
-          user: {
-            id: req.user.id,
-            email: req.user.email,
-            name: req.user.name,
-            profile_picture: req.user.profile_picture,
-          },
-        });
-      }
-
-      const redirectUrl = new URL(redirectTarget);
-      redirectUrl.searchParams.set('access_token', tokens.accessToken);
-      redirectUrl.searchParams.set('refresh_token', tokens.refreshToken);
-      redirectUrl.searchParams.set('token_type', 'Bearer');
-      redirectUrl.searchParams.set('expires_in', (15 * 60).toString());
-      redirectUrl.searchParams.set('email', req.user.email || '');
-      redirectUrl.searchParams.set('name', req.user.name || '');
-      redirectUrl.searchParams.set('picture', req.user.profile_picture || '');
-      res.redirect(redirectUrl.toString());
-    } catch (err) {
-      console.error('[AUTH] OAuth callback failed:', err.message);
-      res.redirect('/login?error=Unable%20to%20complete%20login');
-    }
-  }
-);
-
-router.post('/refresh', async (req, res) => {
-  try {
-    const incomingToken =
-      req.cookies.refresh_token || req.body.refreshToken || req.headers['x-refresh-token'];
-
-    if (!incomingToken) {
-      return res.status(400).json({ error: 'Refresh token is required' });
-    }
-
-    const { tokens } = await rotateRefreshToken(incomingToken);
-    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-
-    res.json({
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
-      token_type: 'Bearer',
-      expires_in: 15 * 60,
+    const url = `${BACKEND_URL}${path}`;
+    const backendRes = await axios({
+      method,
+      url,
+      data: req.body,
+      params: req.query,
+      headers: {
+        ...req.headers,
+        host: undefined,
+        cookie: req.headers.cookie,
+        origin: undefined,
+      },
+      withCredentials: true,
+      validateStatus: () => true, // forward backend status as-is
     });
+
+    // Propagate Set-Cookie from backend so httpOnly cookies flow to the browser
+    const setCookie = backendRes.headers['set-cookie'];
+    if (setCookie) {
+      res.setHeader('set-cookie', setCookie);
+    }
+
+    res.status(backendRes.status).json(backendRes.data);
   } catch (err) {
-    console.error('[AUTH] Refresh token error:', err.message);
-    res.status(401).json({ error: 'Unable to refresh session' });
+    console.error(`[AUTH-PROXY] ${method.toUpperCase()} ${path} failed:`, err.message);
+    res.status(502).json({ error: 'Authentication service unavailable' });
   }
-});
+};
 
-router.post('/logout', async (req, res) => {
-  const incomingToken =
-    req.cookies.refresh_token || req.body.refreshToken || req.headers['x-refresh-token'];
-  await revokeRefreshToken(incomingToken);
-  clearAuthCookies(res);
-  res.json({ success: true });
-});
+router.post('/register', (req, res) => forward(req, res, '/auth/register', 'post'));
+router.post('/login', (req, res) => forward(req, res, '/auth/login', 'post'));
+router.post('/refresh', (req, res) => forward(req, res, '/auth/refresh', 'post'));
+router.post('/logout', (req, res) => forward(req, res, '/auth/logout', 'post'));
+router.post('/social', (req, res) => forward(req, res, '/auth/social', 'post'));
+router.post('/password-strength', (req, res) =>
+  forward(req, res, '/auth/password-strength', 'post')
+);
+router.post('/forgot-password', (req, res) => forward(req, res, '/auth/forgot-password', 'post'));
+router.post('/reset-password', (req, res) => forward(req, res, '/auth/reset-password', 'post'));
+router.get('/me', (req, res) => forward(req, res, '/auth/me', 'get'));
 
-router.get('/me', authenticateJWT, async (req, res) => {
-  const user = await findUserById(req.authUser.id);
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
-  }
-  res.json({ user });
+// Google OAuth is handled by the backend; fail fast if misrouted
+router.get('/google', (req, res) => {
+  res.status(501).json({ error: 'Google OAuth is handled by backend service' });
+});
+router.get('/google/callback', (req, res) => {
+  res.status(501).json({ error: 'Google OAuth is handled by backend service' });
 });
 
 module.exports = router;

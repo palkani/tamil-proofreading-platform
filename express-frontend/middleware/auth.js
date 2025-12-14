@@ -21,13 +21,16 @@ const attachUser = (req, res, next) => {
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-    req.user = {
-      id: payload.sub,
-      email: payload.email,
-      name: payload.name,
-      profile_picture: payload.picture,
-    };
+    // Decode without verifying signature — trust is enforced by backend
+    const payload = jwt.decode(token) || {};
+    req.user = payload.sub
+      ? {
+          id: payload.sub,
+          email: payload.email,
+          name: payload.name,
+          profile_picture: payload.picture,
+        }
+      : null;
   } catch (err) {
     req.user = null;
   }
@@ -63,7 +66,10 @@ function authenticateJWT(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+    const payload = jwt.decode(token);
+    if (!payload || !payload.sub) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
     req.authUser = {
       id: payload.sub,
       email: payload.email,
@@ -72,7 +78,7 @@ function authenticateJWT(req, res, next) {
     };
     return next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    return res.status(401).json({ error: 'Invalid token' });
   }
 }
 
