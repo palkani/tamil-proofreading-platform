@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "rootDirectory": "express-frontend",
   "installCommand": "npm install",
   "buildCommand": "npm run build:css",
   "functions": {
