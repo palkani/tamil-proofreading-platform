@@ -2,13 +2,6 @@
   "version": 2,
   "installCommand": "npm install",
   "buildCommand": "npm run build:css",
-  "functions": {
-    "api/index.js": {
-      "runtime": "nodejs20.x",
-      "memory": 1024,
-      "maxDuration": 60
-    }
-  },
   "routes": [
     {
       "src": "/(.*)",
