@@ -8,6 +8,9 @@ on:
 env:
   PROJECT_ID: prooftamil
   REGION: asia-south1
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 jobs:
   deploy:
@@ -86,11 +89,14 @@ jobs:
       run: npm run build:css
       working-directory: express-frontend
 
+    - name: Check Vercel credentials
+      run: |
+        if [ -z "${VERCEL_TOKEN}" ] || [ -z "${VERCEL_ORG_ID}" ] || [ -z "${VERCEL_PROJECT_ID}" ]; then
+          echo "Missing Vercel secrets. Ensure VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID are set in GitHub secrets."
+          exit 1
+        fi
+
     - name: Deploy Frontend to Vercel
-      env:
-        VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-        VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       run: |
         npm install --global vercel@latest
         vercel pull --yes --environment=production --token=$VERCEL_TOKEN
