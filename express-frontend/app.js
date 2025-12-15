@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
+const querystring = require('querystring');
 const { trackPageView } = require('./middleware/analytics');
 const { getSeoData } = require('./config/seo');
 const authRoutes = require('./routes/auth');
@@ -89,6 +90,13 @@ app.use(
     etag: true,
   })
 );
+
+// Guard: normalize legacy OAuth callback paths to the correct backend path
+app.get(['/v1/auth/google/callback', '/auth/google/callback'], (req, res) => {
+  const qs = querystring.stringify(req.query);
+  const target = `/api/v1/auth/google/callback${qs ? `?${qs}` : ''}`;
+  return res.redirect(target);
+});
 
 app.get('/sitemap.xml', (req, res) => {
   const baseUrl = 'https://prooftamil.com';
