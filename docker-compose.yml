@@ -32,6 +32,7 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql://prooftamil:localdev123@db:5432/prooftamil_local}
       - PORT=8080
       - GIN_MODE=release
+      - GOOGLE_OAUTH_REDIRECT_DOMAIN=${GOOGLE_OAUTH_REDIRECT_DOMAIN:-https://prooftamil.com}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
       - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret}

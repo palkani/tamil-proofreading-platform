@@ -11,6 +11,7 @@ env:
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  GOOGLE_OAUTH_REDIRECT_DOMAIN: https://prooftamil.com
 
 jobs:
   deploy:
@@ -61,7 +62,7 @@ jobs:
           --timeout=300 \
           --max-instances=100 \
           --port=8080 \
-          --set-env-vars=GIN_MODE=release \
+          --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }} \
           --update-secrets DATABASE_URL=DATABASE_URL:latest \
           --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
           --update-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest \

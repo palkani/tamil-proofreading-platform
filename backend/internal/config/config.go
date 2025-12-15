@@ -59,7 +59,7 @@ func Load() *Config {
 		DatabaseURL:               getEnv("DATABASE_URL", "postgres://user:password@localhost:5432/tamil_proofreading?sslmode=disable"),
 		Port:                      getEnv("PORT", "8080"),
 		FrontendURL:               getEnv("FRONTEND_URL", "http://localhost:3000"),
-		GoogleOAuthRedirectDomain: getEnv("GOOGLE_OAUTH_REDIRECT_DOMAIN", "https://www.prooftamil.com"),
+		GoogleOAuthRedirectDomain: getEnv("GOOGLE_OAUTH_REDIRECT_DOMAIN", "https://prooftamil.com"),
 		JWTSecret:                 getEnv("JWT_SECRET", "change-this-secret-key-in-production"),
 		RefreshTokenSecret:        getEnv("REFRESH_TOKEN_SECRET", ""),
 		// Access tokens are short-lived (15m) to limit blast radius
