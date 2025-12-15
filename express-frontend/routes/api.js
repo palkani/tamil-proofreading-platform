@@ -14,6 +14,7 @@ function getBackendApiUrl() {
 }
 
 const BACKEND_URL = getBackendApiUrl();
+const ENABLE_PROXY_LOGS = process.env.PROXY_LOG !== 'false';
 
 // Helper function to split text into manageable chunks for better accuracy
 // Optimized: Increased chunk size from 120 to 200 chars to reduce API calls
@@ -320,7 +321,9 @@ router.all('/*', async (req, res) => {
 
     const url = `${BACKEND_URL}${normalizedPath}`;
     
-    console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
+    if (ENABLE_PROXY_LOGS) {
+      console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
+    }
     
     const config = {
       method: req.method,
