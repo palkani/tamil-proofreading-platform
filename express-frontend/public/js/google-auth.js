@@ -38,11 +38,8 @@ function triggerGoogleSignIn() {
     const isCloudRun = window.location.hostname.includes('run.app');
     const isProduction = window.location.hostname.includes('prooftamil.com');
     
-    // Use consistent URI - ALWAYS prooftamil.com for production/Cloud Run
-    // Must match the Google OAuth allowed redirect exactly (no www).
-    const redirectUri = (isProduction || isCloudRun)
-      ? 'https://prooftamil.com/api/v1/auth/google/callback'
-      : `${window.location.origin}/api/v1/auth/google/callback`;
+    // Always use the single allowed redirect URI to avoid mismatches
+    const redirectUri = 'https://prooftamil.com/api/v1/auth/google/callback';
     
     console.log('[GOOGLE-AUTH] Production Mode:', isProduction);
     console.log('[GOOGLE-AUTH] Cloud Run:', isCloudRun);
