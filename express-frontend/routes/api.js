@@ -311,9 +311,14 @@ router.post('/transliterate', async (req, res) => {
 // Proxy other API calls to Go backend
 router.all('/*', async (req, res) => {
   try {
-    // req.path includes the leading slash, construct full URL
-    // BACKEND_URL is http://localhost:8080/api/v1, req.path is /auth/register
-    const url = `${BACKEND_URL}${req.path}`;
+    // Normalize path to avoid double /v1 when BACKEND_URL already has /api/v1
+    // Example: BACKEND_URL=/api/v1 and req.path=/v1/auth/register -> strip leading /v1
+    let normalizedPath = req.path;
+    if (BACKEND_URL.endsWith('/api/v1') && normalizedPath.startsWith('/v1/')) {
+      normalizedPath = normalizedPath.replace(/^\/v1/, '');
+    }
+
+    const url = `${BACKEND_URL}${normalizedPath}`;
     
     console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
     
