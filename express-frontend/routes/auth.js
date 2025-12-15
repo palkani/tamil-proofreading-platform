@@ -1,5 +1,6 @@
 const express = require('express');
 const axios = require('axios');
+const querystring = require('querystring');
 const router = express.Router();
 
 // Construct backend API URL - handle both cases:
@@ -63,7 +64,10 @@ router.get('/google', (req, res) => {
   res.status(501).json({ error: 'Google OAuth is handled by backend service' });
 });
 router.get('/google/callback', (req, res) => {
-  res.status(501).json({ error: 'Google OAuth is handled by backend service' });
+  // Forward any accidental callback hits to the backend handler to avoid 501s
+  const qs = querystring.stringify(req.query);
+  const target = `/api/v1/auth/google/callback${qs ? `?${qs}` : ''}`;
+  return res.redirect(target);
 });
 
 module.exports = router;
