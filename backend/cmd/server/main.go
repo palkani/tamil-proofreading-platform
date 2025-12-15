@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,32 @@ import (
 	"tamil-proofreading-platform/backend/internal/models"
 	"tamil-proofreading-platform/backend/internal/translit"
 )
+
+// resolveLexiconPath tries env override first, then common relative locations.
+func resolveLexiconPath() string {
+	if p := os.Getenv("LEXICON_PATH"); p != "" {
+		return p
+	}
+
+	candidates := []string{}
+
+	if wd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, filepath.Join(wd, "data", "tamil_lexicon.json"))
+	}
+	if execPath, err := os.Executable(); err == nil {
+		execDir := filepath.Dir(execPath)
+		candidates = append(candidates, filepath.Join(execDir, "data", "tamil_lexicon.json"))
+	}
+	// Fallback to project-relative path
+	candidates = append(candidates, "data/tamil_lexicon.json")
+
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	return candidates[len(candidates)-1]
+}
 
 func main() {
 	port := os.Getenv("PORT")
@@ -30,10 +57,10 @@ func main() {
 	cfg := config.Load()
 
 	// Load in-memory Tamil lexicon for transliteration
-	lexiconPath := "data/tamil_lexicon.json"
+	lexiconPath := resolveLexiconPath()
 	if err := translit.LoadLexicon(lexiconPath); err != nil {
-		log.Printf("[ERROR] Failed to load Tamil lexicon: %v", err)
-		log.Printf("[INFO] Transliteration will not work without lexicon")
+		log.Printf("[ERROR] Failed to load Tamil lexicon from %s: %v", lexiconPath, err)
+		log.Printf("[INFO] Transliteration will not work without lexicon. Set LEXICON_PATH if stored elsewhere.")
 	} else {
 		log.Printf("[SUCCESS] Tamil lexicon loaded from %s", lexiconPath)
 	}
