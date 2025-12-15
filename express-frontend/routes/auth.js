@@ -69,6 +69,12 @@ router.get('/google/callback', (req, res) => {
   const target = `/api/v1/auth/google/callback${qs ? `?${qs}` : ''}`;
   return res.redirect(target);
 });
+router.get('/v1/auth/google/callback', (req, res) => {
+  // Normalize legacy path that was missing /api prefix
+  const qs = querystring.stringify(req.query);
+  const target = `/api/v1/auth/google/callback${qs ? `?${qs}` : ''}`;
+  return res.redirect(target);
+});
 
 module.exports = router;
 
