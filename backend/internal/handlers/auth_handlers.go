@@ -434,6 +434,9 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
         code := c.Query("code")
         errParam := c.Query("error")
 
+	// Early debug to ensure callback is reaching the backend
+	log.Printf("[OAUTH-DEBUG] callback hit host=%s code_len=%d error_param=%s", c.Request.Host, len(code), errParam)
+
         if errParam != "" {
                 c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error="+errParam)
                 return
@@ -491,6 +494,12 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, origin string) (string, error) {
         // Use configured OAuth redirect domain (must match Google Cloud Console)
         redirectURI := h.cfg.GoogleOAuthRedirectDomain + "/api/v1/auth/google/callback"
+
+	clientID := h.cfg.GoogleClientID
+	if len(clientID) > 16 {
+		clientID = clientID[:8] + "..." + clientID[len(clientID)-4:]
+	}
+	log.Printf("[OAUTH-DEBUG] exchanging code with redirect_uri=%s client_id=%s code_len=%d", redirectURI, clientID, len(code))
 
         tokenURL := "https://oauth2.googleapis.com/token"
         data := url.Values{
