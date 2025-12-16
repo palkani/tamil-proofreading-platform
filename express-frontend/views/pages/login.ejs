@@ -110,3 +110,53 @@ document.getElementById('google-signin-btn')?.addEventListener('click', () => {
 </script>
 
 <%- include('../partials/footer') %>
+
+<script>
+  // Auto-consume ?redirect=/workspace?access_token=... on page load
+  (function handleRedirectToken() {
+    const params = new URLSearchParams(window.location.search);
+    const redirectParam = params.get('redirect');
+
+    /**
+     * Persist the token for subsequent requests.
+     * - localStorage: used by client-side fetches
+     * - cookie: sent to the Express auth guard on the next request
+     */
+    function persistAccessToken(token) {
+      if (!token) return;
+      localStorage.setItem('access_token', token);
+      // Non-HttpOnly cookie so the backend guard can read it on first hop
+      document.cookie = `access_token=${token}; path=/; SameSite=Lax`;
+    }
+
+    // Try to extract access_token from the encoded redirect URL
+    function extractTokenFromRedirect(rawRedirect) {
+      if (!rawRedirect) return null;
+      try {
+        // Support both absolute and relative redirect values
+        const redirectUrl = new URL(rawRedirect, window.location.origin);
+        return redirectUrl.searchParams.get('access_token');
+      } catch (err) {
+        console.warn('[Login] Failed to parse redirect param', err);
+        return null;
+      }
+    }
+
+    const tokenFromRedirect = extractTokenFromRedirect(redirectParam);
+
+    if (tokenFromRedirect) {
+      // 1) Save token
+      persistAccessToken(tokenFromRedirect);
+      // 2) Send the user to the workspace without leaking the token in the URL
+      window.location.replace('/workspace');
+      return;
+    }
+
+    // If we already have a token in storage, treat as authenticated and skip login UI
+    const existingToken = localStorage.getItem('access_token');
+    if (existingToken) {
+      persistAccessToken(existingToken); // ensure cookie is present
+      window.location.replace('/workspace');
+    }
+  })();
+</script>
