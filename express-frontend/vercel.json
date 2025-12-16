@@ -2,10 +2,11 @@
   "version": 2,
   "installCommand": "npm install",
   "buildCommand": "npm run build:css",
-  "routes": [
+
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "/api/index.js"
+      "source": "/api/v1/:path*",
+      "destination": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/:path*"
     }
   ]
 }
