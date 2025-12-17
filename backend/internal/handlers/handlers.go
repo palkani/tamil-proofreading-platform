@@ -79,6 +79,35 @@ func (h *Handlers) startArchiveCleanup() {
         }()
 }
 
+// WhoAmI is a diagnostic endpoint to inspect auth headers/cookies without requiring auth.
+func (h *Handlers) WhoAmI(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	cookieToken, _ := c.Cookie("access_token")
+
+	log.Printf("[WHOAMI] authorization=%s", authHeader)
+	log.Printf("[WHOAMI] cookie_access_token=%t", cookieToken != "")
+
+	c.JSON(200, gin.H{
+		"ok":              true,
+		"hasAuthHeader":   authHeader != "",
+		"authHeaderPrefix": func() string {
+			if strings.HasPrefix(authHeader, "Bearer ") {
+				return "Bearer"
+			}
+			if authHeader != "" {
+				return "Other"
+			}
+			return ""
+		}(),
+		"hasCookie": cookieToken != "",
+		"user": gin.H{
+			"id":    c.GetString("user_id"),
+			"email": c.GetString("user_email"),
+			"name":  c.GetString("user_name"),
+		},
+	})
+}
+
 func (h *Handlers) cleanupArchivedSubmissions() error {
         cutoff := time.Now().Add(-45 * 24 * time.Hour)
         return h.db.Where("archived = ? AND archived_at < ?", true, cutoff).Delete(&models.Submission{}).Error

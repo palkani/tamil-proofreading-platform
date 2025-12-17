@@ -319,35 +319,34 @@ router.all('/*', async (req, res) => {
       normalizedPath = normalizedPath.replace(/^\/v1/, '');
     }
 
-    // Guardrail: block any attempt to proxy directly to Google domains from the client
-    const forbiddenTargets = /(googleapis\.com|google\.com)/i;
-    if (forbiddenTargets.test(normalizedPath)) {
-      console.warn('[PROXY] Blocked attempt to reach Google domain via proxy:', normalizedPath);
-      return res.status(400).json({ error: 'Direct Google API calls are not allowed from the client.' });
+    const url = `${BACKEND_URL}${normalizedPath}`;
+
+    // Debug logging for auth passthrough
+    console.log('[PROXY] incoming authorization:', req.headers.authorization);
+    if (ENABLE_PROXY_LOGS) {
+      console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
     }
 
-    const url = `${BACKEND_URL}${normalizedPath}`;
-    
     if (ENABLE_PROXY_LOGS) {
       console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
     }
     
-    // Forward all incoming headers (including Authorization) except Host
-    const forwardedHeaders = { ...req.headers };
-    delete forwardedHeaders.host;
-    delete forwardedHeaders.connection;
-    delete forwardedHeaders['content-length'];
-
+    // Forward all incoming headers (including Authorization) except Host to avoid Cloud Run host mismatch
     const config = {
       method: req.method,
       url: url,
-      headers: forwardedHeaders,
+      headers: {
+        ...req.headers,
+        host: undefined,
+        'content-length': undefined,
+      },
       params: req.query,
       data: req.body,
+      validateStatus: () => true,
     };
 
     const response = await axios(config);
-    res.status(response.status).json(response.data);
+    res.status(response.status).send(response.data);
   } catch (error) {
     console.error(`[PROXY-ERROR] ${error.message}`);
     console.error('[PROXY-ERROR] Response data:', error.response?.data);
