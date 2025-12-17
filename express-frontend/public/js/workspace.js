@@ -28,6 +28,20 @@ class WorkspaceController {
     this.init();
   }
 
+  // Unified API helper to attach Authorization consistently
+  async apiFetch(url, options = {}, requireAuth = true) {
+    const token = localStorage.getItem('access_token');
+    if (requireAuth && !token) {
+      this.showNotification('Please log in to continue.', 'warning');
+      throw new Error('login_required');
+    }
+    const headers = {
+      ...(options.headers || {}),
+      ...(token && requireAuth ? { Authorization: `Bearer ${token}` } : {}),
+    };
+    return fetch(url, { ...options, headers });
+  }
+
   init() {
     // Initialize editor
     const editorElement = document.getElementById('editor');
@@ -229,12 +243,10 @@ class WorkspaceController {
       this.translitAbort = new AbortController();
       try {
         const mode = this.getMode();
-        const res = await fetch(`/api/transliterate/suggest?q=${encodeURIComponent(word)}&limit=8&mode=${encodeURIComponent(mode)}`, {
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+        const res = await this.apiFetch(`/api/transliterate/suggest?q=${encodeURIComponent(word)}&limit=8&mode=${encodeURIComponent(mode)}`, {
+          headers: {},
           signal: this.translitAbort.signal,
-        });
+        }, false);
         if (!res.ok) throw new Error('Failed to fetch suggestions');
         const data = await res.json();
         const suggestions = data?.suggestions || [];
@@ -285,11 +297,10 @@ class WorkspaceController {
     
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch('/api/submit', {
+      const response = await this.apiFetch('/api/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ text, save_draft: false }),
         signal: this.abortController.signal
@@ -444,11 +455,10 @@ class WorkspaceController {
     
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch('/api/submit', {
+      const response = await this.apiFetch('/api/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ text, save_draft: false })
       });
@@ -522,11 +532,10 @@ class WorkspaceController {
       
       // If we have a current draft, we're updating it
       // Otherwise, create a new one
-      const response = await fetch('/api/submit', {
+      const response = await this.apiFetch('/api/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           text: text,
@@ -594,11 +603,10 @@ class WorkspaceController {
     try {
       const token = localStorage.getItem('access_token');
       // Client must not call Google APIs directly; use backend validate endpoint instead.
-      const response = await fetch('/api/validate', {
+      const response = await this.apiFetch('/api/validate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ text, mode: this.getMode() || 'english_to_tamil' })
       });
@@ -763,7 +771,7 @@ class WorkspaceController {
     if (noDataEl) noDataEl.classList.add('hidden');
     
     try {
-      const response = await fetch('/api/submissions?limit=50');
+      const response = await this.apiFetch('/api/submissions?limit=50');
       
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);
@@ -913,7 +921,7 @@ class WorkspaceController {
       const apiUrl = `/api/submissions/${draftId}`;
       console.log('Fetching from:', apiUrl);
       
-      const response = await fetch(apiUrl);
+      const response = await this.apiFetch(apiUrl);
       console.log('Response status:', response.status);
       
       if (!response.ok) {
@@ -982,7 +990,7 @@ class WorkspaceController {
     }
 
     try {
-      const response = await fetch(`/api/submissions/${draftId}`, {
+      const response = await this.apiFetch(`/api/submissions/${draftId}`, {
         method: 'DELETE'
       });
 
