@@ -1,38 +1,18 @@
 // Google OAuth Authentication Handler
 let googleClientId = null;
 
-// Initialize Google Auth
+// Initialize Google Auth (single, browser-safe source: window.GOOGLE_CLIENT_ID)
 async function initializeGoogleAuth() {
   try {
-    // Prefer runtime-injected global (set from server env: NEXT_PUBLIC_GOOGLE_CLIENT_ID)
-    const globalClientId = typeof window !== 'undefined' ? window.GOOGLE_CLIENT_ID : '';
-    const hiddenInputClientId = document.getElementById('google-client-id')?.value || '';
-    googleClientId = globalClientId || hiddenInputClientId || '';
+    googleClientId = typeof window !== 'undefined' ? window.GOOGLE_CLIENT_ID || '' : '';
 
-    // Debug (non-secret): only log presence, not the full value
+    // Debug (non-secret): log only presence
     console.log('[GOOGLE-AUTH] Client ID present:', !!googleClientId);
 
-    const btn = document.getElementById('google-signin-btn');
-    const errorDiv = document.getElementById('error-message');
-
+    // If missing, warn but do not block rendering or throw
     if (!googleClientId) {
-      if (btn) btn.disabled = true;
-      if (errorDiv) {
-        errorDiv.textContent = 'Google Sign-In is not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID.';
-        errorDiv.classList.remove('hidden');
-      } else {
-        console.error('Google OAuth not configured (missing client ID)');
-      }
-      return;
+      console.warn('[GOOGLE-AUTH] Client ID not provided via window.GOOGLE_CLIENT_ID');
     }
-
-    if (btn) btn.disabled = false;
-    if (errorDiv) {
-      errorDiv.textContent = '';
-      errorDiv.classList.add('hidden');
-    }
-
-    console.log('[GOOGLE-AUTH] Sign-In initialized with provided client ID');
   } catch (error) {
     console.error('Failed to initialize Google Auth:', error);
   }
@@ -41,8 +21,7 @@ async function initializeGoogleAuth() {
 // Trigger Google Sign-In using redirect flow
 function triggerGoogleSignIn() {
   if (!googleClientId) {
-    console.error('Google Client ID not available');
-    alert('Google Sign-In is not configured. Please try again later.');
+    console.warn('Google Client ID not available; cannot start OAuth redirect.');
     return;
   }
   

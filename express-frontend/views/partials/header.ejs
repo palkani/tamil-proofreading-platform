@@ -36,6 +36,11 @@
   <meta name="geo.region" content="IN-TN">
   <meta name="geo.placename" content="Tamil Nadu, India">
   <meta name="theme-color" content="#ea580c">
+  <!-- Global injection of Google Client ID for browser usage (forces single source of truth) -->
+  <script>
+    window.GOOGLE_CLIENT_ID = "<%= process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '' %>";
+    console.log('[GOOGLE-AUTH] Global client ID injected (presence only):', !!window.GOOGLE_CLIENT_ID);
+  </script>
   
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
