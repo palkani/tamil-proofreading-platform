@@ -1,6 +1,10 @@
 <%- include('../partials/header') %>
 
-<!-- Google Client ID for OAuth -->
+<!-- Google Client ID for OAuth (injected for runtime use on the browser) -->
+<script>
+  // Injected from server env (NEXT_PUBLIC_GOOGLE_CLIENT_ID preferred)
+  window.GOOGLE_CLIENT_ID = "<%= googleClientId || '' %>";
+</script>
 <input type="hidden" id="google-client-id" value="<%= googleClientId || '' %>">
 
 <div class="min-h-screen bg-gray-50 text-gray-900">

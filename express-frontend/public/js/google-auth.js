@@ -4,21 +4,35 @@ let googleClientId = null;
 // Initialize Google Auth
 async function initializeGoogleAuth() {
   try {
-    const clientIdElement = document.getElementById('google-client-id');
-    if (!clientIdElement) {
-      console.error('Google OAuth not configured');
-      return;
-    }
-    
-    googleClientId = clientIdElement.value;
+    // Prefer runtime-injected global (set from server env: NEXT_PUBLIC_GOOGLE_CLIENT_ID)
+    const globalClientId = typeof window !== 'undefined' ? window.GOOGLE_CLIENT_ID : '';
+    const hiddenInputClientId = document.getElementById('google-client-id')?.value || '';
+    googleClientId = globalClientId || hiddenInputClientId || '';
+
+    // Debug (non-secret): only log presence, not the full value
+    console.log('[GOOGLE-AUTH] Client ID present:', !!googleClientId);
+
+    const btn = document.getElementById('google-signin-btn');
+    const errorDiv = document.getElementById('error-message');
+
     if (!googleClientId) {
-      console.error('Google OAuth not configured - empty client ID');
+      if (btn) btn.disabled = true;
+      if (errorDiv) {
+        errorDiv.textContent = 'Google Sign-In is not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID.';
+        errorDiv.classList.remove('hidden');
+      } else {
+        console.error('Google OAuth not configured (missing client ID)');
+      }
       return;
     }
-    
-    console.log('Google Client ID loaded: Yes');
-    console.log('Google Sign-In initialized successfully');
-    
+
+    if (btn) btn.disabled = false;
+    if (errorDiv) {
+      errorDiv.textContent = '';
+      errorDiv.classList.add('hidden');
+    }
+
+    console.log('[GOOGLE-AUTH] Sign-In initialized with provided client ID');
   } catch (error) {
     console.error('Failed to initialize Google Auth:', error);
   }
