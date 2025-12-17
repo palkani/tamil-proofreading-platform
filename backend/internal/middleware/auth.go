@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -24,9 +25,9 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 		// TEMP debug log
 		if authHeader != "" {
-			c.Logger().Infof("[AUTH] authorization header: %s", authHeader)
+			log.Printf("[AUTH] authorization header: %s", authHeader)
 		} else {
-			c.Logger().Info("[AUTH] authorization header: <empty>")
+			log.Printf("[AUTH] authorization header: <empty>")
 		}
 		tokenString := ""
 
