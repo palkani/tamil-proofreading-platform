@@ -319,6 +319,13 @@ router.all('/*', async (req, res) => {
       normalizedPath = normalizedPath.replace(/^\/v1/, '');
     }
 
+    // Guardrail: block any attempt to proxy directly to Google domains from the client
+    const forbiddenTargets = /(googleapis\.com|google\.com)/i;
+    if (forbiddenTargets.test(normalizedPath)) {
+      console.warn('[PROXY] Blocked attempt to reach Google domain via proxy:', normalizedPath);
+      return res.status(400).json({ error: 'Direct Google API calls are not allowed from the client.' });
+    }
+
     const url = `${BACKEND_URL}${normalizedPath}`;
     
     if (ENABLE_PROXY_LOGS) {
