@@ -312,9 +312,9 @@ class WorkspaceController {
     const originalBtnContent = translateBtn ? translateBtn.innerHTML : '';
     if (translateBtn) {
       translateBtn.innerHTML = 'Submitting...';
-      translateBtn.disabled = true;
+    translateBtn.disabled = true;
     }
-
+    
     try {
       const token = localStorage.getItem('access_token');
       const response = await fetch('/api/submit', {
@@ -325,11 +325,11 @@ class WorkspaceController {
         },
         body: JSON.stringify({ text, save_draft: false })
       });
-
+      
       if (!response.ok) {
         throw new Error('Submit failed');
       }
-
+      
       const data = await response.json();
       if (data.translated_text) {
         this.editor.setText(data.translated_text);
@@ -342,7 +342,7 @@ class WorkspaceController {
     } finally {
       if (translateBtn) {
         translateBtn.innerHTML = originalBtnContent || 'Translate';
-        translateBtn.disabled = false;
+      translateBtn.disabled = false;
       }
     }
   }
@@ -391,6 +391,7 @@ class WorkspaceController {
 
     try {
       const html = this.editor.getHTML();
+      const token = localStorage.getItem('access_token');
       
       // If we have a current draft, we're updating it
       // Otherwise, create a new one
@@ -398,6 +399,7 @@ class WorkspaceController {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           text: text,
