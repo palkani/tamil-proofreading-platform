@@ -1,16 +1,24 @@
 <%- include('../partials/header') %>
 
+<div id="workspace-auth-banner" class="hidden bg-yellow-50 border-b border-yellow-200 text-yellow-800 px-4 py-3 flex items-center justify-between">
+  <span>No access token detected. Please sign in to sync your workspace.</span>
+  <a href="/login" class="btn-primary text-sm">Login</a>
+</div>
+
 <script>
-  // Frontend-only auth guard: allow if token in localStorage; otherwise redirect to login.
-  (function syncTokenAndGuard() {
+  // Light-weight client-side check: never auto-redirect; just surface a CTA when missing a token.
+  (function syncTokenAndShowCta() {
     const token = localStorage.getItem('access_token');
     if (token) {
       // Ensure cookie is set so subsequent server requests carry the token
       document.cookie = `access_token=${token}; path=/; SameSite=Lax`;
       return;
     }
-    // No token: go to login
-    window.location.replace('/login');
+    // No token: show banner with login button (no automatic redirect or Google flow)
+    const banner = document.getElementById('workspace-auth-banner');
+    if (banner) {
+      banner.classList.remove('hidden');
+    }
   })();
 </script>
 
