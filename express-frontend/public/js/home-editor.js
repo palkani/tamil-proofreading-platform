@@ -1,3 +1,17 @@
+// Unified API helper for all /api calls
+async function apiFetch(path, options = {}, requireAuth = true) {
+  const token = localStorage.getItem('access_token');
+  if (requireAuth && !token) {
+    console.warn('[API] Missing token for', path);
+    throw new Error('login_required');
+  }
+  const headers = {
+    ...(options.headers || {}),
+    ...(token && requireAuth ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  console.log('[API] tokenPresent=', !!token, 'path=', path);
+  return fetch(path, { ...options, headers });
+}
 // Home Page Editor - Simplified Tamil Editor with 200 Character Limit
 
 class HomeEditor {
@@ -231,11 +245,10 @@ class HomeEditor {
     if (this.translitTimeout) clearTimeout(this.translitTimeout);
     this.translitTimeout = setTimeout(async () => {
       try {
-        const response = await fetch('/api/v1/transliterate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: lastWord })
-        });
+        const response = await apiFetch('/api/transliterate/suggest?q=' + encodeURIComponent(lastWord) + '&limit=8&mode=spoken', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        }, false);
         
         console.log('[AUTOCOMPLETE] API response status:', response.status);
         
@@ -313,11 +326,10 @@ class HomeEditor {
   async transliterateFromInput(englishWord) {
     console.log('[API-INPUT] Transliterating:', englishWord);
     try {
-      const response = await fetch('/api/v1/transliterate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: englishWord })
-      });
+      const response = await apiFetch('/api/transliterate/suggest?q=' + encodeURIComponent(englishWord) + '&limit=8&mode=spoken', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      }, false);
       
       console.log('[API-INPUT] Status:', response.status);
       
