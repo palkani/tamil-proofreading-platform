@@ -37,6 +37,15 @@ jobs:
       run: |
         gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
+    - name: Go build precheck (fail fast)
+      working-directory: backend
+      run: |
+        go env
+        go version
+        go mod tidy
+        go mod verify
+        CGO_ENABLED=0 GOOS=linux go build ./cmd/server
+
     - name: Build Backend Image
       run: |
         docker build \
