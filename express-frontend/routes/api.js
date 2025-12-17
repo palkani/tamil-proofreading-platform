@@ -332,13 +332,16 @@ router.all('/*', async (req, res) => {
       console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
     }
     
+    // Forward all incoming headers (including Authorization) except Host
+    const forwardedHeaders = { ...req.headers };
+    delete forwardedHeaders.host;
+    delete forwardedHeaders.connection;
+    delete forwardedHeaders['content-length'];
+
     const config = {
       method: req.method,
       url: url,
-      headers: {
-        ...req.headers,
-        host: undefined, // Remove host header
-      },
+      headers: forwardedHeaders,
       params: req.query,
       data: req.body,
     };
