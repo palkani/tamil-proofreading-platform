@@ -23,10 +23,10 @@ type TransliterateResponse struct {
 }
 
 type TransliterateSuggestResponse struct {
-	Success     bool                   `json:"success"`
-	Query       string                 `json:"query"`
-	Suggestions []translit.Suggestion  `json:"suggestions"`
-	Error       string                 `json:"error,omitempty"`
+	Success     bool                      `json:"success"`
+	Query       string                    `json:"query"`
+	Suggestions []map[string]interface{}  `json:"suggestions"`
+	Error       string                    `json:"error,omitempty"`
 }
 
 type ValidateRequest struct {
@@ -35,14 +35,17 @@ type ValidateRequest struct {
 }
 
 type ValidateTokenSuggestion struct {
-	Original    string                 `json:"original"`
-	Start       int                    `json:"start"`
-	End         int                    `json:"end"`
-	Suggestions []translit.Suggestion  `json:"suggestions"`
+	Original    string                    `json:"original"`
+	Start       int                       `json:"start"`
+	End         int                       `json:"end"`
+	Category    string                    `json:"category"`
+	Severity    string                    `json:"severity"`
+	Suggestions []map[string]interface{}  `json:"suggestions"`
 }
 
 type ValidateResponse struct {
 	Success bool                     `json:"success"`
+	Summary map[string]interface{}   `json:"summary,omitempty"`
 	Tokens  []ValidateTokenSuggestion `json:"tokens"`
 	Error   string                   `json:"error,omitempty"`
 }
@@ -103,6 +106,15 @@ func (h *Handlers) Transliterate(c *gin.Context) {
 // TransliterateSuggest handles GET /transliterate/suggest?q=...
 func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
+	mode := strings.ToLower(strings.TrimSpace(c.Query("mode")))
+	usageLabel := map[string]string{
+		"spoken":   "Spoken",
+		"formal":   "Written / Formal",
+		"academic": "Academic",
+	}[mode]
+	if usageLabel == "" {
+		usageLabel = "Both"
+	}
 	limitStr := strings.TrimSpace(c.Query("limit"))
 	limit := 8
 	if limitStr != "" {
@@ -125,12 +137,25 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 		suggestions = suggestions[:limit]
 	}
 
+	// Map to rich metadata
+	mapped := make([]map[string]interface{}, 0, len(suggestions))
+	for idx, s := range suggestions {
+		mapped = append(mapped, map[string]interface{}{
+			"ta":     s.Word,
+			"score":  s.Score,
+			"rank":   idx + 1,
+			"label":  "Recommended",
+			"usage":  usageLabel,
+			"reason": "Standard transliteration match",
+		})
+	}
+
 	log.Printf("[SUGGEST] q=%q count=%d", q, len(suggestions))
 
 	c.JSON(http.StatusOK, TransliterateSuggestResponse{
 		Success:     true,
 		Query:       q,
-		Suggestions: suggestions,
+		Suggestions: mapped,
 	})
 }
 
@@ -156,6 +181,19 @@ func (h *Handlers) ValidateText(c *gin.Context) {
 		return
 	}
 
+	mode := strings.TrimSpace(req.Mode)
+	if mode == "" {
+		mode = "spoken"
+	}
+	usageLabel := map[string]string{
+		"spoken":   "Spoken",
+		"formal":   "Written / Formal",
+		"academic": "Academic",
+	}[strings.ToLower(mode)]
+	if usageLabel == "" {
+		usageLabel = "Both"
+	}
+
 	var tokens []ValidateTokenSuggestion
 	words := strings.Fields(text)
 	pos := 0
@@ -175,11 +213,26 @@ func (h *Handlers) ValidateText(c *gin.Context) {
 
 		suggestions := translit.GetSuggestions(w)
 		if len(suggestions) > 0 {
+			mapped := make([]map[string]interface{}, 0, len(suggestions))
+			for idx, s := range suggestions {
+				mapped = append(mapped, map[string]interface{}{
+					"ta":     s.Word,
+					"score":  s.Score,
+					"reason": "Transliteration improvement",
+					"example": "",
+					"usage":  usageLabel,
+					"label":  "Recommended",
+					"rank":   idx + 1,
+				})
+			}
+
 			tokens = append(tokens, ValidateTokenSuggestion{
 				Original:    w,
 				Start:       startIdx,
 				End:         endIdx,
-				Suggestions: suggestions,
+				Category:    "Transliteration",
+				Severity:    "High",
+				Suggestions: mapped,
 			})
 		}
 	}
@@ -189,6 +242,12 @@ func (h *Handlers) ValidateText(c *gin.Context) {
 
 	c.JSON(http.StatusOK, ValidateResponse{
 		Success: true,
+		Summary: map[string]interface{}{
+			"total_tokens": len(words),
+			"issues_found": len(tokens),
+			"confidence":   "High",
+			"mode":         req.Mode,
+		},
 		Tokens:  tokens,
-	})
+        })
 }

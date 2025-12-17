@@ -2,6 +2,10 @@
 
 class WorkspaceController {
   constructor() {
+    this.getMode = () => {
+      const sel = document.getElementById('mode-select');
+      return (sel && sel.value) || 'spoken';
+    };
     this.editor = null;
     this.suggestionsPanel = null;
     this.currentDraft = null;
@@ -151,8 +155,21 @@ class WorkspaceController {
 
     suggestions.forEach((sugg) => {
       const li = document.createElement('li');
-      li.className = 'flex items-center justify-between px-2 py-1 rounded hover:bg-purple-50 cursor-pointer';
-      li.innerHTML = `<span class="font-semibold text-purple-700">${sugg.ta}</span><span class="text-xs text-gray-500">${Math.round((sugg.score || 0) * 100)}%</span>`;
+      const label = sugg.label || 'Recommended';
+      const usage = sugg.usage || 'Both';
+      const reason = sugg.reason || '';
+      li.className = 'flex flex-col px-2 py-1 rounded hover:bg-purple-50 cursor-pointer';
+      li.innerHTML = `
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-purple-700">${sugg.ta}</span>
+          <span class="text-xs text-gray-500">${Math.round((sugg.score || 0) * 100)}%</span>
+        </div>
+        <div class="text-xs text-gray-600 flex items-center gap-2">
+          <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">${label}</span>
+          <span class="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">${usage}</span>
+        </div>
+        ${reason ? `<div class="text-xs text-gray-500 mt-1">${reason}</div>` : ''}
+      `;
       li.addEventListener('click', () => {
         this.replaceLastWord(word, sugg.ta);
       });
@@ -211,7 +228,8 @@ class WorkspaceController {
     this.translitTimer = setTimeout(async () => {
       this.translitAbort = new AbortController();
       try {
-        const res = await fetch(`/api/transliterate/suggest?q=${encodeURIComponent(word)}&limit=8`, {
+        const mode = this.getMode();
+        const res = await fetch(`/api/transliterate/suggest?q=${encodeURIComponent(word)}&limit=8&mode=${encodeURIComponent(mode)}`, {
           headers: {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
@@ -582,7 +600,7 @@ class WorkspaceController {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ text, mode: 'english_to_tamil' })
+        body: JSON.stringify({ text, mode: this.getMode() || 'english_to_tamil' })
       });
 
       if (!response.ok) {
