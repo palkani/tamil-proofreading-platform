@@ -1,5 +1,19 @@
 <%- include('../partials/header') %>
 
+<script>
+  // Frontend-only auth guard: allow if token in localStorage; otherwise redirect to login.
+  (function syncTokenAndGuard() {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      // Ensure cookie is set so subsequent server requests carry the token
+      document.cookie = `access_token=${token}; path=/; SameSite=Lax`;
+      return;
+    }
+    // No token: go to login
+    window.location.replace('/login');
+  })();
+</script>
+
 <div class="min-h-screen flex flex-col">
   <!-- Header -->
   <header class="bg-white border-b border-gray-200 px-6 py-3">
