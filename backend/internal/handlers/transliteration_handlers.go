@@ -127,7 +127,7 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 		c.JSON(http.StatusOK, TransliterateSuggestResponse{
 			Success:     true,
 			Query:       q,
-			Suggestions: []translit.Suggestion{},
+			Suggestions: []map[string]interface{}{},
 		})
 		return
 	}
