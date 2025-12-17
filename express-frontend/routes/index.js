@@ -48,13 +48,16 @@ router.get('/login', redirectIfAuth, (req, res) => {
   });
 });
 
+// Resolve Google Client ID once (prefer NEXT_PUBLIC_* so Vercel runtime matches frontend expectation)
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
+
 // Register page - redirect if already logged in
 router.get('/register', redirectIfAuth, (req, res) => {
   const seo = getSeoData('register');
   res.render('pages/register', { 
     title: seo.title,
     seo: seo,
-    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    googleClientId: GOOGLE_CLIENT_ID,
     redirectTo: req.query.redirect || '/dashboard'
   });
 });
@@ -72,7 +75,7 @@ router.post('/register', (req, res) => {
 // Provide Google Client ID to frontend
 router.get('/api/config/google-client-id', (req, res) => {
   res.json({ 
-    clientId: process.env.GOOGLE_CLIENT_ID || '' 
+    clientId: GOOGLE_CLIENT_ID 
   });
 });
 
