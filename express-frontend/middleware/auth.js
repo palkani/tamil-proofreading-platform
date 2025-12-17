@@ -39,10 +39,28 @@ const attachUser = (req, res, next) => {
 };
 
 function requireAuth(req, res, next) {
-  // TEMP: Allow OAuth callback flow to land on workspace once with access_token in query
-  if (req.path === '/workspace' && req.query.access_token) {
-    console.log('[AUTH] Bypass redirect for workspace with access_token in query (OAuth handoff)');
-    return next();
+  // TEMP: Allow OAuth handoff to land on /workspace once when access_token is nested in ?redirect=/workspace?access_token=...
+  if (req.path === '/workspace' && req.query.redirect) {
+    const rawRedirect = req.query.redirect;
+    // Extract access_token from the redirect query (handles plain or comma-separated values)
+    const extractToken = (value) => {
+      if (!value) return null;
+      // Fast regex for any occurrence of access_token
+      const match = value.match(/access_token=([^&]+)/);
+      if (match && match[1]) return match[1];
+      try {
+        const url = new URL(value, `${req.protocol}://${req.get('host')}`);
+        return url.searchParams.get('access_token');
+      } catch (err) {
+        return null;
+      }
+    };
+
+    const tokenFromRedirect = extractToken(rawRedirect);
+    if (tokenFromRedirect) {
+      console.log('[AUTH] Bypass redirect for workspace with access_token found in redirect param (OAuth handoff)');
+      return next();
+    }
   }
 
   if (req.user) {
