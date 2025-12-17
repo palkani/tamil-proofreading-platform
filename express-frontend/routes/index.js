@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
-const { requireAuth, redirectIfAuth, getCurrentUser } = require('../middleware/auth');
+const { redirectIfAuth, getCurrentUser } = require('../middleware/auth');
 const { getSeoData } = require('../config/seo');
 // Build backend API URL (matches api/auth proxy)
 function getBackendApiUrl() {
@@ -36,7 +36,7 @@ router.get('/how-to-use', (req, res) => {
   });
 });
 
-// Login page - redirect if already logged in
+// Login page - client-side auth only
 router.get('/login', redirectIfAuth, (req, res) => {
   const seo = getSeoData('login');
   res.render('pages/login', { 
@@ -51,7 +51,7 @@ router.get('/login', redirectIfAuth, (req, res) => {
 // Resolve Google Client ID once (prefer NEXT_PUBLIC_* so Vercel runtime matches frontend expectation)
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
 
-// Register page - redirect if already logged in
+// Register page - client-side auth only
 router.get('/register', redirectIfAuth, (req, res) => {
   const seo = getSeoData('register');
   res.render('pages/register', { 
@@ -79,8 +79,8 @@ router.get('/api/config/google-client-id', (req, res) => {
   });
 });
 
-// Dashboard page - requires authentication
-router.get('/dashboard', requireAuth, (req, res) => {
+// Dashboard page - client-side auth only
+router.get('/dashboard', (req, res) => {
   const seo = getSeoData('dashboard');
   res.render('pages/dashboard', { 
     title: seo.title,
@@ -89,8 +89,8 @@ router.get('/dashboard', requireAuth, (req, res) => {
   });
 });
 
-// Account page - requires authentication
-router.get('/account', requireAuth, (req, res) => {
+// Account page - client-side auth only
+router.get('/account', (req, res) => {
   const seo = getSeoData('account');
   res.render('pages/account', { 
     title: seo.title,
@@ -99,8 +99,8 @@ router.get('/account', requireAuth, (req, res) => {
   });
 });
 
-// Analytics dashboard - requires admin role
-router.get('/analytics', requireAuth, (req, res) => {
+// Analytics dashboard - client-side auth only
+router.get('/analytics', (req, res) => {
   // Check if user is admin (prooftamil@gmail.com)
   const user = req.user;
   if (user.email !== 'prooftamil@gmail.com' && user.role !== 'admin') {
@@ -121,8 +121,8 @@ router.get('/analytics', requireAuth, (req, res) => {
   });
 });
 
-// Archive page - requires authentication
-router.get('/archive', requireAuth, (req, res) => {
+// Archive page - client-side auth only
+router.get('/archive', (req, res) => {
   const seo = getSeoData('archive');
   res.render('pages/archive', { 
     title: seo.title,
