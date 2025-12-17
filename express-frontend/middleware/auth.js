@@ -39,6 +39,12 @@ const attachUser = (req, res, next) => {
 };
 
 function requireAuth(req, res, next) {
+  // TEMP: Allow OAuth callback flow to land on workspace once with access_token in query
+  if (req.path === '/workspace' && req.query.access_token) {
+    console.log('[AUTH] Bypass redirect for workspace with access_token in query (OAuth handoff)');
+    return next();
+  }
+
   if (req.user) {
     return next();
   }
