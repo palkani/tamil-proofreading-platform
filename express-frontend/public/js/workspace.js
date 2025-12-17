@@ -157,10 +157,12 @@ class WorkspaceController {
     this.updateAnalysisStatus('analyzing');
     
     try {
+      const token = localStorage.getItem('access_token');
       const response = await fetch('/api/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ text, save_draft: false }),
         signal: this.abortController.signal
@@ -314,9 +316,13 @@ class WorkspaceController {
     }
 
     try {
+      const token = localStorage.getItem('access_token');
       const response = await fetch('/api/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ text, save_draft: false })
       });
 
@@ -457,11 +463,13 @@ class WorkspaceController {
     }
 
     try {
+      const token = localStorage.getItem('access_token');
       // Client must not call Google APIs directly; use backend submit endpoint instead.
       const response = await fetch('/api/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ text })
       });
