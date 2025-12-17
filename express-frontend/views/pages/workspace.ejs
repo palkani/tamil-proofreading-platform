@@ -5,6 +5,12 @@
   <a href="/login" class="btn-primary text-sm">Login</a>
 </div>
 
+<!-- Transliteration suggestion strip -->
+<div id="translit-suggest-box" class="hidden bg-white border border-gray-200 rounded-lg px-3 py-2 mt-2 text-sm shadow-sm">
+  <div id="translit-suggest-status" class="text-gray-600">Type English to see Tamil suggestions…</div>
+  <ul id="translit-suggest-list" class="mt-1 space-y-1"></ul>
+</div>
+
 <script>
   // On load: consume access_token from URL (if present) and persist it, then clean the URL.
   (function consumeAccessTokenFromUrl() {

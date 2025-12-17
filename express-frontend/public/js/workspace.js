@@ -16,6 +16,10 @@ class WorkspaceController {
     this.lastAnalyzedText = '';
     this.isAnalyzing = false;
     this.autoAnalysisEnabled = true; // Enable auto-analysis by default
+    // Transliteration typeahead state
+    this.translitCache = new Map();
+    this.translitAbort = null;
+    this.translitTimer = null;
 
     this.init();
   }
@@ -113,11 +117,116 @@ class WorkspaceController {
   handleEditorChange() {
     this.updateWordCount();
     this.scheduleSave();
+    this.updateTranslitSuggestions();
     
     // Trigger auto-analysis
     if (this.autoAnalysisEnabled) {
       this.scheduleAutoAnalysis();
     }
+  }
+
+  getCurrentWord() {
+    const text = this.editor.getPlainText();
+    const parts = text.split(/\s+/);
+    const last = parts[parts.length - 1] || '';
+    return last.trim();
+  }
+
+  renderTranslitSuggestions(word, suggestions) {
+    const box = document.getElementById('translit-suggest-box');
+    const status = document.getElementById('translit-suggest-status');
+    const list = document.getElementById('translit-suggest-list');
+    if (!box || !status || !list) return;
+
+    list.innerHTML = '';
+
+    if (!word || !suggestions || suggestions.length === 0) {
+      status.textContent = word ? `No suggestions for "${word}"` : 'Type English to see Tamil suggestions…';
+      box.classList.toggle('hidden', !word);
+      return;
+    }
+
+    status.textContent = `Suggestions for "${word}"`;
+    box.classList.remove('hidden');
+
+    suggestions.forEach((sugg) => {
+      const li = document.createElement('li');
+      li.className = 'flex items-center justify-between px-2 py-1 rounded hover:bg-purple-50 cursor-pointer';
+      li.innerHTML = `<span class="font-semibold text-purple-700">${sugg.ta}</span><span class="text-xs text-gray-500">${Math.round((sugg.score || 0) * 100)}%</span>`;
+      li.addEventListener('click', () => {
+        this.replaceLastWord(word, sugg.ta);
+      });
+      list.appendChild(li);
+    });
+  }
+
+  clearTranslitSuggestions() {
+    const box = document.getElementById('translit-suggest-box');
+    const status = document.getElementById('translit-suggest-status');
+    const list = document.getElementById('translit-suggest-list');
+    if (!box || !status || !list) return;
+    status.textContent = 'Type English to see Tamil suggestions…';
+    list.innerHTML = '';
+    box.classList.add('hidden');
+  }
+
+  replaceLastWord(word, replacement) {
+    if (!word || !replacement) return;
+    const text = this.editor.getPlainText();
+    const newText = text.replace(new RegExp(`${word}$`), replacement);
+    this.editor.setText(newText);
+    this.clearTranslitSuggestions();
+  }
+
+  replaceTokenInText(fullText, token, replacement, startIndex) {
+    if (!token || !replacement) return fullText;
+    // Use start index when available to be precise
+    if (typeof startIndex === 'number' && startIndex >= 0) {
+      return fullText.slice(0, startIndex) + replacement + fullText.slice(startIndex + token.length);
+    }
+    // Fallback: replace first occurrence
+    return fullText.replace(token, replacement);
+  }
+
+  updateTranslitSuggestions() {
+    const word = this.getCurrentWord();
+    if (!word || word.length < 2 || !/^[a-zA-Z]+$/.test(word)) {
+      this.clearTranslitSuggestions();
+      return;
+    }
+
+    if (this.translitCache.has(word)) {
+      this.renderTranslitSuggestions(word, this.translitCache.get(word));
+      return;
+    }
+
+    if (this.translitTimer) {
+      clearTimeout(this.translitTimer);
+    }
+    if (this.translitAbort) {
+      this.translitAbort.abort();
+    }
+
+    const token = localStorage.getItem('access_token');
+    this.translitTimer = setTimeout(async () => {
+      this.translitAbort = new AbortController();
+      try {
+        const res = await fetch(`/api/transliterate/suggest?q=${encodeURIComponent(word)}&limit=8`, {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          signal: this.translitAbort.signal,
+        });
+        if (!res.ok) throw new Error('Failed to fetch suggestions');
+        const data = await res.json();
+        const suggestions = data?.suggestions || [];
+        this.translitCache.set(word, suggestions);
+        this.renderTranslitSuggestions(word, suggestions);
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.error('[Translit] Suggest error:', err);
+      }
+    }, 300);
   }
   
   scheduleAutoAnalysis() {
@@ -466,14 +575,14 @@ class WorkspaceController {
 
     try {
       const token = localStorage.getItem('access_token');
-      // Client must not call Google APIs directly; use backend submit endpoint instead.
-      const response = await fetch('/api/submit', {
+      // Client must not call Google APIs directly; use backend validate endpoint instead.
+      const response = await fetch('/api/validate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text, mode: 'english_to_tamil' })
       });
 
       if (!response.ok) {
@@ -481,37 +590,31 @@ class WorkspaceController {
       }
 
       const data = await response.json();
-      // Handle different API response formats
-      const suggestions = data.result?.suggestions || data.suggestions || [];
-      const geminiSuggestions = suggestions.map((result, index) => ({
-        id: `gemini-${result.id || index}-${Date.now()}`,
-        title: result.reason || result.title || 'Suggestion',
-        description: result.description || '',
-        type: result.type || 'grammar',
-        preview: (result.original || result.originalText) && (result.corrected || result.suggestion)
-          ? `${result.original || result.originalText} → ${result.corrected || result.suggestion}` 
-          : result.corrected || result.suggestion || result.original || result.originalText || '',
-        sourceText: result.original || result.originalText,
-        onApply: (result.corrected || result.suggestion) && (result.original || result.originalText) ? () => {
-          const currentText = this.editor.getPlainText();
-          const { text: newText, changed } = applyReplacement(currentText, result.original || result.originalText, result.corrected || result.suggestion, result.start_index || result.position?.start);
-          
-          if (changed) {
-            this.editor.setText(newText);
-          }
-        } : null,
-        onIgnore: () => {
-          // Just removes the suggestion
-        }
-      }));
+      const tokens = data.tokens || [];
+      const suggestions = tokens.flatMap((t, idx) => {
+        return (t.suggestions || []).map((sugg, sIdx) => ({
+          id: `validate-${idx}-${sIdx}-${Date.now()}`,
+          title: sugg.reason || 'Suggestion',
+          description: sugg.reason || '',
+          type: 'transliteration',
+          preview: `${t.original} → ${sugg.ta}`,
+          sourceText: t.original,
+          onApply: () => {
+            const currentText = this.editor.getPlainText();
+            const replaced = this.replaceTokenInText(currentText, t.original, sugg.ta, t.start);
+            this.editor.setText(replaced);
+          },
+          onIgnore: () => {},
+        }));
+      });
 
       this.suggestionsPanel.clearSuggestions();
-      this.suggestionsPanel.addSuggestions(geminiSuggestions);
+      this.suggestionsPanel.addSuggestions(suggestions);
 
-      if (geminiSuggestions.length === 0) {
-        this.showNotification('Gemini AI found no issues in your Tamil text. Great work!', 'success');
+      if (suggestions.length === 0) {
+        this.showNotification('No transliteration issues found.', 'success');
       } else {
-        this.showNotification(`Found ${geminiSuggestions.length} suggestion${geminiSuggestions.length > 1 ? 's' : ''}`, 'success');
+        this.showNotification(`Found ${suggestions.length} transliteration suggestion${suggestions.length > 1 ? 's' : ''}`, 'success');
       }
     } catch (error) {
       console.error('Gemini AI error:', error);

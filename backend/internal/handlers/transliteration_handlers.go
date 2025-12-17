@@ -3,7 +3,9 @@ package handlers
 import (
         "log"
         "net/http"
+        "strconv"
         "strings"
+        "time"
 
         "tamil-proofreading-platform/backend/internal/translit"
 
@@ -18,6 +20,31 @@ type TransliterateResponse struct {
         Success     bool                   `json:"success"`
         Suggestions []translit.Suggestion  `json:"suggestions"`
         Error       string                 `json:"error,omitempty"`
+}
+
+type TransliterateSuggestResponse struct {
+	Success     bool                   `json:"success"`
+	Query       string                 `json:"query"`
+	Suggestions []translit.Suggestion  `json:"suggestions"`
+	Error       string                 `json:"error,omitempty"`
+}
+
+type ValidateRequest struct {
+	Text string `json:"text" binding:"required"`
+	Mode string `json:"mode"`
+}
+
+type ValidateTokenSuggestion struct {
+	Original    string                 `json:"original"`
+	Start       int                    `json:"start"`
+	End         int                    `json:"end"`
+	Suggestions []translit.Suggestion  `json:"suggestions"`
+}
+
+type ValidateResponse struct {
+	Success bool                     `json:"success"`
+	Tokens  []ValidateTokenSuggestion `json:"tokens"`
+	Error   string                   `json:"error,omitempty"`
 }
 
 // Transliterate handles English to Tamil transliteration
@@ -71,4 +98,97 @@ func (h *Handlers) Transliterate(c *gin.Context) {
                 Success:     true,
                 Suggestions: suggestions,
         })
+}
+
+// TransliterateSuggest handles GET /transliterate/suggest?q=...
+func (h *Handlers) TransliterateSuggest(c *gin.Context) {
+	q := strings.TrimSpace(c.Query("q"))
+	limitStr := strings.TrimSpace(c.Query("limit"))
+	limit := 8
+	if limitStr != "" {
+		if v, err := strconv.Atoi(limitStr); err == nil && v > 0 && v <= 20 {
+			limit = v
+		}
+	}
+
+	if len(q) < 2 {
+		c.JSON(http.StatusOK, TransliterateSuggestResponse{
+			Success:     true,
+			Query:       q,
+			Suggestions: []translit.Suggestion{},
+		})
+		return
+	}
+
+	suggestions := translit.GetSuggestions(q)
+	if len(suggestions) > limit {
+		suggestions = suggestions[:limit]
+	}
+
+	log.Printf("[SUGGEST] q=%q count=%d", q, len(suggestions))
+
+	c.JSON(http.StatusOK, TransliterateSuggestResponse{
+		Success:     true,
+		Query:       q,
+		Suggestions: suggestions,
+	})
+}
+
+// ValidateText handles POST /validate to return per-token Tamil suggestions
+func (h *Handlers) ValidateText(c *gin.Context) {
+	start := time.Now()
+
+	var req ValidateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ValidateResponse{
+			Success: false,
+			Error:   "Invalid request format",
+		})
+		return
+	}
+
+	text := strings.TrimSpace(req.Text)
+	if text == "" {
+		c.JSON(http.StatusBadRequest, ValidateResponse{
+			Success: false,
+			Error:   "Text is required",
+		})
+		return
+	}
+
+	var tokens []ValidateTokenSuggestion
+	words := strings.Fields(text)
+	pos := 0
+	for _, w := range words {
+		startIdx := strings.Index(text[pos:], w)
+		if startIdx < 0 {
+			continue
+		}
+		startIdx += pos
+		endIdx := startIdx + len(w)
+		pos = endIdx
+
+		// Skip very short tokens
+		if len(w) < 2 {
+			continue
+		}
+
+		suggestions := translit.GetSuggestions(w)
+		if len(suggestions) > 0 {
+			tokens = append(tokens, ValidateTokenSuggestion{
+				Original:    w,
+				Start:       startIdx,
+				End:         endIdx,
+				Suggestions: suggestions,
+			})
+		}
+	}
+
+	elapsed := time.Since(start).Milliseconds()
+	log.Printf("[VALIDATE] tokens=%d time_ms=%d", len(tokens), elapsed)
+
+	c.JSON(http.StatusOK, ValidateResponse{
+		Success: true,
+		Tokens:  tokens,
+	})
 }

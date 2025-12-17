@@ -155,6 +155,8 @@ func main() {
 		api.POST("/tamil-words", h.AddTamilWord)
 		api.POST("/tamil-words/confirm", h.ConfirmTamilWord)
 		api.POST("/events/visit", h.LogVisit)
+		api.GET("/transliterate/suggest", h.TransliterateSuggest)
+		api.POST("/validate", h.ValidateText)
 		api.POST("/webhooks/stripe", h.StripeWebhook)
 		api.POST("/webhooks/razorpay", h.RazorpayWebhook)
 	}
