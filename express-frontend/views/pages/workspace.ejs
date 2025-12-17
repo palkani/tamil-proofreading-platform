@@ -6,12 +6,28 @@
 </div>
 
 <script>
+  // On load: consume access_token from URL (if present) and persist it, then clean the URL.
+  (function consumeAccessTokenFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('access_token');
+    if (token) {
+      localStorage.setItem('access_token', token);
+      document.cookie = `access_token=${token}; path=/; SameSite=Lax`;
+      // Remove token from URL to avoid leaking it
+      const cleanUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+  })();
+
   // Light-weight client-side check: never auto-redirect; just surface a CTA when missing a token.
   (function syncTokenAndShowCta() {
     const token = localStorage.getItem('access_token');
     if (token) {
       // Ensure cookie is set so subsequent server requests carry the token
       document.cookie = `access_token=${token}; path=/; SameSite=Lax`;
+      // Hide banner if visible
+      const banner = document.getElementById('workspace-auth-banner');
+      if (banner) banner.classList.add('hidden');
       return;
     }
     // No token: show banner with login button (no automatic redirect or Google flow)
