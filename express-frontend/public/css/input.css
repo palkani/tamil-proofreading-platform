@@ -2,27 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme tokens */
+:root {
+  --color-bg: #fff9e6;            /* warm light yellow */
+  --color-card: #ffffff;
+  --color-text: #1f2937;
+  --color-muted: #4b5563;
+  --color-border: #e5e7eb;
+  --color-primary: #6d28d9;       /* purple 600 */
+  --color-primary-hover: #5b21b6; /* purple 700 */
+  --color-primary-ghost: #ede9fe; /* purple 100 */
+  --color-accent: #fbbf24;        /* yellow 400 */
+  --color-accent-light: #fef3c7;  /* yellow 100 */
+}
+
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900;
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  a {
+    color: var(--color-primary);
+  }
+
+  a:hover {
+    color: var(--color-primary-hover);
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors;
+    @apply px-4 py-2 rounded-lg transition-colors font-semibold;
+    color: #ffffff;
+    background: var(--color-primary);
+    border: 1px solid var(--color-primary);
+  }
+  
+  .btn-primary:hover {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
   }
   
   .btn-secondary {
-    @apply px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors;
+    @apply px-4 py-2 rounded-lg transition-colors font-semibold;
+    color: var(--color-primary);
+    background: #ffffff;
+    border: 1px solid var(--color-primary);
+  }
+  
+  .btn-secondary:hover {
+    background: var(--color-primary-ghost);
+    border-color: var(--color-primary-hover);
+    color: var(--color-primary-hover);
   }
   
   .input-field {
-    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none;
+    @apply w-full px-4 py-2 rounded-lg outline-none;
+    border: 1px solid var(--color-border);
+    background: #ffffff;
+    color: var(--color-text);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+  }
+  
+  .input-field:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-accent-light);
+    background-color: #fffef7;
   }
   
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-200;
+    @apply rounded-xl shadow-sm;
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
   }
 }
 
@@ -49,27 +101,33 @@
 
 /* Suggestion card styles */
 .suggestion-card {
-  @apply bg-white border border-gray-200 rounded-2xl p-4 hover:border-orange-300 transition-all;
+  @apply bg-white border rounded-2xl p-4 transition-all;
+  border-color: var(--color-border);
 }
 
 .suggestion-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: var(--color-primary);
 }
 
 /* Enhanced Toolbar Styles */
 .toolbar-btn {
-  @apply p-2 rounded-md text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-all duration-150 flex items-center gap-1;
+  @apply p-2 rounded-md transition-all duration-150 flex items-center gap-1;
+  color: var(--color-muted);
   border: 1px solid transparent;
 }
 
 .toolbar-btn:hover {
-  border-color: #fed7aa; /* orange-100 */
+  color: var(--color-primary);
+  background: var(--color-primary-ghost);
+  border-color: var(--color-primary);
 }
 
 .toolbar-btn:active,
 .toolbar-btn.active {
-  @apply bg-orange-600 text-white;
-  border-color: #ea580c; /* orange-600 */
+  color: #ffffff;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 /* Toolbar scrollbar styling */
@@ -91,11 +149,25 @@
 }
 
 .toolbar-select {
-  @apply px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none cursor-pointer hover:border-orange-400 transition-colors;
+  @apply px-3 py-1.5 border rounded-md text-sm outline-none cursor-pointer transition-colors;
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.toolbar-select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
 }
 
 .dropdown-item {
-  @apply w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 flex items-center transition-colors;
+  @apply w-full text-left px-4 py-2 text-sm flex items-center transition-colors;
+  color: var(--color-text);
+  background: #ffffff;
+}
+
+.dropdown-item:hover {
+  background: var(--color-accent-light);
+  color: var(--color-primary);
   border: none;
 }
 
@@ -109,12 +181,13 @@
 
 /* Language Toggle Button */
 .language-toggle-btn {
-  @apply flex items-center gap-3 px-4 py-2 bg-orange-600 text-white rounded-full hover:bg-orange-700 transition-all duration-200;
-  box-shadow: 0 2px 4px rgba(234, 88, 12, 0.3);
+  @apply flex items-center gap-3 px-4 py-2 text-white rounded-full transition-all duration-200;
+  background: var(--color-primary);
+  box-shadow: 0 2px 4px rgba(109, 40, 217, 0.3);
 }
 
 .language-toggle-btn:hover {
-  box-shadow: 0 4px 8px rgba(234, 88, 12, 0.4);
+  box-shadow: 0 4px 8px rgba(109, 40, 217, 0.4);
   transform: translateY(-1px);
 }
 
