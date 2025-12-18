@@ -500,6 +500,16 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 	// Force canonical redirect URI to match Google Console configuration
 	redirectURI := "https://www.prooftamil.com/api/v1/auth/google/callback"
 
+	// Capture scheme for logging (not used for redirect_uri construction)
+	scheme := c.GetHeader("X-Forwarded-Proto")
+	if scheme == "" {
+		if c.Request.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+
         // Exchange authorization code for ID token
 	tokens, err := h.exchangeCodeForToken(c.Request.Context(), code, redirectURI, reqID)
         if err != nil {
