@@ -516,7 +516,13 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 	tokens, err := h.exchangeCodeForToken(c.Request.Context(), code, redirectURI, reqID)
         if err != nil {
 		log.Printf("[OAUTH-ERROR] step=token_exchange request_id=%s host=%s scheme=%s redirect_uri=%s err=%v", reqID, c.Request.Host, scheme, redirectURI, err)
-		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=token_exchange_failed")
+		errMsg := "google_oauth_failed"
+		if strings.Contains(strings.ToLower(err.Error()), "invalid_grant") {
+			errMsg = "oauth_code_used"
+		} else if strings.Contains(strings.ToLower(err.Error()), "redirect_uri_mismatch") {
+			errMsg = "redirect_uri_mismatch"
+		}
+		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error="+errMsg)
                 return
         }
 
@@ -602,7 +608,14 @@ func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, redire
 
 	// Capture non-200 responses for debugging invalid_grant/redirect mismatches
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[OAUTH-ERROR] step=token_exchange status=%d body=%s request_id=%s", resp.StatusCode, string(body), reqID)
+		log.Printf("[OAUTH-ERROR] step=token_exchange status=%d body=%s request_id=%s redirect_uri=%s", resp.StatusCode, string(body), reqID, redirectURI)
+		lower := strings.ToLower(string(body))
+		if strings.Contains(lower, "invalid_grant") {
+			return nil, errors.New("invalid_grant")
+		}
+		if strings.Contains(lower, "redirect_uri_mismatch") {
+			return nil, errors.New("redirect_uri_mismatch")
+		}
 		return nil, errors.New("token exchange failed: status=" + http.StatusText(resp.StatusCode))
         }
 
