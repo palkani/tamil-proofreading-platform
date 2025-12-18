@@ -31,7 +31,7 @@ type googleTokens struct {
 	Scope        string
 }
 
-const googleRedirectURI = "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/auth/google/callback"
+const googleRedirectURI = "https://www.prooftamil.com/api/v1/auth/google/callback"
 const googleFrontendWorkspace = "https://www.prooftamil.com/workspace"
 
 // GoogleAuthStart initiates OAuth by redirecting directly to Google with backend callback
@@ -505,6 +505,7 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 
 	log.Printf("[OAUTH-DEBUG] step=callback_hit request_id=%s host=%s originalUrl=%s code_len=%d error_param=%s query_keys=%v",
 		reqID, c.Request.Host, c.Request.URL.String(), len(code), errParam, c.Request.URL.Query())
+	log.Printf("[OAUTH-DEBUG] step=callback_redirect_uri request_id=%s received=%s using=%s", reqID, c.Query("redirect_uri"), googleRedirectURI)
 
         if errParam != "" {
                 c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error="+errParam)
