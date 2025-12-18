@@ -92,8 +92,18 @@ jobs:
         node-version: 20
 
     - name: Install frontend dependencies
-      run: npm ci
       working-directory: express-frontend
+      run: |
+        npm config set registry https://registry.npmjs.org
+        npm config set fetch-retries 5
+        npm config set fetch-retry-factor 2
+        npm config set fetch-retry-mintimeout 20000
+        npm config set fetch-timeout 600000
+        for i in 1 2 3; do
+          npm ci && break
+          echo "npm ci failed (attempt $i), retrying in 10s..."
+          sleep 10
+        done
 
     - name: Build frontend assets
       run: npm run build:css
