@@ -139,9 +139,11 @@ func (h *Handlers) setAccessTokenCookie(c *gin.Context, token string, expiresAt 
 		Domain:   domain,
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 		Expires:  expiresAt,
 	})
+
+	log.Printf("[AUTH] set access_token cookie domain=%s secure=%v samesite=None expires=%s", domain, true, expiresAt.UTC().Format(time.RFC3339))
 }
 
 func (h *Handlers) clearRefreshCookie(c *gin.Context) {

@@ -59,9 +59,20 @@ router.post('/forgot-password', (req, res) => forward(req, res, '/auth/forgot-pa
 router.post('/reset-password', (req, res) => forward(req, res, '/auth/reset-password', 'post'));
 router.get('/me', (req, res) => forward(req, res, '/auth/me', 'get'));
 
-// Google OAuth now owned by backend Cloud Run; redirect there directly
 router.get('/google', (req, res) => {
-  res.redirect('https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/auth/google');
+  const redirectUri = 'https://www.prooftamil.com/api/v1/auth/google/callback';
+  const clientId = '991187041222-dp582s8kvqqktpq3t0bihl43e4iv8m5i.apps.googleusercontent.com';
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    access_type: 'offline',
+    prompt: 'consent',
+  });
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  console.log('[OAUTH-FRONTEND] redirecting to Google auth', { redirectUri, clientIdPresent: !!clientId });
+  res.redirect(authUrl);
 });
 router.get('/google/callback', (req, res) => {
   res.redirect('https://prooftamil.com/login?error=oauth_flow_invalid_path');
