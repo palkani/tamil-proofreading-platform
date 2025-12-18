@@ -591,10 +591,21 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 	// Set access token cookie
 	h.setAccessTokenCookie(c, tokenPair.AccessToken, tokenPair.AccessExpiresAt)
 
-        // Redirect to workspace with access token
-        redirectURL := h.cfg.FrontendURL + "/workspace?access_token=" + tokenPair.AccessToken
+	// Optional JSON handoff for proxy to set cookie on frontend domain
+	if strings.ToLower(c.GetHeader("x-oauth-handoff")) == "json" {
+		log.Printf("[OAUTH-DEBUG] step=handoff_json request_id=%s user_id=%d", reqID, user.ID)
+		c.JSON(http.StatusOK, gin.H{
+			"user":         user,
+			"access_token": tokenPair.AccessToken,
+			"redirect":     "/workspace",
+		})
+		return
+	}
+
+	// Redirect to workspace with access token (legacy path)
+	redirectURL := h.cfg.FrontendURL + "/workspace?access_token=" + tokenPair.AccessToken
 	log.Printf("[OAUTH-DEBUG] step=redirect request_id=%s user_id=%d target=%s", reqID, user.ID, redirectURL)
-        c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
 func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, redirectURI string, reqID string) (*googleTokens, error) {

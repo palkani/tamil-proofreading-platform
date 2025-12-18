@@ -317,6 +317,7 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     delete forwardHeaders.host;
     delete forwardHeaders.connection;
     delete forwardHeaders['content-length'];
+    forwardHeaders['x-oauth-handoff'] = 'json';
 
     console.log('[OAUTH-PROXY] received redirect_uri:', req.query.redirect_uri);
     console.log('[OAUTH-PROXY] forwarding to:', target);
@@ -330,13 +331,28 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       validateStatus: () => true,
     });
 
-    // forward cookies and location
+    // If backend returned JSON handoff
+    const contentType = response.headers['content-type'] || '';
+    if (response.status === 200 && contentType.includes('application/json') && response.data?.access_token) {
+      // Set cookie on frontend domain
+      const cookie = [
+        `access_token=${response.data.access_token}`,
+        'Path=/',
+        'Secure',
+        'SameSite=Lax',
+        'Domain=.prooftamil.com'
+      ].join('; ');
+      res.setHeader('Set-Cookie', cookie);
+      console.log('[OAUTH-HANDOFF] set cookie for domain prooftamil.com');
+      return res.redirect(response.data.redirect || '/workspace');
+    }
+
+    // fallback: forward cookies and location
     const setCookie = response.headers['set-cookie'];
     if (setCookie) res.setHeader('set-cookie', setCookie);
     if (response.headers.location) res.setHeader('location', response.headers.location);
 
     res.status(response.status);
-    // If backend responded with redirect, end without altering body
     if (response.status >= 300 && response.status < 400) {
       return res.end();
     }

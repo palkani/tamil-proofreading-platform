@@ -13,6 +13,9 @@ const { getSeoData } = require('../config/seo');
 
 // Workspace page - main editor (client-side auth only)
 router.get('/', (req, res) => {
+  if (req.cookies && req.cookies.access_token) {
+    console.log('[AUTH] cookie present on /workspace');
+  }
   if (!req.user) {
     console.log('[AUTH] workspace guard missing req.user; redirecting to login');
     return res.redirect(`/login?redirect=${encodeURIComponent('/workspace')}`);
