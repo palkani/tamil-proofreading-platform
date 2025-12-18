@@ -10,17 +10,17 @@
           </a>
         </div>
         <div class="hidden sm:ml-8 sm:flex sm:space-x-4">
-          <a href="/dashboard" class="<%= active === 'dashboard' ? 'border-orange-600 text-gray-900' : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+          <a href="/dashboard" class="<%= active === 'dashboard' ? 'border-primary-600 text-gray-900' : 'border-transparent text-gray-600 hover:border-primary-300 hover:text-gray-900' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
             Dashboard
           </a>
-          <a href="/workspace" class="<%= active === 'workspace' ? 'border-orange-600 text-gray-900' : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+          <a href="/workspace" class="<%= active === 'workspace' ? 'border-primary-600 text-gray-900' : 'border-transparent text-gray-600 hover:border-primary-300 hover:text-gray-900' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
             Workspace
           </a>
-          <a href="/archive" class="<%= active === 'archive' ? 'border-orange-600 text-gray-900' : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+          <a href="/archive" class="<%= active === 'archive' ? 'border-primary-600 text-gray-900' : 'border-transparent text-gray-600 hover:border-primary-300 hover:text-gray-900' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
             Archive
           </a>
           <% if (user.role === 'admin' || user.email === 'prooftamil@gmail.com') { %>
-          <a href="/analytics" class="<%= active === 'analytics' ? 'border-orange-600 text-gray-900' : 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+          <a href="/analytics" class="<%= active === 'analytics' ? 'border-primary-600 text-gray-900' : 'border-transparent text-gray-600 hover:border-primary-300 hover:text-gray-900' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
             📊 Analytics
           </a>
           <% } %>
@@ -30,7 +30,7 @@
       <!-- User Menu -->
       <div class="flex items-center gap-4">
         <span class="text-sm text-gray-600"><%= user.email %></span>
-        <a href="/account" class="<%= active === 'account' ? 'text-orange-600' : 'text-gray-600 hover:text-gray-900' %>">
+        <a href="/account" class="<%= active === 'account' ? 'text-primary-600' : 'text-gray-600 hover:text-gray-900' %>">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
           </svg>

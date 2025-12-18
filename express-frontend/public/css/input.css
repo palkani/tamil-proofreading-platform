@@ -4,16 +4,16 @@
 
 /* Theme tokens */
 :root {
-  --color-bg: #fff9e6;            /* warm light yellow */
+  --color-bg: #fdf2f8;            /* light pink background */
   --color-card: #ffffff;
-  --color-text: #1f2937;
-  --color-muted: #4b5563;
-  --color-border: #e5e7eb;
-  --color-primary: #6d28d9;       /* purple 600 */
-  --color-primary-hover: #5b21b6; /* purple 700 */
-  --color-primary-ghost: #ede9fe; /* purple 100 */
-  --color-accent: #fbbf24;        /* yellow 400 */
-  --color-accent-light: #fef3c7;  /* yellow 100 */
+  --color-text: #111827;          /* Dark text */
+  --color-muted: #374151;         /* Body text */
+  --color-border: #e5e7eb;        /* Muted border */
+  --color-primary: #6d28d9;       /* Primary Purple */
+  --color-primary-hover: #7c3aed; /* Accent Purple */
+  --color-primary-ghost: #f3e8ff; /* Soft purple surface */
+  --color-accent: #ec4899;        /* Soft Pink */
+  --color-accent-light: #fdf2f8;  /* Light Pink Background */
 }
 
 @layer base {
@@ -27,7 +27,7 @@
   }
 
   a:hover {
-    color: var(--color-primary-hover);
+    color: var(--color-accent);
   }
 }
 
@@ -40,8 +40,8 @@
   }
   
   .btn-primary:hover {
-    background: var(--color-primary-hover);
-    border-color: var(--color-primary-hover);
+    background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+    border-color: var(--color-accent);
   }
   
   .btn-secondary {
@@ -67,8 +67,8 @@
   
   .input-field:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-accent-light);
-    background-color: #fffef7;
+    box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.25); /* Soft pink glow */
+    background-color: #fff;
   }
   
   .card {
@@ -101,8 +101,10 @@
 
 /* Suggestion card styles */
 .suggestion-card {
-  @apply bg-white border rounded-2xl p-4 transition-all;
-  border-color: var(--color-border);
+  @apply border rounded-2xl p-4 transition-all;
+  background: var(--color-accent-light);
+  border-color: #f3e8ff;
+  color: var(--color-muted);
 }
 
 .suggestion-card:hover {
@@ -156,7 +158,7 @@
 
 .toolbar-select:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-accent-light);
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.25);
 }
 
 .dropdown-item {
@@ -187,7 +189,7 @@
 }
 
 .language-toggle-btn:hover {
-  box-shadow: 0 4px 8px rgba(109, 40, 217, 0.4);
+  box-shadow: 0 4px 8px rgba(124, 58, 237, 0.35);
   transform: translateY(-1px);
 }
 

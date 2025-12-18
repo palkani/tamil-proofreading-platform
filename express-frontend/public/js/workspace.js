@@ -433,7 +433,7 @@ class WorkspaceController {
     switch (status) {
       case 'analyzing':
         summaryEl.innerHTML = `
-          <div class="flex items-center gap-2 text-orange-600">
+          <div class="flex items-center gap-2 text-primary-600">
             <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -765,10 +765,10 @@ class WorkspaceController {
     toast.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 transition-opacity duration-300`;
     
     const bgColors = {
-      success: 'bg-green-600',
-      error: 'bg-red-600',
-      warning: 'bg-yellow-600',
-      info: 'bg-orange-600'
+      success: 'bg-emerald-600',
+      error: 'bg-rose-600',
+      warning: 'bg-pink-500',
+      info: 'bg-primary-600'
     };
     
     toast.classList.add(bgColors[type] || bgColors.info);
@@ -886,7 +886,7 @@ class WorkspaceController {
       const status = this.getStatusBadge(draft.status);
       
       return `
-        <div class="bg-white rounded-lg border border-gray-200 hover:border-orange-500 hover:shadow-md transition-all cursor-pointer p-4" data-draft-id="${draft.id}">
+        <div class="bg-white rounded-lg border border-gray-200 hover:border-primary-500 hover:shadow-md transition-all cursor-pointer p-4" data-draft-id="${draft.id}">
           <div class="flex items-start justify-between mb-2">
             <div class="flex-1">
               <h3 class="font-semibold text-gray-900 mb-1">Draft #${draft.id}</h3>
@@ -958,10 +958,10 @@ class WorkspaceController {
 
   getStatusBadge(status) {
     const badges = {
-      'pending': '<span class="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">Pending</span>',
-      'completed': '<span class="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">Completed</span>',
-      'processing': '<span class="text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-700">Processing</span>',
-      'failed': '<span class="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">Failed</span>'
+      'pending': '<span class="text-xs px-2 py-1 rounded-full bg-accent-50 text-primary-700">Pending</span>',
+      'completed': '<span class="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700">Completed</span>',
+      'processing': '<span class="text-xs px-2 py-1 rounded-full bg-primary-50 text-primary-700">Processing</span>',
+      'failed': '<span class="text-xs px-2 py-1 rounded-full bg-rose-50 text-rose-700">Failed</span>'
     };
     return badges[status] || '';
   }

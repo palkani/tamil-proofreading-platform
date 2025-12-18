@@ -44,7 +44,7 @@
 </script>
 <input type="hidden" id="google-client-id" value="<%= googleClientId || '' %>">
 
-<div class="min-h-screen flex items-center justify-center bg-gradient-to-b from-orange-50 to-white p-4">
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-b from-pink-50 to-white p-4">
   <div class="max-w-md w-full">
     <div class="bg-white rounded-2xl shadow-2xl border border-gray-200 p-8">
       <div class="text-center mb-8">
@@ -62,7 +62,7 @@
       <div id="error-message" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6"></div>
 
       <div class="space-y-4 mb-6">
-        <button id="google-signin-btn" type="button" class="w-full flex items-center justify-center gap-3 rounded-lg border-2 border-gray-300 bg-white px-4 py-3 font-semibold text-gray-900 shadow-sm transition hover:bg-gray-50 hover:border-orange-500">
+        <button id="google-signin-btn" type="button" class="w-full flex items-center justify-center gap-3 rounded-lg border-2 border-gray-300 bg-white px-4 py-3 font-semibold text-gray-900 shadow-sm transition hover:bg-gray-50 hover:border-primary-500">
           <svg class="h-5 w-5" viewBox="0 0 24 24">
             <path fill="#EA4335" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
           </svg>
@@ -83,7 +83,7 @@
             id="email" 
             name="email" 
             required 
-            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
             placeholder="you@example.com"
           >
         </div>
@@ -95,22 +95,22 @@
             id="password" 
             name="password" 
             required 
-            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
             placeholder="Enter your password"
           >
         </div>
 
         <div class="flex items-center justify-between">
           <label class="flex items-center">
-            <input type="checkbox" name="remember" class="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500">
+            <input type="checkbox" name="remember" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500">
             <span class="ml-2 text-sm text-gray-600">Remember me</span>
           </label>
-          <a href="#" class="text-sm text-orange-600 hover:text-orange-700 font-semibold">Forgot password?</a>
+          <a href="#" class="text-sm text-primary-600 hover:text-accent-500 font-semibold">Forgot password?</a>
         </div>
 
         <button 
           type="submit" 
-          class="w-full bg-orange-600 text-white py-3 px-6 rounded-lg font-semibold text-lg hover:bg-orange-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+          class="w-full bg-primary-600 text-white py-3 px-6 rounded-lg font-semibold text-lg hover:bg-accent-500 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
         >
           Sign In
         </button>
@@ -119,7 +119,7 @@
       <div class="mt-6 text-center">
         <p class="text-sm text-gray-600">
           Don't have an account? 
-          <a href="/register" class="text-orange-600 hover:text-orange-700 font-semibold">Sign up for free</a>
+          <a href="/register" class="text-primary-600 hover:text-accent-500 font-semibold">Sign up for free</a>
         </p>
       </div>
 
@@ -132,7 +132,7 @@
 
     <div class="mt-8 text-center text-sm text-gray-500">
       <p>Powered by AI • Tamil Language Processing</p>
-      <a href="/" class="text-orange-600 hover:text-orange-800 mt-2 inline-block font-semibold">← Back to home</a>
+      <a href="/" class="text-primary-600 hover:text-accent-500 mt-2 inline-block font-semibold">← Back to home</a>
     </div>
   </div>
 </div>
