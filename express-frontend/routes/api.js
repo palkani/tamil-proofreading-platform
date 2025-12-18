@@ -327,19 +327,16 @@ router.all('/*', async (req, res) => {
       console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
     }
 
-    if (ENABLE_PROXY_LOGS) {
-    console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
-    }
-    
-    // Forward all incoming headers (including Authorization) except Host to avoid Cloud Run host mismatch
+    // Forward all incoming headers as-is (incl. Authorization/cookies), but strip host to avoid upstream conflicts
+    const forwardHeaders = { ...req.headers };
+    delete forwardHeaders.host;
+    delete forwardHeaders.connection; // not needed upstream
+    delete forwardHeaders['content-length']; // let axios set correct length
+
     const config = {
       method: req.method,
-      url: url,
-      headers: {
-        ...req.headers,
-        host: undefined,
-        'content-length': undefined,
-      },
+      url,
+      headers: forwardHeaders,
       params: req.query,
       data: req.body,
       validateStatus: () => true,
