@@ -5,7 +5,7 @@
 
   "routes": [
     {
-      "src": "^/api/v1/auth/google/callback",
+      "src": "^/api/v1/auth/google/callback$",
       "dest": "/api/index.js"
     },
     {
@@ -13,7 +13,7 @@
       "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/$1"
     },
     {
-      "src": "/(.*)",
+      "src": "^(?!/api/v1/).*",
       "dest": "/api/index.js"
     }
   ]
