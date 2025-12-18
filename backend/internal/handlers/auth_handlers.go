@@ -499,6 +499,8 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 
 	// Force canonical redirect URI to match Google Console configuration
 	redirectURI := "https://www.prooftamil.com/api/v1/auth/google/callback"
+	log.Printf("[OAUTH-DEBUG] step=redirect_uri request_id=%s redirect_uri=%s client_id_present=%v client_secret_present=%v code_present=%v",
+		reqID, redirectURI, h.cfg.GoogleClientID != "", h.cfg.GoogleClientSecret != "", code != "")
 
 	// Capture scheme for logging (not used for redirect_uri construction)
 	scheme := c.GetHeader("X-Forwarded-Proto")
@@ -565,7 +567,8 @@ func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, redire
 	if len(clientID) > 16 {
 		clientID = clientID[:8] + "..." + clientID[len(clientID)-4:]
 	}
-	log.Printf("[OAUTH-DEBUG] exchanging code with redirect_uri=%s client_id=%s code_len=%d", redirectURI, clientID, len(code))
+	log.Printf("[OAUTH-DEBUG] exchanging code with redirect_uri=%s client_id=%s code_len=%d request_id=%s client_id_present=%v client_secret_present=%v code_present=%v",
+		redirectURI, clientID, len(code), reqID, h.cfg.GoogleClientID != "", h.cfg.GoogleClientSecret != "", code != "")
 
         tokenURL := "https://oauth2.googleapis.com/token"
         data := url.Values{
@@ -576,15 +579,15 @@ func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, redire
                 "grant_type":     {"authorization_code"},
         }.Encode()
         
-        // Debug logging
-        log.Printf("[OAUTH-DEBUG] Exchanging code with redirect_uri=%s", redirectURI)
+	// Debug logging
+	log.Printf("[OAUTH-DEBUG] Exchanging code with redirect_uri=%s request_id=%s", redirectURI, reqID)
 
         req, err := http.NewRequestWithContext(ctx, "POST", tokenURL, strings.NewReader(data))
         if err != nil {
 		return nil, err
         }
 
-        req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
         resp, err := http.DefaultClient.Do(req)
         if err != nil {
