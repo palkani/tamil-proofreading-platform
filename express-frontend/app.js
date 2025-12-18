@@ -14,7 +14,6 @@ const apiRouter = require('./routes/api');
 const processRouter = require('./routes/process');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
 app.set('trust proxy', true);
 app.set('view engine', 'ejs');
@@ -170,4 +169,11 @@ app.use((err, req, res, next) => {
 });
 
 // Vercel Serverless Function export: wrap express app as a handler (no app.listen)
-module.exports = (req, res) => app(req, res);
+module.exports = async (req, res) => {
+  try {
+    await appReady;
+  } catch (err) {
+    console.error('[Init] appReady failed (non-fatal):', err?.message);
+  }
+  return app(req, res);
+};
