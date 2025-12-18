@@ -626,12 +626,12 @@ class WorkspaceController {
           preview: `${t.original} → ${sugg.ta}`,
           sourceText: t.original,
           onApply: () => {
-            const currentText = this.editor.getPlainText();
+          const currentText = this.editor.getPlainText();
             const replaced = this.replaceTokenInText(currentText, t.original, sugg.ta, t.start);
             this.editor.setText(replaced);
           },
           onIgnore: () => {},
-        }));
+      }));
       });
 
       this.suggestionsPanel.clearSuggestions();

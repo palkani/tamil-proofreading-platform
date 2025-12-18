@@ -462,12 +462,12 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
         origin := scheme + "://" + c.Request.Host
 
         // Exchange authorization code for ID token
-	idToken, err := h.exchangeCodeForToken(c.Request.Context(), code, origin)
-	if err != nil {
+        idToken, err := h.exchangeCodeForToken(c.Request.Context(), code, origin)
+        if err != nil {
 		log.Printf("[OAUTH-DEBUG] token exchange failed: %v", err)
-		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=token_exchange_failed")
-		return
-	}
+                c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=token_exchange_failed")
+                return
+        }
 
         // Get or create user
         user, err := h.googleOAuthLogin(c.Request.Context(), idToken)
@@ -520,7 +520,7 @@ func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, origin
 
         req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
+        resp, err := http.DefaultClient.Do(req)
         if err != nil {
                 return "", err
         }
@@ -535,7 +535,7 @@ func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, origin
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("[OAUTH-DEBUG] Token exchange failed status=%d body=%s", resp.StatusCode, string(body))
 		return "", errors.New("token exchange failed")
-	}
+        }
 
         var tokenResp map[string]interface{}
         if err := json.Unmarshal(body, &tokenResp); err != nil {
