@@ -1,25 +1,35 @@
 package handlers
 
 import (
-        "context"
-        "encoding/json"
-        "errors"
-        "io"
-        "log"
-        "net/http"
-        "net/url"
-        "strings"
-        "time"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"log"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
 
-        "tamil-proofreading-platform/backend/internal/middleware"
-        "tamil-proofreading-platform/backend/internal/models"
-        "tamil-proofreading-platform/backend/internal/services/auth"
-        "tamil-proofreading-platform/backend/internal/util/auditlog"
-        "tamil-proofreading-platform/backend/internal/util/securecookie"
+	"tamil-proofreading-platform/backend/internal/middleware"
+	"tamil-proofreading-platform/backend/internal/models"
+	"tamil-proofreading-platform/backend/internal/services/auth"
+	"tamil-proofreading-platform/backend/internal/util/auditlog"
+	"tamil-proofreading-platform/backend/internal/util/securecookie"
 
-        "github.com/gin-gonic/gin"
-        "google.golang.org/api/idtoken"
+	"github.com/gin-gonic/gin"
+	"google.golang.org/api/idtoken"
 )
+
+type googleTokens struct {
+	IDToken      string
+	AccessToken  string
+	RefreshToken string
+	ExpiresIn    int64
+	TokenType    string
+	Scope        string
+}
 
 const refreshTokenCookieName = "proof_refresh_token"
 const refreshTokenCookiePath = "/"
@@ -75,6 +85,29 @@ func (h *Handlers) setRefreshCookie(c *gin.Context, token string, expiresAt time
                 MaxAge:   maxAge,
                 Expires:  expiresAt,
         })
+}
+
+func (h *Handlers) setAccessTokenCookie(c *gin.Context, token string, expiresAt time.Time) {
+	if strings.TrimSpace(token) == "" {
+		return
+	}
+
+	host := c.Request.Host
+	var domain string
+	if strings.HasSuffix(host, "prooftamil.com") {
+		domain = ".prooftamil.com"
+	}
+
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "access_token",
+		Value:    token,
+		Path:     "/",
+		Domain:   domain,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  expiresAt,
+	})
 }
 
 func (h *Handlers) clearRefreshCookie(c *gin.Context) {
@@ -434,8 +467,9 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
         code := c.Query("code")
         errParam := c.Query("error")
 
-	// Early debug to ensure callback is reaching the backend
-	log.Printf("[OAUTH-DEBUG] callback hit host=%s code_len=%d error_param=%s", c.Request.Host, len(code), errParam)
+	reqID := c.GetString("request_id")
+	log.Printf("[OAUTH-DEBUG] step=callback_hit request_id=%s host=%s originalUrl=%s code_len=%d error_param=%s query_keys=%v",
+		reqID, c.Request.Host, c.Request.URL.String(), len(code), errParam, c.Request.URL.Query())
 
         if errParam != "" {
                 c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error="+errParam)
@@ -443,14 +477,14 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
         }
 
         if code == "" {
-		log.Printf("[OAUTH-ERROR] missing code on callback host=%s", c.Request.Host)
+		log.Printf("[OAUTH-ERROR] step=missing_code request_id=%s host=%s", reqID, c.Request.Host)
 		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=missing_code")
                 return
         }
 
         if h.cfg.GoogleClientID == "" || h.cfg.GoogleClientSecret == "" {
-		log.Printf("[OAUTH-ERROR] oauth not configured client_id_present=%v client_secret_present=%v", h.cfg.GoogleClientID != "", h.cfg.GoogleClientSecret != "")
-                c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_not_configured")
+		log.Printf("[OAUTH-ERROR] step=config_missing request_id=%s client_id_present=%v client_secret_present=%v", reqID, h.cfg.GoogleClientID != "", h.cfg.GoogleClientSecret != "")
+		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_not_configured")
                 return
         }
 
@@ -462,43 +496,55 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
                 scheme = "https"
         }
         origin := scheme + "://" + c.Request.Host
+	redirectURI := origin + "/api/v1/auth/google/callback"
 
         // Exchange authorization code for ID token
-        idToken, err := h.exchangeCodeForToken(c.Request.Context(), code, origin)
+	tokens, err := h.exchangeCodeForToken(c.Request.Context(), code, redirectURI, reqID)
         if err != nil {
-		log.Printf("[OAUTH-ERROR] token exchange failed host=%s scheme=%s origin=%s err=%v", c.Request.Host, scheme, origin, err)
-                c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=token_exchange_failed")
+		log.Printf("[OAUTH-ERROR] step=token_exchange request_id=%s host=%s scheme=%s redirect_uri=%s err=%v", reqID, c.Request.Host, scheme, redirectURI, err)
+		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=token_exchange_failed")
                 return
         }
 
+	if tokens.AccessToken != "" {
+		if err := h.logGoogleUserInfo(c.Request.Context(), tokens.AccessToken, reqID); err != nil {
+			log.Printf("[OAUTH-WARN] step=userinfo_fetch request_id=%s err=%v", reqID, err)
+		}
+	}
+
         // Get or create user
-        user, err := h.googleOAuthLogin(c.Request.Context(), idToken)
+	user, err := h.googleOAuthLogin(c.Request.Context(), tokens.IDToken)
         if err != nil {
-		log.Printf("[OAUTH-ERROR] oauth login failed (google token validation/user creation) err=%v", err)
-                c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_login_failed")
+		log.Printf("[OAUTH-ERROR] step=oauth_login request_id=%s err=%v", reqID, err)
+		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_login_failed")
                 return
         }
 
         // Create session
         tokenPair, err := h.authService.IssueSession(user, sessionMetadataFromContext(c))
         if err != nil {
-		log.Printf("[OAUTH-ERROR] session creation failed user_id=%d err=%v", user.ID, err)
-                c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=session_creation_failed")
+		log.Printf("[OAUTH-ERROR] step=session_creation request_id=%s user_id=%d err=%v", reqID, user.ID, err)
+		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=session_creation_failed")
                 return
         }
 
         // Set refresh token cookie
         h.setRefreshCookie(c, tokenPair.RefreshToken, tokenPair.RefreshExpiresAt)
 
+	// Set access token cookie
+	h.setAccessTokenCookie(c, tokenPair.AccessToken, tokenPair.AccessExpiresAt)
+
         // Redirect to workspace with access token
         redirectURL := h.cfg.FrontendURL + "/workspace?access_token=" + tokenPair.AccessToken
-	log.Printf("[OAUTH-DEBUG] login success user_id=%d redirect=%s", user.ID, redirectURL)
+	log.Printf("[OAUTH-DEBUG] step=redirect request_id=%s user_id=%d target=%s", reqID, user.ID, redirectURL)
         c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
-func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, origin string) (string, error) {
-        // Use configured OAuth redirect domain (must match Google Cloud Console)
-	redirectURI := h.cfg.GoogleOAuthRedirectDomain + "/api/v1/auth/google/callback"
+func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, redirectURI string, reqID string) (*googleTokens, error) {
+	// Use configured OAuth redirect domain (must match Google Cloud Console)
+	if redirectURI == "" {
+		redirectURI = h.cfg.GoogleOAuthRedirectDomain + "/api/v1/auth/google/callback"
+	}
 
 	// Validate redirect URI is the expected production value
 	expectedRedirect := "https://www.prooftamil.com/api/v1/auth/google/callback"
@@ -526,39 +572,89 @@ func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, origin
 
         req, err := http.NewRequestWithContext(ctx, "POST", tokenURL, strings.NewReader(data))
         if err != nil {
-                return "", err
+		return nil, err
         }
 
         req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
         resp, err := http.DefaultClient.Do(req)
         if err != nil {
-                return "", err
+		return nil, err
         }
         defer resp.Body.Close()
 
         body, err := io.ReadAll(resp.Body)
         if err != nil {
-                return "", err
+		return nil, err
         }
 
 	// Capture non-200 responses for debugging invalid_grant/redirect mismatches
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[OAUTH-DEBUG] Token exchange failed status=%d body=%s", resp.StatusCode, string(body))
-		return "", errors.New("token exchange failed")
+		log.Printf("[OAUTH-DEBUG] Token exchange failed status=%d body=%s request_id=%s", resp.StatusCode, string(body), reqID)
+		return nil, errors.New("token exchange failed")
         }
 
         var tokenResp map[string]interface{}
         if err := json.Unmarshal(body, &tokenResp); err != nil {
-                return "", err
+		return nil, err
         }
 
         idToken, ok := tokenResp["id_token"].(string)
         if !ok || idToken == "" {
-                return "", errors.New("id_token not in response")
+		return nil, errors.New("id_token not in response")
         }
 
-        return idToken, nil
+	accessToken, _ := tokenResp["access_token"].(string)
+	refreshToken, _ := tokenResp["refresh_token"].(string)
+	scope, _ := tokenResp["scope"].(string)
+	expiresIn, _ := tokenResp["expires_in"].(float64)
+	tokenType, _ := tokenResp["token_type"].(string)
+
+	return &googleTokens{
+		IDToken:      idToken,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		Scope:        scope,
+		TokenType:    tokenType,
+		ExpiresIn:    int64(expiresIn),
+	}, nil
+}
+
+func (h *Handlers) logGoogleUserInfo(ctx context.Context, accessToken string, reqID string) error {
+	if strings.TrimSpace(accessToken) == "" {
+		return nil
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://www.googleapis.com/oauth2/v3/userinfo", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[OAUTH-ERROR] step=userinfo status=%d body=%s request_id=%s", resp.StatusCode, string(body), reqID)
+		return errors.New("userinfo fetch failed")
+	}
+
+	var info map[string]interface{}
+	if err := json.Unmarshal(body, &info); err != nil {
+		log.Printf("[OAUTH-WARN] step=userinfo_parse err=%v request_id=%s body=%s", err, reqID, string(body))
+		return nil
+	}
+
+	slog.Info("[OAUTH-DEBUG] step=userinfo_ok",
+		"request_id", reqID,
+		"sub", info["sub"],
+		"email_present", info["email"] != nil,
+		"email_verified", info["email_verified"],
+	)
+	return nil
 }
 
 // ForgotPassword handles forgotten password requests
