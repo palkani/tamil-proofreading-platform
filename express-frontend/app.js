@@ -31,7 +31,8 @@ async function initializeAppSecrets() {
     await loadAllSecrets();
     console.log(`[Init] GOOGLE_CLIENT_ID available: ${!!process.env.GOOGLE_CLIENT_ID}`);
   } catch (error) {
-    console.log('[Init] Secrets module error (non-fatal):', error.message);
+    console.warn('[Init] Secrets module error (non-fatal):', error.message);
+    // Non-fatal: allow app to continue even if secrets failed to load
   }
 }
 
@@ -43,9 +44,9 @@ const ensureAppReady = () => {
       await initializeAppSecrets();
       console.log('[Init] Express app bootstrap complete');
     })().catch((error) => {
-      // Reset so a subsequent request can retry initialization
+      // Do not fail requests; log and allow retry on next request
+      console.warn('[Init] Bootstrap encountered an error (non-fatal):', error.message);
       initPromise = null;
-      throw error;
     });
   }
   return initPromise;
@@ -54,6 +55,12 @@ const ensureAppReady = () => {
 const appReady = ensureAppReady();
 
 const ensureAppReadyMiddleware = (req, res, next) => {
+  // Allow OAuth callbacks to proceed without waiting on appReady
+  const path = req.path || '';
+  if (path.startsWith('/api/v1/auth/google/callback') || path.startsWith('/v1/auth/google/callback') || path.startsWith('/auth/google/callback')) {
+    return next();
+  }
+
   ensureAppReady()
     .then(() => next())
     .catch((error) => {
