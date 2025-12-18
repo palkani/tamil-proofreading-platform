@@ -309,6 +309,44 @@ router.post('/transliterate', async (req, res) => {
   }
 });
 
+// Google OAuth callback proxy: frontend callback terminates here, then proxied to backend
+router.get('/v1/auth/google/callback', async (req, res) => {
+  try {
+    const target = `${BACKEND_URL}/auth/google/callback`;
+    const forwardHeaders = { ...req.headers };
+    delete forwardHeaders.host;
+    delete forwardHeaders.connection;
+    delete forwardHeaders['content-length'];
+
+    console.log('[OAUTH-PROXY] received redirect_uri:', req.query.redirect_uri);
+    console.log('[OAUTH-PROXY] forwarding to:', target);
+
+    const response = await axios({
+      method: 'get',
+      url: target,
+      params: req.query,
+      headers: forwardHeaders,
+      withCredentials: true,
+      validateStatus: () => true,
+    });
+
+    // forward cookies and location
+    const setCookie = response.headers['set-cookie'];
+    if (setCookie) res.setHeader('set-cookie', setCookie);
+    if (response.headers.location) res.setHeader('location', response.headers.location);
+
+    res.status(response.status);
+    // If backend responded with redirect, end without altering body
+    if (response.status >= 300 && response.status < 400) {
+      return res.end();
+    }
+    return res.send(response.data);
+  } catch (error) {
+    console.error('[OAUTH-PROXY] error', error?.message);
+    res.redirect('/login?error=google_oauth_failed');
+  }
+});
+
 // Proxy other API calls to Go backend
 router.all('/*', async (req, res) => {
   try {
