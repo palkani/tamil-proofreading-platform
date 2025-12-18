@@ -1,5 +1,29 @@
 // Rich Text Editor with Tamil Support
 
+async function apiFetch(path, options = {}, requireAuth = true) {
+  const token = localStorage.getItem('access_token');
+  if (requireAuth && !token) {
+    throw new Error('login_required');
+  }
+
+  const headers = {
+    ...(options.headers || {}),
+    ...(token && requireAuth ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const response = await fetch(path, { 
+    ...options, 
+    headers,
+    credentials: options.credentials || 'include'
+  });
+
+  if (requireAuth && response.status === 401) {
+    throw new Error('unauthorized');
+  }
+
+  return response;
+}
+
 class TamilEditor {
   constructor(editorElement) {
     this.editor = editorElement;
@@ -326,11 +350,16 @@ class TamilEditor {
       // Debounce autocomplete with delay for better performance
       autocompleteTimeout = setTimeout(async () => {
         let suggestions = [];
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          removeAutocomplete();
+          return;
+        }
 
         // Check if typing in Tamil (1+ character)
         if (/[\u0B80-\u0BFF]/.test(currentWord)) {
           try {
-            const response = await fetch(`/api/autocomplete?prefix=${encodeURIComponent(currentWord)}&limit=8`);
+            const response = await apiFetch(`/api/autocomplete?prefix=${encodeURIComponent(currentWord)}&limit=8`);
             if (response.ok) {
               const data = await response.json();
               suggestions = data.suggestions || [];
@@ -342,7 +371,7 @@ class TamilEditor {
         // Check if typing in English - call Gemini transliteration API
         else if (/^[a-zA-Z]+$/.test(currentWord) && currentWord.length >= 2) {
           try {
-            const response = await fetch('/api/v1/transliterate', {
+            const response = await apiFetch('/api/v1/transliterate', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ text: currentWord })

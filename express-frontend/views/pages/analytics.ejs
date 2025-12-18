@@ -164,6 +164,30 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
 <script>
+async function apiFetch(path, options = {}, requireAuth = true) {
+  const token = localStorage.getItem('access_token');
+  if (requireAuth && !token) {
+    throw new Error('login_required');
+  }
+
+  const headers = {
+    ...(options.headers || {}),
+    ...(token && requireAuth ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const response = await fetch(path, { 
+    ...options, 
+    headers,
+    credentials: options.credentials || 'include'
+  });
+
+  if (requireAuth && response.status === 401) {
+    throw new Error('unauthorized');
+  }
+
+  return response;
+}
+
 // Analytics Dashboard Controller
 let visitsChart, activitiesChart;
 
@@ -171,7 +195,7 @@ let visitsChart, activitiesChart;
 async function loadAnalytics(days = 30) {
   try {
     // Try to fetch from backend, fallback to graceful handling if admin auth not configured
-    const response = await fetch(`http://localhost:8080/api/v1/admin/analytics-dashboard?days=${days}`)
+    const response = await apiFetch(`http://localhost:8080/api/v1/admin/analytics-dashboard?days=${days}`)
       .catch(err => {
         console.warn('Backend admin endpoint not accessible, using mock data');
         return null;

@@ -35,11 +35,24 @@ class WorkspaceController {
       this.showNotification('Please log in to continue.', 'warning');
       throw new Error('login_required');
     }
+
     const headers = {
       ...(options.headers || {}),
       ...(token && requireAuth ? { Authorization: `Bearer ${token}` } : {}),
     };
-    return fetch(url, { ...options, headers });
+
+    const response = await fetch(url, { 
+      ...options, 
+      headers,
+      credentials: options.credentials || 'include'
+    });
+
+    if (requireAuth && response.status === 401) {
+      this.showNotification('Session expired. Please log in again.', 'warning');
+      throw new Error('unauthorized');
+    }
+
+    return response;
   }
 
   init() {
@@ -220,6 +233,12 @@ class WorkspaceController {
   }
 
   updateTranslitSuggestions() {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      this.clearTranslitSuggestions();
+      return;
+    }
+
     const word = this.getCurrentWord();
     if (!word || word.length < 2 || !/^[a-zA-Z]+$/.test(word)) {
       this.clearTranslitSuggestions();
@@ -238,15 +257,20 @@ class WorkspaceController {
       this.translitAbort.abort();
     }
 
-    const token = localStorage.getItem('access_token');
     this.translitTimer = setTimeout(async () => {
+      const activeToken = localStorage.getItem('access_token');
+      if (!activeToken) {
+        this.clearTranslitSuggestions();
+        return;
+      }
+
       this.translitAbort = new AbortController();
       try {
         const mode = this.getMode();
         const res = await this.apiFetch(`/api/transliterate/suggest?q=${encodeURIComponent(word)}&limit=8&mode=${encodeURIComponent(mode)}`, {
           headers: {},
           signal: this.translitAbort.signal,
-        }, false);
+        });
         if (!res.ok) throw new Error('Failed to fetch suggestions');
         const data = await res.json();
         const suggestions = data?.suggestions || [];
@@ -254,17 +278,25 @@ class WorkspaceController {
         this.renderTranslitSuggestions(word, suggestions);
       } catch (err) {
         if (err.name === 'AbortError') return;
+        if (err.message === 'login_required' || err.message === 'unauthorized') {
+          this.showNotification('Please log in to get suggestions.', 'warning');
+          return;
+        }
         console.error('[Translit] Suggest error:', err);
       }
     }, 300);
   }
   
   scheduleAutoAnalysis() {
-    // Clear existing timeout
     if (this.analysisTimeout) {
       clearTimeout(this.analysisTimeout);
     }
-    
+
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      return;
+    }
+
     // Debounce: Wait 1 second after user stops typing
     this.analysisTimeout = setTimeout(() => {
       this.autoAnalyze();
@@ -272,6 +304,12 @@ class WorkspaceController {
   }
   
   async autoAnalyze() {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      this.updateAnalysisStatus('');
+      return;
+    }
+
     const text = this.editor.getPlainText().trim();
     
     // Skip if text is too short (minimum 5 words or 20 characters)
@@ -296,7 +334,6 @@ class WorkspaceController {
     this.updateAnalysisStatus('analyzing');
     
     try {
-      const token = localStorage.getItem('access_token');
       const response = await this.apiFetch('/api/submit', {
         method: 'POST',
         headers: {
@@ -376,6 +413,11 @@ class WorkspaceController {
         // Request was cancelled, this is normal
         return;
       }
+      if (error.message === 'login_required' || error.message === 'unauthorized') {
+        this.updateAnalysisStatus('');
+        this.showNotification('Please log in to continue.', 'warning');
+        return;
+      }
       console.error('Auto-analysis error:', error);
       this.updateAnalysisStatus('error');
     } finally {
@@ -444,6 +486,12 @@ class WorkspaceController {
       alert('Please enter some English text to translate.');
       return;
     }
+
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      this.showNotification('Please log in to translate.', 'warning');
+      return;
+    }
     
     // Client must not call Google APIs directly; route through backend submit endpoint instead.
     const translateBtn = document.getElementById('translate-english-btn');
@@ -506,12 +554,22 @@ class WorkspaceController {
       clearTimeout(this.saveTimeout);
     }
 
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      return;
+    }
+
     this.saveTimeout = setTimeout(() => {
       this.autosave();
     }, 2000);
   }
 
   async autosave() {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      return;
+    }
+
     const text = this.editor.getPlainText().trim();
     
     // Don't save empty drafts
@@ -528,7 +586,6 @@ class WorkspaceController {
 
     try {
       const html = this.editor.getHTML();
-      const token = localStorage.getItem('access_token');
       
       // If we have a current draft, we're updating it
       // Otherwise, create a new one
@@ -569,6 +626,13 @@ class WorkspaceController {
         autosaveTimeEl.textContent = `Last saved: ${now.toLocaleTimeString()}`;
       }
     } catch (error) {
+      if (error.message === 'login_required' || error.message === 'unauthorized') {
+        if (saveStatusEl) {
+          saveStatusEl.innerHTML = '<span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>Login required';
+        }
+        this.showNotification('Please log in to save drafts.', 'warning');
+        return;
+      }
       console.error('Autosave error:', error);
       if (saveStatusEl) {
         saveStatusEl.innerHTML = '<span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>Save failed';
