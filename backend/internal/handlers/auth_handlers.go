@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"tamil-proofreading-platform/backend/internal/middleware"
@@ -34,9 +35,16 @@ type googleTokens struct {
 const googleRedirectURI = "https://www.prooftamil.com/api/v1/auth/google/callback"
 const googleFrontendWorkspace = "https://www.prooftamil.com/workspace"
 
+var logOAuthConfigOnce sync.Once
+
 // GoogleAuthStart initiates OAuth by redirecting directly to Google with backend callback
 func (h *Handlers) GoogleAuthStart(c *gin.Context) {
 	reqID := c.GetString("request_id")
+
+	logOAuthConfigOnce.Do(func() {
+		log.Printf("[OAUTH-CONFIG] client_id=%s redirect_uri=%s", h.cfg.GoogleClientID, googleRedirectURI)
+	})
+
 	if h.cfg.GoogleClientID == "" {
 		log.Printf("[OAUTH-ERROR] step=auth_start_missing_client request_id=%s", reqID)
 		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_not_configured")
