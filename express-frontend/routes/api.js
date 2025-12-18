@@ -320,7 +320,7 @@ router.all('/*', async (req, res) => {
     }
 
     const url = `${BACKEND_URL}${normalizedPath}`;
-
+    
     // Debug logging for auth passthrough
     console.log('[PROXY] incoming authorization:', req.headers.authorization);
     if (ENABLE_PROXY_LOGS) {
@@ -328,7 +328,7 @@ router.all('/*', async (req, res) => {
     }
 
     if (ENABLE_PROXY_LOGS) {
-      console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
+    console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
     }
     
     // Forward all incoming headers (including Authorization) except Host to avoid Cloud Run host mismatch
