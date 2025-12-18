@@ -443,11 +443,13 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
         }
 
         if code == "" {
-                c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=missing_code")
+		log.Printf("[OAUTH-ERROR] missing code on callback host=%s", c.Request.Host)
+		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=missing_code")
                 return
         }
 
         if h.cfg.GoogleClientID == "" || h.cfg.GoogleClientSecret == "" {
+		log.Printf("[OAUTH-ERROR] oauth not configured client_id_present=%v client_secret_present=%v", h.cfg.GoogleClientID != "", h.cfg.GoogleClientSecret != "")
                 c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_not_configured")
                 return
         }
@@ -464,7 +466,7 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
         // Exchange authorization code for ID token
         idToken, err := h.exchangeCodeForToken(c.Request.Context(), code, origin)
         if err != nil {
-		log.Printf("[OAUTH-DEBUG] token exchange failed: %v", err)
+		log.Printf("[OAUTH-ERROR] token exchange failed host=%s scheme=%s origin=%s err=%v", c.Request.Host, scheme, origin, err)
                 c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=token_exchange_failed")
                 return
         }
@@ -472,6 +474,7 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
         // Get or create user
         user, err := h.googleOAuthLogin(c.Request.Context(), idToken)
         if err != nil {
+		log.Printf("[OAUTH-ERROR] oauth login failed (google token validation/user creation) err=%v", err)
                 c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_login_failed")
                 return
         }
@@ -479,6 +482,7 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
         // Create session
         tokenPair, err := h.authService.IssueSession(user, sessionMetadataFromContext(c))
         if err != nil {
+		log.Printf("[OAUTH-ERROR] session creation failed user_id=%d err=%v", user.ID, err)
                 c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=session_creation_failed")
                 return
         }
@@ -488,12 +492,19 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 
         // Redirect to workspace with access token
         redirectURL := h.cfg.FrontendURL + "/workspace?access_token=" + tokenPair.AccessToken
+	log.Printf("[OAUTH-DEBUG] login success user_id=%d redirect=%s", user.ID, redirectURL)
         c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
 func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, origin string) (string, error) {
         // Use configured OAuth redirect domain (must match Google Cloud Console)
-        redirectURI := h.cfg.GoogleOAuthRedirectDomain + "/api/v1/auth/google/callback"
+	redirectURI := h.cfg.GoogleOAuthRedirectDomain + "/api/v1/auth/google/callback"
+
+	// Validate redirect URI is the expected production value
+	expectedRedirect := "https://www.prooftamil.com/api/v1/auth/google/callback"
+	if redirectURI != expectedRedirect {
+		log.Printf("[OAUTH-WARN] redirect URI mismatch configured=%s expected=%s", redirectURI, expectedRedirect)
+	}
 
 	clientID := h.cfg.GoogleClientID
 	if len(clientID) > 16 {
