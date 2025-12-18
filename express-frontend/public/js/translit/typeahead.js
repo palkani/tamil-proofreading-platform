@@ -160,10 +160,17 @@
       const dropdown = document.createElement('div');
       dropdown.className = 'translit-dropdown fixed bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-auto';
       dropdown.style.minWidth = '200px';
-      const left = Math.max(8, Math.min(rect.left, window.innerWidth - 220));
-      const top = rect.bottom + 6 > window.innerHeight
-        ? Math.max(8, rect.top - 6 - 200)
-        : rect.bottom + 6;
+      const viewW = window.innerWidth || 360;
+      const viewH = window.innerHeight || 640;
+      const left = Math.max(8, Math.min(rect.left, viewW - 220));
+      let top = rect.bottom + 6;
+      if (top > viewH - 40) {
+        top = Math.max(8, rect.top - 206);
+      }
+      if (top < 0 || top > viewH - 20) {
+        const fb = this.adapter.getFallbackRect && this.adapter.getFallbackRect();
+        top = Math.min(viewH - 220, Math.max(8, fb?.top || 40));
+      }
       dropdown.style.left = `${left}px`;
       dropdown.style.top = `${top}px`;
 

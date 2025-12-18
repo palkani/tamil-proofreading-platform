@@ -1,6 +1,19 @@
 <%- include('../partials/header') %>
 
 <style>
+  .workspace-layout {
+    display: grid;
+    grid-template-columns: 1fr 384px;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .workspace-editor-panel,
+  .workspace-ai-panel {
+    min-height: 0;
+  }
+  .workspace-editor-panel .flex-1 {
+    min-height: 0;
+  }
   @media (max-width: 768px) {
     .workspace-layout {
       display: flex;
@@ -17,6 +30,8 @@
       width: 100%;
       max-height: none;
       overflow: visible;
+      border-left: none !important;
+      border-top: 1px solid #e5e7eb;
     }
   }
 </style>
@@ -116,7 +131,7 @@
   </header>
 
   <!-- Main Content -->
-  <div class="flex-1" style="display: grid; grid-template-columns: 1fr 384px; overflow: hidden;">
+  <div class="flex-1 workspace-layout">
     <!-- Drafts List View (Hidden by default) -->
     <div id="drafts-list-view" class="hidden bg-slate-50 overflow-auto" style="grid-column: 1 / -1;">
       <div class="max-w-4xl mx-auto px-6 py-8">
@@ -151,7 +166,7 @@
     </div>
 
     <!-- Left: Editor Panel -->
-    <div class="flex flex-col bg-slate-50 border-r border-gray-200" style="overflow: hidden;">
+    <div class="flex flex-col bg-slate-50 border-r border-gray-200 workspace-editor-panel" style="overflow: hidden;">
       <!-- Enhanced Toolbar -->
       <div class="bg-white border-b border-gray-200 px-4 py-2 shadow-sm overflow-x-auto">
         <div class="flex items-center gap-1 min-w-max">
@@ -278,7 +293,7 @@
     </div>
 
     <!-- Right: AI Assistant Panel -->
-    <div id="ai-assistant-panel" class="bg-white flex flex-col border-l border-gray-200" style="overflow: hidden;">
+    <div id="ai-assistant-panel" class="bg-white flex flex-col border-l border-gray-200 workspace-ai-panel" style="overflow: hidden;">
       <!-- Panel Header -->
       <div class="px-6 py-4 border-b border-gray-200">
         <div class="flex items-center justify-between mb-2">

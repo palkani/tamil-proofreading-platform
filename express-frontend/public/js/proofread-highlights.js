@@ -93,9 +93,9 @@
     style.id = 'proofread-underline-styles';
     style.textContent = `
       .proofread-underline { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; cursor: pointer; }
-      .proofread-spelling { text-decoration-color: #ef4444; }
-      .proofread-grammar { text-decoration-color: #3b82f6; }
-      .proofread-style { text-decoration-color: #8b5cf6; }
+      .proofread-spelling { text-decoration-color: #f87171; }
+      .proofread-grammar { text-decoration-color: #5b8cff; }
+      .proofread-style { text-decoration-color: #c084fc; }
     `;
     document.head.appendChild(style);
   }
