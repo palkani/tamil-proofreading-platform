@@ -55,9 +55,14 @@ const ensureAppReady = () => {
 const appReady = ensureAppReady();
 
 const ensureAppReadyMiddleware = (req, res, next) => {
-  // Allow OAuth callbacks to proceed without waiting on appReady
+  // Allow OAuth callbacks and workspace to proceed without waiting on appReady
   const path = req.path || '';
-  if (path.startsWith('/api/v1/auth/google/callback') || path.startsWith('/v1/auth/google/callback') || path.startsWith('/auth/google/callback')) {
+  if (
+    path.startsWith('/api/v1/auth/google/callback') ||
+    path.startsWith('/v1/auth/google/callback') ||
+    path.startsWith('/auth/google/callback') ||
+    path.startsWith('/workspace')
+  ) {
     return next();
   }
 

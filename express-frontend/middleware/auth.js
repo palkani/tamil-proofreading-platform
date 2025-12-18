@@ -14,13 +14,13 @@ const getAccessTokenFromRequest = (req) => {
 };
 
 const attachUser = (req, res, next) => {
-  const token = getAccessTokenFromRequest(req);
-  if (!token) {
-    req.user = null;
-    return next();
-  }
-
   try {
+    const token = getAccessTokenFromRequest(req);
+    if (!token) {
+      req.user = null;
+      return next();
+    }
+
     // Decode without verifying signature — trust is enforced by backend
     const payload = jwt.decode(token) || {};
     req.user = payload.sub
@@ -32,7 +32,9 @@ const attachUser = (req, res, next) => {
         }
       : null;
   } catch (err) {
+    // Non-fatal: never throw from attachUser
     req.user = null;
+    console.warn('[AUTH] attachUser non-fatal error:', err.message);
   }
 
   next();
