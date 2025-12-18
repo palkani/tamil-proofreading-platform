@@ -5,6 +5,14 @@
 
   "routes": [
     {
+      "src": "^/api/v1/auth/google/callback",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "^/api/v1/(.*)",
+      "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/api/index.js"
     }

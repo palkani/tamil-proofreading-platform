@@ -319,7 +319,7 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     delete forwardHeaders['content-length'];
     forwardHeaders['x-oauth-handoff'] = 'json';
 
-    console.log('[OAUTH-PROXY] received redirect_uri:', req.query.redirect_uri);
+    console.log('[OAUTH-HANDOFF] callback handled on frontend host=', req.hostname);
     console.log('[OAUTH-PROXY] forwarding to:', target);
 
     const response = await axios({
@@ -340,10 +340,12 @@ router.get('/v1/auth/google/callback', async (req, res) => {
         'Path=/',
         'Secure',
         'SameSite=Lax',
-        'Domain=.prooftamil.com'
+        'Domain=.prooftamil.com',
+        'HttpOnly'
       ].join('; ');
       res.setHeader('Set-Cookie', cookie);
-      console.log('[OAUTH-HANDOFF] set cookie for domain prooftamil.com');
+      console.log('[OAUTH-HANDOFF] set-cookie for prooftamil.com');
+      console.log('[OAUTH-HANDOFF] redirecting to /workspace');
       return res.redirect(response.data.redirect || '/workspace');
     }
 
