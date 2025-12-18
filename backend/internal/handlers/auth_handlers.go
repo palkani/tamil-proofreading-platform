@@ -1,25 +1,3 @@
-// GoogleAuthStart initiates OAuth by redirecting directly to Google with backend callback
-func (h *Handlers) GoogleAuthStart(c *gin.Context) {
-	reqID := c.GetString("request_id")
-	if h.cfg.GoogleClientID == "" {
-		log.Printf("[OAUTH-ERROR] step=auth_start_missing_client request_id=%s", reqID)
-		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_not_configured")
-		return
-	}
-
-	// Build Google authorize URL with canonical redirect_uri (backend Cloud Run)
-	params := url.Values{}
-	params.Set("client_id", h.cfg.GoogleClientID)
-	params.Set("redirect_uri", googleRedirectURI)
-	params.Set("response_type", "code")
-	params.Set("scope", "openid email profile")
-	params.Set("access_type", "offline")
-	params.Set("prompt", "consent")
-
-	authURL := "https://accounts.google.com/o/oauth2/v2/auth?" + params.Encode()
-	log.Printf("[OAUTH-DEBUG] step=auth_start request_id=%s auth_url=%s client_id_present=%v", reqID, authURL, h.cfg.GoogleClientID != "")
-	c.Redirect(http.StatusTemporaryRedirect, authURL)
-}
 package handlers
 
 import (
@@ -55,6 +33,29 @@ type googleTokens struct {
 
 const googleRedirectURI = "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/auth/google/callback"
 const googleFrontendWorkspace = "https://www.prooftamil.com/workspace"
+
+// GoogleAuthStart initiates OAuth by redirecting directly to Google with backend callback
+func (h *Handlers) GoogleAuthStart(c *gin.Context) {
+	reqID := c.GetString("request_id")
+	if h.cfg.GoogleClientID == "" {
+		log.Printf("[OAUTH-ERROR] step=auth_start_missing_client request_id=%s", reqID)
+		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_not_configured")
+		return
+	}
+
+	// Build Google authorize URL with canonical redirect_uri (backend Cloud Run)
+	params := url.Values{}
+	params.Set("client_id", h.cfg.GoogleClientID)
+	params.Set("redirect_uri", googleRedirectURI)
+	params.Set("response_type", "code")
+	params.Set("scope", "openid email profile")
+	params.Set("access_type", "offline")
+	params.Set("prompt", "consent")
+
+	authURL := "https://accounts.google.com/o/oauth2/v2/auth?" + params.Encode()
+	log.Printf("[OAUTH-DEBUG] step=auth_start request_id=%s auth_url=%s client_id_present=%v", reqID, authURL, h.cfg.GoogleClientID != "")
+	c.Redirect(http.StatusTemporaryRedirect, authURL)
+}
 
 const refreshTokenCookieName = "proof_refresh_token"
 const refreshTokenCookiePath = "/"

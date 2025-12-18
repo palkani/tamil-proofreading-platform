@@ -65,6 +65,15 @@ class WorkspaceController {
       this.editor.onChange = () => this.handleEditorChange();
     }
 
+    // Transliteration typeahead (shared)
+    if (window.TranslitTypeahead && editorElement) {
+      this.translitTypeahead = new window.TranslitTypeahead({
+        editorEl: editorElement,
+        getMode: () => this.getMode(),
+        endpoint: '/api/transliterate/suggest',
+      });
+    }
+
     // Initialize suggestions panel
     const container = document.getElementById('suggestions-container');
     const summary = document.getElementById('suggestions-summary');
