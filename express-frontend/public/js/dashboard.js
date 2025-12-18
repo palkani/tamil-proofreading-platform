@@ -1,5 +1,29 @@
 // Dashboard page functionality
 
+async function apiFetch(path, options = {}, requireAuth = true) {
+  const token = localStorage.getItem('access_token');
+  if (requireAuth && !token) {
+    throw new Error('login_required');
+  }
+
+  const headers = {
+    ...(options.headers || {}),
+    ...(token && requireAuth ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const response = await fetch(path, { 
+    ...options, 
+    headers,
+    credentials: options.credentials || 'include'
+  });
+
+  if (requireAuth && response.status === 401) {
+    throw new Error('unauthorized');
+  }
+
+  return response;
+}
+
 async function loadDashboard() {
   const loadingDiv = document.getElementById('loading');
   const tableDiv = document.getElementById('submissions-table');
@@ -7,7 +31,7 @@ async function loadDashboard() {
   const tbody = document.getElementById('submissions-body');
   
   try {
-    const response = await fetch('/api/dashboard/stats');
+    const response = await apiFetch('/api/dashboard/stats');
     const data = await response.json();
     
     loadingDiv.classList.add('hidden');
@@ -60,6 +84,10 @@ async function loadDashboard() {
     
     tableDiv.classList.remove('hidden');
   } catch (error) {
+    if (error.message === 'login_required' || error.message === 'unauthorized') {
+      loadingDiv.innerHTML = '<p class="text-red-600">Please log in to view your dashboard.</p>';
+      return;
+    }
     console.error('Error loading dashboard:', error);
     loadingDiv.innerHTML = '<p class="text-red-600">Failed to load submissions. Please try again later.</p>';
   }

@@ -1,5 +1,29 @@
 // Archive page functionality
 
+async function apiFetch(path, options = {}, requireAuth = true) {
+  const token = localStorage.getItem('access_token');
+  if (requireAuth && !token) {
+    throw new Error('login_required');
+  }
+
+  const headers = {
+    ...(options.headers || {}),
+    ...(token && requireAuth ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const response = await fetch(path, { 
+    ...options, 
+    headers,
+    credentials: options.credentials || 'include'
+  });
+
+  if (requireAuth && response.status === 401) {
+    throw new Error('unauthorized');
+  }
+
+  return response;
+}
+
 const RETENTION_DAYS = 45;
 
 function calculateDaysRemaining(archivedAt) {
@@ -18,7 +42,7 @@ async function loadArchive() {
   const errorDiv = document.getElementById('error-message');
   
   try {
-    const response = await fetch('/api/archive');
+    const response = await apiFetch('/api/archive');
     const data = await response.json();
     
     loadingDiv.classList.add('hidden');
@@ -62,6 +86,12 @@ async function loadArchive() {
     
     archivedDraftsDiv.classList.remove('hidden');
   } catch (error) {
+    if (error.message === 'login_required' || error.message === 'unauthorized') {
+      errorDiv.textContent = 'Please log in to view archived drafts.';
+      errorDiv.classList.remove('hidden');
+      loadingDiv.classList.add('hidden');
+      return;
+    }
     console.error('Error loading archive:', error);
     loadingDiv.classList.add('hidden');
     errorDiv.textContent = 'Unable to load archived drafts. Please try again later.';

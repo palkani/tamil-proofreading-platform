@@ -10,7 +10,18 @@ async function apiFetch(path, options = {}, requireAuth = true) {
     ...(token && requireAuth ? { Authorization: `Bearer ${token}` } : {}),
   };
   console.log('[API] tokenPresent=', !!token, 'path=', path);
-  return fetch(path, { ...options, headers });
+  const response = await fetch(path, { 
+    ...options, 
+    headers,
+    credentials: options.credentials || 'include'
+  });
+
+  if (requireAuth && response.status === 401) {
+    console.warn('[API] Unauthorized for', path);
+    throw new Error('unauthorized');
+  }
+
+  return response;
 }
 // Home Page Editor - Simplified Tamil Editor with 200 Character Limit
 
@@ -325,11 +336,16 @@ class HomeEditor {
   
   async transliterateFromInput(englishWord) {
     console.log('[API-INPUT] Transliterating:', englishWord);
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      console.warn('[API-INPUT] Missing token, skipping transliteration');
+      return;
+    }
     try {
       const response = await apiFetch('/api/transliterate/suggest?q=' + encodeURIComponent(englishWord) + '&limit=8&mode=spoken', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
-      }, false);
+      });
       
       console.log('[API-INPUT] Status:', response.status);
       
@@ -362,8 +378,13 @@ class HomeEditor {
   
   async transliterateFromKeypress(englishWord) {
     console.log('[KEYPRESS] Calling transliteration API for:', englishWord);
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      console.warn('[KEYPRESS] Missing token, skipping transliteration');
+      return;
+    }
     try {
-      const response = await fetch('/api/v1/transliterate', {
+      const response = await apiFetch('/api/v1/transliterate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: englishWord })
@@ -426,8 +447,13 @@ class HomeEditor {
     // Debounce transliteration API call
     this.translitTimeout = setTimeout(async () => {
       console.log('[TRANSLIT-DEBUG] Calling API with word:', currentWord);
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        console.warn('[TRANSLIT-DEBUG] Missing token, skipping autocomplete');
+        return;
+      }
       try {
-        const response = await fetch('/api/v1/transliterate', {
+        const response = await apiFetch('/api/v1/transliterate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: currentWord })
@@ -623,6 +649,11 @@ class HomeEditor {
     if (this.analysisTimeout) {
       clearTimeout(this.analysisTimeout);
     }
+
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      return;
+    }
     
     // Debounce: Wait 1 second after user stops typing
     this.analysisTimeout = setTimeout(() => {
@@ -631,6 +662,13 @@ class HomeEditor {
   }
   
   async autoAnalyze() {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      this.lastAnalyzedText = '';
+      this.displaySuggestions([]);
+      return;
+    }
+
     const text = this.getPlainText();
     
     // If empty, clear suggestions and reset
@@ -684,7 +722,7 @@ class HomeEditor {
       
       this.abortController = new AbortController();
       
-      const response = await fetch('/api/submit', {
+      const response = await apiFetch('/api/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, save_draft: false }),
@@ -742,6 +780,11 @@ class HomeEditor {
       
     } catch (error) {
       if (error.name !== 'AbortError') {
+        if (error.message === 'login_required' || error.message === 'unauthorized') {
+          console.warn('Auto-analysis requires login');
+          this.showError();
+          return;
+        }
         console.error('Auto-analysis error:', error);
         console.error('Error details:', {
           message: error.message,
