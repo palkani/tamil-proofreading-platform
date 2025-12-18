@@ -464,10 +464,19 @@ func (h *Handlers) googleOAuthLogin(ctx context.Context, token string) (*models.
 
 // GoogleCallback handles the OAuth2 callback from Google
 func (h *Handlers) GoogleCallback(c *gin.Context) {
+	// Safety net: never allow panic to surface
+	reqID := c.GetString("request_id")
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[OAUTH_FATAL] panic request_id=%s host=%s err=%v", reqID, c.Request.Host, r)
+			safeRedirect := h.cfg.FrontendURL + "/login?error=oauth_failed"
+			c.Redirect(http.StatusTemporaryRedirect, safeRedirect)
+		}
+	}()
+
         code := c.Query("code")
         errParam := c.Query("error")
 
-	reqID := c.GetString("request_id")
 	log.Printf("[OAUTH-DEBUG] step=callback_hit request_id=%s host=%s originalUrl=%s code_len=%d error_param=%s query_keys=%v",
 		reqID, c.Request.Host, c.Request.URL.String(), len(code), errParam, c.Request.URL.Query())
 
