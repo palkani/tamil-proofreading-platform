@@ -497,15 +497,8 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
                 return
         }
 
-        // Get the origin/scheme from request headers for proper redirect URI
-        scheme := "http"
-        if c.GetHeader("X-Forwarded-Proto") == "https" {
-                scheme = "https"
-        } else if c.Request.TLS != nil {
-                scheme = "https"
-        }
-        origin := scheme + "://" + c.Request.Host
-	redirectURI := origin + "/api/v1/auth/google/callback"
+	// Force canonical redirect URI to match Google Console configuration
+	redirectURI := "https://www.prooftamil.com/api/v1/auth/google/callback"
 
         // Exchange authorization code for ID token
 	tokens, err := h.exchangeCodeForToken(c.Request.Context(), code, redirectURI, reqID)
@@ -550,15 +543,12 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 }
 
 func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, redirectURI string, reqID string) (*googleTokens, error) {
-	// Use configured OAuth redirect domain (must match Google Cloud Console)
+	// Force canonical redirect URI to match Google Console configuration
 	if redirectURI == "" {
-		redirectURI = h.cfg.GoogleOAuthRedirectDomain + "/api/v1/auth/google/callback"
+		redirectURI = "https://www.prooftamil.com/api/v1/auth/google/callback"
 	}
-
-	// Validate redirect URI is the expected production value
-	expectedRedirect := "https://www.prooftamil.com/api/v1/auth/google/callback"
-	if redirectURI != expectedRedirect {
-		log.Printf("[OAUTH-WARN] redirect URI mismatch configured=%s expected=%s", redirectURI, expectedRedirect)
+	if redirectURI != "https://www.prooftamil.com/api/v1/auth/google/callback" {
+		log.Printf("[OAUTH-WARN] redirect URI mismatch provided=%s expected=%s request_id=%s", redirectURI, "https://www.prooftamil.com/api/v1/auth/google/callback", reqID)
 	}
 
 	clientID := h.cfg.GoogleClientID
@@ -599,8 +589,8 @@ func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, redire
 
 	// Capture non-200 responses for debugging invalid_grant/redirect mismatches
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[OAUTH-DEBUG] Token exchange failed status=%d body=%s request_id=%s", resp.StatusCode, string(body), reqID)
-		return nil, errors.New("token exchange failed")
+		log.Printf("[OAUTH-ERROR] step=token_exchange status=%d body=%s request_id=%s", resp.StatusCode, string(body), reqID)
+		return nil, errors.New("token exchange failed: status=" + http.StatusText(resp.StatusCode))
         }
 
         var tokenResp map[string]interface{}
