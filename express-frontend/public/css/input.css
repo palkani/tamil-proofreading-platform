@@ -4,6 +4,26 @@
 
 /* Theme tokens */
 :root {
+  --bg-primary: #0b061a;
+  --bg-secondary: #120b2d;
+  --bg-surface: #1a1340;
+
+  --accent-primary: #7c5cff;
+  --accent-secondary: #5b8cff;
+  --accent-pink: #c084fc;
+
+  --text-primary: #ffffff;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+
+  --border-soft: rgba(255,255,255,0.08);
+
+  --gradient-primary: linear-gradient(
+    135deg,
+    #7c5cff 0%,
+    #5b8cff 50%,
+    #c084fc 100%
+  );
   --color-bg: #fdf2f8;            /* light pink background */
   --color-card: #ffffff;
   --color-text: #111827;          /* Dark text */
@@ -18,8 +38,12 @@
 
 @layer base {
   body {
-    background: var(--color-bg);
-    color: var(--color-text);
+    background: radial-gradient(
+      circle at top right,
+      rgba(124, 92, 255, 0.15),
+      transparent 60%
+    ), var(--bg-primary);
+    color: var(--text-primary);
   }
 
   a {
@@ -35,26 +59,32 @@
   .btn-primary {
     @apply px-4 py-2 rounded-lg transition-colors font-semibold;
     color: #ffffff;
-    background: var(--color-primary);
-    border: 1px solid var(--color-primary);
+    background: var(--gradient-primary);
+    border: 1px solid var(--border-soft);
+    box-shadow: 0 10px 30px rgba(124, 92, 255, 0.35);
+    border-radius: 10px;
+    transform: translateZ(0);
   }
   
   .btn-primary:hover {
-    background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-    border-color: var(--color-accent);
+    background: linear-gradient(135deg, #8d6dff, #6c95ff, #d1a8ff);
+    border-color: var(--border-soft);
+    transform: scale(1.03);
+    box-shadow: 0 12px 36px rgba(124, 92, 255, 0.45);
   }
   
   .btn-secondary {
     @apply px-4 py-2 rounded-lg transition-colors font-semibold;
-    color: var(--color-primary);
-    background: #ffffff;
-    border: 1px solid var(--color-primary);
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
   }
   
   .btn-secondary:hover {
-    background: var(--color-primary-ghost);
-    border-color: var(--color-primary-hover);
-    color: var(--color-primary-hover);
+    background: rgba(124, 92, 255, 0.08);
+    border-color: var(--border-soft);
+    color: #ffffff;
   }
   
   .input-field {
@@ -73,8 +103,9 @@
   
   .card {
     @apply rounded-xl shadow-sm;
-    background: var(--color-card);
-    border: 1px solid var(--color-border);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-soft);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.45);
   }
 }
 
@@ -93,6 +124,9 @@
   min-height: 500px;
   padding: 1rem;
   outline: none;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  color: var(--text-primary);
 }
 
 .editor-content:focus {
@@ -102,9 +136,10 @@
 /* Suggestion card styles */
 .suggestion-card {
   @apply border rounded-2xl p-4 transition-all;
-  background: var(--color-accent-light);
-  border-color: #f3e8ff;
-  color: var(--color-muted);
+  background: var(--bg-surface);
+  border-color: var(--border-soft);
+  color: var(--text-secondary);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.45);
 }
 
 .suggestion-card:hover {
