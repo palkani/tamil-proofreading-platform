@@ -157,8 +157,5 @@ app.use((err, req, res, next) => {
   });
 });
 
-module.exports = {
-  app,
-  appReady,
-  PORT,
-};
+// Vercel Serverless Function export: wrap express app as a handler (no app.listen)
+module.exports = (req, res) => app(req, res);
