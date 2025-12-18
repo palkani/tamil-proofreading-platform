@@ -1,2 +1,2 @@
-const handler = require('../app');
-module.exports = (req, res) => handler(req, res);
+const app = require('../app');
+module.exports = app;
