@@ -21,6 +21,9 @@ class WorkspaceController {
     this.lastAnalyzedText = '';
     this.isAnalyzing = false;
     this.autoAnalysisEnabled = true; // Enable auto-analysis by default
+    this.proofreadHighlights = null;
+    this.proofreadSuggestions = [];
+    this.proofreadSnapshots = [];
     // Transliteration typeahead state
     this.translitCache = new Map();
     this.translitAbort = null;
@@ -63,6 +66,22 @@ class WorkspaceController {
     if (editorElement) {
       this.editor = new TamilEditor(editorElement);
       this.editor.onChange = () => this.handleEditorChange();
+    }
+
+    // Transliteration V2 (feature-flagged)
+    if (window.TRANS_SUGGEST_V2 && window.TransliterationTypeahead && window.WorkspaceEditorAdapter && editorElement) {
+      this.translitTypeahead = new window.TransliterationTypeahead(
+        new window.WorkspaceEditorAdapter(editorElement),
+        {
+          endpoint: '/api/transliterate/suggest',
+          getMode: () => this.getMode(),
+        }
+      );
+    }
+
+    // Proofread V2 highlights (feature-flagged)
+    if (window.PROOFREAD_V2 && window.ProofreadHighlights && editorElement) {
+      this.proofreadHighlights = new window.ProofreadHighlights(editorElement);
     }
 
     // Initialize suggestions panel
@@ -355,6 +374,16 @@ class WorkspaceController {
       // Debug: Log the API response
       console.log('[AI Debug] API Response:', JSON.stringify(data, null, 2));
       
+      // Proofread V2 normalize + highlight
+      if (window.PROOFREAD_V2 && window.normalizeProofreadResponse) {
+        const norm = window.normalizeProofreadResponse(data, text);
+        this.proofreadSuggestions = norm;
+        if (this.proofreadHighlights) {
+          this.proofreadHighlights.clear();
+          this.proofreadHighlights.underline(norm);
+        }
+      }
+
       // Map backend response format to suggestions
       // API can return suggestions at different levels: data.result.suggestions, data.corrections, or data.suggestions
       const corrections = data.result?.suggestions || data.corrections || data.suggestions || [];
@@ -718,6 +747,17 @@ class WorkspaceController {
 
       this.suggestionsPanel.clearSuggestions();
       this.suggestionsPanel.addSuggestions(suggestions);
+
+      // Proofread V2 normalize + highlight for validate
+      if (window.PROOFREAD_V2 && window.normalizeProofreadResponse) {
+        const plain = this.editor.getPlainText();
+        const norm = window.normalizeProofreadResponse(data, plain);
+        this.proofreadSuggestions = norm;
+        if (this.proofreadHighlights) {
+          this.proofreadHighlights.clear();
+          this.proofreadHighlights.underline(norm);
+        }
+      }
 
       if (suggestions.length === 0) {
         this.showNotification('No transliteration issues found.', 'success');

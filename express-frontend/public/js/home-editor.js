@@ -75,6 +75,18 @@ class HomeEditor {
     };
     
     this.init();
+
+    // Transliteration V2 (feature-flagged)
+    const editorEl = this.editor;
+    if (window.TRANS_SUGGEST_V2 && window.TransliterationTypeahead && window.HomeEditorAdapter && editorEl) {
+      this.translitTypeahead = new window.TransliterationTypeahead(
+        new window.HomeEditorAdapter(editorEl),
+        {
+          endpoint: '/api/transliterate/suggest',
+          getMode: () => 'spoken',
+        }
+      );
+    }
   }
   
   init() {
