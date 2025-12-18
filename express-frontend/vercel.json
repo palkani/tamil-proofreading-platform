@@ -5,11 +5,7 @@
 
   "routes": [
     {
-      "src": "^/api/v1/(.*)",
-      "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/$1"
-    },
-    {
-      "src": "/(.*)",
+      "src": "^/api/(.*)",
       "dest": "/api/index.js"
     }
   ]
