@@ -5,15 +5,15 @@ async function apiFetch(path, options = {}, requireAuth = true) {
     console.warn('[API] Missing token for', path);
     throw new Error('login_required');
   }
-  const headers = {
-    ...(options.headers || {}),
-    ...(token && requireAuth ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  const headers = new Headers(options.headers || {});
+  if (requireAuth && token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
   console.log('[API] tokenPresent=', !!token, 'path=', path);
   const response = await fetch(path, { 
     ...options, 
     headers,
-    credentials: options.credentials || 'include'
+    credentials: 'include'
   });
 
   if (requireAuth && response.status === 401) {
