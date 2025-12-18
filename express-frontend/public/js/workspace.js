@@ -10,6 +10,7 @@ class WorkspaceController {
     this.suggestionsPanel = null;
     this.currentDraft = null;
     this.saveTimeout = null;
+    this.autosaveAuthBlocked = false;
     this.loading = false;
     this.currentMode = 'editor'; // 'list' or 'editor'
     this.drafts = [];
@@ -36,15 +37,16 @@ class WorkspaceController {
       throw new Error('login_required');
     }
 
-    const headers = {
-      ...(options.headers || {}),
-      ...(token && requireAuth ? { Authorization: `Bearer ${token}` } : {}),
-    };
+    // Build headers and force-set Authorization so it cannot be overwritten
+    const headers = new Headers(options.headers || {});
+    if (requireAuth && token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
 
-    const response = await fetch(url, { 
-      ...options, 
+    const response = await fetch(url, {
+      ...options,
       headers,
-      credentials: options.credentials || 'include'
+      credentials: 'include',
     });
 
     if (requireAuth && response.status === 401) {
@@ -554,6 +556,10 @@ class WorkspaceController {
       clearTimeout(this.saveTimeout);
     }
 
+    if (this.autosaveAuthBlocked) {
+      return;
+    }
+
     const token = localStorage.getItem('access_token');
     if (!token) {
       return;
@@ -565,6 +571,10 @@ class WorkspaceController {
   }
 
   async autosave() {
+    if (this.autosaveAuthBlocked) {
+      return;
+    }
+
     const token = localStorage.getItem('access_token');
     if (!token) {
       return;
@@ -626,6 +636,14 @@ class WorkspaceController {
         autosaveTimeEl.textContent = `Last saved: ${now.toLocaleTimeString()}`;
       }
     } catch (error) {
+      if (error.message === 'unauthorized') {
+        this.autosaveAuthBlocked = true;
+        if (saveStatusEl) {
+          saveStatusEl.innerHTML = '<span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>Session expired';
+        }
+        this.showNotification('Autosave paused: please log in again.', 'warning');
+        return;
+      }
       if (error.message === 'login_required' || error.message === 'unauthorized') {
         if (saveStatusEl) {
           saveStatusEl.innerHTML = '<span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>Login required';
