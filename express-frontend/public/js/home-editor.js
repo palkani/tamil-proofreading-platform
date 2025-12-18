@@ -478,12 +478,12 @@ class HomeEditor {
     this.removeTranslitAutocomplete();
     
     const box = document.createElement('div');
-    box.className = 'autocomplete-box bg-white border-2 border-orange-200 rounded-lg shadow-xl z-50';
+    box.className = 'autocomplete-box bg-white border-2 border-primary-200 rounded-lg shadow-xl z-50';
     box.style.cssText = 'position: fixed; max-height: 200px; overflow-y: auto; min-width: 150px;';
     
     suggestions.slice(0, 5).forEach((word) => {
       const item = document.createElement('div');
-      item.className = 'px-3 py-2 cursor-pointer tamil-text hover:bg-orange-100';
+      item.className = 'px-3 py-2 cursor-pointer tamil-text hover:bg-accent-50';
       item.textContent = word;
       item.style.fontSize = '1rem';
       
@@ -810,7 +810,7 @@ class HomeEditor {
     
     this.suggestionsContainer.innerHTML = `
       <div class="text-center text-gray-500 py-8">
-        <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-orange-200 border-t-orange-600 mb-4"></div>
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-primary-200 border-t-primary-600 mb-4"></div>
         <p class="text-sm">Analyzing your Tamil text...</p>
       </div>
     `;
@@ -865,9 +865,9 @@ class HomeEditor {
       const hasAlternatives = suggestion.alternatives && Array.isArray(suggestion.alternatives) && suggestion.alternatives.length > 0;
       
       return `
-        <div class="bg-orange-50 rounded-lg p-4 border-l-4 border-orange-500 mb-3">
+        <div class="bg-accent-50 rounded-lg p-4 border-l-4 border-primary-500 mb-3">
           <div class="flex items-start gap-2">
-            <span class="inline-block px-2 py-1 bg-orange-600 text-white text-xs rounded font-semibold flex-shrink-0 whitespace-nowrap">
+            <span class="inline-block px-2 py-1 bg-primary-600 text-white text-xs rounded font-semibold flex-shrink-0 whitespace-nowrap">
               ${typeLabel}
             </span>
             <div class="flex-1 min-w-0">
@@ -882,11 +882,11 @@ class HomeEditor {
                 <p class="text-sm text-gray-700 mb-2">${suggestion.reason}</p>
               ` : ''}
               ${hasAlternatives ? `
-                <div class="mt-2 pt-2 border-t border-orange-200">
+                <div class="mt-2 pt-2 border-t border-primary-200">
                   <p class="text-xs font-semibold text-gray-600 mb-1">Alternatives:</p>
                   <div class="space-y-1">
                     ${suggestion.alternatives.map(alt => `
-                      <p class="text-xs text-gray-600 pl-2 border-l-2 border-orange-300">
+                      <p class="text-xs text-gray-600 pl-2 border-l-2 border-primary-200">
                         "${alt}"
                       </p>
                     `).join('')}

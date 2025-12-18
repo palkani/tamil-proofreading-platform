@@ -436,7 +436,7 @@ class TamilEditor {
     if (existing) existing.remove();
 
     const box = document.createElement('div');
-    box.className = 'autocomplete-box bg-white border-2 border-orange-200 rounded-lg shadow-xl z-50';
+    box.className = 'autocomplete-box bg-white border-2 border-primary-200 rounded-lg shadow-xl z-50';
     box.style.cssText = 'position: fixed; max-height: 250px; overflow-y: auto; min-width: 200px;';
 
     suggestions.forEach((suggestion, index) => {
