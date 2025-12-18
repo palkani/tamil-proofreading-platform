@@ -1,5 +1,14 @@
 const express = require('express');
 const router = express.Router();
+const { attachUser } = require('../middleware/auth');
+
+// Ensure user attachment runs before auth guard
+router.use((req, res, next) => {
+  attachUser(req, res, () => {
+    console.log('[AUTH] workspace middleware order: attachUser executed, user present:', !!req.user);
+    next();
+  });
+});
 const { getSeoData } = require('../config/seo');
 
 // Workspace page - main editor (client-side auth only)
