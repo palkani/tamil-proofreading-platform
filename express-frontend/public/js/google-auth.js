@@ -31,29 +31,17 @@ function triggerGoogleSignIn() {
     const isCloudRun = window.location.hostname.includes('run.app');
     const isProduction = window.location.hostname.includes('prooftamil.com');
     
-    // Always use the single allowed redirect URI to avoid mismatches
-    const redirectUri = 'https://www.prooftamil.com/api/v1/auth/google/callback';
+    // Redirect directly to backend Cloud Run auth endpoint (no proxy)
+    const backendAuthUrl = 'https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/auth/google';
     
     console.log('[GOOGLE-AUTH] Production Mode:', isProduction);
     console.log('[GOOGLE-AUTH] Cloud Run:', isCloudRun);
     console.log('[GOOGLE-AUTH] Hostname:', window.location.hostname);
-    console.log('[GOOGLE-AUTH] Redirect URI:', redirectUri);
+    console.log('[GOOGLE-AUTH] Backend Auth URL:', backendAuthUrl);
     console.log('[GOOGLE-AUTH] Client ID:', googleClientId.substring(0, 20) + '...');
-    
-    // Build Google OAuth URL
-    const params = new URLSearchParams({
-      client_id: googleClientId,
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: 'openid email profile',
-      access_type: 'offline'
-    });
-    
-    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-    
-    console.log('[GOOGLE-AUTH] Full OAuth URL:', googleAuthUrl);
-    console.log('[GOOGLE-AUTH] Redirecting to Google OAuth...');
-    window.location.href = googleAuthUrl;
+
+    // Hand off to backend which owns the full OAuth flow
+    window.location.href = backendAuthUrl;
     
   } catch (error) {
     console.error('Error triggering Google Sign-In:', error);
