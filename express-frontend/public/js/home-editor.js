@@ -76,14 +76,16 @@ class HomeEditor {
     
     this.init();
 
-    // Initialize transliteration typeahead
+    // Transliteration V2 (feature-flagged)
     const editorEl = this.editor;
-    if (window.TranslitTypeahead && editorEl) {
-      this.translitTypeahead = new window.TranslitTypeahead({
-        editorEl,
-        getMode: () => 'spoken',
-        endpoint: '/api/transliterate/suggest',
-      });
+    if (window.TRANS_SUGGEST_V2 && window.TransliterationTypeahead && window.HomeEditorAdapter && editorEl) {
+      this.translitTypeahead = new window.TransliterationTypeahead(
+        new window.HomeEditorAdapter(editorEl),
+        {
+          endpoint: '/api/transliterate/suggest',
+          getMode: () => 'spoken',
+        }
+      );
     }
   }
   
