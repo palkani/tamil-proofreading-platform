@@ -146,6 +146,7 @@ func main() {
 		api.POST("/auth/refresh", h.RefreshAccessToken)
 		api.POST("/auth/otp/send", h.SendOTP)
 		api.POST("/auth/otp/verify", h.VerifyOTP)
+		api.GET("/auth/google", h.GoogleAuthStart)
 		api.POST("/auth/social", h.SocialLogin)
 		api.GET("/auth/google/callback", h.GoogleCallback)
 		api.POST("/auth/password-strength", h.CheckPasswordStrength)

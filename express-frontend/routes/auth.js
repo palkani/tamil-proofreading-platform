@@ -59,21 +59,15 @@ router.post('/forgot-password', (req, res) => forward(req, res, '/auth/forgot-pa
 router.post('/reset-password', (req, res) => forward(req, res, '/auth/reset-password', 'post'));
 router.get('/me', (req, res) => forward(req, res, '/auth/me', 'get'));
 
-// Google OAuth is handled by the backend; fail fast if misrouted
+// Google OAuth now owned by backend Cloud Run; redirect there directly
 router.get('/google', (req, res) => {
-  res.status(501).json({ error: 'Google OAuth is handled by backend service' });
+  res.redirect('https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/auth/google');
 });
 router.get('/google/callback', (req, res) => {
-  // Forward any accidental callback hits to the backend handler to avoid 501s
-  const qs = querystring.stringify(req.query);
-  const target = `/api/v1/auth/google/callback${qs ? `?${qs}` : ''}`;
-  return res.redirect(target);
+  res.redirect('https://prooftamil.com/login?error=oauth_flow_invalid_path');
 });
 router.get('/v1/auth/google/callback', (req, res) => {
-  // Normalize legacy path that was missing /api prefix
-  const qs = querystring.stringify(req.query);
-  const target = `/api/v1/auth/google/callback${qs ? `?${qs}` : ''}`;
-  return res.redirect(target);
+  res.redirect('https://prooftamil.com/login?error=oauth_flow_invalid_path');
 });
 
 module.exports = router;
