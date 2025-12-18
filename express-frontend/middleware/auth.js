@@ -7,6 +7,7 @@ const getAccessTokenFromRequest = (req) => {
   }
 
   if (req.cookies && req.cookies.access_token) {
+    console.log('[AUTH] access_token cookie detected; populating req.user');
     return req.cookies.access_token;
   }
 
