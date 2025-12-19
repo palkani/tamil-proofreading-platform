@@ -9,7 +9,7 @@
   class TransliterationTypeahead {
     constructor(adapter, opts = {}) {
       this.adapter = adapter;
-      this.endpoint = opts.endpoint || '/api/transliterate/suggest';
+      this.endpoint = opts.endpoint || '/api/v1/transliterate/suggest';
       this.getMode = opts.getMode || (() => 'spoken');
       this.cache = new Map();
       this.timer = null;

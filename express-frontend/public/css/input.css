@@ -124,9 +124,9 @@
   min-height: 500px;
   padding: 1rem;
   outline: none;
-  background: var(--bg-surface);
+  background: #ffffff;
   border: 1px solid var(--border-soft);
-  color: var(--text-primary);
+  color: #111827;
 }
 
 .editor-content:focus {

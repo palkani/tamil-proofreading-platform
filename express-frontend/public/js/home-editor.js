@@ -82,7 +82,7 @@ class HomeEditor {
       this.translitTypeahead = new window.TransliterationTypeahead(
         new window.HomeEditorAdapter(editorEl),
         {
-          endpoint: '/api/transliterate/suggest',
+          endpoint: '/api/v1/transliterate/suggest',
           getMode: () => 'spoken',
         }
       );
@@ -268,7 +268,7 @@ class HomeEditor {
     if (this.translitTimeout) clearTimeout(this.translitTimeout);
     this.translitTimeout = setTimeout(async () => {
       try {
-        const response = await apiFetch('/api/transliterate/suggest?q=' + encodeURIComponent(lastWord) + '&limit=8&mode=spoken', {
+        const response = await apiFetch('/api/v1/transliterate/suggest?q=' + encodeURIComponent(lastWord) + '&limit=8&mode=spoken', {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         }, false);
@@ -354,7 +354,7 @@ class HomeEditor {
       return;
     }
     try {
-      const response = await apiFetch('/api/transliterate/suggest?q=' + encodeURIComponent(englishWord) + '&limit=8&mode=spoken', {
+      const response = await apiFetch('/api/v1/transliterate/suggest?q=' + encodeURIComponent(englishWord) + '&limit=8&mode=spoken', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });

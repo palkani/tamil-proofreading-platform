@@ -13,7 +13,7 @@
       this.editorEl = opts.editorEl;
       this.getMode = opts.getMode || (() => 'spoken');
       this.endpoint =
-        opts.endpoint || '/api/transliterate/suggest';
+        opts.endpoint || '/api/v1/transliterate/suggest';
       this.cache = new Map();
       this.abortController = null;
       this.timer = null;
