@@ -47,10 +47,20 @@ function findNearestOccurrence(text, searchWord, approxIndex) {
 // Apply a text replacement
 function applyReplacement(text, original, replacement, approxIndex = null) {
   if (!text || !original) return { text, changed: false };
-  
+
+  // Try start_index if provided
+  if (typeof approxIndex === 'number' && approxIndex >= 0 && approxIndex <= text.length) {
+    const candidate = text.slice(approxIndex, approxIndex + original.length);
+    if (candidate === original) {
+      const newText = text.slice(0, approxIndex) + replacement + text.slice(approxIndex + original.length);
+      return { text: newText, changed: newText !== text };
+    }
+  }
+
   // Try exact match first
-  if (text.includes(original)) {
-    const newText = text.replace(original, replacement);
+  const exactIdx = text.indexOf(original);
+  if (exactIdx !== -1) {
+    const newText = text.slice(0, exactIdx) + replacement + text.slice(exactIdx + original.length);
     return { text: newText, changed: newText !== text };
   }
   

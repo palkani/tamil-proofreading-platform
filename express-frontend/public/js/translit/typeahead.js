@@ -139,17 +139,17 @@
           [];
       return (arr || []).map((s, i) => {
         if (typeof s === 'string') {
-          return { ta: s, score: 1, label: 'Recommended', usage: 'Both', reason: '', id: `s-${i}` };
+          return { word: s, score: 1, label: 'Recommended', usage: 'Both', reason: '', id: `s-${i}` };
         }
         return {
-          ta: s.ta || s.word || s.text || s.suggestion || '',
+          word: s.word || s.ta || s.text || s.suggestion || '',
           score: s.score || s.confidence || 0,
           label: s.label || 'Suggested',
           usage: s.usage || s.mode || 'Both',
           reason: s.reason || s.description || '',
           id: `s-${i}`,
         };
-      }).filter(s => s.ta);
+      }).filter(s => s.word);
     }
 
     renderDropdown(items, info) {
@@ -174,13 +174,20 @@
       dropdown.style.left = `${left}px`;
       dropdown.style.top = `${top}px`;
 
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'px-3 py-2 text-sm text-gray-500';
+        empty.textContent = 'No suggestions found';
+        dropdown.appendChild(empty);
+      }
+
       items.slice(0, MAX).forEach((s, idx) => {
         const el = document.createElement('div');
         el.dataset.idx = idx;
         el.className = 'px-3 py-2 flex flex-col gap-1 cursor-pointer hover:bg-purple-50 text-sm';
         el.innerHTML = `
           <div class="flex items-center justify-between">
-            <span class="font-semibold text-gray-900">${s.ta}</span>
+            <span class="font-semibold text-gray-900">${s.word}</span>
             <span class="text-xs text-gray-500">${Math.round((s.score || 0) * 100)}%</span>
           </div>
           <div class="text-xs text-gray-500 flex gap-2">
