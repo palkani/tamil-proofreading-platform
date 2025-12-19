@@ -141,6 +141,7 @@ func main() {
 	api := router.Group("/api/v1")
 	{
 		api.GET("/whoami", h.WhoAmI) // diagnostic
+		api.GET("/ime/suggest", h.IMESuggest)
 		// Public routes (rate-limited per IP)
 		api.Use(middleware.RateLimitMiddleware(90, time.Minute))
 		api.POST("/auth/register", h.Register)
