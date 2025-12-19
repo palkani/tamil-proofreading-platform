@@ -278,10 +278,14 @@ class HomeEditor {
         if (response.ok) {
           const data = await response.json();
           console.log('[AUTOCOMPLETE] API response:', data);
-          if (data.success && data.suggestions?.length > 0) {
-            this.autocompleteCache[lastWord] = data.suggestions;
-            this.currentSuggestions = data.suggestions;
-            this.renderSuggestions(data.suggestions);
+          if (data.success) {
+            const normalized = (data.suggestions || []).map((s) => ({
+              word: s.word || s.ta || s.text || s.suggestion || '',
+              score: s.score || s.confidence || 0,
+            })).filter(s => s.word);
+            this.autocompleteCache[lastWord] = normalized;
+            this.currentSuggestions = normalized;
+            this.renderSuggestions(normalized);
           } else {
             console.warn('[AUTOCOMPLETE] No suggestions in response');
           }
@@ -301,7 +305,9 @@ class HomeEditor {
     }
     
     if (!suggestions?.length) {
-      this.autocompleteBox.classList.add('hidden');
+      this.autocompleteBox.classList.remove('hidden');
+      const container = this.autocompleteBox.querySelector('.p-3');
+      if (container) container.innerHTML = `<div class="p-3 text-sm text-gray-500">No suggestions found</div>`;
       return;
     }
 
@@ -319,6 +325,7 @@ class HomeEditor {
              data-index="${idx}" onclick="homeEditor.insertSuggestion(${idx})">
           <span class="text-lg font-semibold ${idx === 0 ? 'text-purple-600' : 'text-gray-500'}">${idx + 1}</span>
           <span class="ml-3 text-lg text-gray-900">${tamilWord}</span>
+          <span class="ml-auto text-xs text-gray-500">${Math.round((item.score || 0) * 100)}%</span>
         </div>
       `}).join('');
       

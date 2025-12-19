@@ -155,17 +155,17 @@
             [];
       return (arr || []).map((item, idx) => {
         if (typeof item === 'string') {
-          return { ta: item, score: 1, label: 'Recommended', usage: 'Both', id: `s-${idx}` };
+          return { word: item, score: 1, label: 'Recommended', usage: 'Both', id: `s-${idx}` };
         }
         return {
-          ta: item.ta || item.word || item.text || item.suggestion || '',
+          word: item.word || item.ta || item.text || item.suggestion || '',
           score: item.score || item.confidence || 0,
           label: item.label || 'Recommended',
           usage: item.usage || item.mode || 'Both',
           reason: item.reason || item.description || '',
           id: `s-${idx}`,
         };
-      }).filter(s => s.ta);
+      }).filter(s => s.word);
     }
 
     renderDropdown(suggestions) {
@@ -180,6 +180,13 @@
       dropdown.style.top = `${rect.bottom + 4}px`;
       dropdown.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 220))}px`;
 
+      if (!suggestions.length) {
+        const empty = document.createElement('div');
+        empty.className = 'px-3 py-2 text-sm text-gray-500';
+        empty.textContent = 'No suggestions found';
+        dropdown.appendChild(empty);
+      }
+
       suggestions.slice(0, MAX_SUGGESTIONS).forEach((sugg, idx) => {
         const item = document.createElement('div');
         item.dataset.idx = idx;
@@ -187,7 +194,7 @@
           'px-3 py-2 flex flex-col cursor-pointer hover:bg-purple-50 text-sm';
         item.innerHTML = `
           <div class="flex items-center justify-between">
-            <span class="font-semibold text-gray-900">${sugg.ta}</span>
+            <span class="font-semibold text-gray-900">${sugg.word}</span>
             <span class="text-xs text-gray-500">${Math.round((sugg.score || 0) * 100)}%</span>
           </div>
           <div class="text-xs text-gray-500 flex gap-2">

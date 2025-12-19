@@ -192,6 +192,14 @@ class WorkspaceController {
     status.textContent = `Suggestions for "${word}"`;
     box.classList.remove('hidden');
 
+    if (!suggestions.length) {
+      const li = document.createElement('li');
+      li.className = 'flex px-2 py-1 text-sm text-gray-500';
+      li.textContent = 'No suggestions found';
+      list.appendChild(li);
+      return;
+    }
+
     suggestions.forEach((sugg) => {
       const li = document.createElement('li');
       const label = sugg.label || 'Recommended';
@@ -200,7 +208,7 @@ class WorkspaceController {
       li.className = 'flex flex-col px-2 py-1 rounded hover:bg-purple-50 cursor-pointer';
       li.innerHTML = `
         <div class="flex items-center justify-between">
-          <span class="font-semibold text-purple-700">${sugg.ta}</span>
+          <span class="font-semibold text-purple-700">${sugg.word}</span>
           <span class="text-xs text-gray-500">${Math.round((sugg.score || 0) * 100)}%</span>
         </div>
         <div class="text-xs text-gray-600 flex items-center gap-2">
@@ -210,7 +218,7 @@ class WorkspaceController {
         ${reason ? `<div class="text-xs text-gray-500 mt-1">${reason}</div>` : ''}
       `;
       li.addEventListener('click', () => {
-        this.replaceLastWord(word, sugg.ta);
+        this.replaceLastWord(word, sugg.word);
       });
       list.appendChild(li);
     });
@@ -349,8 +357,13 @@ class WorkspaceController {
       }
 
       // Map backend response format to suggestions
-      // API can return suggestions at different levels: data.result.suggestions, data.corrections, or data.suggestions
-      const corrections = data.result?.suggestions || data.corrections || data.suggestions || [];
+      // API can return suggestions at different levels: submission.suggestions (preferred), result.suggestions, corrections, or suggestions
+      const corrections =
+        data.submission?.suggestions ||
+        data.result?.suggestions ||
+        data.corrections ||
+        data.suggestions ||
+        [];
       console.log('[AI Debug] Extracted corrections:', corrections.length, 'items');
       const geminiSuggestions = corrections
         // FILTER: Only include suggestions where original ≠ corrected (safety filter)
