@@ -15,8 +15,12 @@ RUN go mod download
 # Copy source code
 COPY backend/ .
 
-# Build application with optimizations (CGO disabled since no C dependencies used)
-RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-s -w" -o server ./cmd/server
+# Build application
+# 1) Preflight build without optimizations to surface any compiler errors clearly
+# 2) Final optimized build for Cloud Run (static, CGO disabled)
+RUN go env && go version && \
+    CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/server && \
+    CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-s -w" -o server ./cmd/server
 
 # Runtime stage
 FROM alpine:latest
