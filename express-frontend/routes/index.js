@@ -36,8 +36,12 @@ router.get('/how-to-use', (req, res) => {
   });
 });
 
-// Login page - client-side auth only
-router.get('/login', redirectIfAuth, (req, res) => {
+// Login page - redirect authenticated users to workspace
+router.get('/login', (req, res) => {
+  if (req.user) {
+    console.log('[AUTH] user already authenticated, redirecting to /workspace');
+    return res.redirect('/workspace');
+  }
   const seo = getSeoData('login');
   res.render('pages/login', { 
     title: seo.title,
@@ -51,8 +55,12 @@ router.get('/login', redirectIfAuth, (req, res) => {
 // Resolve Google Client ID once (prefer NEXT_PUBLIC_* so Vercel runtime matches frontend expectation)
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
 
-// Register page - client-side auth only
-router.get('/register', redirectIfAuth, (req, res) => {
+// Register page - redirect authenticated users to workspace
+router.get('/register', (req, res) => {
+  if (req.user) {
+    console.log('[AUTH] user already authenticated, redirecting to /workspace');
+    return res.redirect('/workspace');
+  }
   const seo = getSeoData('register');
   res.render('pages/register', { 
     title: seo.title,
