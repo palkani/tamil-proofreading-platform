@@ -9,6 +9,10 @@
       "dest": "/api/index.js"
     },
     {
+      "src": "^/workspace$",
+      "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/workspace"
+    },
+    {
       "src": "^/api/v1/(.*)",
       "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/$1"
     },
