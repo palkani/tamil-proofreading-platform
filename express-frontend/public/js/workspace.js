@@ -64,7 +64,7 @@ class WorkspaceController {
       this.translitTypeahead = new window.TransliterationTypeahead(
         new window.WorkspaceEditorAdapter(editorElement),
         {
-          endpoint: '/api/transliterate/suggest',
+          endpoint: '/api/v1/transliterate/suggest',
           getMode: () => this.getMode(),
         }
       );
@@ -267,7 +267,7 @@ class WorkspaceController {
       this.translitAbort = new AbortController();
       try {
         const mode = this.getMode();
-        const res = await this.apiFetch(`/api/transliterate/suggest?q=${encodeURIComponent(word)}&limit=8&mode=${encodeURIComponent(mode)}`, {
+        const res = await this.apiFetch(`/api/v1/transliterate/suggest?q=${encodeURIComponent(word)}&limit=8&mode=${encodeURIComponent(mode)}`, {
           headers: {},
           signal: this.translitAbort.signal,
         });
