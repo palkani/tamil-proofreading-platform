@@ -32,19 +32,9 @@ class WorkspaceController {
     this.init();
   }
 
-  // Unified API helper to attach Authorization consistently
+  // Unified API helper: cookie-based auth only
   async apiFetch(url, options = {}, requireAuth = true) {
-    const token = localStorage.getItem('access_token');
-    if (requireAuth && !token) {
-      this.showNotification('Please log in to continue.', 'warning');
-      throw new Error('login_required');
-    }
-
-    // Build headers and force-set Authorization so it cannot be overwritten
     const headers = new Headers(options.headers || {});
-    if (requireAuth && token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
 
     const response = await fetch(url, {
       ...options,
@@ -53,7 +43,8 @@ class WorkspaceController {
     });
 
     if (requireAuth && response.status === 401) {
-      this.showNotification('Session expired. Please log in again.', 'warning');
+      console.warn('[AUTH] Session expired, redirecting to /login');
+      window.location.href = '/login';
       throw new Error('unauthorized');
     }
 
@@ -254,12 +245,6 @@ class WorkspaceController {
   }
 
   updateTranslitSuggestions() {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      this.clearTranslitSuggestions();
-      return;
-    }
-
     const word = this.getCurrentWord();
     if (!word || word.length < 2 || !/^[a-zA-Z]+$/.test(word)) {
       this.clearTranslitSuggestions();
@@ -279,12 +264,6 @@ class WorkspaceController {
     }
 
     this.translitTimer = setTimeout(async () => {
-      const activeToken = localStorage.getItem('access_token');
-      if (!activeToken) {
-        this.clearTranslitSuggestions();
-        return;
-      }
-
       this.translitAbort = new AbortController();
       try {
         const mode = this.getMode();
@@ -299,10 +278,6 @@ class WorkspaceController {
         this.renderTranslitSuggestions(word, suggestions);
       } catch (err) {
         if (err.name === 'AbortError') return;
-        if (err.message === 'login_required' || err.message === 'unauthorized') {
-          this.showNotification('Please log in to get suggestions.', 'warning');
-          return;
-        }
         console.error('[Translit] Suggest error:', err);
       }
     }, 300);
@@ -313,11 +288,6 @@ class WorkspaceController {
       clearTimeout(this.analysisTimeout);
     }
 
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      return;
-    }
-
     // Debounce: Wait 1 second after user stops typing
     this.analysisTimeout = setTimeout(() => {
       this.autoAnalyze();
@@ -325,12 +295,6 @@ class WorkspaceController {
   }
   
   async autoAnalyze() {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      this.updateAnalysisStatus('');
-      return;
-    }
-
     const text = this.editor.getPlainText().trim();
     
     // Skip if text is too short (minimum 5 words or 20 characters)
@@ -518,12 +482,6 @@ class WorkspaceController {
       return;
     }
 
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      this.showNotification('Please log in to translate.', 'warning');
-      return;
-    }
-    
     // Client must not call Google APIs directly; route through backend submit endpoint instead.
     const translateBtn = document.getElementById('translate-english-btn');
     const originalBtnContent = translateBtn ? translateBtn.innerHTML : '';
@@ -533,7 +491,6 @@ class WorkspaceController {
     }
     
     try {
-      const token = localStorage.getItem('access_token');
       const response = await this.apiFetch('/api/submit', {
         method: 'POST',
         headers: {
@@ -589,11 +546,6 @@ class WorkspaceController {
       return;
     }
 
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      return;
-    }
-
     this.saveTimeout = setTimeout(() => {
       this.autosave();
     }, 2000);
@@ -601,11 +553,6 @@ class WorkspaceController {
 
   async autosave() {
     if (this.autosaveAuthBlocked) {
-      return;
-    }
-
-    const token = localStorage.getItem('access_token');
-    if (!token) {
       return;
     }
 
@@ -712,7 +659,6 @@ class WorkspaceController {
     }
 
     try {
-      const token = localStorage.getItem('access_token');
       // Client must not call Google APIs directly; use backend validate endpoint instead.
       const response = await this.apiFetch('/api/validate', {
         method: 'POST',
