@@ -67,6 +67,7 @@ function requireAuth(req, res, next) {
   }
 
   if (req.user) {
+    console.log(`[AUTH] requireAuth passed for path=${req.path} user_id=${req.user.id || 'unknown'}`);
     return next();
   }
 
