@@ -129,6 +129,13 @@
   color: #111827;
 }
 
+/* Ensure any contenteditable editor surface stays white with dark text */
+#editor[contenteditable],
+[contenteditable="true"] {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
 .editor-content:focus {
   outline: none;
 }

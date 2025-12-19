@@ -309,6 +309,7 @@ class WorkspaceController {
     const wordCount = countWords(text);
     if (wordCount < 5 || text.length < 20) {
       this.updateAnalysisStatus('');
+      this.showNotification('Type at least 5 words to get AI grammar suggestions', 'info');
       return;
     }
     
@@ -492,6 +493,12 @@ class WorkspaceController {
     
     if (!text) {
       alert('Please enter some English text to translate.');
+      return;
+    }
+
+    const wc = countWords(text);
+    if (wc < 5 || text.length < 20) {
+      this.showNotification('Type at least 5 words to get AI grammar suggestions', 'info');
       return;
     }
 
