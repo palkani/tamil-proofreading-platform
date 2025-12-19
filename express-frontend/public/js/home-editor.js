@@ -689,6 +689,13 @@ class HomeEditor {
     }
 
     const text = this.getPlainText();
+    const wc = this.countWords(text);
+    if (wc < 5 || text.length < 20) {
+      this.showInfo('Type at least 5 words to get AI grammar suggestions');
+      this.lastAnalyzedText = '';
+      this.displaySuggestions([]);
+      return;
+    }
     
     // If empty, clear suggestions and reset
     if (!text) {
@@ -767,7 +774,9 @@ class HomeEditor {
       // It could be at data.result.suggestions, data.result.corrections, or data.corrections
       let rawSuggestions = [];
       
-      if (data.result?.suggestions) {
+      if (data.submission?.suggestions) {
+        rawSuggestions = data.submission.suggestions;
+      } else if (data.result?.suggestions) {
         rawSuggestions = data.result.suggestions;
       } else if (data.result?.corrections) {
         rawSuggestions = data.result.corrections;
