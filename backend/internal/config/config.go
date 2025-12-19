@@ -36,6 +36,7 @@ type Config struct {
 	TwilioPhoneNumber         string
 	AksharaURL                string
 	IMEEnabled                bool
+	IMECacheEnabled           bool
 }
 
 func Load() *Config {
@@ -84,6 +85,7 @@ func Load() *Config {
 		TwilioPhoneNumber:     getEnv("TWILIO_PHONE_NUMBER", ""),
 		AksharaURL:            getEnv("AKSHARA_URL", ""),
 		IMEEnabled:            strings.ToLower(getEnv("IME_ENABLED", "false")) == "true",
+		IMECacheEnabled:       strings.ToLower(getEnv("IME_CACHE_ENABLED", "true")) == "true",
 	}
 }
 

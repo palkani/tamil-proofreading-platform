@@ -40,7 +40,7 @@ func NewClient(baseURL string) *Client {
 	return &Client{
 		BaseURL: strings.TrimRight(baseURL, "/"),
 		HTTP: &http.Client{
-			Timeout: 300 * time.Millisecond,
+			Timeout: 2 * time.Second,
 		},
 	}
 }
@@ -51,7 +51,11 @@ func (c *Client) Transliterate(ctx context.Context, text, mode string) ([]string
 	}
 	payload := aksharaRequest{Text: text, Mode: mode}
 	b, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/transliterate", bytes.NewReader(b))
+	url := c.BaseURL
+	if !strings.HasSuffix(url, "/transliterate") {
+		url = url + "/transliterate"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}

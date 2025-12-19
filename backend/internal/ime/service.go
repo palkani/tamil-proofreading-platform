@@ -14,20 +14,26 @@ var tamilRegex = regexp.MustCompile("^[\u0B80-\u0BFF\\s]+$")
 var latinRegex = regexp.MustCompile("^[A-Za-z\\s]+$")
 
 type Service struct {
-	client   *Client
-	cache    *Cache
-	freq     freqDict
-	basePath string
-	enabled  bool
+	client       *Client
+	cache        *Cache
+	freq         freqDict
+	basePath     string
+	enabled      bool
+	cacheEnabled bool
 }
 
-func NewService(basePath, aksharaURL string, enabled bool) *Service {
+func NewService(basePath, aksharaURL string, enabled bool, cacheEnabled bool) *Service {
+	var cache *Cache
+	if cacheEnabled {
+		cache = NewCache(10 * time.Minute)
+	}
 	return &Service{
-		client:   NewClient(aksharaURL),
-		cache:    NewCache(6 * time.Hour),
-		freq:     loadFreqDict(basePath),
-		basePath: basePath,
-		enabled:  enabled,
+		client:       NewClient(aksharaURL),
+		cache:        cache,
+		freq:         loadFreqDict(basePath),
+		basePath:     basePath,
+		enabled:      enabled,
+		cacheEnabled: cacheEnabled,
 	}
 }
 
@@ -88,38 +94,87 @@ func (s *Service) Suggest(ctx context.Context, q, mode string, limit int) (cands
 		return []Candidate{}, meta
 	}
 
-	if cached, ok := s.cache.Get(s.key(mode, q, limit)); ok {
-		meta["cache"] = "hit"
-		meta["latency_ms"] = time.Since(start).Milliseconds()
-		return cached, meta
+	if s.cacheEnabled && s.cache != nil {
+		if cached, ok := s.cache.Get(s.key(mode, q, limit)); ok {
+			meta["cache"] = "hit"
+			meta["latency_ms"] = time.Since(start).Milliseconds()
+			return cached, meta
+		}
 	}
+	meta["cache"] = "miss"
 
 	phonetic := normalizePhonetic(q)
 	words, err := s.client.Transliterate(ctx, phonetic, mode)
 	if err != nil {
-		log.Printf("[IME] aksharamukha error q=%q err=%v", q, err)
+		log.Printf("[AKSHARA] request_id=%v q=%q err=%v", ctx.Value("request_id"), q, err)
 		meta["engine"] = "aksharamukha_error"
 		meta["latency_ms"] = time.Since(start).Milliseconds()
 		return []Candidate{}, meta
 	}
 
-	seen := make(map[string]bool)
-	for _, w := range words {
-		w = strings.TrimSpace(w)
-		if w == "" || !tamilRegex.MatchString(w) || seen[w] {
-			continue
+	reqID := ctx.Value("request_id")
+	cands = s.rankCandidates(words, q, limit, reqID)
+
+	if s.cacheEnabled && s.cache != nil {
+		s.cache.Set(s.key(mode, q, limit), cands)
+	}
+	meta["latency_ms"] = time.Since(start).Milliseconds()
+	return cands, meta
+}
+
+func (s *Service) rankCandidates(words []string, original string, limit int, reqID interface{}) []Candidate {
+	cands := []Candidate{}
+	if len(words) == 0 {
+		return cands
+	}
+	seen := make(map[string]float64)
+
+	add := func(word string, score float64, reason string) {
+		word = strings.TrimSpace(word)
+		if word == "" || !tamilRegex.MatchString(word) {
+			return
 		}
-		seen[w] = true
-		base := 0.75
-		freqScore := s.freq.Score(w)
-		final := 0.65*base + 0.35*freqScore
+		if prev, ok := seen[word]; ok && prev >= score {
+			return
+		}
+		seen[word] = score
 		cands = append(cands, Candidate{
-			Word:       w,
-			Score:      final,
+			Word:       word,
+			Score:      score,
 			Source:     "aksharamukha",
-			RankReason: strings.TrimSpace(fmt.Sprintf("base=%.2f freq=%.2f final=%.2f", base, freqScore, final)),
+			RankReason: reason,
 		})
 	}
+
+	// base candidates
+	for _, w := range words {
+		add(w, 1.0, "base=1.0")
+	}
+
+	// common fixes
+	common := map[string]string{
+		"enathu":  "எனது",
+		"enadu":   "எனது",
+		"en":      "என்",
+		"ena":     "என",
+		"enbathu": "என்பது",
+	}
+	lower := strings.ToLower(strings.ReplaceAll(original, " ", ""))
+	if fixed, ok := common[lower]; ok {
+		add(fixed, 0.9, "common_map")
+	}
+
+	// punctuation and collapsed variants
+	for _, w := range words {
+		if strings.ContainsAny(original, ".!?") && !strings.HasSuffix(w, ".") {
+			add(w+"...", 0.85, "punctuation_variant")
+		}
+		if strings.Contains(w, " ") {
+			add(strings.ReplaceAll(w, " ", ""), 0.8, "collapsed_variant")
+		}
+	}
+
+	log.Printf("[RANK] request_id=%v candidates_before=%d after_dedupe=%d returning=%d", reqID, len(words), len(seen), len(cands))
 
 	sort.Slice(cands, func(i, j int) bool {
 		return cands[i].Score > cands[j].Score
@@ -127,7 +182,5 @@ func (s *Service) Suggest(ctx context.Context, q, mode string, limit int) (cands
 	if len(cands) > limit {
 		cands = cands[:limit]
 	}
-	s.cache.Set(s.key(mode, q, limit), cands)
-	meta["latency_ms"] = time.Since(start).Milliseconds()
-	return cands, meta
+	return cands
 }

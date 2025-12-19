@@ -52,10 +52,10 @@ func (h *Handlers) IMESuggest(c *gin.Context) {
 	if h.imeSvc == nil || !h.imeEnabled {
 		log.Printf(`[IME] event=disabled request_id=%s q=%q`, reqID, q)
 		c.JSON(http.StatusOK, gin.H{
-			"success":    true,
-			"query":      q,
-			"mode":       mode,
-			"candidates": []ime.Candidate{},
+			"success":     true,
+			"query":       q,
+			"mode":        mode,
+			"suggestions": []map[string]interface{}{},
 			"meta": gin.H{
 				"cache":      "miss",
 				"latency_ms": 0,
@@ -67,18 +67,34 @@ func (h *Handlers) IMESuggest(c *gin.Context) {
 	}
 
 	start := time.Now()
-	cands, meta := h.imeSvc.Suggest(c.Request.Context(), q, mode, limit)
+	ctx := c.Request.Context()
+	if reqID != "" {
+		ctx = context.WithValue(ctx, "request_id", reqID)
+	}
+	cands, meta := h.imeSvc.Suggest(ctx, q, mode, limit)
 	meta["request_id"] = reqID
 	meta["duration_ms"] = time.Since(start).Milliseconds()
 	cacheState, _ := meta["cache"]
 	log.Printf(`[IME] event=response request_id=%s q=%q mode=%s limit=%d cache=%v count=%d latency_ms=%v`,
 		reqID, q, mode, limit, cacheState, len(cands), meta["latency_ms"])
 
+	suggestions := make([]map[string]interface{}, 0, len(cands))
+	for _, cnd := range cands {
+		suggestions = append(suggestions, map[string]interface{}{
+			"word":  cnd.Word,
+			"ta":    cnd.Word, // backward compatibility
+			"score": cnd.Score,
+			"source": cnd.Source,
+			"rank_reason": cnd.RankReason,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"success":    true,
-		"query":      q,
-		"mode":       mode,
-		"candidates": cands,
-		"meta":       meta,
+		"success":     true,
+		"query":       q,
+		"mode":        mode,
+		"suggestions": suggestions,
+		"candidates":  suggestions, // backward compatibility
+		"meta":        meta,
 	})
 }

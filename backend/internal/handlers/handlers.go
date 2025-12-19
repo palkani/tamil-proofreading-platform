@@ -50,7 +50,7 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	llmService := llm.NewLLMService(cfg.OpenAIAPIKey, cfg.GoogleGenAIKey, nlpService)
 	paymentService := payment.NewPaymentService(db, cfg)
 
-	imeSvc := ime.NewService(".", cfg.AksharaURL, cfg.IMEEnabled)
+	imeSvc := ime.NewService(".", cfg.AksharaURL, cfg.IMEEnabled, cfg.IMECacheEnabled)
 
 	h := &Handlers{
 		db:             db,
