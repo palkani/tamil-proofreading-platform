@@ -9,7 +9,6 @@ const authRoutes = require('./routes/auth');
 const { attachUser } = require('./middleware/auth');
 
 const indexRouter = require('./routes/index');
-const workspaceRouter = require('./routes/workspace');
 const apiRouter = require('./routes/api');
 const processRouter = require('./routes/process');
 
@@ -93,7 +92,11 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(attachUser);
+// Skip attachUser for /workspace because Cloud Run handles auth/rendering there
+app.use((req, res, next) => {
+  if (req.path.startsWith('/workspace')) return next();
+  attachUser(req, res, next);
+});
 app.use(trackPageView);
 app.use(
   express.static(path.join(__dirname, 'public'), {
@@ -146,7 +149,6 @@ app.get('/sitemap.xml', (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/', indexRouter);
-app.use('/workspace', workspaceRouter);
 app.use('/api', apiRouter);
 app.use('/api/process', processRouter);
 

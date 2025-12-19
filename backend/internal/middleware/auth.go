@@ -31,7 +31,13 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 		}
 		tokenString := ""
 
-		if authHeader != "" {
+		// Prefer HTTP-only cookie if present
+		if cookieToken, err := c.Cookie("access_token"); err == nil && strings.TrimSpace(cookieToken) != "" {
+			tokenString = cookieToken
+		}
+
+		// Fallback to Authorization header
+		if tokenString == "" && authHeader != "" {
 			// Extract token from "Bearer <token>"
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 || parts[0] != "Bearer" {
@@ -42,7 +48,10 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 			}
 
 			tokenString = parts[1]
-		} else {
+		}
+
+		// Fallback to query/header param
+		if tokenString == "" {
 			tokenString = c.Query("access_token")
 			if tokenString == "" {
 				tokenString = c.GetHeader("X-Access-Token")

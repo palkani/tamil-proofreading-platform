@@ -134,6 +134,9 @@ func main() {
 	// Initialize handlers
 	h := handlers.New(db, cfg)
 
+	// Frontend workspace served from Cloud Run to keep auth cookies on same host
+	router.GET("/workspace", h.WorkspacePage)
+
 	// Setup API routes
 	api := router.Group("/api/v1")
 	{
