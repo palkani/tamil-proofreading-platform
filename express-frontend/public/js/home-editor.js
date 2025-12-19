@@ -669,11 +669,6 @@ class HomeEditor {
       clearTimeout(this.analysisTimeout);
     }
 
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      return;
-    }
-    
     // Debounce: Wait 1 second after user stops typing
     this.analysisTimeout = setTimeout(() => {
       this.autoAnalyze();
@@ -681,17 +676,10 @@ class HomeEditor {
   }
   
   async autoAnalyze() {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      this.lastAnalyzedText = '';
-      this.displaySuggestions([]);
-      return;
-    }
-
     const text = this.getPlainText();
     const wc = this.countWords(text);
     if (wc < 5 || text.length < 20) {
-      this.showInfo('Type at least 5 words to get AI grammar suggestions');
+      this.showInfo('Grammar suggestions require a full sentence.');
       this.lastAnalyzedText = '';
       this.displaySuggestions([]);
       return;

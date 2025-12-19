@@ -309,7 +309,7 @@ class WorkspaceController {
     const wordCount = countWords(text);
     if (wordCount < 5 || text.length < 20) {
       this.updateAnalysisStatus('');
-      this.showNotification('Type at least 5 words to get AI grammar suggestions', 'info');
+      this.showNotification('Grammar suggestions require a full sentence.', 'info');
       return;
     }
     
