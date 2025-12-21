@@ -87,6 +87,58 @@ class HomeEditor {
         }
       );
     }
+
+    // IME transliteration dropdown (no auto-replace)
+    if (window.IME_ENABLED && window.IMETypeahead && editorEl) {
+      const adapter = {
+        getSelectionToken: () => {
+          const sel = window.getSelection();
+          if (!sel || sel.rangeCount === 0) return '';
+          const range = sel.getRangeAt(0);
+          const node = range.startContainer;
+          const text = node.textContent || '';
+          const offset = range.startOffset;
+          const before = text.slice(0, offset);
+          const match = before.match(/([A-Za-z]+)$/);
+          return match ? match[1] : '';
+        },
+        replaceToken: (replacement) => {
+          const sel = window.getSelection();
+          if (!sel || sel.rangeCount === 0) return;
+          const range = sel.getRangeAt(0);
+          const node = range.startContainer;
+          const text = node.textContent || '';
+          const offset = range.startOffset;
+          const before = text.slice(0, offset);
+          const match = before.match(/([A-Za-z]+)$/);
+          if (!match) return;
+          const start = offset - match[1].length;
+          const newText = text.slice(0, start) + replacement + text.slice(offset);
+          node.textContent = newText;
+          const newOffset = start + replacement.length;
+          const newRange = document.createRange();
+          newRange.setStart(node, Math.min(newOffset, node.textContent.length));
+          newRange.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+        },
+        getCaretRect: () => {
+          const sel = window.getSelection();
+          if (!sel || sel.rangeCount === 0) return null;
+          const range = sel.getRangeAt(0).cloneRange();
+          range.collapse(true);
+          const rects = range.getClientRects();
+          return rects.length ? rects[0] : null;
+        },
+      };
+      this.imeTypeahead = new window.IMETypeahead(adapter, { endpoint: '/api/v1/ime/suggest', mode: 'spoken' });
+      this.editor.addEventListener('input', () => this.imeTypeahead.onInput());
+      this.editor.addEventListener('keydown', (e) => {
+        if (this.imeTypeahead && this.imeTypeahead.handleKey(e, null)) {
+          e.preventDefault();
+        }
+      });
+    }
   }
   
   init() {
@@ -135,6 +187,8 @@ class HomeEditor {
   }
   
   handleKeyDown(e) {
+    // Disable auto-replace while typing; IME suggestions are click/keypress only
+    return;
     // Detect space key press BEFORE text is inserted
     if (e.key === ' ' || e.code === 'Space') {
       console.log('[KEYDOWN] Space key detected');
@@ -194,6 +248,8 @@ class HomeEditor {
   }
   
   handleSpaceInInput() {
+    // Disable auto-replace on space; IME suggestions are explicit
+    return;
     const fullText = (this.editor.textContent || '').trimEnd();
     const words = fullText.split(/\s+/);
     const lastWord = words[words.length - 1] || '';

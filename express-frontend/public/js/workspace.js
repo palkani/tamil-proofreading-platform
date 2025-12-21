@@ -75,6 +75,58 @@ class WorkspaceController {
       this.proofreadHighlights = new window.ProofreadHighlights(editorElement);
     }
 
+    // IME transliteration (Aksharamukha) feature flag
+    if (window.IME_ENABLED && window.IMETypeahead && editorElement) {
+      const adapter = {
+        getSelectionToken: () => {
+          const sel = window.getSelection();
+          if (!sel || sel.rangeCount === 0) return '';
+          const range = sel.getRangeAt(0);
+          const node = range.startContainer;
+          const text = node.textContent || '';
+          const offset = range.startOffset;
+          const before = text.slice(0, offset);
+          const match = before.match(/([A-Za-z]+)$/);
+          return match ? match[1] : '';
+        },
+        replaceToken: (replacement) => {
+          const sel = window.getSelection();
+          if (!sel || sel.rangeCount === 0) return;
+          const range = sel.getRangeAt(0);
+          const node = range.startContainer;
+          const text = node.textContent || '';
+          const offset = range.startOffset;
+          const before = text.slice(0, offset);
+          const match = before.match(/([A-Za-z]+)$/);
+          if (!match) return;
+          const start = offset - match[1].length;
+          const newText = text.slice(0, start) + replacement + text.slice(offset);
+          node.textContent = newText;
+          const newOffset = start + replacement.length;
+          const newRange = document.createRange();
+          newRange.setStart(node, Math.min(newOffset, node.textContent.length));
+          newRange.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+        },
+        getCaretRect: () => {
+          const sel = window.getSelection();
+          if (!sel || sel.rangeCount === 0) return null;
+          const range = sel.getRangeAt(0).cloneRange();
+          range.collapse(true);
+          const rects = range.getClientRects();
+          return rects.length ? rects[0] : null;
+        },
+      };
+      this.imeTypeahead = new window.IMETypeahead(adapter, { endpoint: '/api/v1/ime/suggest', mode: 'spoken' });
+      editorElement.addEventListener('input', () => this.imeTypeahead.onInput());
+      editorElement.addEventListener('keydown', (e) => {
+        if (this.imeTypeahead && this.imeTypeahead.handleKey(e, null)) {
+          e.preventDefault();
+        }
+      });
+    }
+
     // Initialize suggestions panel
     const container = document.getElementById('suggestions-container');
     const summary = document.getElementById('suggestions-summary');
@@ -337,11 +389,15 @@ class WorkspaceController {
         signal: this.abortController.signal
       });
       
-      if (!response.ok) {
+      let data = await response.json();
+      if (response.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
+        const submissionId = data.submission?.id;
+        console.log('[GEMINI] submit pending, starting poll', submissionId);
+        data = await this.pollSubmission(submissionId);
+      } else if (!response.ok) {
         throw new Error('Failed to analyze text');
       }
       
-      const data = await response.json();
       this.lastAnalyzedText = text;
       
       // Debug: Log the API response
@@ -775,6 +831,28 @@ class WorkspaceController {
 
     this.updateAcceptedCount();
     this.showNotification('All suggestions applied!', 'success');
+  }
+
+  async pollSubmission(submissionId) {
+    if (!submissionId) return {};
+    const maxTries = 15;
+    const delay = 700;
+    for (let i = 0; i < maxTries; i++) {
+      await new Promise((r) => setTimeout(r, delay));
+      try {
+        const res = await this.apiFetch(`/api/submissions/${submissionId}`, { method: 'GET' });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const status = data.submission?.status || '';
+        console.log('[GEMINI] poll attempt', i + 1, 'status', status);
+        if (status && status.toLowerCase() !== 'pending') {
+          return data;
+        }
+      } catch (err) {
+        console.warn('[GEMINI] poll error', err);
+      }
+    }
+    return {};
   }
 
   logout() {

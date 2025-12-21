@@ -63,6 +63,43 @@ tamil-proofreading-platform/
 └── docs/                 # Documentation
 ```
 
+## Local IME (Aksharamukha) Development
+
+1) Start the Python runner
+```bash
+cd services/aksharamukha-runner
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app:app --host 0.0.0.0 --port 8088
+```
+
+2) Start the Go backend with IME enabled
+```bash
+cd backend
+IME_ENABLED=true IME_CACHE_ENABLED=true AKSHARA_URL=http://localhost:8088 go run cmd/server/main.go
+```
+
+3) Test runner directly
+```bash
+curl -X POST http://localhost:8088/transliterate \
+  -H "Content-Type: application/json" \
+  -d '{"text":"enathu","mode":"spoken"}'
+```
+
+4) Test IME suggest through backend
+```bash
+curl "http://localhost:8080/api/v1/ime/suggest?q=enathu&mode=spoken&limit=8"
+```
+
+Cloud Run (optional):
+```bash
+gcloud run deploy aksharamukha-runner \
+  --source services/aksharamukha-runner \
+  --region asia-south1 \
+  --allow-unauthenticated
+```
+
 ## Getting Started
 
 ### Prerequisites

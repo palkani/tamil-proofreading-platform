@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -33,6 +34,9 @@ type Config struct {
 	TwilioAccountSID          string
 	TwilioAuthToken           string
 	TwilioPhoneNumber         string
+	AksharaURL                string
+	IMEEnabled                bool
+	IMECacheEnabled           bool
 }
 
 func Load() *Config {
@@ -79,6 +83,9 @@ func Load() *Config {
 		TwilioAccountSID:      getEnv("TWILIO_ACCOUNT_SID", ""),
 		TwilioAuthToken:       getEnv("TWILIO_AUTH_TOKEN", ""),
 		TwilioPhoneNumber:     getEnv("TWILIO_PHONE_NUMBER", ""),
+		AksharaURL:            getEnv("AKSHARA_URL", ""),
+		IMEEnabled:            strings.ToLower(getEnv("IME_ENABLED", "false")) == "true",
+		IMECacheEnabled:       strings.ToLower(getEnv("IME_CACHE_ENABLED", "true")) == "true",
 	}
 }
 
