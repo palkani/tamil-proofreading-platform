@@ -1,4 +1,5 @@
 import os
+import logging
 from fastapi import FastAPI
 from app.api.routes import router as api_router
 from app.core.config import settings
@@ -22,6 +23,12 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIDMiddleware)
     app.add_middleware(MetricsMiddleware)
     app.add_middleware(AuthMiddleware, client_registry=settings.CLIENT_REGISTRY)
+
+    logging.info(
+        "transliterator_enabled enabled=%s base_url_present=%s",
+        settings.TRANSLITERATOR_ENABLED,
+        bool(settings.TRANSLITERATOR_BASE_URL),
+    )
 
     app.include_router(api_router)
     return app
