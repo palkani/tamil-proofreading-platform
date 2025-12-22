@@ -37,6 +37,7 @@ type Config struct {
 	AksharaURL                string
 	IMEEnabled                bool
 	IMECacheEnabled           bool
+	TransliteratorBaseURL     string
 }
 
 func Load() *Config {
@@ -86,6 +87,7 @@ func Load() *Config {
 		AksharaURL:            getEnv("AKSHARA_URL", ""),
 		IMEEnabled:            strings.ToLower(getEnv("IME_ENABLED", "false")) == "true",
 		IMECacheEnabled:       strings.ToLower(getEnv("IME_CACHE_ENABLED", "true")) == "true",
+		TransliteratorBaseURL: getEnv("TRANSLITERATOR_BASE_URL", "https://prooftamil-runner-991187041222.asia-south1.run.app"),
 	}
 }
 
