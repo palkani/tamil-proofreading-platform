@@ -1,33 +1,33 @@
 // Main Workspace Controller
 
 async function ensureRunnerLoaded() {
-  if (typeof window.transliterateViaRunner === 'function') return;
-  if (window.transliteratorReady) {
-    await Promise.resolve(window.transliteratorReady);
+  if (typeof window.transliterateViaRunner === 'function') {
     return;
   }
 
-  window.transliteratorReady = new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[data-runner-helper]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('Failed to load transliterator-runner.js')));
-      return;
-    }
+  if (window.__loadingTranslitRunner) {
+    return window.__loadingTranslitRunner;
+  }
 
-    const script = document.createElement('script');
-    script.src = '/js/transliterator-runner.js';
+  window.__loadingTranslitRunner = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "/js/transliterator-runner.js";
     script.async = true;
-    script.setAttribute('data-runner-helper', 'true');
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load transliterator-runner.js'));
-    document.head.appendChild(script);
 
-    // Failsafe timeout
-    setTimeout(() => reject(new Error('Timed out loading transliterator-runner.js')), 5000);
+    script.onload = () => {
+      console.log("[Translit] runner helper loaded");
+      resolve();
+    };
+
+    script.onerror = () => {
+      console.error("[Translit] failed to load runner helper", script.src);
+      reject(new Error("runner helper failed to load"));
+    };
+
+    document.head.appendChild(script);
   });
 
-  await window.transliteratorReady;
+  return window.__loadingTranslitRunner;
 }
 
 class WorkspaceController {
