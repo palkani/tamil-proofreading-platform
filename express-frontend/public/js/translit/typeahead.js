@@ -102,17 +102,20 @@
       if (this.abortController) this.abortController.abort();
       this.abortController = new AbortController();
       const mode = this.getMode() || 'spoken';
-      if (!HAS_RUNNER || typeof window.transliterateViaRunner !== 'function') {
-        this.log('runner function missing');
-        this.closeDropdown();
-        return;
-      }
       if (IS_DEV) {
         console.debug("[TRANSLITERATOR] CALLING RUNNER", { text: info.token, mode, limit: MAX });
       }
 
       try {
         this.log('request', { token: info.token });
+        if (window.transliteratorReady) {
+          await Promise.resolve(window.transliteratorReady);
+        }
+        if (!HAS_RUNNER || typeof window.transliterateViaRunner !== 'function') {
+          this.log('runner function missing');
+          this.closeDropdown();
+          return;
+        }
         const data = await window.transliterateViaRunner(info.token, mode, MAX, this.abortController.signal);
         const items = this.normalize(data);
         this.cache.set(info.token, { items, ts: Date.now() });
