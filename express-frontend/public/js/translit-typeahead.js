@@ -115,16 +115,19 @@
       this.abortController = new AbortController();
 
       const mode = this.getMode() || 'spoken';
-      if (!HAS_RUNNER || typeof window.transliterateViaRunner !== 'function') {
-        this.log('runner function missing');
-        this.closeDropdown();
-        return;
-      }
       if (IS_DEV) {
         console.debug("[TRANSLITERATOR] CALLING RUNNER", { text: token, mode, limit: MAX_SUGGESTIONS });
       }
 
       try {
+        if (window.transliteratorReady) {
+          await Promise.resolve(window.transliteratorReady);
+        }
+        if (!HAS_RUNNER || typeof window.transliterateViaRunner !== 'function') {
+          this.log('runner function missing');
+          this.closeDropdown();
+          return;
+        }
         const data = await window.transliterateViaRunner(token, mode, MAX_SUGGESTIONS, this.abortController.signal);
         const suggestions = this.normalizeSuggestions(data);
         this.cache.set(token, { suggestions, ts: Date.now() });

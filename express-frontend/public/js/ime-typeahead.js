@@ -34,6 +34,9 @@
       this.log('request start', token);
       this.abort = new AbortController();
       try {
+        if (window.transliteratorReady) {
+          await Promise.resolve(window.transliteratorReady);
+        }
         if (typeof window.transliterateViaRunner !== 'function') {
           this.log('transliterateViaRunner missing');
           this.close();

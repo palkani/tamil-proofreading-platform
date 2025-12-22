@@ -25,6 +25,9 @@ async function apiFetch(path, options = {}, requireAuth = true) {
 }
 
 async function transliterateViaRunnerClient(text, mode = 'spoken', limit = 8, signal) {
+  if (window.transliteratorReady) {
+    await Promise.resolve(window.transliteratorReady);
+  }
   if (typeof window.transliterateViaRunner !== 'function') {
     console.error('[TRANSLITERATOR] transliterateViaRunner is not available');
     return [];
