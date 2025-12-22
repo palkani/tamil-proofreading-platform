@@ -1,5 +1,35 @@
 // Main Workspace Controller
 
+async function ensureRunnerLoaded() {
+  if (typeof window.transliterateViaRunner === 'function') return;
+  if (window.transliteratorReady) {
+    await Promise.resolve(window.transliteratorReady);
+    return;
+  }
+
+  window.transliteratorReady = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-runner-helper]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('Failed to load transliterator-runner.js')));
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = '/js/transliterator-runner.js';
+    script.async = true;
+    script.setAttribute('data-runner-helper', 'true');
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load transliterator-runner.js'));
+    document.head.appendChild(script);
+
+    // Failsafe timeout
+    setTimeout(() => reject(new Error('Timed out loading transliterator-runner.js')), 5000);
+  });
+
+  await window.transliteratorReady;
+}
+
 class WorkspaceController {
   constructor() {
     this.getMode = () => {
@@ -52,9 +82,7 @@ class WorkspaceController {
   }
 
   async fetchRunnerSuggestions(text, mode = 'spoken', limit = 8, signal) {
-    if (window.transliteratorReady) {
-      await Promise.resolve(window.transliteratorReady);
-    }
+    await ensureRunnerLoaded();
     if (typeof window.transliterateViaRunner !== 'function') {
       console.error('[Translit] transliterateViaRunner is not available');
       return [];
