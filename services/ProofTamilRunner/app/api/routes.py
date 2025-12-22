@@ -30,3 +30,13 @@ async def transliterate(req: TransliterateRequest, request: Request, response: R
     response.headers["X-Transliterator-Cache"] = cache_status
     return TransliterateResponse(success=True, suggestions=suggestions)
 
+
+@router.get("/transliterate/suggest", response_model=TransliterateResponse)
+async def transliterate_suggest(q: str, limit: int = 8, mode: str = "spoken", request: Request = None, response: Response = None):
+    rid = getattr(getattr(request, "state", None), "request_id", "n/a") if request else "n/a"
+    suggestions, used_runner, cache_status = await service.transliterate(q, mode, limit, rid)
+    if response is not None:
+        response.headers["X-Transliterator-Used"] = "true" if used_runner else "false"
+        response.headers["X-Transliterator-Cache"] = cache_status
+    return TransliterateResponse(success=True, suggestions=suggestions)
+
