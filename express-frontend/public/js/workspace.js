@@ -1,3 +1,7 @@
+const TRANSLITERATOR_BASE = (typeof process !== 'undefined' && process.env.FRONTEND_TRANSLITERATOR_BASE_URL) || '';
+const TRANSLITERATOR_ENDPOINT = TRANSLITERATOR_BASE ? `${TRANSLITERATOR_BASE}/api/v1/transliterate` : '';
+const TRANSLITERATOR_IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
+
 // Main Workspace Controller
 
 class WorkspaceController {
@@ -51,6 +55,34 @@ class WorkspaceController {
     return response;
   }
 
+  async fetchRunnerSuggestions(text, mode = 'spoken', limit = 8, signal) {
+    if (TRANSLITERATOR_IS_DEV) {
+      console.debug('[TRANSLITERATOR] using runner', { text, mode, limit });
+    }
+    if (!TRANSLITERATOR_ENDPOINT) {
+      console.error('[Translit] Runner endpoint missing (FRONTEND_TRANSLITERATOR_BASE_URL not set)');
+      return [];
+    }
+    try {
+      const res = await fetch(TRANSLITERATOR_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Client-Id': 'prooftamil-frontend',
+        },
+        body: JSON.stringify({ text, mode, limit }),
+        signal,
+      });
+      if (!res.ok) return [];
+      const data = await res.json().catch(() => ({}));
+      return data?.suggestions || [];
+    } catch (err) {
+      if (err.name === 'AbortError') throw err;
+      console.error('[Translit] Runner fetch failed', err);
+      return [];
+    }
+  }
+
   init() {
     // Initialize editor
     const editorElement = document.getElementById('editor');
@@ -64,7 +96,7 @@ class WorkspaceController {
       this.translitTypeahead = new window.TransliterationTypeahead(
         new window.WorkspaceEditorAdapter(editorElement),
         {
-          endpoint: '/api/v1/transliterate/suggest',
+          endpoint: TRANSLITERATOR_ENDPOINT,
           getMode: () => this.getMode(),
         }
       );
@@ -327,13 +359,7 @@ class WorkspaceController {
       this.translitAbort = new AbortController();
       try {
         const mode = this.getMode();
-        const res = await this.apiFetch(`/api/v1/transliterate/suggest?q=${encodeURIComponent(word)}&limit=8&mode=${encodeURIComponent(mode)}`, {
-          headers: {},
-          signal: this.translitAbort.signal,
-        });
-        if (!res.ok) throw new Error('Failed to fetch suggestions');
-        const data = await res.json();
-        const suggestions = data?.suggestions || [];
+        const suggestions = await this.fetchRunnerSuggestions(word, mode, 8, this.translitAbort.signal);
         this.translitCache.set(word, suggestions);
         this.renderTranslitSuggestions(word, suggestions);
       } catch (err) {
