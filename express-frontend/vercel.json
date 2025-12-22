@@ -1,24 +1,27 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.js",
-      "use": "@vercel/node"
-    }
-  ],
   "installCommand": "npm install",
   "buildCommand": "npm run build:css",
+
   "routes": [
     {
       "src": "^/api/v1/auth/google/callback$",
       "dest": "/api/index.js"
     },
     {
-      "src": "^/api/(.*)$",
-      "dest": "/api/index.js"
+      "src": "^/api/v1/ime/(.*)",
+      "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/ime/$1"
     },
     {
-      "src": "^/(.*)$",
+      "src": "^/workspace$",
+      "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/workspace"
+    },
+    {
+      "src": "^/api/v1/(.*)",
+      "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/$1"
+    },
+    {
+      "src": "^(?!/api/v1/).*",
       "dest": "/api/index.js"
     }
   ]
