@@ -5,11 +5,13 @@
   const DEBOUNCE_MS = 300;
   const MAX = 8;
   const DEBUG = typeof window !== 'undefined' && !!window.__TRANS_LIT_DEBUG__;
+  const IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
+  const RUNNER_BASE = (typeof process !== 'undefined' && process.env.FRONTEND_TRANSLITERATOR_BASE_URL) || '';
+  const RUNNER_ENDPOINT = RUNNER_BASE ? `${RUNNER_BASE}/api/v1/transliterate` : '';
 
   class TransliterationTypeahead {
     constructor(adapter, opts = {}) {
       this.adapter = adapter;
-      this.endpoint = opts.endpoint || '/api/v1/transliterate/suggest';
       this.getMode = opts.getMode || (() => 'spoken');
       this.cache = new Map();
       this.timer = null;
@@ -101,11 +103,27 @@
       if (this.abortController) this.abortController.abort();
       this.abortController = new AbortController();
       const mode = this.getMode() || 'spoken';
-      const url = `${this.endpoint}?q=${encodeURIComponent(info.token)}&limit=${MAX}&mode=${encodeURIComponent(mode)}`;
+      if (IS_DEV) {
+        console.debug("[TRANSLITERATOR] using runner", { text: info.token, mode, limit: MAX });
+      }
+      if (!RUNNER_ENDPOINT) {
+        this.log('runner endpoint missing');
+        this.closeDropdown();
+        return;
+      }
+      const payload = { text: info.token, mode, limit: MAX };
 
       try {
-        this.log('request', { url, token: info.token });
-        const res = await fetch(url, { signal: this.abortController.signal });
+        this.log('request', { endpoint: RUNNER_ENDPOINT, token: info.token });
+        const res = await fetch(RUNNER_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Client-Id': 'prooftamil-frontend',
+          },
+          body: JSON.stringify(payload),
+          signal: this.abortController.signal,
+        });
         const raw = await res.text();
         let data;
         try {

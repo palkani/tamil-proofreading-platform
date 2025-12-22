@@ -23,6 +23,38 @@ async function apiFetch(path, options = {}, requireAuth = true) {
 
   return response;
 }
+
+const RUNNER_BASE = (typeof process !== 'undefined' && process.env.FRONTEND_TRANSLITERATOR_BASE_URL) || '';
+const RUNNER_ENDPOINT = RUNNER_BASE ? `${RUNNER_BASE}/api/v1/transliterate` : '';
+const RUNNER_IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
+
+async function fetchRunnerSuggestions(text, mode = 'spoken', limit = 8, signal) {
+  if (RUNNER_IS_DEV) {
+    console.debug('[TRANSLITERATOR] using runner', { text, mode, limit });
+  }
+  if (!RUNNER_ENDPOINT) {
+    console.error('[TRANSLITERATOR] Runner endpoint missing (FRONTEND_TRANSLITERATOR_BASE_URL not set)');
+    return [];
+  }
+  try {
+    const res = await fetch(RUNNER_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Id': 'prooftamil-frontend',
+      },
+      body: JSON.stringify({ text, mode, limit }),
+      signal,
+    });
+    if (!res.ok) return [];
+    const data = await res.json().catch(() => ({}));
+    return data?.suggestions || [];
+  } catch (err) {
+    if (err.name === 'AbortError') throw err;
+    console.error('[TRANSLITERATOR] Runner fetch failed', err);
+    return [];
+  }
+}
 // Home Page Editor - Simplified Tamil Editor with 200 Character Limit
 
 class HomeEditor {
@@ -82,7 +114,7 @@ class HomeEditor {
       this.translitTypeahead = new window.TransliterationTypeahead(
         new window.HomeEditorAdapter(editorEl),
         {
-          endpoint: '/api/v1/transliterate/suggest',
+          endpoint: RUNNER_ENDPOINT,
           getMode: () => 'spoken',
         }
       );
@@ -324,30 +356,14 @@ class HomeEditor {
     if (this.translitTimeout) clearTimeout(this.translitTimeout);
     this.translitTimeout = setTimeout(async () => {
       try {
-        const response = await apiFetch('/api/v1/transliterate/suggest?q=' + encodeURIComponent(lastWord) + '&limit=8&mode=spoken', {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        }, false);
-        
-        console.log('[AUTOCOMPLETE] API response status:', response.status);
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[AUTOCOMPLETE] API response:', data);
-          if (data.success) {
-            const normalized = (data.suggestions || []).map((s) => ({
-              word: s.word || s.ta || s.text || s.suggestion || '',
-              score: s.score || s.confidence || 0,
-            })).filter(s => s.word);
-            this.autocompleteCache[lastWord] = normalized;
-            this.currentSuggestions = normalized;
-            this.renderSuggestions(normalized);
-          } else {
-            console.warn('[AUTOCOMPLETE] No suggestions in response');
-          }
-        } else {
-          console.warn('[AUTOCOMPLETE] API error status:', response.status);
-        }
+        const suggestions = await fetchRunnerSuggestions(lastWord, 'spoken', 8);
+        const normalized = (suggestions || []).map((s) => ({
+          word: s.word || s.ta || s.text || s.suggestion || '',
+          score: s.score || s.confidence || 0,
+        })).filter(s => s.word);
+        this.autocompleteCache[lastWord] = normalized;
+        this.currentSuggestions = normalized;
+        this.renderSuggestions(normalized);
       } catch (err) {
         console.error('[AUTOCOMPLETE] Fetch error:', err);
       }
@@ -411,37 +427,21 @@ class HomeEditor {
   
   async transliterateFromInput(englishWord) {
     console.log('[API-INPUT] Transliterating:', englishWord);
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      console.warn('[API-INPUT] Missing token, skipping transliteration');
-      return;
-    }
     try {
-      const response = await apiFetch('/api/v1/transliterate/suggest?q=' + encodeURIComponent(englishWord) + '&limit=8&mode=spoken', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      console.log('[API-INPUT] Status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[API-INPUT] Response:', data);
-        
-        if (data.success && data.suggestions?.[0]) {
-          const suggestion = data.suggestions[0];
-          const tamilWord = typeof suggestion === 'string' ? suggestion : suggestion.word;
-          const fullText = (this.editor.textContent || '').trimEnd();
-          const beforeLastWord = fullText.substring(0, fullText.length - englishWord.length);
-          this.editor.textContent = beforeLastWord + tamilWord + ' ';
-          this.moveCursorToEnd();
-          console.log('[API-INPUT] Inserted Tamil:', englishWord, '->', tamilWord);
-          this.updateWordCount();
-          this.scheduleAutoAnalysis();
-          return;
-        } else {
-          console.log('[API-INPUT] No suggestions or error:', data.error || 'empty suggestions');
-        }
+      const suggestions = await fetchRunnerSuggestions(englishWord, 'spoken', 8);
+      const suggestion = suggestions?.[0];
+      if (suggestion) {
+        const tamilWord = typeof suggestion === 'string' ? suggestion : suggestion.word;
+        const fullText = (this.editor.textContent || '').trimEnd();
+        const beforeLastWord = fullText.substring(0, fullText.length - englishWord.length);
+        this.editor.textContent = beforeLastWord + tamilWord + ' ';
+        this.moveCursorToEnd();
+        console.log('[API-INPUT] Inserted Tamil:', englishWord, '->', tamilWord);
+        this.updateWordCount();
+        this.scheduleAutoAnalysis();
+        return;
+      } else {
+        console.log('[API-INPUT] No suggestions or error');
       }
     } catch (err) {
       console.log('[API-INPUT] Error:', err);
