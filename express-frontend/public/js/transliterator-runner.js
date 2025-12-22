@@ -1,7 +1,7 @@
 // Shared transliteration helper that always targets the runner (never the Go backend).
 const IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
 
-function readBaseUrl() {
+export function readBaseUrl() {
   const envBase =
     (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL) ||
     (typeof window !== 'undefined' && window.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL) ||
