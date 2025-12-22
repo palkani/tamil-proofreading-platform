@@ -71,5 +71,9 @@
   // Attach globally for runtime callers.
   if (typeof window !== 'undefined') {
     window.transliterateViaRunner = transliterateViaRunner;
+    // Signal readiness for any code awaiting a promise.
+    if (!window.transliteratorReady) {
+      window.transliteratorReady = Promise.resolve();
+    }
   }
 })();
