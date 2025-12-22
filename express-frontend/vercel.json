@@ -5,7 +5,7 @@
 
   "routes": [
     {
-      "src": "^/api/v1/auth/google/callback",
+      "src": "^/api/v1/auth/google/callback$",
       "dest": "/api/index.js"
     },
     {
