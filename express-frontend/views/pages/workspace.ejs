@@ -335,18 +335,6 @@
 </div>
 
 <!-- Include Tamil utilities and editor scripts -->
-<script>
-  // Preload transliterator helper as an ES module and expose it to window for legacy scripts.
-  window.transliteratorReady = import('/js/transliterator-runner.js')
-    .then((mod) => {
-      window.transliterateViaRunner = mod.transliterateViaRunner;
-      return mod.transliterateViaRunner;
-    })
-    .catch((err) => {
-      console.error('[TRANSLITERATOR] failed to load runner helper', err);
-      return null;
-    });
-</script>
 <script src="/js/transliterator-runner.js?v=20251222a"></script>
 <script src="/js/tamilDictionary.js?v=20251127b"></script>
 <script src="/js/transliteration.js?v=20251127b"></script>
