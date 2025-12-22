@@ -24,6 +24,14 @@ async function apiFetch(path, options = {}, requireAuth = true) {
   return response;
 }
 
+async function transliterateViaRunnerClient(text, mode = 'spoken', limit = 8, signal) {
+  if (typeof window.transliterateViaRunner !== 'function') {
+    console.error('[TRANSLITERATOR] transliterateViaRunner is not available');
+    return [];
+  }
+  return window.transliterateViaRunner(text, mode, limit, signal);
+}
+
 class TamilEditor {
   constructor(editorElement) {
     this.editor = editorElement;
@@ -371,15 +379,8 @@ class TamilEditor {
         // Check if typing in English - call Gemini transliteration API
         else if (/^[a-zA-Z]+$/.test(currentWord) && currentWord.length >= 2) {
           try {
-            const response = await apiFetch('/api/v1/transliterate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: currentWord })
-            });
-            if (response.ok) {
-              const data = await response.json();
-              suggestions = data.suggestions || [];
-            }
+          const data = await transliterateViaRunnerClient(currentWord, 'spoken', 8);
+          suggestions = data || [];
           } catch (err) {
             console.log('Transliteration API error:', err);
           }

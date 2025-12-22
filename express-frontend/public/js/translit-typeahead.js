@@ -8,14 +8,12 @@
   const MAX_SUGGESTIONS = 8;
   const DEBUG = typeof window !== 'undefined' && !!window.__TRANS_LIT_DEBUG__;
   const IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
-  const RUNNER_BASE = (typeof process !== 'undefined' && process.env.FRONTEND_TRANSLITERATOR_BASE_URL) || '';
-  const RUNNER_ENDPOINT = RUNNER_BASE ? `${RUNNER_BASE}/api/v1/transliterate` : '';
+  const HAS_RUNNER = typeof window !== 'undefined' && typeof window.transliterateViaRunner === 'function';
 
   class TranslitTypeahead {
     constructor(opts) {
       this.editorEl = opts.editorEl;
       this.getMode = opts.getMode || (() => 'spoken');
-      this.endpoint = RUNNER_ENDPOINT;
       this.cache = new Map();
       this.abortController = null;
       this.timer = null;
@@ -117,40 +115,20 @@
       this.abortController = new AbortController();
 
       const mode = this.getMode() || 'spoken';
-      if (IS_DEV) {
-        console.debug("[TRANSLITERATOR] using runner", { text: token, mode, limit: MAX_SUGGESTIONS });
-      }
-      if (!RUNNER_ENDPOINT) {
-        this.log('runner endpoint missing');
+      if (!HAS_RUNNER || typeof window.transliterateViaRunner !== 'function') {
+        this.log('runner function missing');
         this.closeDropdown();
         return;
       }
-      const payload = { text: token, mode, limit: MAX_SUGGESTIONS };
-      this.log('request', RUNNER_ENDPOINT);
+      if (IS_DEV) {
+        console.debug("[TRANSLITERATOR] CALLING RUNNER", { text: token, mode, limit: MAX_SUGGESTIONS });
+      }
 
       try {
-        const res = await fetch(RUNNER_ENDPOINT, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Client-Id': 'prooftamil-frontend',
-          },
-          body: JSON.stringify(payload),
-          signal: this.abortController.signal,
-        });
-        const raw = await res.text();
-        let data;
-        try {
-          data = JSON.parse(raw);
-        } catch (err) {
-          this.log('parse error', err, raw.slice(0, 200));
-          this.closeDropdown();
-          return;
-        }
-
+        const data = await window.transliterateViaRunner(token, mode, MAX_SUGGESTIONS, this.abortController.signal);
         const suggestions = this.normalizeSuggestions(data);
         this.cache.set(token, { suggestions, ts: Date.now() });
-        this.log('response', { status: res.status, count: suggestions.length });
+        this.log('response', { status: 'ok', count: suggestions.length });
         if (!suggestions.length) {
           this.closeDropdown();
           return;
