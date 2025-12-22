@@ -6,8 +6,7 @@
   const MAX = 8;
   const DEBUG = typeof window !== 'undefined' && !!window.__TRANS_LIT_DEBUG__;
   const IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
-  const RUNNER_BASE = (typeof process !== 'undefined' && process.env.FRONTEND_TRANSLITERATOR_BASE_URL) || '';
-  const RUNNER_ENDPOINT = RUNNER_BASE ? `${RUNNER_BASE}/api/v1/transliterate` : '';
+  const HAS_RUNNER = typeof window !== 'undefined' && typeof window.transliterateViaRunner === 'function';
 
   class TransliterationTypeahead {
     constructor(adapter, opts = {}) {
@@ -103,39 +102,21 @@
       if (this.abortController) this.abortController.abort();
       this.abortController = new AbortController();
       const mode = this.getMode() || 'spoken';
-      if (IS_DEV) {
-        console.debug("[TRANSLITERATOR] using runner", { text: info.token, mode, limit: MAX });
-      }
-      if (!RUNNER_ENDPOINT) {
-        this.log('runner endpoint missing');
+      if (!HAS_RUNNER || typeof window.transliterateViaRunner !== 'function') {
+        this.log('runner function missing');
         this.closeDropdown();
         return;
       }
-      const payload = { text: info.token, mode, limit: MAX };
+      if (IS_DEV) {
+        console.debug("[TRANSLITERATOR] CALLING RUNNER", { text: info.token, mode, limit: MAX });
+      }
 
       try {
-        this.log('request', { endpoint: RUNNER_ENDPOINT, token: info.token });
-        const res = await fetch(RUNNER_ENDPOINT, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Client-Id': 'prooftamil-frontend',
-          },
-          body: JSON.stringify(payload),
-          signal: this.abortController.signal,
-        });
-        const raw = await res.text();
-        let data;
-        try {
-          data = JSON.parse(raw);
-        } catch (err) {
-          this.log('parse error', err, raw.slice(0, 200));
-          this.closeDropdown();
-          return;
-        }
+        this.log('request', { token: info.token });
+        const data = await window.transliterateViaRunner(info.token, mode, MAX, this.abortController.signal);
         const items = this.normalize(data);
         this.cache.set(info.token, { items, ts: Date.now() });
-        this.log('response', { status: res.status, count: items.length });
+        this.log('response', { status: 'ok', count: items.length });
         if (!items.length) {
           this.closeDropdown();
           return;

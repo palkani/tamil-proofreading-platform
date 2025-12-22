@@ -24,36 +24,12 @@ async function apiFetch(path, options = {}, requireAuth = true) {
   return response;
 }
 
-const RUNNER_BASE = (typeof process !== 'undefined' && process.env.FRONTEND_TRANSLITERATOR_BASE_URL) || '';
-const RUNNER_ENDPOINT = RUNNER_BASE ? `${RUNNER_BASE}/api/v1/transliterate` : '';
-const RUNNER_IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
-
-async function fetchRunnerSuggestions(text, mode = 'spoken', limit = 8, signal) {
-  if (RUNNER_IS_DEV) {
-    console.debug('[TRANSLITERATOR] using runner', { text, mode, limit });
-  }
-  if (!RUNNER_ENDPOINT) {
-    console.error('[TRANSLITERATOR] Runner endpoint missing (FRONTEND_TRANSLITERATOR_BASE_URL not set)');
+async function callTransliterator(text, mode = 'spoken', limit = 8, signal) {
+  if (typeof window.transliterateViaRunner !== 'function') {
+    console.error('[TRANSLITERATOR] transliterateViaRunner is not available');
     return [];
   }
-  try {
-    const res = await fetch(RUNNER_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Client-Id': 'prooftamil-frontend',
-      },
-      body: JSON.stringify({ text, mode, limit }),
-      signal,
-    });
-    if (!res.ok) return [];
-    const data = await res.json().catch(() => ({}));
-    return data?.suggestions || [];
-  } catch (err) {
-    if (err.name === 'AbortError') throw err;
-    console.error('[TRANSLITERATOR] Runner fetch failed', err);
-    return [];
-  }
+  return window.transliterateViaRunner(text, mode, limit, signal);
 }
 // Home Page Editor - Simplified Tamil Editor with 200 Character Limit
 
@@ -114,7 +90,6 @@ class HomeEditor {
       this.translitTypeahead = new window.TransliterationTypeahead(
         new window.HomeEditorAdapter(editorEl),
         {
-          endpoint: RUNNER_ENDPOINT,
           getMode: () => 'spoken',
         }
       );
@@ -163,7 +138,7 @@ class HomeEditor {
           return rects.length ? rects[0] : null;
         },
       };
-      this.imeTypeahead = new window.IMETypeahead(adapter, { endpoint: '/api/v1/ime/suggest', mode: 'spoken' });
+      this.imeTypeahead = new window.IMETypeahead(adapter, { mode: 'spoken' });
       this.editor.addEventListener('input', () => this.imeTypeahead.onInput());
       this.editor.addEventListener('keydown', (e) => {
         if (this.imeTypeahead && this.imeTypeahead.handleKey(e, null)) {
@@ -356,7 +331,7 @@ class HomeEditor {
     if (this.translitTimeout) clearTimeout(this.translitTimeout);
     this.translitTimeout = setTimeout(async () => {
       try {
-        const suggestions = await fetchRunnerSuggestions(lastWord, 'spoken', 8);
+        const suggestions = await callTransliterator(lastWord, 'spoken', 8);
         const normalized = (suggestions || []).map((s) => ({
           word: s.word || s.ta || s.text || s.suggestion || '',
           score: s.score || s.confidence || 0,
@@ -428,7 +403,7 @@ class HomeEditor {
   async transliterateFromInput(englishWord) {
     console.log('[API-INPUT] Transliterating:', englishWord);
     try {
-      const suggestions = await fetchRunnerSuggestions(englishWord, 'spoken', 8);
+      const suggestions = await callTransliterator(englishWord, 'spoken', 8);
       const suggestion = suggestions?.[0];
       if (suggestion) {
         const tamilWord = typeof suggestion === 'string' ? suggestion : suggestion.word;
@@ -453,39 +428,21 @@ class HomeEditor {
   
   async transliterateFromKeypress(englishWord) {
     console.log('[KEYPRESS] Calling transliteration API for:', englishWord);
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      console.warn('[KEYPRESS] Missing token, skipping transliteration');
-      return;
-    }
     try {
-      const response = await apiFetch('/api/v1/transliterate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: englishWord })
-      });
-      
-      console.log('[KEYPRESS] Status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[KEYPRESS] Response:', data);
-        
-        if (data.success && data.suggestions?.[0]) {
-          const suggestion = data.suggestions[0];
-          const tamilWord = typeof suggestion === 'string' ? suggestion : suggestion.word;
-          // Use the stored word info if available, otherwise fallback
-          if (this.lastEditedWord) {
-            this.editor.textContent = this.lastEditedWord.before + tamilWord + ' ';
-          }
-          this.moveCursorToEnd();
-          console.log('[KEYPRESS] Inserted Tamil:', englishWord, '->', tamilWord);
-          this.updateWordCount();
-          this.scheduleAutoAnalysis();
-          return;
-        } else {
-          console.log('[KEYPRESS] No suggestions or error:', data.error || 'empty suggestions');
+      const suggestions = await callTransliterator(englishWord, 'spoken', 8);
+      const suggestion = suggestions?.[0];
+      if (suggestion) {
+        const tamilWord = typeof suggestion === 'string' ? suggestion : suggestion.word;
+        if (this.lastEditedWord) {
+          this.editor.textContent = this.lastEditedWord.before + tamilWord + ' ';
         }
+        this.moveCursorToEnd();
+        console.log('[KEYPRESS] Inserted Tamil:', englishWord, '->', tamilWord);
+        this.updateWordCount();
+        this.scheduleAutoAnalysis();
+        return;
+      } else {
+        console.log('[KEYPRESS] No suggestions or error');
       }
     } catch (err) {
       console.log('[KEYPRESS] Error:', err);
@@ -522,26 +479,11 @@ class HomeEditor {
     // Debounce transliteration API call
     this.translitTimeout = setTimeout(async () => {
       console.log('[TRANSLIT-DEBUG] Calling API with word:', currentWord);
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        console.warn('[TRANSLIT-DEBUG] Missing token, skipping autocomplete');
-        return;
-      }
       try {
-        const response = await apiFetch('/api/v1/transliterate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: currentWord })
-        });
-        
-        console.log('[TRANSLIT-DEBUG] API response status:', response.status);
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[TRANSLIT-DEBUG] API response data:', data);
-          if (data.suggestions && data.suggestions.length > 0) {
-            console.log('[TRANSLIT-DEBUG] Showing autocomplete with', data.suggestions.length, 'suggestions');
-            this.showTranslitAutocomplete(data.suggestions);
-          }
+        const suggestions = await callTransliterator(currentWord, 'spoken', 8);
+        if (suggestions && suggestions.length > 0) {
+          console.log('[TRANSLIT-DEBUG] Showing autocomplete with', suggestions.length, 'suggestions');
+          this.showTranslitAutocomplete(suggestions);
         }
       } catch (err) {
         console.log('[TRANSLIT-DEBUG] Transliteration API error:', err);

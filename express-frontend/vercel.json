@@ -9,19 +9,7 @@
       "dest": "/api/index.js"
     },
     {
-      "src": "^/api/v1/ime/(.*)",
-      "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/ime/$1"
-    },
-    {
-      "src": "^/workspace$",
-      "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/workspace"
-    },
-    {
-      "src": "^/api/v1/(.*)",
-      "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/$1"
-    },
-    {
-      "src": "^(?!/api/v1/).*",
+      "src": "/(.*)",
       "dest": "/api/index.js"
     }
   ]

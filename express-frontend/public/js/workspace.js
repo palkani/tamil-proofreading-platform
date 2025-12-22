@@ -1,7 +1,3 @@
-const TRANSLITERATOR_BASE = (typeof process !== 'undefined' && process.env.FRONTEND_TRANSLITERATOR_BASE_URL) || '';
-const TRANSLITERATOR_ENDPOINT = TRANSLITERATOR_BASE ? `${TRANSLITERATOR_BASE}/api/v1/transliterate` : '';
-const TRANSLITERATOR_IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
-
 // Main Workspace Controller
 
 class WorkspaceController {
@@ -56,31 +52,11 @@ class WorkspaceController {
   }
 
   async fetchRunnerSuggestions(text, mode = 'spoken', limit = 8, signal) {
-    if (TRANSLITERATOR_IS_DEV) {
-      console.debug('[TRANSLITERATOR] using runner', { text, mode, limit });
-    }
-    if (!TRANSLITERATOR_ENDPOINT) {
-      console.error('[Translit] Runner endpoint missing (FRONTEND_TRANSLITERATOR_BASE_URL not set)');
+    if (typeof window.transliterateViaRunner !== 'function') {
+      console.error('[Translit] transliterateViaRunner is not available');
       return [];
     }
-    try {
-      const res = await fetch(TRANSLITERATOR_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Client-Id': 'prooftamil-frontend',
-        },
-        body: JSON.stringify({ text, mode, limit }),
-        signal,
-      });
-      if (!res.ok) return [];
-      const data = await res.json().catch(() => ({}));
-      return data?.suggestions || [];
-    } catch (err) {
-      if (err.name === 'AbortError') throw err;
-      console.error('[Translit] Runner fetch failed', err);
-      return [];
-    }
+    return window.transliterateViaRunner(text, mode, limit, signal);
   }
 
   init() {
@@ -96,7 +72,6 @@ class WorkspaceController {
       this.translitTypeahead = new window.TransliterationTypeahead(
         new window.WorkspaceEditorAdapter(editorElement),
         {
-          endpoint: TRANSLITERATOR_ENDPOINT,
           getMode: () => this.getMode(),
         }
       );
@@ -150,7 +125,7 @@ class WorkspaceController {
           return rects.length ? rects[0] : null;
         },
       };
-      this.imeTypeahead = new window.IMETypeahead(adapter, { endpoint: '/api/v1/ime/suggest', mode: 'spoken' });
+      this.imeTypeahead = new window.IMETypeahead(adapter, { mode: 'spoken' });
       editorElement.addEventListener('input', () => this.imeTypeahead.onInput());
       editorElement.addEventListener('keydown', (e) => {
         if (this.imeTypeahead && this.imeTypeahead.handleKey(e, null)) {

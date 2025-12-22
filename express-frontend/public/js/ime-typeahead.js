@@ -5,7 +5,6 @@
   class IMETypeahead {
     constructor(adapter, opts = {}) {
       this.adapter = adapter;
-      this.endpoint = opts.endpoint || '/api/v1/ime/suggest';
       this.mode = opts.mode || 'spoken';
       this.enabled = opts.enabled !== false;
       this.timer = null;
@@ -35,13 +34,19 @@
       this.log('request start', token);
       this.abort = new AbortController();
       try {
-        const res = await fetch(`${this.endpoint}?q=${encodeURIComponent(token)}&limit=${MAX_ITEMS}&mode=${this.mode}`, {
-          credentials: 'include',
-          signal: this.abort.signal,
-        });
-        if (!res.ok) throw new Error(`status ${res.status}`);
-        const data = await res.json();
-        const candidates = (data.candidates || []).filter(c => c.word);
+        if (typeof window.transliterateViaRunner !== 'function') {
+          this.log('transliterateViaRunner missing');
+          this.close();
+          return;
+        }
+        const results = await window.transliterateViaRunner(token, this.mode, MAX_ITEMS, this.abort.signal);
+        const candidates = (results || [])
+          .map((item, idx) => ({
+            word: typeof item === 'string' ? item : item.word || item.ta || item.text || item.suggestion || '',
+            score: (typeof item === 'object' && item) ? (item.score || item.confidence || 0) : 0,
+            id: `ime-${idx}`,
+          }))
+          .filter(c => c.word);
         this.log('response ok', { count: candidates.length });
         if (candidates.length === 0) {
           this.renderDropdown([]);
