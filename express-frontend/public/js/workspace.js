@@ -20,7 +20,7 @@ async function ensureRunnerLoaded() {
     };
 
     script.onerror = () => {
-      console.error("[Translit] failed to load runner helper", script.src);
+      console.error("[Translit] Runner JS missing at /js/transliterator-runner.js");
       reject(new Error("runner helper failed to load"));
     };
 

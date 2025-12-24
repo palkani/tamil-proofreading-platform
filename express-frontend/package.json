@@ -7,6 +7,7 @@
     "dev": "concurrently \"npm run watch:css\" \"nodemon server.js\"",
     "start": "node server.js",
     "watch:css": "npx tailwindcss -i ./public/css/input.css -o ./public/css/output.css --watch",
+    "prebuild:css": "node scripts/assert-runner.js",
     "build:css": "npx tailwindcss -i ./public/css/input.css -o ./public/css/output.css --minify"
   },
   "keywords": ["tamil", "proofreading", "ai", "express"],
