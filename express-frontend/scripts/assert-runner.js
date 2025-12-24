@@ -8,5 +8,11 @@ if (!fs.existsSync(runnerPath)) {
   process.exit(1);
 }
 
-console.log('[Build] Found transliterator-runner.js');
+const envVar = process.env.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL;
+if (!envVar || !envVar.trim()) {
+  console.error('[Build] NEXT_PUBLIC_TRANSLITERATOR_BASE_URL is required for transliterator-runner.js');
+  process.exit(1);
+}
+
+console.log('[Build] Found transliterator-runner.js and NEXT_PUBLIC_TRANSLITERATOR_BASE_URL');
 

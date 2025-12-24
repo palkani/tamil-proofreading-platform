@@ -4,18 +4,17 @@
 
   function readBaseUrl() {
     const envBase =
-      (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL) ||
+      (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL) ||
       (typeof window !== 'undefined' && window.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL) ||
       '';
+
     const trimmed = envBase.trim().replace(/\/+$/, '');
     if (!trimmed) {
       console.error('[TRANSLITERATOR] Missing NEXT_PUBLIC_TRANSLITERATOR_BASE_URL');
       return '';
     }
-    if (!/^https?:\/\//i.test(trimmed)) {
-      console.error('[TRANSLITERATOR] Runner base URL must be absolute');
-      return '';
-    }
+
+    console.log('[TRANSLITERATOR] Using base URL:', trimmed);
     return trimmed;
   }
 
