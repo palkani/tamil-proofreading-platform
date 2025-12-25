@@ -121,8 +121,8 @@ jobs:
     - name: Deploy Frontend to Vercel
       run: |
         npm install --global vercel@latest
-        vercel pull --yes --environment=production --token=$VERCEL_TOKEN --cwd express-frontend
-        vercel deploy --prod --token=$VERCEL_TOKEN --yes --force --cwd express-frontend
+        vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+        vercel deploy --prod --token=$VERCEL_TOKEN --yes --force
 
     - name: Deployment Complete
       run: |
