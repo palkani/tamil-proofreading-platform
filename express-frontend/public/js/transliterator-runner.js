@@ -1,9 +1,14 @@
 // Shared transliteration helper that always targets the runner (never the Go backend).
 (() => {
-  const IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
+  const IS_DEV = typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost';
+
+  function buildRunnerUrl(params) {
+    const qs = new URLSearchParams(params).toString();
+    return `/api/transliterate/suggest?${qs}`;
+  }
 
   async function transliterateViaRunner(text, mode = 'spoken', limit = 8, signal) {
-    const requestUrl = `/api/transliterate/suggest?q=${encodeURIComponent(text)}&limit=${encodeURIComponent(limit)}&mode=${encodeURIComponent(mode)}`;
+    const requestUrl = buildRunnerUrl({ q: text, limit, mode });
     if (IS_DEV) {
       console.debug('[TRANSLITERATOR] CALLING RUNNER VIA PROXY', { requestUrl, text, mode, limit });
     }
