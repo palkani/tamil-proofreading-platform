@@ -3,15 +3,13 @@
   const IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
 
   async function transliterateViaRunner(text, mode = 'spoken', limit = 8, signal) {
-    const envBase =
-      (typeof window !== 'undefined' && window.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL) ||
-      (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL) ||
-      '';
-    const baseUrl = envBase.trim().replace(/\/+$/, '');
-    if (!baseUrl) {
-      console.error('[TRANSLITERATOR] Missing NEXT_PUBLIC_TRANSLITERATOR_BASE_URL');
+    if (typeof window === "undefined") return [];
+    const v = window.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL;
+    if (!v || typeof v !== "string") {
+      console.error("[TRANSLITERATOR] Missing NEXT_PUBLIC_TRANSLITERATOR_BASE_URL", { value: v });
       return [];
     }
+    const baseUrl = v.replace(/\/+$/, "");
 
     const requestUrl = `${baseUrl}/api/v1/transliterate`;
     if (IS_DEV) {
