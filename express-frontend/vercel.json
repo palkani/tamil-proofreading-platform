@@ -5,6 +5,10 @@
 
   "routes": [
     {
+      "src": "^/api/transliterate/suggest$",
+      "dest": "/api/transliterate/suggest.js"
+    },
+    {
       "src": "^/api/v1/auth/google/callback$",
       "dest": "/api/index.js"
     },
