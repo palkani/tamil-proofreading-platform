@@ -1,5 +1,3 @@
-const fetch = require('node-fetch');
-
 module.exports = async function handler(req, res) {
   // Hardcoded runner base to avoid env misconfiguration at runtime
   const base = 'https://prooftamil-runner-991187041222.asia-south1.run.app';
