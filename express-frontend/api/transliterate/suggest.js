@@ -6,6 +6,10 @@ module.exports = async function handler(req, res) {
     console.error('[Translit Proxy] Missing TRANSLITERATOR_BASE_URL');
     return res.status(500).json({ error: 'TRANSLITERATOR_BASE_URL is not configured' });
   }
+  if (base.includes('prooftamil-backend')) {
+    console.error('[Translit Proxy] TRANSLITERATOR_BASE_URL points to backend host, must be runner host', { base });
+    return res.status(500).json({ error: 'TRANSLITERATOR_BASE_URL must point to runner host (prooftamil-runner-...).' });
+  }
 
   const { q = '', limit = 8, mode = 'spoken' } = req.query || {};
   const target = `${base.replace(/\/+$/, '')}/api/v1/transliterate/suggest?q=${encodeURIComponent(
