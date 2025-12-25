@@ -3,38 +3,14 @@
   const IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
 
   async function transliterateViaRunner(text, mode = 'spoken', limit = 8, signal) {
-    if (typeof window === "undefined") return [];
-    const v = window.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL;
-    if (!v || typeof v !== "string") {
-      console.error("[TRANSLITERATOR] Missing NEXT_PUBLIC_TRANSLITERATOR_BASE_URL", { value: v });
-      return [];
-    }
-    const baseUrl = v.replace(/\/+$/, "");
-
-    const requestUrl = `${baseUrl}/api/v1/transliterate`;
+    const requestUrl = `/api/transliterate/suggest?q=${encodeURIComponent(text)}&limit=${encodeURIComponent(limit)}&mode=${encodeURIComponent(mode)}`;
     if (IS_DEV) {
-      const isRelative = !/^https?:\/\//i.test(requestUrl);
-      if (requestUrl.includes('prooftamil-backend') || isRelative || requestUrl.startsWith('/api/')) {
-        throw new Error('[TRANSLITERATOR] Invalid runner URL (backend/proxy use is forbidden)');
-      }
-    }
-    console.log('[TRANSLITERATOR] Using base URL:', baseUrl);
-
-    if (!requestUrl) return [];
-
-    const logBase = requestUrl.replace(/\/api\/v1\/transliterate$/, '');
-    if (IS_DEV) {
-      console.debug('[TRANSLITERATOR] CALLING RUNNER', { baseUrl: logBase, text, mode, limit });
+      console.debug('[TRANSLITERATOR] CALLING RUNNER VIA PROXY', { requestUrl, text, mode, limit });
     }
 
     try {
       const res = await fetch(requestUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Client-Id': 'prooftamil-frontend',
-        },
-        body: JSON.stringify({ text, mode, limit }),
+        method: 'GET',
         signal,
       });
 
