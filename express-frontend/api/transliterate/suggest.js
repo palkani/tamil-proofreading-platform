@@ -18,13 +18,17 @@ module.exports = async function handler(req, res) {
   try {
     const resp = await fetch(target, { signal: controller.signal });
     const status = resp.status;
-    let data = {};
+    const raw = await resp.text();
+    let data;
     try {
-      data = await resp.json();
-    } catch (err) {
-      console.error('[Translit Proxy] Failed to parse runner response', err);
+      data = JSON.parse(raw);
+    } catch (_err) {
+      data = raw;
     }
-    res.status(status).json(data);
+    if (status >= 400) {
+      console.error('[Translit Proxy] Runner error', { status, body: raw.slice(0, 500) });
+    }
+    res.status(status).send(data);
   } catch (err) {
     if (err.name === 'AbortError') {
       console.error('[Translit Proxy] Runner request timed out');
