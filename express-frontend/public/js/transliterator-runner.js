@@ -2,42 +2,31 @@
 (() => {
   const IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
 
-  function readBaseUrl() {
+  async function transliterateViaRunner(text, mode = 'spoken', limit = 8, signal) {
     const envBase =
-      (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL) ||
       (typeof window !== 'undefined' && window.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL) ||
+      (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL) ||
       '';
-
-    const trimmed = envBase.trim().replace(/\/+$/, '');
-    if (!trimmed) {
+    const baseUrl = envBase.trim().replace(/\/+$/, '');
+    if (!baseUrl) {
       console.error('[TRANSLITERATOR] Missing NEXT_PUBLIC_TRANSLITERATOR_BASE_URL');
-      return '';
+      return [];
     }
 
-    console.log('[TRANSLITERATOR] Using base URL:', trimmed);
-    return trimmed;
-  }
-
-  function buildRunnerUrl() {
-    const baseUrl = readBaseUrl();
-    if (!baseUrl) return '';
-    const url = `${baseUrl}/api/v1/transliterate`;
+    const requestUrl = `${baseUrl}/api/v1/transliterate`;
     if (IS_DEV) {
-      const isRelative = !/^https?:\/\//i.test(url);
-      if (url.includes('prooftamil-backend') || isRelative || url.startsWith('/api/')) {
+      const isRelative = !/^https?:\/\//i.test(requestUrl);
+      if (requestUrl.includes('prooftamil-backend') || isRelative || requestUrl.startsWith('/api/')) {
         throw new Error('[TRANSLITERATOR] Invalid runner URL (backend/proxy use is forbidden)');
       }
     }
-    return url;
-  }
+    console.log('[TRANSLITERATOR] Using base URL:', baseUrl);
 
-  async function transliterateViaRunner(text, mode = 'spoken', limit = 8, signal) {
-    const requestUrl = buildRunnerUrl();
     if (!requestUrl) return [];
 
-    const baseUrl = requestUrl.replace(/\/api\/v1\/transliterate$/, '');
+    const logBase = requestUrl.replace(/\/api\/v1\/transliterate$/, '');
     if (IS_DEV) {
-      console.debug('[TRANSLITERATOR] CALLING RUNNER', { baseUrl, text, mode, limit });
+      console.debug('[TRANSLITERATOR] CALLING RUNNER', { baseUrl: logBase, text, mode, limit });
     }
 
     try {
