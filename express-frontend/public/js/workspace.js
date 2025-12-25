@@ -81,13 +81,29 @@ class WorkspaceController {
     return response;
   }
 
-  async fetchRunnerSuggestions(text, mode = 'spoken', limit = 8, signal) {
-    await ensureRunnerLoaded();
-    if (typeof window.transliterateViaRunner !== 'function') {
-      console.error('[Translit] transliterateViaRunner is not available');
-      return [];
+  async fetchRunnerSuggestions(params) {
+    console.log('IME fetchRunnerSuggestions CALLED');
+    const { q = '', limit = 8, mode = 'spoken' } = params || {};
+    const qs = new URLSearchParams({ q, limit, mode }).toString();
+    const url = `/api/transliterate/suggest?${qs}`;
+    console.debug('IME GET:', url);
+
+    try {
+      const res = await fetch(url, { method: 'GET' });
+      if (!res.ok) {
+        console.error('[Translit] proxy returned non-200', res.status);
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      const suggestions = data?.suggestions || data || [];
+      if (this.renderTranslitSuggestions) {
+        this.renderTranslitSuggestions(q, suggestions);
+      } else if (this.updateTranslitSuggestions) {
+        this.updateTranslitSuggestions(suggestions);
+      }
+    } catch (err) {
+      console.error('[Translit] fetchRunnerSuggestions failed', err);
     }
-    return window.transliterateViaRunner(text, mode, limit, signal);
   }
 
   init() {
@@ -250,7 +266,17 @@ class WorkspaceController {
   handleEditorChange() {
     this.updateWordCount();
     this.scheduleSave();
-    this.updateTranslitSuggestions();
+    const text = this.editor.getPlainText();
+    if (!text || text.length < 2) {
+      this.clearTranslitSuggestions();
+      return;
+    }
+    const lastWord = text.split(/\s+/).pop();
+    if (!lastWord) {
+      this.clearTranslitSuggestions();
+      return;
+    }
+    this.fetchRunnerSuggestions({ q: lastWord, limit: 8, mode: 'spoken' });
     
     // Trigger auto-analysis
     if (this.autoAnalysisEnabled) {
