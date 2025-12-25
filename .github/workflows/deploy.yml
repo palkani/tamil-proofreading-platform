@@ -119,10 +119,11 @@ jobs:
         fi
 
     - name: Deploy Frontend to Vercel
+      working-directory: express-frontend
       run: |
         npm install --global vercel@latest
         vercel pull --yes --environment=production --token=$VERCEL_TOKEN
-        vercel deploy --prod --token=$VERCEL_TOKEN --yes
+        vercel deploy --prod --token=$VERCEL_TOKEN --yes --force --cwd .
 
     - name: Deployment Complete
       run: |
