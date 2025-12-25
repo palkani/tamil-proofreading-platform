@@ -10,12 +10,21 @@ module.exports = async function handler(req, res) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
 
+  const headers = {
+    'X-Client-Id': 'prooftamil-frontend',
+    Accept: 'application/json',
+  };
+  const apiKey = process.env.RUNNER_API_KEY;
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  } else {
+    console.warn('[Translit Proxy] RUNNER_API_KEY not set; proceeding without Authorization header');
+  }
+
   try {
     const resp = await fetch(target, {
       signal: controller.signal,
-      headers: {
-        'X-Client-Id': 'prooftamil-frontend',
-      },
+      headers,
     });
     const status = resp.status;
     const raw = await resp.text();
