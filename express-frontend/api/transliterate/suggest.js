@@ -1,15 +1,8 @@
 const fetch = require('node-fetch');
 
 module.exports = async function handler(req, res) {
-  const base = process.env.TRANSLITERATOR_BASE_URL;
-  if (!base || !base.trim()) {
-    console.error('[Translit Proxy] Missing TRANSLITERATOR_BASE_URL');
-    return res.status(500).json({ error: 'TRANSLITERATOR_BASE_URL is not configured' });
-  }
-  if (base.includes('prooftamil-backend')) {
-    console.error('[Translit Proxy] TRANSLITERATOR_BASE_URL points to backend host, must be runner host', { base });
-    return res.status(500).json({ error: 'TRANSLITERATOR_BASE_URL must point to runner host (prooftamil-runner-...).' });
-  }
+  // Hardcoded runner base to avoid env misconfiguration at runtime
+  const base = 'https://prooftamil-runner-991187041222.asia-south1.run.app';
 
   const { q = '', limit = 8, mode = 'spoken' } = req.query || {};
   const target = `${base.replace(/\/+$/, '')}/api/v1/transliterate/suggest?q=${encodeURIComponent(
