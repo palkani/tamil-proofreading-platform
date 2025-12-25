@@ -11,7 +11,12 @@ module.exports = async function handler(req, res) {
   const timeout = setTimeout(() => controller.abort(), 8000);
 
   try {
-    const resp = await fetch(target, { signal: controller.signal });
+    const resp = await fetch(target, {
+      signal: controller.signal,
+      headers: {
+        'X-Client-Id': 'prooftamil-frontend',
+      },
+    });
     const status = resp.status;
     const raw = await resp.text();
     let data;
