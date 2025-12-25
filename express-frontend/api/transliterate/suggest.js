@@ -17,9 +17,11 @@ module.exports = async function handler(req, res) {
   const apiKey = process.env.RUNNER_API_KEY;
   if (apiKey) {
     headers.Authorization = `Bearer ${apiKey}`;
+    console.log('[Translit Proxy] Using Authorization bearer header');
   } else {
     console.warn('[Translit Proxy] RUNNER_API_KEY not set; proceeding without Authorization header');
   }
+  console.log('[Translit Proxy] target:', target);
 
   try {
     const resp = await fetch(target, {
