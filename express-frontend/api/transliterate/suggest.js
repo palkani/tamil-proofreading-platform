@@ -11,15 +11,16 @@ module.exports = async function handler(req, res) {
   const timeout = setTimeout(() => controller.abort(), 8000);
 
   const headers = {
-    'X-Client-Id': 'prooftamil-frontend',
     Accept: 'application/json',
   };
+  const clientId = process.env.RUNNER_CLIENT_ID || 'prooftamil-frontend';
   const apiKey = process.env.RUNNER_API_KEY;
+  headers['X-Client-Id'] = clientId;
   if (apiKey) {
-    headers.Authorization = `Bearer ${apiKey}`;
-    console.log('[Translit Proxy] Using Authorization bearer header');
+    headers['X-API-Key'] = apiKey;
+    console.log('[Translit Proxy] Using X-API-Key header for client', clientId);
   } else {
-    console.warn('[Translit Proxy] RUNNER_API_KEY not set; proceeding without Authorization header');
+    console.warn('[Translit Proxy] RUNNER_API_KEY not set; proceeding without X-API-Key');
   }
   console.log('[Translit Proxy] target:', target);
 
