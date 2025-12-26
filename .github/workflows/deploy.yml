@@ -87,6 +87,43 @@ jobs:
         BACKEND_URL=$(gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)')
         echo "Backend URL: $BACKEND_URL"
         curl -f "$BACKEND_URL/health" || echo "Health check pending..."
+
+    - name: Build Runner Image
+      run: |
+        docker build \
+          -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/runner:${{ github.sha }} \
+          -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/runner:latest \
+          -f services/ProofTamilRunner/Dockerfile \
+          services/ProofTamilRunner
+
+    - name: Push Runner Image
+      run: |
+        docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/runner:${{ github.sha }}
+        docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/runner:latest
+
+    - name: Deploy Runner to Cloud Run
+      run: |
+        gcloud run deploy prooftamil-runner \
+          --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/runner:${{ github.sha }} \
+          --region=${{ env.REGION }} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --memory=512Mi \
+          --cpu=1 \
+          --timeout=300 \
+          --max-instances=50 \
+          --port=8080
+
+    - name: Shift Runner Traffic to Latest
+      run: |
+        gcloud run services update-traffic prooftamil-runner --to-latest --region=${{ env.REGION }}
+
+    - name: Prune Old Runner Revisions
+      run: |
+        LATEST=$(gcloud run services describe prooftamil-runner --region=${{ env.REGION }} --format='value(status.latestReadyRevisionName)')
+        gcloud run revisions list --service=prooftamil-runner --region=${{ env.REGION }} --format='value(metadata.name)' \
+          | grep -v "$LATEST" \
+          | xargs -r gcloud run revisions delete --region=${{ env.REGION }} --quiet
     
     - name: Set up Node.js
       uses: actions/setup-node@v4
