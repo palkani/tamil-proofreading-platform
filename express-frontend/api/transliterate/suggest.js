@@ -23,6 +23,7 @@ module.exports = async function handler(req, res) {
     console.warn('[Translit Proxy] RUNNER_API_KEY not set; proceeding without X-API-Key');
   }
   console.log('[Translit Proxy] target:', target);
+  console.log('[Translit Proxy] outbound headers:', headers);
 
   try {
     const resp = await fetch(target, {
