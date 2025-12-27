@@ -39,6 +39,13 @@ async function ensureRunnerLoaded() {
   return window.__loadingTranslitRunner;
 }
 
+const EditorMode = {
+  IDLE: 'IDLE',
+  IME_TYPING: 'IME_TYPING',
+  SUBMIT_PENDING: 'SUBMIT_PENDING',
+  SUBMITTING: 'SUBMITTING',
+};
+
 class WorkspaceController {
   constructor() {
     this.getMode = () => {
@@ -68,6 +75,9 @@ class WorkspaceController {
     this.translitAbort = null;
     this.translitTimer = null;
     this.lastRunnerSuggestions = [];
+    this.editorMode = EditorMode.IDLE;
+    this.imeActive = false;
+    this.currentSuggestions = [];
     this.translitDropdownOpen = false;
     this.submitAbort = null;
     this.submitTimer = null;
@@ -124,6 +134,9 @@ class WorkspaceController {
 
       if (res.status === 304) {
         if (this.DEBUG_IME) console.debug('[IME] suggest 304 - reusing lastSuggestions', { q });
+        this.currentSuggestions = this.lastRunnerSuggestions;
+        this.imeActive = true;
+        this.editorMode = EditorMode.IME_TYPING;
         if (this.renderTranslitSuggestions) {
           this.renderTranslitSuggestions(q, this.lastRunnerSuggestions);
         } else if (this.updateTranslitSuggestions) {
@@ -154,6 +167,9 @@ class WorkspaceController {
         }))
         .filter((s) => s.text);
       this.lastRunnerSuggestions = suggestions;
+      this.currentSuggestions = suggestions;
+      this.imeActive = true;
+      this.editorMode = EditorMode.IME_TYPING;
 
       if (this.renderTranslitSuggestions) {
         this.renderTranslitSuggestions(q, suggestions);
@@ -330,11 +346,24 @@ class WorkspaceController {
     const text = this.editor.getPlainText() || '';
     const lastToken = getLastToken(text);
     const isLatin = /^[A-Za-z]+$/.test(lastToken);
+    if (this.DEBUG_IME) console.debug('[IME] onChange', { lastToken, imeActive: this.imeActive, editorMode: this.editorMode });
+
+    // IME activation
     if (lastToken && isLatin && lastToken.length >= 2) {
+      this.imeActive = true;
+      this.editorMode = EditorMode.IME_TYPING;
       this.fetchRunnerSuggestions({ q: lastToken, limit: 8, mode: 'spoken' });
-    } else {
+      return; // DO NOT schedule submit while IME is active
+    }
+
+    // IME deactivate when token not latin / too short
+    if (!isLatin || lastToken.length === 0) {
+      this.imeActive = false;
+      this.editorMode = EditorMode.IDLE;
       this.clearTranslitSuggestions();
     }
+
+    // Submit scheduling only when IME not active
     this.scheduleSubmitThrottled(text);
   }
 
@@ -353,7 +382,7 @@ class WorkspaceController {
 
     list.innerHTML = '';
 
-    if (!word || !suggestions || suggestions.length === 0) {
+    if (!this.imeActive || !word || !suggestions || suggestions.length === 0) {
       status.textContent = word ? `No suggestions for "${word}"` : 'Type English to see Tamil suggestions…';
       box.classList.toggle('hidden', true);
       this.translitDropdownOpen = false;
@@ -397,6 +426,8 @@ class WorkspaceController {
       li.addEventListener('click', () => {
         this.replaceLastWord(word, sugg.text || sugg.word);
         this.clearTranslitSuggestions();
+        this.imeActive = false;
+        this.editorMode = EditorMode.IDLE;
       });
       list.appendChild(li);
     });
@@ -411,6 +442,7 @@ class WorkspaceController {
     list.innerHTML = '';
     box.classList.add('hidden');
     this.translitDropdownOpen = false;
+    this.currentSuggestions = [];
   }
 
   replaceLastWord(word, replacement) {
@@ -475,6 +507,10 @@ class WorkspaceController {
   }
 
   scheduleSubmitThrottled(text) {
+    if (this.imeActive || this.editorMode === EditorMode.IME_TYPING) {
+      if (this.DEBUG_IME) console.debug('[SUBMIT] skipped (IME active)');
+      return;
+    }
     const words = (text || '').trim().split(/\s+/).filter(Boolean);
     const wordCount = words.length;
     if (wordCount < 10) {
