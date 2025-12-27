@@ -205,6 +205,11 @@ class WorkspaceController {
   }
 
   async fetchRunnerSuggestions(params) {
+    // Phase 5: Disable legacy IME when TipTap is active
+    if (window.USE_TIPTAP_EDITOR) {
+      return []; // TipTap handles IME via extension
+    }
+    
     console.log('IME fetchRunnerSuggestions CALLED');
     const { q = '', limit = 8, mode = 'spoken' } = params || {};
     const qs = new URLSearchParams({ q, limit, mode, _ts: Date.now(), _r: Math.random().toString(36).slice(2) }).toString();
@@ -284,8 +289,43 @@ class WorkspaceController {
     }
   }
 
+  /**
+   * Phase 7: Helper methods to abstract editor access (works with both legacy and TipTap)
+   */
+  getEditorText() {
+    if (window.USE_TIPTAP_EDITOR && tiptapWorkspaceEditor) {
+      return tiptapWorkspaceEditor.getText();
+    }
+    return this.editor ? (this.editor.getPlainText ? this.getEditorText() : '') : '';
+  }
+
+  getEditorHTML() {
+    if (window.USE_TIPTAP_EDITOR && tiptapWorkspaceEditor) {
+      return tiptapWorkspaceEditor.getHTML();
+    }
+    return this.editor ? (this.editor.getHTML ? this.getEditorHTML() : '') : '';
+  }
+
+  setEditorContent(html) {
+    if (window.USE_TIPTAP_EDITOR && tiptapWorkspaceEditor) {
+      tiptapWorkspaceEditor.commands.setContent(html);
+      return;
+    }
+    if (this.editor && this.editor.setContent) {
+      this.editor.setContent(html);
+    } else if (this.editor && this.editor.innerHTML !== undefined) {
+      this.editor.innerHTML = html;
+    }
+  }
+
   init() {
-    // Initialize editor
+    // Initialize editor (only if TipTap is not active)
+    if (window.USE_TIPTAP_EDITOR) {
+      // Skip legacy editor initialization when TipTap is active
+      console.log('[TipTap Migration] Skipping legacy editor init (TipTap active)');
+      return;
+    }
+
     const editorElement = document.getElementById('editor');
     if (editorElement) {
       this.editor = new TamilEditor(editorElement);
@@ -449,7 +489,13 @@ class WorkspaceController {
   handleEditorChange() {
     this.updateWordCount();
     this.scheduleSave();
-    const text = this.editor.getPlainText() || '';
+    
+    // Phase 5: Disable legacy IME when TipTap is active
+    if (window.USE_TIPTAP_EDITOR) {
+      return; // TipTap handles IME via extension
+    }
+    
+    const text = this.getEditorText() || '';
     const caretPos = (this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
     const tokenInfo = getTokenAtCaret(text, caretPos);
     const { token, start, end } = tokenInfo;
@@ -492,13 +538,18 @@ class WorkspaceController {
   // DEPRECATED: Use getTokenAtCaret instead
   // Keeping for backward compatibility but should be removed
   getCurrentWord() {
-    const text = this.editor.getPlainText() || '';
+    const text = this.getEditorText() || '';
     const caretPos = (this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
     const { token } = getTokenAtCaret(text, caretPos);
     return token || '';
   }
 
   renderTranslitSuggestions(word, suggestions) {
+    // Phase 5: Disable legacy IME popup when TipTap is active
+    if (window.USE_TIPTAP_EDITOR) {
+      return; // TipTap handles IME inline via decorations
+    }
+    
     const box = document.getElementById('translit-suggest-box');
     const status = document.getElementById('translit-suggest-status');
     const list = document.getElementById('translit-suggest-list');
@@ -755,6 +806,11 @@ class WorkspaceController {
   }
 
   clearTranslitSuggestions() {
+    // Phase 5: Disable legacy IME popup when TipTap is active
+    if (window.USE_TIPTAP_EDITOR) {
+      return; // TipTap handles IME inline via decorations
+    }
+    
     this.clearGhostText();
     const box = document.getElementById('translit-suggest-box');
     const status = document.getElementById('translit-suggest-status');
@@ -769,6 +825,11 @@ class WorkspaceController {
   }
 
   repositionTranslitDropdown() {
+    // Phase 5: Disable legacy IME popup when TipTap is active
+    if (window.USE_TIPTAP_EDITOR) {
+      return; // TipTap handles IME inline via decorations
+    }
+    
     if (!this.translitDropdownOpen || !this.imeActive) return;
     const box = document.getElementById('translit-suggest-box');
     if (!box) return;
@@ -805,7 +866,7 @@ class WorkspaceController {
   replaceTokenAtCaret(replacement, appendSpace = false) {
     if (!this.currentTokenInfo || !replacement) return;
     const { token, start, end } = this.currentTokenInfo;
-    const text = this.editor.getPlainText() || '';
+    const text = this.getEditorText() || '';
     const replacementText = replacement + (appendSpace ? ' ' : '');
     const newText = text.slice(0, start) + replacementText + text.slice(end);
     this.editor.setText(newText);
@@ -821,7 +882,7 @@ class WorkspaceController {
 
   replaceLastWord(word, replacement) {
     if (!word || !replacement) return;
-    const text = this.editor.getPlainText();
+    const text = this.getEditorText();
     const newText = replaceLastToken(text, replacement);
     this.editor.setText(newText);
     const range = document.createRange();
@@ -887,7 +948,8 @@ class WorkspaceController {
   }
 
   async runAutoSubmit(hash, wordCount) {
-    const text = (this.editor.getPlainText() || '').trim();
+    // Phase 7: Use helper method that works with both legacy and TipTap
+    const text = (this.getEditorText() || '').trim();
     if (text !== hash) {
       return;
     }
@@ -919,7 +981,7 @@ class WorkspaceController {
   }
   
   async autoAnalyze() {
-    const text = this.editor.getPlainText().trim();
+    const text = this.getEditorText().trim();
     
     // Skip if text is too short (minimum 5 words or 20 characters)
     const wordCount = countWords(text);
@@ -1009,7 +1071,7 @@ class WorkspaceController {
             preview: original && corrected ? `${original} → ${corrected}` : corrected || original || '',
             sourceText: original,
             onApply: original && corrected ? () => {
-              const currentText = this.editor.getPlainText();
+              const currentText = this.getEditorText();
               const { text: newText, changed } = applyReplacement(currentText, original, corrected, result.start_index);
               
               if (changed) {
@@ -1109,7 +1171,7 @@ class WorkspaceController {
   }
 
   async translateEnglishToTamil() {
-    const text = this.editor.getPlainText().trim();
+    const text = this.getEditorText().trim();
     
     if (!text) {
       alert('Please enter some English text to translate.');
@@ -1161,7 +1223,7 @@ class WorkspaceController {
   }
 
   updateWordCount() {
-    const text = this.editor.getPlainText();
+    const text = this.getEditorText();
     const count = countWords(text);
     const wordCountEl = document.getElementById('word-count');
     if (wordCountEl) {
@@ -1196,7 +1258,7 @@ class WorkspaceController {
       return;
     }
 
-    const text = this.editor.getPlainText().trim();
+    const text = this.getEditorText().trim();
     
     // Don't save empty drafts
     if (!text || text.length < 5) {
@@ -1211,7 +1273,7 @@ class WorkspaceController {
     }
 
     try {
-      const html = this.editor.getHTML();
+      const html = this.getEditorHTML();
       
       // If we have a current draft, we're updating it
       // Otherwise, create a new one
@@ -1277,7 +1339,7 @@ class WorkspaceController {
   async checkWithGemini() {
     if (this.loading) return;
 
-    const text = this.editor.getPlainText();
+    const text = this.getEditorText();
     if (!text || text.trim().length === 0) {
       this.showNotification('Please enter some text first', 'warning');
       return;
@@ -1323,7 +1385,7 @@ class WorkspaceController {
           preview: `${t.original} → ${sugg.ta}`,
           sourceText: t.original,
           onApply: () => {
-          const currentText = this.editor.getPlainText();
+          const currentText = this.getEditorText();
             const replaced = this.replaceTokenInText(currentText, t.original, sugg.ta, t.start);
             this.editor.setText(replaced);
           },
@@ -1336,7 +1398,7 @@ class WorkspaceController {
 
       // Proofread V2 normalize + highlight for validate
       if (window.PROOFREAD_V2 && window.normalizeProofreadResponse) {
-        const plain = this.editor.getPlainText();
+        const plain = this.getEditorText();
         const norm = window.normalizeProofreadResponse(data, plain);
         this.proofreadSuggestions = norm;
         if (this.proofreadHighlights) {
@@ -1368,7 +1430,7 @@ class WorkspaceController {
   }
 
   async submitForProofreading() {
-    const text = this.editor.getPlainText();
+    const text = this.getEditorText();
     if (!text || text.trim().length === 0) {
       this.showNotification('Please enter some text first', 'warning');
       return;
@@ -1742,11 +1804,176 @@ class WorkspaceController {
   }
 }
 
+// ============================================
+// TIPTAP MIGRATION - Phase 3 & 4
+// ============================================
+// Migration flag: set to true to enable TipTap editor
+window.USE_TIPTAP_EDITOR = false; // Change to true to activate TipTap
+
+// Global TipTap editor instance
+let tiptapWorkspaceEditor = null;
+
+/**
+ * Phase 3: Mount TipTap editor in workspace
+ * Creates and mounts TipTap editor instance
+ */
+function mountTipTapWorkspaceEditor() {
+  const el = document.getElementById('tiptap-workspace-editor');
+  if (!el) {
+    console.warn('[TipTap Migration] Container not found');
+    return;
+  }
+
+  // Wait for TipTap to load
+  const checkTipTap = setInterval(() => {
+    if (window.TIPTAP_LOADED && window.createTipTapEditor) {
+      clearInterval(checkTipTap);
+      el.classList.remove('hidden');
+      
+      // Get initial content from legacy editor if it exists
+      const legacyEditor = document.getElementById('editor');
+      const initialContent = legacyEditor ? legacyEditor.textContent : '';
+      
+      tiptapWorkspaceEditor = window.createTipTapEditor(el, initialContent || '<p></p>');
+      
+      if (tiptapWorkspaceEditor) {
+        console.log('[TipTap Migration] Workspace editor mounted successfully');
+      } else {
+        console.error('[TipTap Migration] Failed to create TipTap editor');
+        el.classList.add('hidden');
+      }
+    }
+  }, 100);
+
+  // Timeout after 5 seconds
+  setTimeout(() => {
+    clearInterval(checkTipTap);
+    if (!window.TIPTAP_LOADED) {
+      console.error('[TipTap Migration] TipTap failed to load within 5 seconds');
+    }
+  }, 5000);
+}
+
+/**
+ * Phase 4: Switch UI from legacy to TipTap
+ * Hides legacy editor and shows TipTap editor
+ */
+function switchWorkspaceEditor() {
+  if (!window.USE_TIPTAP_EDITOR) {
+    return; // Legacy editor remains active
+  }
+
+  const legacyPanel = document.querySelector('.workspace-editor-panel');
+  const legacyEditor = document.getElementById('editor');
+  
+  // Hide legacy editor
+  if (legacyEditor) {
+    legacyEditor.style.display = 'none';
+  }
+  
+  // Mount TipTap editor
+  mountTipTapWorkspaceEditor();
+  
+  // Phase 6: Wire toolbar to TipTap (with delay to ensure editor is mounted)
+  setTimeout(() => {
+    setupTipTapToolbar();
+  }, 600);
+  
+  console.log('[TipTap Migration] Switched to TipTap editor');
+}
+
+/**
+ * Phase 6: Wire toolbar buttons to TipTap commands
+ * This function sets up TipTap-aware toolbar handlers that override legacy handlers
+ */
+function setupTipTapToolbar() {
+  if (!window.USE_TIPTAP_EDITOR || !tiptapWorkspaceEditor) {
+    return; // Legacy toolbar remains active
+  }
+
+  // Command mapping: data-command → TipTap command
+  const commandMap = {
+    'bold': () => tiptapWorkspaceEditor.chain().focus().toggleBold().run(),
+    'italic': () => tiptapWorkspaceEditor.chain().focus().toggleItalic().run(),
+    'underline': () => tiptapWorkspaceEditor.chain().focus().toggleUnderline?.().run?.() || null, // Underline may need extension
+    'strikeThrough': () => tiptapWorkspaceEditor.chain().focus().toggleStrike().run(),
+    'undo': () => tiptapWorkspaceEditor.chain().focus().undo().run(),
+    'redo': () => tiptapWorkspaceEditor.chain().focus().redo().run(),
+    'insertUnorderedList': () => tiptapWorkspaceEditor.chain().focus().toggleBulletList().run(),
+    'insertOrderedList': () => tiptapWorkspaceEditor.chain().focus().toggleOrderedList().run(),
+    'justifyLeft': () => tiptapWorkspaceEditor.chain().focus().setTextAlign('left').run(),
+    'justifyCenter': () => tiptapWorkspaceEditor.chain().focus().setTextAlign('center').run(),
+    'justifyRight': () => tiptapWorkspaceEditor.chain().focus().setTextAlign('right').run(),
+    'justifyFull': () => tiptapWorkspaceEditor.chain().focus().setTextAlign('justify').run(),
+  };
+
+  // Override toolbar button handlers
+  const toolbarButtons = document.querySelectorAll('.toolbar-btn[data-command]');
+  toolbarButtons.forEach(btn => {
+    // Remove existing listeners by cloning the button (hacky but effective)
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    
+    newBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const command = newBtn.getAttribute('data-command');
+      const tipTapCommand = commandMap[command];
+      
+      if (tipTapCommand) {
+        tipTapCommand();
+        
+        // Update active state for formatting buttons
+        if (['bold', 'italic', 'underline', 'strikeThrough'].includes(command)) {
+          const isActive = tiptapWorkspaceEditor.isActive(command === 'strikeThrough' ? 'strike' : command);
+          if (isActive) {
+            newBtn.classList.add('active');
+          } else {
+            newBtn.classList.remove('active');
+          }
+        }
+      }
+    });
+  });
+
+  // Handle alignment dropdown items
+  const dropdownItems = document.querySelectorAll('.dropdown-item[data-command]');
+  dropdownItems.forEach(item => {
+    const newItem = item.cloneNode(true);
+    item.parentNode.replaceChild(newItem, item);
+    
+    newItem.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const command = newItem.getAttribute('data-command');
+      const tipTapCommand = commandMap[command];
+      if (tipTapCommand) {
+        tipTapCommand();
+      }
+      // Close dropdown
+      const dropdown = document.getElementById('align-dropdown');
+      if (dropdown) dropdown.classList.add('hidden');
+    });
+  });
+
+  console.log('[TipTap Migration] Toolbar wired to TipTap commands');
+}
+
+// Expose globally for toolbar integration
+window.tiptapWorkspaceEditor = () => tiptapWorkspaceEditor;
+window.mountTipTapWorkspaceEditor = mountTipTapWorkspaceEditor;
+window.switchWorkspaceEditor = switchWorkspaceEditor;
+window.setupTipTapToolbar = setupTipTapToolbar;
+
 // Initialize workspace when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     new WorkspaceController();
+    // Phase 4: Switch to TipTap if flag is enabled
+    setTimeout(() => switchWorkspaceEditor(), 500); // Wait a bit for TipTap to load
   });
 } else {
   new WorkspaceController();
+  // Phase 4: Switch to TipTap if flag is enabled
+  setTimeout(() => switchWorkspaceEditor(), 500); // Wait a bit for TipTap to load
 }

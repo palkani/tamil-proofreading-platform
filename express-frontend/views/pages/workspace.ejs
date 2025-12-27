@@ -282,6 +282,7 @@
 
       <!-- Editor -->
       <div class="flex-1 overflow-auto px-6 py-4 pb-6">
+        <!-- Legacy Editor (hidden when TipTap is active) -->
         <div 
           id="editor" 
           class="editor-content bg-white rounded-xl shadow-sm border border-gray-200 min-h-[500px] p-6 tamil-text text-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
@@ -289,6 +290,9 @@
           spellcheck="false"
           placeholder="தமிழில் எழுதத் தொடங்குங்கள்..."
         ></div>
+        
+        <!-- TipTap Editor Container (hidden by default, shown when migration flag is active) -->
+        <div id="tiptap-workspace-editor" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 min-h-[500px] p-6 tamil-text text-lg"></div>
       </div>
     </div>
 
@@ -339,6 +343,8 @@
   window.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL = "https://prooftamil-runner-991187041222.asia-south1.run.app";
 </script>
 <!-- Include Tamil utilities and editor scripts -->
+<!-- TipTap Editor Bootstrap (loaded before other scripts for migration) -->
+<script type="module" src="/js/tiptap-editor.js"></script>
 <script src="/js/transliterator-runner.js"></script>
 <script src="/js/tamilDictionary.js?v=20251127b"></script>
 <script src="/js/transliteration.js?v=20251127b"></script>
