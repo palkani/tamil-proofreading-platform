@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, useEditor, BubbleMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
 import {
@@ -9,18 +9,10 @@ import {
   IconRedo,
   IconBold,
   IconItalic,
-  IconUnderline,
-  IconStrikethrough,
   IconBulletList,
   IconNumberList,
-  IconAlignLeft,
-  IconAlignCenter,
-  IconAlignRight,
-  IconAlignJustify,
-  IconLink,
-  IconSearch,
 } from './icons';
-import { transliterateTamilVariants, convertEnglishToTamil } from '@/utils/transliterate';
+import { convertEnglishToTamil } from '@/utils/transliterate';
 import { TamilIME } from '@/src/editor/extensions/TamilIME';
 import { GrammarHighlighter } from '@/src/editor/extensions/GrammarHighlighter';
 
@@ -32,42 +24,7 @@ interface RichTextEditorProps {
   onPasteContent?: (payload: { html: string; plain: string }) => void;
 }
 
-const POPUP_WIDTH = 280;
-const POPUP_HEIGHT = 220;
-const POPUP_MARGIN = 12;
 
-const clampPopupPosition = (coords: DOMRect, containerRect: DOMRect) => {
-  if (typeof window === 'undefined') {
-    return { left: coords.left, top: coords.bottom + 8, placement: 'below' as const };
-  }
-
-  let left = coords.left;
-  let top = coords.bottom + 8;
-  let placement: 'above' | 'below' = 'below';
-
-  const minLeft = containerRect.left + POPUP_MARGIN;
-  const maxLeft = containerRect.right - POPUP_WIDTH - POPUP_MARGIN;
-  left = Math.min(Math.max(left, minLeft), Math.max(minLeft, maxLeft));
-
-  if (top + POPUP_HEIGHT + POPUP_MARGIN > containerRect.bottom) {
-    top = coords.top - POPUP_HEIGHT - 8;
-    placement = 'above';
-  }
-
-  const minTop = containerRect.top + POPUP_MARGIN;
-  if (top < minTop) {
-    top = minTop;
-  }
-
-  return { left, top, placement };
-};
-
-const toolbarButtonClasses = (active: boolean) =>
-  `flex items-center justify-center h-12 w-12 rounded-xl text-lg font-semibold transition-all duration-200 ${
-    active
-      ? 'bg-[#4F46E5] text-white shadow-lg shadow-[#4F46E5]/30 scale-105'
-      : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#4F46E5] hover:scale-110 border-2 border-transparent hover:border-[#E2E8F0]'
-  }`;
 
 export default function RichTextEditor({
   value,
@@ -76,13 +33,7 @@ export default function RichTextEditor({
   onPasteContent,
   onPlainTextChange,
 }: RichTextEditorProps) {
-  const [isTamil, setIsTamil] = useState(true);
   const [tamilIMEEnabled, setTamilIMEEnabled] = useState(true);
-  const [popupSuggestions, setPopupSuggestions] = useState<string[]>([]);
-  const [popupCoords, setPopupCoords] = useState<{ left: number; top: number; placement: 'above' | 'below' } | null>(null);
-  const [currentPrefix, setCurrentPrefix] = useState('');
-  const [activeIndex, setActiveIndex] = useState(0);
-  const suggestionTimerRef = useRef<number | null>(null);
   const updateTimerRef = useRef<number | null>(null);
   const pasteCallbackRef = useRef<typeof onPasteContent>(onPasteContent);
   const isUpdatingFromPropsRef = useRef(false);
@@ -111,7 +62,7 @@ export default function RichTextEditor({
     ];
 
     return base;
-  }, [isTamil, tamilIMEEnabled]);
+  }, [tamilIMEEnabled]);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -149,24 +100,6 @@ export default function RichTextEditor({
       }, 50);
     },
   });
-
-  const insertSuggestion = useCallback(
-    (suggestion: string) => {
-      if (!editor) return;
-      const { from } = editor.state.selection;
-      const deleteFrom = Math.max(0, from - currentPrefix.length);
-      editor
-        .chain()
-        .focus()
-        .deleteRange({ from: deleteFrom, to: from })
-        .insertContent(`${suggestion} `)
-        .run();
-      setPopupSuggestions([]);
-      setPopupCoords(null);
-      setActiveIndex(0);
-    },
-    [editor, currentPrefix]
-  );
 
   useEffect(() => {
     if (!editor) return;
@@ -337,85 +270,6 @@ export default function RichTextEditor({
     };
   }, [editor]);
 
-  useEffect(() => {
-    if (!editor) return;
-
-    const updateSuggestions = () => {
-      if (!isTamil) {
-        setPopupSuggestions([]);
-        setPopupCoords(null);
-        return;
-      }
-
-      const selection = editor.state.selection;
-      const { from } = selection;
-      const textBefore = editor.state.doc.textBetween(Math.max(0, from - 40), from, '\n', ' ');
-      const match = textBefore.match(/([A-Za-z]+)$/);
-      const prefix = match ? match[1] : '';
-      setCurrentPrefix(prefix);
-
-      if (prefix.length >= 2 && /^[a-z]+$/i.test(prefix)) {
-        const variants = transliterateTamilVariants(prefix.toLowerCase(), 6);
-        if (variants.length > 0) {
-          const coords = editor.view.coordsAtPos(from) as DOMRect;
-          const containerRect = (editor.view.dom as HTMLElement).getBoundingClientRect();
-          const safePosition = clampPopupPosition(coords, containerRect);
-          setPopupCoords(safePosition);
-          setPopupSuggestions(variants);
-          setActiveIndex(0);
-          return;
-        }
-      }
-
-      setPopupSuggestions([]);
-      setPopupCoords(null);
-    };
-
-    const debouncedUpdate = () => {
-      if (suggestionTimerRef.current) {
-        window.clearTimeout(suggestionTimerRef.current);
-      }
-      suggestionTimerRef.current = window.setTimeout(updateSuggestions, 120);
-    };
-
-    const dom = editor.view.dom;
-    dom.addEventListener('keyup', debouncedUpdate);
-    dom.addEventListener('click', debouncedUpdate);
-
-    return () => {
-      if (suggestionTimerRef.current) {
-        window.clearTimeout(suggestionTimerRef.current);
-      }
-      dom.removeEventListener('keyup', debouncedUpdate);
-      dom.removeEventListener('click', debouncedUpdate);
-    };
-  }, [editor, isTamil]);
-
-  useEffect(() => {
-    if (!editor) return;
-    const dom = editor.view.dom;
-
-    const keyHandler = (event: KeyboardEvent) => {
-      if (!popupSuggestions.length) return;
-
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        setActiveIndex((prev) => (prev + 1) % popupSuggestions.length);
-      } else if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        setActiveIndex((prev) => (prev - 1 + popupSuggestions.length) % popupSuggestions.length);
-      } else if (event.key === 'Enter') {
-        event.preventDefault();
-        insertSuggestion(popupSuggestions[activeIndex]);
-      } else if (event.key === 'Escape') {
-        setPopupSuggestions([]);
-        setPopupCoords(null);
-      }
-    };
-
-    dom.addEventListener('keydown', keyHandler);
-    return () => dom.removeEventListener('keydown', keyHandler);
-  }, [editor, popupSuggestions, activeIndex, insertSuggestion]);
 
   if (!editor) {
     return (
@@ -427,157 +281,37 @@ export default function RichTextEditor({
 
   return (
     <div className="flex h-full flex-col bg-white rounded-3xl border-2 border-[#E2E8F0] shadow-xl overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-4 px-8 py-5 border-b-2 border-[#E2E8F0] bg-[#F8FAFC]">
+      <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-[#E2E8F0] bg-[#F8FAFC]">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => editor.chain().focus().undo().run()}
-            className="flex items-center justify-center h-12 w-12 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded-xl transition-all duration-200 hover:scale-110 border-2 border-transparent hover:border-[#E2E8F0]"
+            className="flex items-center justify-center h-8 w-8 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors"
             title="Undo (Ctrl+Z)"
           >
-            <IconUndo width={20} height={20} />
+            <IconUndo width={16} height={16} />
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().redo().run()}
-            className="flex items-center justify-center h-12 w-12 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded-xl transition-all duration-200 hover:scale-110 border-2 border-transparent hover:border-[#E2E8F0]"
+            className="flex items-center justify-center h-8 w-8 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors"
             title="Redo (Ctrl+Y)"
           >
-            <IconRedo width={20} height={20} />
-          </button>
-          <div className="h-8 w-px bg-[#E2E8F0] mx-2"></div>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={toolbarButtonClasses(editor.isActive('bold'))}
-            title="Bold (Ctrl+B)"
-          >
-            <IconBold width={20} height={20} />
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={toolbarButtonClasses(editor.isActive('italic'))}
-            title="Italic (Ctrl+I)"
-          >
-            <IconItalic width={20} height={20} />
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleUnderline?.().run?.() || editor.commands.toggleBold()}
-            className={toolbarButtonClasses(false)}
-            title="Underline (Ctrl+U)"
-          >
-            <IconUnderline width={20} height={20} />
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            className={toolbarButtonClasses(editor.isActive('strike'))}
-            title="Strikethrough"
-          >
-            <IconStrikethrough width={20} height={20} />
-          </button>
-          <div className="h-8 w-px bg-[#E2E8F0] mx-2"></div>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={toolbarButtonClasses(editor.isActive('bulletList'))}
-            title="Bullet List"
-          >
-            <IconBulletList width={20} height={20} />
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            className={toolbarButtonClasses(editor.isActive('orderedList'))}
-            title="Numbered List"
-          >
-            <IconNumberList width={20} height={20} />
+            <IconRedo width={16} height={16} />
           </button>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().setTextAlign('left').run()}
-            className={toolbarButtonClasses(editor.isActive({ textAlign: 'left' }))}
-            title="Align Left"
-          >
-            <IconAlignLeft width={20} height={20} />
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().setTextAlign('center').run()}
-            className={toolbarButtonClasses(editor.isActive({ textAlign: 'center' }))}
-            title="Align Center"
-          >
-            <IconAlignCenter width={20} height={20} />
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().setTextAlign('right').run()}
-            className={toolbarButtonClasses(editor.isActive({ textAlign: 'right' }))}
-            title="Align Right"
-          >
-            <IconAlignRight width={20} height={20} />
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().setTextAlign('justify').run()}
-            className={toolbarButtonClasses(editor.isActive({ textAlign: 'justify' }))}
-            title="Justify"
-          >
-            <IconAlignJustify width={20} height={20} />
-          </button>
-          <div className="h-8 w-px bg-[#E2E8F0] mx-2"></div>
-          <button
-            type="button"
-            onClick={() => setTamilIMEEnabled(!tamilIMEEnabled)}
-            className={toolbarButtonClasses(tamilIMEEnabled)}
-            title={tamilIMEEnabled ? 'Disable Tamil IME' : 'Enable Tamil IME'}
-          >
-            <span className="text-sm font-semibold">த</span>
-          </button>
-          <button
-            type="button"
-            className="flex items-center justify-center h-12 w-12 text-[#475569] hover:bg-[#F8FAFC] hover:text-[#4F46E5] rounded-xl transition-all duration-200 hover:scale-110 border-2 border-transparent hover:border-[#E2E8F0]"
-            title="Insert Link"
-          >
-            <IconLink width={20} height={20} />
-          </button>
-          <button
-            type="button"
-            className="flex items-center justify-center h-12 w-12 text-[#475569] hover:bg-[#F8FAFC] hover:text-[#4F46E5] rounded-xl transition-all duration-200 hover:scale-110 border-2 border-transparent hover:border-[#E2E8F0]"
-            title="Search"
-          >
-            <IconSearch width={20} height={20} />
-          </button>
-        </div>
-
-        <div className="flex items-center">
-          <button
-            type="button"
-            onClick={() =>
-              setIsTamil((prev) => {
-                const next = !prev;
-                if (!next) {
-                  setPopupSuggestions([]);
-                  setPopupCoords(null);
-                }
-                return next;
-              })
-            }
-            className={`flex items-center gap-3 px-6 py-3 rounded-xl text-base font-semibold transition-all duration-200 border-2 ${
-              isTamil
-                ? 'bg-[#4F46E5] text-white shadow-lg shadow-[#4F46E5]/30 border-[#4F46E5]'
-                : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#4F46E5] border-[#E2E8F0]'
-            }`}
-            title={isTamil ? 'Switch to English' : 'Switch to Tamil'}
-          >
-            {isTamil ? 'தமிழ்' : 'English'}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setTamilIMEEnabled(!tamilIMEEnabled)}
+          className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+            tamilIMEEnabled
+              ? 'bg-[#4F46E5] text-white'
+              : 'bg-white text-[#475569] hover:bg-gray-100 border border-[#E2E8F0]'
+          }`}
+          title={tamilIMEEnabled ? 'Disable Tamil IME' : 'Enable Tamil IME'}
+        >
+          <span className="text-sm">த</span>
+        </button>
       </div>
 
       <div 
@@ -591,49 +325,61 @@ export default function RichTextEditor({
         <EditorContent editor={editor} />
       </div>
 
-      {popupCoords && popupSuggestions.length > 0 && (
-        <div
-          className={`fixed z-50 glass border border-white/50 rounded-2xl shadow-xl shadow-[#6366F1]/20 text-sm text-[#1E293B] backdrop-blur-xl ${popupCoords.placement === 'above' ? 'origin-bottom-left' : 'origin-top-left'}`}
-          style={{ left: popupCoords.left, top: popupCoords.top, width: POPUP_WIDTH }}
+      {editor && (
+        <BubbleMenu
+          editor={editor}
+          tippyOptions={{ duration: 100 }}
+          className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg shadow-lg p-1"
         >
-          <ul className="max-h-48 overflow-y-auto divide-y divide-white/20">
-            {popupSuggestions.map((suggestion, index) => (
-              <li key={suggestion}>
-                <button
-                  type="button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => insertSuggestion(suggestion)}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  className={`w-full text-left px-4 py-3 transition-all duration-200 rounded-lg mx-1 my-1 ${
-                    index === activeIndex
-                      ? 'bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white shadow-lg scale-105'
-                      : 'hover:bg-white/50 text-[#1E293B] hover:scale-102'
-                  }`}
-                >
-                  {suggestion}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="flex border-t border-white/20 bg-gradient-to-r from-white/50 to-[#6366F1]/5 rounded-b-2xl">
-            <button
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => setActiveIndex((prev) => (prev - 1 + popupSuggestions.length) % popupSuggestions.length)}
-              className="flex-1 px-4 py-2.5 text-xs font-semibold text-[#6366F1] hover:bg-white/50 rounded-bl-2xl transition-all"
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => setActiveIndex((prev) => (prev + 1) % popupSuggestions.length)}
-              className="flex-1 px-4 py-2.5 text-xs font-semibold text-[#6366F1] hover:bg-white/50 rounded-br-2xl transition-all"
-            >
-              ↓
-            </button>
-          </div>
-        </div>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
+              editor.isActive('bold')
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-100'
+            }`}
+            title="Bold (Ctrl+B)"
+          >
+            <IconBold width={16} height={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
+              editor.isActive('italic')
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-100'
+            }`}
+            title="Italic (Ctrl+I)"
+          >
+            <IconItalic width={16} height={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
+              editor.isActive('bulletList')
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-100'
+            }`}
+            title="Bullet List"
+          >
+            <IconBulletList width={16} height={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
+              editor.isActive('orderedList')
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-100'
+            }`}
+            title="Numbered List"
+          >
+            <IconNumberList width={16} height={16} />
+          </button>
+        </BubbleMenu>
       )}
     </div>
   );

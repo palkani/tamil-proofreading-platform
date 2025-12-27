@@ -220,18 +220,54 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
           const updateDecos = () => {
             const storage = extension.storage as TamilIMEStorage;
             const state = editorView.state;
-            let decos = DecorationSet.empty;
+            const decos: Decoration[] = [];
 
             if (storage.ghost && storage.start !== null && storage.end !== null) {
-              const deco = Decoration.inline(storage.start, storage.end, {
+              // Ghost text decoration
+              const ghostDeco = Decoration.inline(storage.start, storage.end, {
                 class: 'tamil-ime-ghost',
                 'data-ghost': storage.ghost,
               });
-              decos = DecorationSet.create(state.doc, [deco]);
+              decos.push(ghostDeco);
+
+              // Candidate strip widget (only if multiple candidates)
+              if (storage.candidates.length > 1) {
+                const widgetDeco = Decoration.widget(storage.end, () => {
+                  const el = document.createElement('span');
+                  el.className = 'tamil-ime-candidates';
+                  el.innerHTML = storage.candidates
+                    .slice(0, 5)
+                    .map(
+                      (c, i) =>
+                        `<span class="tamil-ime-cand ${i === storage.index ? 'active' : ''}" data-index="${i}">${c.text}</span>`
+                    )
+                    .join('');
+                  
+                  // Add click handlers
+                  el.addEventListener('click', (e) => {
+                    const target = (e.target as HTMLElement).closest('.tamil-ime-cand');
+                    if (target) {
+                      const index = parseInt(target.getAttribute('data-index') || '0', 10);
+                      storage.index = index;
+                      storage.ghost = storage.candidates[index]?.text || null;
+                      updateDecos();
+                    }
+                  });
+                  
+                  return el;
+                }, {
+                  side: 1, // Render after the position
+                });
+                decos.push(widgetDeco);
+              }
             }
 
+            const decoSet = decos.length > 0
+              ? DecorationSet.create(state.doc, decos)
+              : DecorationSet.empty;
+
             // Update plugin state via transaction
-            const tr = state.tr.setMeta(TamilIMEPluginKey, { decorations: decos });
+            const tr = state.tr.setMeta(TamilIMEPluginKey, { decorations: decoSet });
             editorView.dispatch(tr);
           };
 
