@@ -1,5 +1,14 @@
 // Main Workspace Controller
 
+function getLastToken(text) {
+  const match = (text || '').match(/(\S+)$/);
+  return match ? match[1] : '';
+}
+
+function replaceLastToken(text, replacement) {
+  return (text || '').replace(/(\S+)$/, replacement);
+}
+
 async function ensureRunnerLoaded() {
   if (typeof window.transliterateViaRunner === 'function') {
     return;
@@ -59,6 +68,13 @@ class WorkspaceController {
     this.translitAbort = null;
     this.translitTimer = null;
     this.lastRunnerSuggestions = [];
+    this.translitDropdownOpen = false;
+    this.submitAbort = null;
+    this.submitTimer = null;
+    this.lastSubmittedHash = '';
+    this.lastSubmittedCount = 0;
+    this.DEBUG_IME = true;
+    this.lastRunnerSuggestions = [];
 
     this.init();
   }
@@ -85,9 +101,9 @@ class WorkspaceController {
   async fetchRunnerSuggestions(params) {
     console.log('IME fetchRunnerSuggestions CALLED');
     const { q = '', limit = 8, mode = 'spoken' } = params || {};
-    const qs = new URLSearchParams({ q, limit, mode, _ts: Date.now() }).toString();
+    const qs = new URLSearchParams({ q, limit, mode, _ts: Date.now(), _r: Math.random().toString(36).slice(2) }).toString();
     const url = `/api/transliterate/suggest?${qs}`;
-    console.debug('IME GET:', url);
+    if (this.DEBUG_IME) console.debug('IME GET:', url);
 
     try {
       // Cancel any in-flight request
@@ -107,18 +123,18 @@ class WorkspaceController {
       });
 
       if (res.status === 304) {
-        console.debug('[Translit] 304 Not Modified; using last suggestions');
+        if (this.DEBUG_IME) console.debug('[IME] suggest 304 - reusing lastSuggestions', { q });
         if (this.renderTranslitSuggestions) {
           this.renderTranslitSuggestions(q, this.lastRunnerSuggestions);
         } else if (this.updateTranslitSuggestions) {
           this.updateTranslitSuggestions(this.lastRunnerSuggestions);
         }
-        return;
+        return this.lastRunnerSuggestions;
       }
 
       if (!res.ok) {
         console.error('[Translit] proxy returned non-200', res.status);
-        return;
+        return [];
       }
 
       const text = await res.text();
@@ -144,8 +160,10 @@ class WorkspaceController {
       } else if (this.updateTranslitSuggestions) {
         this.updateTranslitSuggestions(suggestions);
       }
+      return suggestions;
     } catch (err) {
       console.error('[Translit] fetchRunnerSuggestions failed', err);
+      return [];
     }
   }
 
@@ -309,22 +327,15 @@ class WorkspaceController {
   handleEditorChange() {
     this.updateWordCount();
     this.scheduleSave();
-    const text = this.editor.getPlainText();
-    if (!text || text.length < 2) {
+    const text = this.editor.getPlainText() || '';
+    const lastToken = getLastToken(text);
+    const isLatin = /^[A-Za-z]+$/.test(lastToken);
+    if (lastToken && isLatin && lastToken.length >= 2) {
+      this.fetchRunnerSuggestions({ q: lastToken, limit: 8, mode: 'spoken' });
+    } else {
       this.clearTranslitSuggestions();
-      return;
     }
-    const lastWord = text.split(/\s+/).pop();
-    if (!lastWord) {
-      this.clearTranslitSuggestions();
-      return;
-    }
-    this.fetchRunnerSuggestions({ q: lastWord, limit: 8, mode: 'spoken' });
-    
-    // Trigger auto-analysis
-    if (this.autoAnalysisEnabled) {
-      this.scheduleAutoAnalysis();
-    }
+    this.scheduleSubmitThrottled(text);
   }
 
   getCurrentWord() {
@@ -344,22 +355,29 @@ class WorkspaceController {
 
     if (!word || !suggestions || suggestions.length === 0) {
       status.textContent = word ? `No suggestions for "${word}"` : 'Type English to see Tamil suggestions…';
-      box.classList.toggle('hidden', !word);
+      box.classList.toggle('hidden', true);
+      this.translitDropdownOpen = false;
       return;
     }
 
     status.textContent = `Suggestions for "${word}"`;
     box.classList.remove('hidden');
+    box.style.position = 'absolute';
+    box.style.zIndex = 99999;
+    box.style.background = 'white';
+    box.style.boxShadow = '0 10px 25px rgba(0,0,0,0.08)';
 
     if (!suggestions.length) {
       const li = document.createElement('li');
       li.className = 'flex px-2 py-1 text-sm text-gray-500';
       li.textContent = 'No suggestions found';
       list.appendChild(li);
+      this.translitDropdownOpen = false;
       return;
     }
 
-    suggestions.forEach((sugg) => {
+    this.translitDropdownOpen = true;
+    suggestions.slice(0, 5).forEach((sugg) => {
       const li = document.createElement('li');
       const label = sugg.label || 'Recommended';
       const usage = sugg.usage || 'Both';
@@ -367,7 +385,7 @@ class WorkspaceController {
       li.className = 'flex flex-col px-2 py-1 rounded hover:bg-purple-50 cursor-pointer';
       li.innerHTML = `
         <div class="flex items-center justify-between">
-          <span class="font-semibold text-purple-700">${sugg.word}</span>
+          <span class="font-semibold text-purple-700">${sugg.text || sugg.word}</span>
           <span class="text-xs text-gray-500">${Math.round((sugg.score || 0) * 100)}%</span>
         </div>
         <div class="text-xs text-gray-600 flex items-center gap-2">
@@ -377,7 +395,8 @@ class WorkspaceController {
         ${reason ? `<div class="text-xs text-gray-500 mt-1">${reason}</div>` : ''}
       `;
       li.addEventListener('click', () => {
-        this.replaceLastWord(word, sugg.word);
+        this.replaceLastWord(word, sugg.text || sugg.word);
+        this.clearTranslitSuggestions();
       });
       list.appendChild(li);
     });
@@ -391,13 +410,20 @@ class WorkspaceController {
     status.textContent = 'Type English to see Tamil suggestions…';
     list.innerHTML = '';
     box.classList.add('hidden');
+    this.translitDropdownOpen = false;
   }
 
   replaceLastWord(word, replacement) {
     if (!word || !replacement) return;
     const text = this.editor.getPlainText();
-    const newText = text.replace(new RegExp(`${word}$`), replacement);
+    const newText = replaceLastToken(text, replacement);
     this.editor.setText(newText);
+    const range = document.createRange();
+    range.selectNodeContents(this.editor.editor);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
     this.clearTranslitSuggestions();
   }
 
@@ -445,14 +471,64 @@ class WorkspaceController {
   }
   
   scheduleAutoAnalysis() {
-    if (this.analysisTimeout) {
-      clearTimeout(this.analysisTimeout);
+    // deprecated in favor of scheduleSubmitThrottled
+  }
+
+  scheduleSubmitThrottled(text) {
+    const words = (text || '').trim().split(/\s+/).filter(Boolean);
+    const wordCount = words.length;
+    if (wordCount < 10) {
+      return;
+    }
+    if (this.translitDropdownOpen) {
+      if (this.DEBUG_IME) console.debug('[SUBMIT] skipped (dropdown open)');
+      return;
+    }
+    const hash = (text || '').trim();
+    if (hash && hash === this.lastSubmittedHash) {
+      if (this.DEBUG_IME) console.debug('[SUBMIT] skipped (same hash)');
+      return;
     }
 
-    // Debounce: Wait 1 second after user stops typing
-    this.analysisTimeout = setTimeout(() => {
-      this.autoAnalyze();
-    }, 1000);
+    if (this.submitTimer) clearTimeout(this.submitTimer);
+    const shouldBump = this.lastSubmittedCount === 0 || wordCount >= this.lastSubmittedCount + 10;
+    const delay = 1200;
+    this.submitTimer = setTimeout(() => {
+      this.runAutoSubmit(hash, wordCount);
+    }, delay);
+    if (this.DEBUG_IME) console.debug('[SUBMIT] scheduled', { wordCount, shouldBump });
+  }
+
+  async runAutoSubmit(hash, wordCount) {
+    const text = (this.editor.getPlainText() || '').trim();
+    if (text !== hash) {
+      return;
+    }
+    if (wordCount < 10) return;
+    if (this.translitDropdownOpen) return;
+
+    if (this.submitAbort) this.submitAbort.abort();
+    this.submitAbort = new AbortController();
+    if (this.DEBUG_IME) console.debug('[SUBMIT] sending', { wordCount });
+    try {
+      const response = await this.apiFetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, save_draft: false }),
+        signal: this.submitAbort.signal,
+      });
+      const bodyText = await response.text();
+      if (!response.ok) {
+        console.error('[SUBMIT] failed', response.status);
+        return;
+      }
+      this.lastSubmittedHash = hash;
+      this.lastSubmittedCount = wordCount;
+      if (this.DEBUG_IME) console.debug('[SUBMIT] success', { wordCount, body: bodyText });
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      console.error('[SUBMIT] error', err);
+    }
   }
   
   async autoAnalyze() {
