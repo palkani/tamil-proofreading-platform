@@ -20,13 +20,35 @@ function getTokenAtCaret(text, caretPos) {
   return { token: text.slice(start, end), start, end };
 }
 
+// Tamil phonetic ranking: prefer high-score API suggestions, prioritize common patterns
 function rankSuggestions(token, suggestions) {
+  if (!suggestions || suggestions.length === 0) return [];
   const t = (token || '').toLowerCase();
-  return (suggestions || []).map((s) => {
-    const txt = (s.text || s.word || '').toLowerCase();
-    const prefix = t && txt.startsWith(t) ? 100 : 0;
-    return { ...s, score: prefix };
-  }).sort((a, b) => (b.score || 0) - (a.score || 0));
+  
+  // Normalize and rank suggestions
+  const ranked = suggestions.map((s) => {
+    const txt = (s.text || s.word || '').trim();
+    if (!txt) return null;
+    
+    // Base score from API (0-1 range, typically 0.7-1.0 for good matches)
+    let score = typeof s.score === 'number' ? s.score : 0.5;
+    
+    // Boost exact phonetic matches (API already handles this well, but small boost)
+    const txtLower = txt.toLowerCase();
+    if (t.length >= 2 && txtLower.includes(t)) {
+      score += 0.1;
+    }
+    
+    // Prefer shorter words for common tokens (better UX)
+    if (t.length <= 3 && txt.length <= t.length + 2) {
+      score += 0.05;
+    }
+    
+    return { ...s, text: txt, score: Math.min(1.0, score) };
+  }).filter(Boolean);
+  
+  // Sort by score descending
+  return ranked.sort((a, b) => (b.score || 0) - (a.score || 0));
 }
 
 function getCaretClientRect() {
@@ -128,6 +150,10 @@ class WorkspaceController {
     this.lastSubmittedCount = 0;
     this.DEBUG_IME = true;
     this.lastRunnerSuggestions = [];
+    this.ghostTextMarker = null; // Inline ghost text span element
+    this.currentTokenInfo = null; // { token, start, end } at caret
+    this.imeDebounceTimer = null; // Debounce timer for IME fetching
+    this.activeSuggestionIndex = 0; // For keyboard navigation
 
     this.init();
   }
@@ -203,23 +229,32 @@ class WorkspaceController {
         }
       }
       const raw = (data && data.suggestions) || data || [];
-      const suggestions = (raw || [])
+      const rawSuggestions = (raw || [])
         .map((s) => ({
           text: s.ta || s.word || s.text || '',
           score: typeof s.score === 'number' ? s.score : 0,
         }))
         .filter((s) => s.text);
-      this.lastRunnerSuggestions = suggestions;
-      this.currentSuggestions = suggestions;
+      
+      // Rank suggestions with Tamil phonetic ranking
+      const rankedSuggestions = rankSuggestions(q, rawSuggestions);
+      this.lastRunnerSuggestions = rankedSuggestions;
+      this.currentSuggestions = rankedSuggestions;
+      this.activeSuggestionIndex = 0;
       this.imeActive = true;
       this.editorMode = EditorMode.IME_TYPING;
 
-      if (this.renderTranslitSuggestions) {
-        this.renderTranslitSuggestions(q, suggestions);
-      } else if (this.updateTranslitSuggestions) {
-        this.updateTranslitSuggestions(suggestions);
+      // Show ghost text for best suggestion
+      if (rankedSuggestions.length > 0) {
+        this.showGhostText(rankedSuggestions[0].text);
       }
-      return suggestions;
+
+      if (this.renderTranslitSuggestions) {
+        this.renderTranslitSuggestions(q, rankedSuggestions);
+      } else if (this.updateTranslitSuggestions) {
+        this.updateTranslitSuggestions(rankedSuggestions);
+      }
+      return rankedSuggestions;
     } catch (err) {
       console.error('[Translit] fetchRunnerSuggestions failed', err);
       return [];
@@ -236,11 +271,7 @@ class WorkspaceController {
       editorElement.addEventListener('scroll', () => this.repositionTranslitDropdown());
       editorElement.addEventListener('blur', () => this.clearTranslitSuggestions());
       window.addEventListener('resize', () => this.repositionTranslitDropdown());
-      this.editorElement.addEventListener('keydown', (e) => {
-        if (e.key === ' ' || e.key === 'Enter' || e.key === '.' || e.key === ',' || e.key === ';') {
-          this.clearTranslitSuggestions();
-        }
-      });
+      this.editorElement.addEventListener('keydown', (e) => this.handleKeyDown(e));
     }
 
     // Transliteration V2 (feature-flagged)
@@ -397,19 +428,40 @@ class WorkspaceController {
     this.scheduleSave();
     const text = this.editor.getPlainText() || '';
     const caretPos = (this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
-    const { token } = getTokenAtCaret(text, caretPos);
-    if (this.DEBUG_IME) console.debug('[IME] onChange', { token, caretPos, imeActive: this.imeActive, editorMode: this.editorMode });
+    const tokenInfo = getTokenAtCaret(text, caretPos);
+    const { token, start, end } = tokenInfo;
+    
+    if (this.DEBUG_IME) console.debug('[IME] onChange', { token, caretPos, start, end, imeActive: this.imeActive });
+
+    // Debounce IME fetching (200ms)
+    if (this.imeDebounceTimer) clearTimeout(this.imeDebounceTimer);
 
     if (token && token.length >= 1 && /^[A-Za-z]+$/.test(token)) {
+      // Clear ghost text if token changed
+      const tokenChanged = !this.currentTokenInfo || 
+        this.currentTokenInfo.token !== token ||
+        this.currentTokenInfo.start !== start ||
+        this.currentTokenInfo.end !== end;
+      if (tokenChanged) {
+        this.clearGhostText();
+      }
+      
+      this.currentTokenInfo = { token, start, end };
       this.imeActive = true;
       this.editorMode = EditorMode.IME_TYPING;
-      this.fetchRunnerSuggestions({ q: token, limit: 8, mode: 'spoken' });
+      
+      // Debounced fetch
+      this.imeDebounceTimer = setTimeout(() => {
+        this.fetchRunnerSuggestions({ q: token, limit: 8, mode: 'spoken' });
+      }, 200);
       return;
     }
 
-    // deactivate IME when no token or non-latin
+    // Deactivate IME when no token or non-latin
+    this.clearGhostText();
     this.imeActive = false;
     this.editorMode = EditorMode.IDLE;
+    this.currentTokenInfo = null;
     this.clearTranslitSuggestions();
     this.scheduleSubmitThrottled(text);
   }
@@ -456,36 +508,229 @@ class WorkspaceController {
     }
 
     this.translitDropdownOpen = true;
-    suggestions.slice(0, 5).forEach((sugg) => {
+    suggestions.slice(0, 5).forEach((sugg, idx) => {
       const li = document.createElement('li');
-      const label = sugg.label || 'Recommended';
-      const usage = sugg.usage || 'Both';
-      const reason = sugg.reason || '';
-      li.className = 'flex flex-col px-2 py-1 rounded hover:bg-purple-50 cursor-pointer';
+      li.dataset.index = idx;
+      li.className = 'flex items-center justify-between px-3 py-2 rounded cursor-pointer';
+      if (idx === this.activeSuggestionIndex) {
+        li.className += ' bg-purple-100';
+      } else {
+        li.className += ' hover:bg-purple-50';
+      }
       li.innerHTML = `
-        <div class="flex items-center justify-between">
-          <span class="font-semibold text-purple-700">${sugg.text || sugg.word}</span>
-          <span class="text-xs text-gray-500">${Math.round((sugg.score || 0) * 100)}%</span>
-        </div>
-        <div class="text-xs text-gray-600 flex items-center gap-2">
-          <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">${label}</span>
-          <span class="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">${usage}</span>
-        </div>
-        ${reason ? `<div class="text-xs text-gray-500 mt-1">${reason}</div>` : ''}
+        <span class="font-semibold text-purple-700">${sugg.text || sugg.word}</span>
+        <span class="text-xs text-gray-500">${Math.round((sugg.score || 0) * 100)}%</span>
       `;
       li.addEventListener('click', () => {
-        this.replaceLastWord(word, sugg.text || sugg.word);
-        this.clearTranslitSuggestions();
-        this.imeActive = false;
-        this.editorMode = EditorMode.IDLE;
+        this.acceptSuggestion(idx);
       });
       list.appendChild(li);
     });
-
+    this.highlightActiveSuggestion();
     this.repositionTranslitDropdown();
   }
 
+  highlightActiveSuggestion() {
+    const list = document.getElementById('translit-suggest-list');
+    if (!list) return;
+    const items = list.querySelectorAll('li');
+    items.forEach((li, idx) => {
+      if (idx === this.activeSuggestionIndex) {
+        li.className = 'flex items-center justify-between px-3 py-2 rounded cursor-pointer bg-purple-100';
+      } else {
+        li.className = 'flex items-center justify-between px-3 py-2 rounded cursor-pointer hover:bg-purple-50';
+      }
+    });
+  }
+
+  acceptSuggestion(index) {
+    if (!this.currentSuggestions || !this.currentSuggestions[index]) return;
+    const suggestion = this.currentSuggestions[index];
+    this.replaceTokenAtCaret(suggestion.text, false);
+  }
+
+  acceptSuggestion(index) {
+    if (!this.currentSuggestions || !this.currentSuggestions[index]) return;
+    const suggestion = this.currentSuggestions[index];
+    this.replaceTokenAtCaret(suggestion.text, false);
+  }
+
+  // Keyboard navigation handler
+  handleKeyDown(e) {
+    if (!this.imeActive || !this.currentSuggestions || this.currentSuggestions.length === 0) {
+      // If not in IME mode, handle space/enter/punctuation normally
+      if (e.key === ' ' || e.key === 'Enter' || e.key === '.' || e.key === ',' || e.key === ';') {
+        this.clearGhostText();
+        this.clearTranslitSuggestions();
+        this.imeActive = false;
+        this.editorMode = EditorMode.IDLE;
+      }
+      return false;
+    }
+
+    // IME keyboard shortcuts
+    switch (e.key) {
+      case 'Tab':
+      case 'Enter':
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.currentSuggestions[this.activeSuggestionIndex]) {
+          const appendSpace = e.key === 'Enter';
+          const suggestion = this.currentSuggestions[this.activeSuggestionIndex];
+          this.replaceTokenAtCaret(suggestion.text, appendSpace);
+        }
+        return true;
+
+      case 'ArrowDown':
+        e.preventDefault();
+        e.stopPropagation();
+        this.activeSuggestionIndex = Math.min(
+          this.activeSuggestionIndex + 1,
+          this.currentSuggestions.length - 1
+        );
+        this.highlightActiveSuggestion();
+        // Update ghost text
+        if (this.currentSuggestions[this.activeSuggestionIndex]) {
+          this.showGhostText(this.currentSuggestions[this.activeSuggestionIndex].text);
+        }
+        return true;
+
+      case 'ArrowUp':
+        e.preventDefault();
+        e.stopPropagation();
+        this.activeSuggestionIndex = Math.max(this.activeSuggestionIndex - 1, 0);
+        this.highlightActiveSuggestion();
+        // Update ghost text
+        if (this.currentSuggestions[this.activeSuggestionIndex]) {
+          this.showGhostText(this.currentSuggestions[this.activeSuggestionIndex].text);
+        }
+        return true;
+
+      case 'Escape':
+        e.preventDefault();
+        e.stopPropagation();
+        this.clearGhostText();
+        this.clearTranslitSuggestions();
+        this.imeActive = false;
+        this.editorMode = EditorMode.IDLE;
+        this.currentTokenInfo = null;
+        return true;
+
+      case ' ':
+        // Space commits current suggestion
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.currentSuggestions[this.activeSuggestionIndex]) {
+          const suggestion = this.currentSuggestions[this.activeSuggestionIndex];
+          this.replaceTokenAtCaret(suggestion.text, true); // Append space
+        } else {
+          // If no selection, just close IME
+          this.clearGhostText();
+          this.clearTranslitSuggestions();
+          this.imeActive = false;
+          this.editorMode = EditorMode.IDLE;
+        }
+        return true;
+
+      default:
+        // Let other keys through (typing continues)
+        return false;
+    }
+  }
+
+  // Show ghost text (inline suggestion) after the current token
+  showGhostText(suggestionText) {
+    this.clearGhostText();
+    if (!this.currentTokenInfo || !suggestionText || !this.editorElement) return;
+    
+    try {
+      // Find the text node at the end of the token
+      const { end } = this.currentTokenInfo;
+      const walker = document.createTreeWalker(
+        this.editorElement,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
+      
+      let textNode = null;
+      let charCount = 0;
+      
+      while ((textNode = walker.nextNode())) {
+        const nodeLength = textNode.textContent.length;
+        if (charCount + nodeLength >= end) {
+          // Found the text node containing the end position
+          const offset = end - charCount;
+          
+          const range = document.createRange();
+          range.setStart(textNode, Math.min(offset, nodeLength));
+          range.collapse(true);
+          
+          const marker = document.createElement('span');
+          marker.id = 'ime-ghost-text';
+          marker.className = 'ime-ghost-text';
+          marker.textContent = suggestionText;
+          marker.style.color = '#9ca3af'; // gray-400
+          marker.style.opacity = '0.6';
+          marker.style.pointerEvents = 'none';
+          marker.style.userSelect = 'none';
+          marker.contentEditable = 'false';
+          
+          range.insertNode(marker);
+          this.ghostTextMarker = marker;
+          
+          // Move cursor back before ghost text
+          const sel = window.getSelection();
+          const newRange = document.createRange();
+          newRange.setStartBefore(marker);
+          newRange.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+          
+          return;
+        }
+        charCount += nodeLength;
+      }
+      
+      // Fallback: insert at current selection end
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0).cloneRange();
+        range.collapse(false);
+        
+        const marker = document.createElement('span');
+        marker.id = 'ime-ghost-text';
+        marker.className = 'ime-ghost-text';
+        marker.textContent = suggestionText;
+        marker.style.color = '#9ca3af';
+        marker.style.opacity = '0.6';
+        marker.style.pointerEvents = 'none';
+        marker.style.userSelect = 'none';
+        marker.contentEditable = 'false';
+        
+        range.insertNode(marker);
+        this.ghostTextMarker = marker;
+        
+        const newRange = document.createRange();
+        newRange.setStartBefore(marker);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      }
+    } catch (err) {
+      console.warn('[IME] Failed to show ghost text', err);
+    }
+  }
+
+  clearGhostText() {
+    if (this.ghostTextMarker && this.ghostTextMarker.parentNode) {
+      this.ghostTextMarker.parentNode.removeChild(this.ghostTextMarker);
+    }
+    this.ghostTextMarker = null;
+  }
+
   clearTranslitSuggestions() {
+    this.clearGhostText();
     const box = document.getElementById('translit-suggest-box');
     const status = document.getElementById('translit-suggest-status');
     const list = document.getElementById('translit-suggest-list');
@@ -495,6 +740,7 @@ class WorkspaceController {
     box.classList.add('hidden');
     this.translitDropdownOpen = false;
     this.currentSuggestions = [];
+    this.activeSuggestionIndex = 0;
   }
 
   repositionTranslitDropdown() {
@@ -530,6 +776,24 @@ class WorkspaceController {
     box.style.visibility = 'visible';
   }
 
+  // Replace token at caret position with replacement
+  replaceTokenAtCaret(replacement, appendSpace = false) {
+    if (!this.currentTokenInfo || !replacement) return;
+    const { token, start, end } = this.currentTokenInfo;
+    const text = this.editor.getPlainText() || '';
+    const replacementText = replacement + (appendSpace ? ' ' : '');
+    const newText = text.slice(0, start) + replacementText + text.slice(end);
+    this.editor.setText(newText);
+    // Set cursor after replacement
+    const newPos = start + replacementText.length;
+    this.editor.setCursorPosition(newPos);
+    this.clearGhostText();
+    this.clearTranslitSuggestions();
+    this.imeActive = false;
+    this.editorMode = EditorMode.IDLE;
+    this.currentTokenInfo = null;
+  }
+
   replaceLastWord(word, replacement) {
     if (!word || !replacement) return;
     const text = this.editor.getPlainText();
@@ -541,6 +805,7 @@ class WorkspaceController {
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
+    this.clearGhostText();
     this.clearTranslitSuggestions();
   }
 
