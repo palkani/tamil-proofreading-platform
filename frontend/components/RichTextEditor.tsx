@@ -22,6 +22,7 @@ import {
 } from './icons';
 import { transliterateTamilVariants, convertEnglishToTamil } from '@/utils/transliterate';
 import { TamilIME } from '@/src/editor/extensions/TamilIME';
+import { GrammarHighlighter } from '@/src/editor/extensions/GrammarHighlighter';
 
 interface RichTextEditorProps {
   value: string;
@@ -76,6 +77,7 @@ export default function RichTextEditor({
   onPlainTextChange,
 }: RichTextEditorProps) {
   const [isTamil, setIsTamil] = useState(true);
+  const [tamilIMEEnabled, setTamilIMEEnabled] = useState(true);
   const [popupSuggestions, setPopupSuggestions] = useState<string[]>([]);
   const [popupCoords, setPopupCoords] = useState<{ left: number; top: number; placement: 'above' | 'below' } | null>(null);
   const [currentPrefix, setCurrentPrefix] = useState('');
@@ -101,11 +103,15 @@ export default function RichTextEditor({
       TextAlign.configure({
         types: ['paragraph', 'heading'],
       }),
-      TamilIME,
+      TamilIME.configure({
+        enabled: tamilIMEEnabled,
+        autoCommitOnSpace: true,
+      }),
+      GrammarHighlighter,
     ];
 
     return base;
-  }, [isTamil]);
+  }, [isTamil, tamilIMEEnabled]);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -525,6 +531,14 @@ export default function RichTextEditor({
             <IconAlignJustify width={20} height={20} />
           </button>
           <div className="h-8 w-px bg-[#E2E8F0] mx-2"></div>
+          <button
+            type="button"
+            onClick={() => setTamilIMEEnabled(!tamilIMEEnabled)}
+            className={toolbarButtonClasses(tamilIMEEnabled)}
+            title={tamilIMEEnabled ? 'Disable Tamil IME' : 'Enable Tamil IME'}
+          >
+            <span className="text-sm font-semibold">த</span>
+          </button>
           <button
             type="button"
             className="flex items-center justify-center h-12 w-12 text-[#475569] hover:bg-[#F8FAFC] hover:text-[#4F46E5] rounded-xl transition-all duration-200 hover:scale-110 border-2 border-transparent hover:border-[#E2E8F0]"

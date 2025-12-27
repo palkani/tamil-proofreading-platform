@@ -38,3 +38,28 @@ body {
   pointer-events: none;
   user-select: none;
 }
+
+/* Grammar Highlighting */
+.grammar-highlight {
+  position: relative;
+  cursor: help;
+}
+
+.grammar-highlight.grammar-spelling {
+  text-decoration: underline wavy #ef4444;
+  text-decoration-thickness: 2px;
+}
+
+.grammar-highlight.grammar-grammar {
+  text-decoration: underline solid #f59e0b;
+  text-decoration-thickness: 2px;
+}
+
+.grammar-highlight.grammar-style {
+  text-decoration: underline solid #8b5cf6;
+  text-decoration-thickness: 2px;
+}
+
+.grammar-highlight:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}

@@ -16,6 +16,36 @@ interface TamilIMEState {
   decorations: DecorationSet;
 }
 
+interface TamilIMEOptions {
+  enabled?: boolean;
+  autoCommitOnSpace?: boolean;
+}
+
+// Tamil character detection
+function isTamilChar(ch: string): boolean {
+  const code = ch.codePointAt(0);
+  if (code === undefined) return false;
+  // Tamil block U+0B80..U+0BFF
+  return code >= 0x0b80 && code <= 0x0bff;
+}
+
+function isMostlyTamil(str: string): boolean {
+  if (!str) return false;
+  let tamil = 0;
+  let other = 0;
+  for (const c of str) {
+    if (/\s/.test(c)) continue;
+    if (isTamilChar(c)) tamil++;
+    else other++;
+  }
+  return tamil > 0 && tamil >= other;
+}
+
+function isLatinToken(str: string): boolean {
+  // Latin letters only (allow apostrophe for translit)
+  return /^[A-Za-z][A-Za-z']*$/.test(str);
+}
+
 // Token extraction helper (caret-aware)
 function getTokenAtCaret(state: any) {
   const { from } = state.selection;
@@ -38,43 +68,113 @@ function getTokenAtCaret(state: any) {
   };
 }
 
-// Tamil phonetic scoring
-function tamilScore(tokenLatin: string, candidateTamil: string): number {
-  let score = 0;
-  const len = candidateTamil.length;
+// Tamil orthography helpers
+const DEP_VOWELS = new Set(['ா', 'ி', 'ீ', 'ு', 'ூ', 'ெ', 'ே', 'ை', 'ொ', 'ோ', 'ௌ']);
+const PULLI = '்';
 
-  // Prefer shorter sensible outputs
-  score += Math.max(0, 20 - len);
+function isDependentVowel(ch: string): boolean {
+  return DEP_VOWELS.has(ch);
+}
 
-  // Tamil common endings (heuristic)
-  if (candidateTamil.endsWith('ம்')) score += 10;
-  if (candidateTamil.endsWith('ல்')) score += 8;
-  if (candidateTamil.endsWith('ன்') || candidateTamil.endsWith('ய்')) score += 6;
-  if (candidateTamil.endsWith('்')) score += 4;
+function tamilOrthographyPenalty(s: string): number {
+  let p = 0;
+  if (!s) return 999;
 
-  // Penalize symbols / latin leakage
-  if (/[A-Za-z0-9]/.test(candidateTamil)) score -= 30;
+  // Latin/digits leakage
+  if (/[A-Za-z0-9]/.test(s)) p += 50;
 
-  // Token-specific heuristics
+  // too long
+  if (s.length > 12) p += (s.length - 12) * 3;
+
+  // invalid sequences
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    const prev = s[i - 1];
+
+    // Dep vowel cannot start a word and should not follow whitespace
+    if (isDependentVowel(ch) && (!prev || /\s/.test(prev))) p += 15;
+
+    // Pulli cannot start
+    if (ch === PULLI && i === 0) p += 15;
+
+    // Double pulli
+    if (ch === PULLI && prev === PULLI) p += 20;
+
+    // Dep vowel right after pulli is usually invalid (very rough)
+    if (isDependentVowel(ch) && prev === PULLI) p += 10;
+  }
+
+  return p;
+}
+
+function tokenHeuristicBoost(tokenLatin: string, candidateTamil: string): number {
   const t = tokenLatin.toLowerCase();
-  if (t.endsWith('m') && candidateTamil.endsWith('ம்')) score += 10;
-  if (t.endsWith('l') && candidateTamil.endsWith('ல்')) score += 8;
-  if (t.endsWith('n') && candidateTamil.endsWith('ன்')) score += 8;
+  let b = 0;
+  // common "tamil" → தமிழ் preference
+  if (t === 'tamil' && candidateTamil === 'தமிழ்') b += 40;
+
+  // ending hints
+  if (t.endsWith('m') && candidateTamil.endsWith('ம்')) b += 8;
+  if (t.endsWith('l') && candidateTamil.endsWith('ல்')) b += 6;
+
+  // common suffix: -il (in) → இல்
+  if (t.endsWith('il') && candidateTamil.endsWith('இல்')) b += 10;
+
+  return b;
+}
+
+function tamilCandidateScore(
+  tokenLatin: string,
+  candTamil: string,
+  meta?: { recommended?: boolean; confidence?: number; score?: number }
+): number {
+  let score = 0;
+
+  // base preference: shorter
+  score += Math.max(0, 20 - candTamil.length);
+
+  // meta confidence if available
+  if (meta?.recommended) score += 20;
+  if (typeof meta?.confidence === 'number') score += Math.round(meta.confidence * 30);
+  if (typeof meta?.score === 'number') score += Math.round(meta.score * 30);
+
+  // orthography penalty
+  score -= tamilOrthographyPenalty(candTamil);
+
+  // heuristic boost
+  score += tokenHeuristicBoost(tokenLatin, candTamil);
 
   return score;
 }
 
-function rankTamil(tokenLatin: string, candidates: Array<{ text: string; score?: number }>) {
+function rankCandidates(
+  tokenLatin: string,
+  candidates: Array<{ text: string; score?: number; recommended?: boolean; confidence?: number }>
+) {
   return [...candidates]
-    .map(c => ({ ...c, _score: tamilScore(tokenLatin, c.text) }))
+    .map(c => ({
+      ...c,
+      _score: tamilCandidateScore(tokenLatin, c.text, {
+        recommended: c.recommended,
+        confidence: c.confidence,
+        score: c.score,
+      }),
+    }))
     .sort((a, b) => (b as any)._score - (a as any)._score)
     .map(({ _score, ...rest }) => rest);
 }
 
 const TamilIMEPluginKey = new PluginKey<TamilIMEState>('tamilIME');
 
-export const TamilIME = Extension.create<TamilIMEStorage>({
+export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
   name: 'tamilIME',
+
+  addOptions() {
+    return {
+      enabled: true,
+      autoCommitOnSpace: true,
+    };
+  },
 
   addStorage() {
     return {
@@ -178,8 +278,12 @@ export const TamilIME = Extension.create<TamilIMEStorage>({
       Space: () => {
         const storage = extension.storage as TamilIMEStorage;
         if (storage.ghost) {
-          extension.commit();
-          this.editor.commands.insertContent(' ');
+          if (extension.options.autoCommitOnSpace) {
+            extension.commit();
+            this.editor.commands.insertContent(' ');
+          } else {
+            extension.clear();
+          }
           return true;
         }
         return false;
@@ -188,12 +292,30 @@ export const TamilIME = Extension.create<TamilIMEStorage>({
   },
 
   onUpdate({ editor }) {
+    // Skip if extension is disabled
+    if (!this.options.enabled) {
+      this.clear();
+      return;
+    }
+
     const storage = this.storage as TamilIMEStorage;
     const state = editor.state;
     const { token, start, end } = getTokenAtCaret(state);
 
-    // Clear if no token or non-latin
-    if (!token || token.length < 1 || !/^[A-Za-z]+$/.test(token)) {
+    // Clear if no token
+    if (!token || token.length < 1) {
+      this.clear();
+      return;
+    }
+
+    // Mixed language support: skip IME if token contains Tamil
+    if (isMostlyTamil(token)) {
+      this.clear();
+      return;
+    }
+
+    // Only process Latin tokens
+    if (!isLatinToken(token)) {
       this.clear();
       return;
     }
@@ -222,7 +344,7 @@ export const TamilIME = Extension.create<TamilIMEStorage>({
 
         const data = await res.json();
         const raw = data.suggestions || [];
-        const ranked = rankTamil(token, raw);
+        const ranked = rankCandidates(token, raw);
 
         if (!ranked.length) {
           this.clear();
