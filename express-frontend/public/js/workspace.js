@@ -16,7 +16,8 @@ function getCaretClientRect() {
   range.collapse(true);
   const marker = document.createElement('span');
   marker.textContent = '\u200b';
-  marker.style.position = 'relative';
+  marker.style.position = 'fixed';
+  marker.style.pointerEvents = 'none';
   range.insertNode(marker);
   const rect = marker.getBoundingClientRect();
   const parent = marker.parentNode;
@@ -477,7 +478,7 @@ class WorkspaceController {
   }
 
   repositionTranslitDropdown() {
-    if (!this.translitDropdownOpen) return;
+    if (!this.translitDropdownOpen || !this.imeActive) return;
     const box = document.getElementById('translit-suggest-box');
     if (!box) return;
     const rect = getCaretClientRect();
@@ -489,11 +490,10 @@ class WorkspaceController {
     let top = rect.bottom + 6;
     let left = rect.left;
 
-    // Ensure styles for measurement
     box.style.position = 'fixed';
     box.style.zIndex = 99999;
     box.style.minWidth = '180px';
-    box.style.maxHeight = '220px';
+    box.style.maxHeight = '240px';
     box.style.overflowY = 'auto';
     box.style.background = 'white';
     box.style.boxShadow = '0 10px 25px rgba(0,0,0,0.08)';
