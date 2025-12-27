@@ -21,6 +21,7 @@ import {
   IconSearch,
 } from './icons';
 import { transliterateTamilVariants, convertEnglishToTamil } from '@/utils/transliterate';
+import { TamilIME } from '@/src/editor/extensions/TamilIME';
 
 interface RichTextEditorProps {
   value: string;
@@ -100,6 +101,7 @@ export default function RichTextEditor({
       TextAlign.configure({
         types: ['paragraph', 'heading'],
       }),
+      TamilIME,
     ];
 
     return base;
