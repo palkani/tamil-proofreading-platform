@@ -9,6 +9,28 @@ function replaceLastToken(text, replacement) {
   return (text || '').replace(/(\S+)$/, replacement);
 }
 
+function getCaretClientRect() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0).cloneRange();
+  range.collapse(true);
+  const marker = document.createElement('span');
+  marker.textContent = '\u200b';
+  marker.style.position = 'relative';
+  range.insertNode(marker);
+  const rect = marker.getBoundingClientRect();
+  const parent = marker.parentNode;
+  if (parent) parent.removeChild(marker);
+  return rect;
+}
+
+const EditorMode = {
+  IDLE: 'IDLE',
+  IME_TYPING: 'IME_TYPING',
+  SUBMIT_PENDING: 'SUBMIT_PENDING',
+  SUBMITTING: 'SUBMITTING',
+};
+
 async function ensureRunnerLoaded() {
   if (typeof window.transliterateViaRunner === 'function') {
     return;
@@ -189,6 +211,10 @@ class WorkspaceController {
     if (editorElement) {
       this.editor = new TamilEditor(editorElement);
       this.editor.onChange = () => this.handleEditorChange();
+      this.editorElement = editorElement;
+      editorElement.addEventListener('scroll', () => this.repositionTranslitDropdown());
+      editorElement.addEventListener('blur', () => this.clearTranslitSuggestions());
+      window.addEventListener('resize', () => this.repositionTranslitDropdown());
     }
 
     // Transliteration V2 (feature-flagged)
@@ -391,10 +417,13 @@ class WorkspaceController {
 
     status.textContent = `Suggestions for "${word}"`;
     box.classList.remove('hidden');
-    box.style.position = 'absolute';
+    box.style.position = 'fixed';
     box.style.zIndex = 99999;
     box.style.background = 'white';
     box.style.boxShadow = '0 10px 25px rgba(0,0,0,0.08)';
+    box.style.minWidth = '180px';
+    box.style.maxHeight = '220px';
+    box.style.overflowY = 'auto';
 
     if (!suggestions.length) {
       const li = document.createElement('li');
@@ -431,6 +460,8 @@ class WorkspaceController {
       });
       list.appendChild(li);
     });
+
+    this.repositionTranslitDropdown();
   }
 
   clearTranslitSuggestions() {
@@ -443,6 +474,40 @@ class WorkspaceController {
     box.classList.add('hidden');
     this.translitDropdownOpen = false;
     this.currentSuggestions = [];
+  }
+
+  repositionTranslitDropdown() {
+    if (!this.translitDropdownOpen) return;
+    const box = document.getElementById('translit-suggest-box');
+    if (!box) return;
+    const rect = getCaretClientRect();
+    if (!rect) {
+      box.classList.add('hidden');
+      return;
+    }
+    if (this.DEBUG_IME) console.debug('[IME POSITION]', rect);
+    let top = rect.bottom + 6;
+    let left = rect.left;
+
+    // Ensure styles for measurement
+    box.style.position = 'fixed';
+    box.style.zIndex = 99999;
+    box.style.minWidth = '180px';
+    box.style.maxHeight = '220px';
+    box.style.overflowY = 'auto';
+    box.style.background = 'white';
+    box.style.boxShadow = '0 10px 25px rgba(0,0,0,0.08)';
+    box.style.visibility = 'hidden';
+    box.classList.remove('hidden');
+
+    const height = box.offsetHeight || 0;
+    if (top + height > window.innerHeight - 8) {
+      top = rect.top - height - 6;
+    }
+
+    box.style.left = `${left}px`;
+    box.style.top = `${Math.max(8, top)}px`;
+    box.style.visibility = 'visible';
   }
 
   replaceLastWord(word, replacement) {
