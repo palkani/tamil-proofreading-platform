@@ -10,6 +10,26 @@ function replaceLastToken(text, replacement) {
 }
 
 function getCaretClientRect() {
+}
+
+function getTokenAtCaret(text, caretPos) {
+  let start = caretPos;
+  while (start > 0 && /\S/.test(text[start - 1])) start--;
+  let end = caretPos;
+  while (end < text.length && /\S/.test(text[end])) end++;
+  return { token: text.slice(start, end), start, end };
+}
+
+function rankSuggestions(token, suggestions) {
+  const t = (token || '').toLowerCase();
+  return (suggestions || []).map((s) => {
+    const txt = (s.text || s.word || '').toLowerCase();
+    const prefix = t && txt.startsWith(t) ? 100 : 0;
+    return { ...s, score: prefix };
+  }).sort((a, b) => (b.score || 0) - (a.score || 0));
+}
+
+function getCaretClientRect() {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return null;
   const range = selection.getRangeAt(0).cloneRange();
@@ -216,6 +236,11 @@ class WorkspaceController {
       editorElement.addEventListener('scroll', () => this.repositionTranslitDropdown());
       editorElement.addEventListener('blur', () => this.clearTranslitSuggestions());
       window.addEventListener('resize', () => this.repositionTranslitDropdown());
+      this.editorElement.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'Enter' || e.key === '.' || e.key === ',' || e.key === ';') {
+          this.clearTranslitSuggestions();
+        }
+      });
     }
 
     // Transliteration V2 (feature-flagged)
@@ -371,26 +396,21 @@ class WorkspaceController {
     this.updateWordCount();
     this.scheduleSave();
     const text = this.editor.getPlainText() || '';
-    const lastToken = getLastToken(text);
-    const isLatin = /^[A-Za-z]+$/.test(lastToken);
-    if (this.DEBUG_IME) console.debug('[IME] onChange', { lastToken, imeActive: this.imeActive, editorMode: this.editorMode });
+    const caretPos = (this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
+    const { token } = getTokenAtCaret(text, caretPos);
+    if (this.DEBUG_IME) console.debug('[IME] onChange', { token, caretPos, imeActive: this.imeActive, editorMode: this.editorMode });
 
-    // IME activation
-    if (lastToken && isLatin && lastToken.length >= 2) {
+    if (token && token.length >= 1 && /^[A-Za-z]+$/.test(token)) {
       this.imeActive = true;
       this.editorMode = EditorMode.IME_TYPING;
-      this.fetchRunnerSuggestions({ q: lastToken, limit: 8, mode: 'spoken' });
-      return; // DO NOT schedule submit while IME is active
+      this.fetchRunnerSuggestions({ q: token, limit: 8, mode: 'spoken' });
+      return;
     }
 
-    // IME deactivate when token not latin / too short
-    if (!isLatin || lastToken.length === 0) {
-      this.imeActive = false;
-      this.editorMode = EditorMode.IDLE;
-      this.clearTranslitSuggestions();
-    }
-
-    // Submit scheduling only when IME not active
+    // deactivate IME when no token or non-latin
+    this.imeActive = false;
+    this.editorMode = EditorMode.IDLE;
+    this.clearTranslitSuggestions();
     this.scheduleSubmitThrottled(text);
   }
 
