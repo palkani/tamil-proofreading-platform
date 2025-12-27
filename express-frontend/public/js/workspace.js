@@ -129,8 +129,8 @@ class WorkspaceController {
       this.proofreadHighlights = new window.ProofreadHighlights(editorElement);
     }
 
-    // IME transliteration (Aksharamukha) feature flag
-    if (window.IME_ENABLED && window.IMETypeahead && editorElement) {
+    // IME transliteration (runner-backed); enable whenever the helper exists
+    if (window.IMETypeahead && editorElement) {
       const adapter = {
         getSelectionToken: () => {
           const sel = window.getSelection();

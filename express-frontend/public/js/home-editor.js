@@ -98,8 +98,8 @@ class HomeEditor {
       );
     }
 
-    // IME transliteration dropdown (no auto-replace)
-    if (window.IME_ENABLED && window.IMETypeahead && editorEl) {
+    // IME transliteration dropdown (no auto-replace) - enable when helper is present
+    if (window.IMETypeahead && editorEl) {
       const adapter = {
         getSelectionToken: () => {
           const sel = window.getSelection();
