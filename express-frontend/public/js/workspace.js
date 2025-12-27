@@ -20,35 +20,62 @@ function getTokenAtCaret(text, caretPos) {
   return { token: text.slice(start, end), start, end };
 }
 
-// Tamil phonetic ranking: prefer high-score API suggestions, prioritize common patterns
-function rankSuggestions(token, suggestions) {
-  if (!suggestions || suggestions.length === 0) return [];
-  const t = (token || '').toLowerCase();
+// Tamil phonetic scoring: comprehensive ranking for IME suggestions
+function tamilScore(tokenLatin, candidateTamil, meta) {
+  // tokenLatin is what user typed (e.g. "tamil")
+  // candidateTamil is Tamil output (e.g. "தமிழ்")
+  const candLen = candidateTamil.length;
+  let score = 0;
+
+  // 1) Boost recommended/confidence if present
+  if (meta?.recommended) score += 50;
+  if (typeof meta?.confidence === 'number') score += Math.round(meta.confidence * 50);
+  // Use API score if available (0-1 range, scale to 0-50)
+  if (typeof meta?.score === 'number') score += Math.round(meta.score * 50);
+
+  // 2) Prefer shorter sensible outputs
+  score += Math.max(0, 20 - candLen);
+
+  // 3) Tamil common endings (heuristic)
+  if (candidateTamil.endsWith('்')) score += 5;   // pure consonant
+  if (candidateTamil.endsWith('ம்')) score += 8;
+  if (candidateTamil.endsWith('ன்') || candidateTamil.endsWith('ய்')) score += 6;
+
+  // 4) Penalize symbols / latin leakage
+  if (/[A-Za-z0-9]/.test(candidateTamil)) score -= 30;
+
+  // 5) Token-specific heuristics (very light)
+  const t = tokenLatin.toLowerCase();
+  if (t.endsWith('l') && candidateTamil.endsWith('ல்')) score += 8;
+  if (t.endsWith('m') && candidateTamil.endsWith('ம்')) score += 10;
+  if (t.endsWith('n') && (candidateTamil.endsWith('ன்') || candidateTamil.endsWith('ந்'))) score += 8;
+
+  return score;
+}
+
+function rankTamilCandidates(tokenLatin, candidates) {
+  if (!candidates || candidates.length === 0) return [];
   
-  // Normalize and rank suggestions
-  const ranked = suggestions.map((s) => {
-    const txt = (s.text || s.word || '').trim();
-    if (!txt) return null;
-    
-    // Base score from API (0-1 range, typically 0.7-1.0 for good matches)
-    let score = typeof s.score === 'number' ? s.score : 0.5;
-    
-    // Boost exact phonetic matches (API already handles this well, but small boost)
-    const txtLower = txt.toLowerCase();
-    if (t.length >= 2 && txtLower.includes(t)) {
-      score += 0.1;
-    }
-    
-    // Prefer shorter words for common tokens (better UX)
-    if (t.length <= 3 && txt.length <= t.length + 2) {
-      score += 0.05;
-    }
-    
-    return { ...s, text: txt, score: Math.min(1.0, score) };
-  }).filter(Boolean);
-  
-  // Sort by score descending
-  return ranked.sort((a, b) => (b.score || 0) - (a.score || 0));
+  return [...candidates]
+    .map(c => {
+      const txt = (c.text || c.word || '').trim();
+      if (!txt) return null;
+      const originalScore = typeof c.score === 'number' ? c.score : 0;
+      const rankingScore = tamilScore(tokenLatin, txt, { 
+        recommended: c.recommended,
+        confidence: c.confidence,
+        score: originalScore 
+      });
+      return {
+        ...c,
+        text: txt,
+        score: originalScore, // Preserve original API score (0-1) for display
+        _rankingScore: rankingScore // Internal score for sorting
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b._rankingScore || 0) - (a._rankingScore || 0))
+    .map(({ _rankingScore, ...rest }) => rest); // Remove internal score, keep original score
 }
 
 function getCaretClientRect() {
@@ -206,12 +233,10 @@ class WorkspaceController {
         this.currentSuggestions = this.lastRunnerSuggestions;
         this.imeActive = true;
         this.editorMode = EditorMode.IME_TYPING;
-        if (this.renderTranslitSuggestions) {
-          this.renderTranslitSuggestions(q, this.lastRunnerSuggestions);
-        } else if (this.updateTranslitSuggestions) {
-          this.updateTranslitSuggestions(this.lastRunnerSuggestions);
-        }
-        return this.lastRunnerSuggestions;
+      if (this.renderTranslitSuggestions) {
+        this.renderTranslitSuggestions(q, this.lastRunnerSuggestions);
+      }
+      return this.lastRunnerSuggestions;
       }
 
       if (!res.ok) {
@@ -237,7 +262,7 @@ class WorkspaceController {
         .filter((s) => s.text);
       
       // Rank suggestions with Tamil phonetic ranking
-      const rankedSuggestions = rankSuggestions(q, rawSuggestions);
+      const rankedSuggestions = rankTamilCandidates(q, rawSuggestions);
       this.lastRunnerSuggestions = rankedSuggestions;
       this.currentSuggestions = rankedSuggestions;
       this.activeSuggestionIndex = 0;
@@ -251,8 +276,6 @@ class WorkspaceController {
 
       if (this.renderTranslitSuggestions) {
         this.renderTranslitSuggestions(q, rankedSuggestions);
-      } else if (this.updateTranslitSuggestions) {
-        this.updateTranslitSuggestions(rankedSuggestions);
       }
       return rankedSuggestions;
     } catch (err) {
@@ -466,11 +489,13 @@ class WorkspaceController {
     this.scheduleSubmitThrottled(text);
   }
 
+  // DEPRECATED: Use getTokenAtCaret instead
+  // Keeping for backward compatibility but should be removed
   getCurrentWord() {
-    const text = this.editor.getPlainText();
-    const parts = text.split(/\s+/);
-    const last = parts[parts.length - 1] || '';
-    return last.trim();
+    const text = this.editor.getPlainText() || '';
+    const caretPos = (this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
+    const { token } = getTokenAtCaret(text, caretPos);
+    return token || '';
   }
 
   renderTranslitSuggestions(word, suggestions) {
@@ -819,37 +844,13 @@ class WorkspaceController {
     return fullText.replace(token, replacement);
   }
 
+  // DEPRECATED: Old space-based transliteration logic
+  // New IME flow uses handleEditorChange() -> fetchRunnerSuggestions() -> renderTranslitSuggestions()
+  // This method is kept for backward compatibility but is no longer called in the main flow
   updateTranslitSuggestions() {
-    const word = this.getCurrentWord();
-    if (!word || word.length < 2 || !/^[a-zA-Z]+$/.test(word)) {
-      this.clearTranslitSuggestions();
-      return;
-    }
-
-    if (this.translitCache.has(word)) {
-      this.renderTranslitSuggestions(word, this.translitCache.get(word));
-      return;
-    }
-
-    if (this.translitTimer) {
-      clearTimeout(this.translitTimer);
-    }
-    if (this.translitAbort) {
-      this.translitAbort.abort();
-    }
-
-    this.translitTimer = setTimeout(async () => {
-      this.translitAbort = new AbortController();
-      try {
-        const mode = this.getMode();
-        const suggestions = await this.fetchRunnerSuggestions(word, mode, 8, this.translitAbort.signal);
-        this.translitCache.set(word, suggestions);
-        this.renderTranslitSuggestions(word, suggestions);
-      } catch (err) {
-        if (err.name === 'AbortError') return;
-        console.error('[Translit] Suggest error:', err);
-      }
-    }, 300);
+    // This method used to trigger on space, but now we use per-keystroke detection
+    // If needed, call handleEditorChange() instead
+    console.warn('[IME] updateTranslitSuggestions() is deprecated, use handleEditorChange() flow');
   }
   
   scheduleAutoAnalysis() {
