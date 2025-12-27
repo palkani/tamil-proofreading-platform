@@ -1,6 +1,15 @@
 (() => {
-  const DEBOUNCE_MS = 200;
+  const DEBOUNCE_MS = 300;
   const MAX_ITEMS = 8;
+
+  function getLastToken(text) {
+    const match = (text || '').match(/(\S+)$/);
+    return match ? match[1] : '';
+  }
+
+  function replaceLastToken(text, replacement) {
+    return (text || '').replace(/(\S+)$/, replacement);
+  }
 
   class IMETypeahead {
     constructor(adapter, opts = {}) {
@@ -44,11 +53,17 @@
         }
         const results = await window.transliterateViaRunner(token, this.mode, MAX_ITEMS, this.abort.signal);
         const candidates = (results || [])
-          .map((item, idx) => ({
-            word: typeof item === 'string' ? item : item.word || item.ta || item.text || item.suggestion || '',
-            score: (typeof item === 'object' && item) ? (item.score || item.confidence || 0) : 0,
-            id: `ime-${idx}`,
-          }))
+          .map((item, idx) => {
+            const word = typeof item === 'string'
+              ? item
+              : item.ta || item.word || item.text || item.suggestion || '';
+            const score = (typeof item === 'object' && item) ? (item.score || item.confidence || 0) : 0;
+            return {
+              word,
+              score,
+              id: `ime-${idx}`,
+            };
+          })
           .filter(c => c.word);
         this.log('response ok', { count: candidates.length });
         if (candidates.length === 0) {
@@ -95,7 +110,7 @@
           this.activeIndex = idx;
           this.highlight(dropdown);
         });
-        el.addEventListener('click', () => this.select(idx, items));
+        el.addEventListener('click', () => this.select(idx, items, false));
         dropdown.appendChild(el);
       });
 
@@ -125,8 +140,14 @@
         this.highlight(this.dropdown);
         return true;
       }
-      if (e.key === 'Enter' || e.key === ' ') {
-        this.select(this.activeIndex, items);
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        this.select(this.activeIndex, items, false);
+        e.preventDefault();
+        return true;
+      }
+      if (e.key === ' ') {
+        this.select(this.activeIndex, items, true);
+        e.preventDefault();
         return true;
       }
       if (e.key === 'Escape') {
@@ -136,11 +157,43 @@
       return false;
     }
 
-    select(idx, items) {
+    insertSpace() {
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+      range.collapse(false);
+      const spaceNode = document.createTextNode(' ');
+      range.insertNode(spaceNode);
+      range.setStartAfter(spaceNode);
+      range.setEndAfter(spaceNode);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    select(idx, items, appendSpace) {
       if (!items || !items[idx]) return;
       const word = items[idx].word;
-      this.adapter.replaceToken(word + ' ');
+      // Replace only the last token in the current text node
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        const range = sel.getRangeAt(0);
+        const node = range.startContainer;
+        const text = node.textContent || '';
+        const nextText = replaceLastToken(text, word);
+        node.textContent = nextText;
+        const newOffset = nextText.length;
+        const newRange = document.createRange();
+        newRange.setStart(node, Math.min(newOffset, node.textContent.length));
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      } else if (typeof this.adapter.replaceToken === 'function') {
+        this.adapter.replaceToken(word);
+      }
       this.close();
+      if (appendSpace) {
+        this.insertSpace();
+      }
     }
 
     close() {
