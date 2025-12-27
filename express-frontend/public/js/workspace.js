@@ -58,6 +58,7 @@ class WorkspaceController {
     this.translitCache = new Map();
     this.translitAbort = null;
     this.translitTimer = null;
+    this.lastRunnerSuggestions = [];
 
     this.init();
   }
@@ -84,18 +85,60 @@ class WorkspaceController {
   async fetchRunnerSuggestions(params) {
     console.log('IME fetchRunnerSuggestions CALLED');
     const { q = '', limit = 8, mode = 'spoken' } = params || {};
-    const qs = new URLSearchParams({ q, limit, mode }).toString();
+    const qs = new URLSearchParams({ q, limit, mode, _ts: Date.now() }).toString();
     const url = `/api/transliterate/suggest?${qs}`;
     console.debug('IME GET:', url);
 
     try {
-      const res = await fetch(url, { method: 'GET' });
+      // Cancel any in-flight request
+      if (this.translitAbort) this.translitAbort.abort();
+      this.translitAbort = new AbortController();
+
+      const res = await fetch(url, {
+        method: 'GET',
+        cache: 'no-store',
+        signal: this.translitAbort.signal,
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      });
+
+      if (res.status === 304) {
+        console.debug('[Translit] 304 Not Modified; using last suggestions');
+        if (this.renderTranslitSuggestions) {
+          this.renderTranslitSuggestions(q, this.lastRunnerSuggestions);
+        } else if (this.updateTranslitSuggestions) {
+          this.updateTranslitSuggestions(this.lastRunnerSuggestions);
+        }
+        return;
+      }
+
       if (!res.ok) {
         console.error('[Translit] proxy returned non-200', res.status);
         return;
       }
-      const data = await res.json().catch(() => ({}));
-      const suggestions = data?.suggestions || data || [];
+
+      const text = await res.text();
+      let data = null;
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (err) {
+          console.error('[Translit] failed to parse JSON', err);
+        }
+      }
+      const raw = (data && data.suggestions) || data || [];
+      const suggestions = (raw || [])
+        .map((s) => ({
+          text: s.ta || s.word || s.text || '',
+          score: typeof s.score === 'number' ? s.score : 0,
+        }))
+        .filter((s) => s.text);
+      this.lastRunnerSuggestions = suggestions;
+
       if (this.renderTranslitSuggestions) {
         this.renderTranslitSuggestions(q, suggestions);
       } else if (this.updateTranslitSuggestions) {
