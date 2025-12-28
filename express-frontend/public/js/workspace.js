@@ -415,7 +415,15 @@ class WorkspaceController {
     if (window.USE_TIPTAP_EDITOR && tiptapWorkspaceEditor) {
       return tiptapWorkspaceEditor.getText();
     }
-    return this.editor ? (this.editor.getPlainText ? this.editor.getPlainText() : '') : '';
+    // TamilEditor stores the editor element in this.editor.editor
+    if (this.editor && this.editor.editor) {
+      return this.editor.editor.textContent || '';
+    }
+    // Fallback: try getPlainText if it exists
+    if (this.editor && typeof this.editor.getPlainText === 'function') {
+      return this.editor.getPlainText();
+    }
+    return '';
   }
 
   getEditorHTML() {
@@ -448,7 +456,11 @@ class WorkspaceController {
     const editorElement = document.getElementById('editor');
     if (editorElement) {
       this.editor = new TamilEditor(editorElement);
-      this.editor.onChange = () => this.handleEditorChange();
+      this.editor.onChange = () => {
+        console.log("[IME] TamilEditor onChange callback triggered");
+        this.handleEditorChange();
+      };
+      console.log("[IME] Editor initialized, onChange callback set");
       this.editorElement = editorElement;
       editorElement.addEventListener('scroll', () => this.repositionTranslitDropdown());
       editorElement.addEventListener('blur', () => this.clearTranslitSuggestions());
@@ -629,11 +641,13 @@ class WorkspaceController {
   }
 
   handleEditorChange() {
+    console.log("[IME] handleEditorChange CALLED");
     this.updateWordCount();
     this.scheduleSave();
     
     // Phase 5: Disable legacy IME when TipTap is active
     if (window.USE_TIPTAP_EDITOR) {
+      console.log("[IME] blocked: TipTap editor active");
       return; // TipTap handles IME via extension
     }
     
@@ -643,9 +657,25 @@ class WorkspaceController {
       return;
     }
     
+    console.log("[IME] editor available, proceeding with token extraction");
+    
     // PART B: Extract and normalize token
     const text = this.getEditorText() || '';
-    const caretPos = (this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
+    console.log("[IME] getEditorText returned:", text);
+    
+    // Get cursor position - TamilEditor stores editor element in this.editor.editor
+    let caretPos = text.length;
+    if (this.editor && typeof this.editor.getCursorPosition === 'function') {
+      caretPos = this.editor.getCursorPosition() || text.length;
+    } else if (this.editorElement) {
+      // Fallback: try to get cursor position from selection
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        caretPos = range.startOffset;
+      }
+    }
+    
     const tokenInfo = getTokenAtCaret(text, caretPos);
     const { start, end, token } = tokenInfo;
     
@@ -705,7 +735,7 @@ class WorkspaceController {
       // Update previousToken only when fetch actually fires
       // Re-extract token to ensure we have the latest
       const text = this.getEditorText() || '';
-      const caretPos = (this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
+      const caretPos = (this.editor && this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
       const tokenInfo = getTokenAtCaret(text, caretPos);
       const currentToken = tokenInfo.token ? tokenInfo.token.trim().toLowerCase() : '';
       const isValidLatin = currentToken && /^[a-z]+$/.test(currentToken);
@@ -713,10 +743,10 @@ class WorkspaceController {
       if (currentToken && currentToken.length >= 1 && isValidLatin) {
         const currentMode = currentToken.length === 1 ? 'char' : 'word';
         this.previousToken = currentToken;
-        console.log("[IME] suggest fired", { token: currentToken, mode: currentMode });
+        console.log("[IME] suggest fired - calling API", { token: currentToken, mode: currentMode, text: text.substring(0, 50) });
         this.fetchRunnerSuggestions({ q: currentToken, limit: 8, mode: currentMode });
       } else {
-        console.debug("[IME] blocked: token became invalid during debounce", { token: currentToken, isValidLatin });
+        console.log("[IME] blocked: token became invalid during debounce", { token: currentToken, isValidLatin, text: text.substring(0, 50) });
       }
     }, 300);
   }
