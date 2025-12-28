@@ -1,3 +1,4 @@
+// v1766939363
 // Main Workspace Controller
 
 // ============================================
@@ -172,12 +173,16 @@ function getCaretClientRect() {
   return rect;
 }
 
-const EditorMode = {
-  IDLE: 'IDLE',
-  IME_TYPING: 'IME_TYPING',
-  SUBMIT_PENDING: 'SUBMIT_PENDING',
-  SUBMITTING: 'SUBMITTING',
-};
+// Prevent duplicate declaration if script is loaded twice
+if (typeof window.EditorMode === 'undefined') {
+  window.EditorMode = {
+    IDLE: 'IDLE',
+    IME_TYPING: 'IME_TYPING',
+    SUBMIT_PENDING: 'SUBMIT_PENDING',
+    SUBMITTING: 'SUBMITTING',
+  };
+}
+const EditorMode = window.EditorMode;
 
 async function ensureRunnerLoaded() {
   if (typeof window.transliterateViaRunner === 'function') {
