@@ -607,10 +607,11 @@ class WorkspaceController {
 
   /**
    * PART B: Safe token extraction - get last Latin token from caret position
+   * DEPRECATED: Direct token extraction is now done in handleEditorChange
    */
   getLastLatinToken() {
     const text = this.getEditorText() || '';
-    const caretPos = (this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
+    const caretPos = (this.editor && this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
     const tokenInfo = getTokenAtCaret(text, caretPos);
     const { token } = tokenInfo;
     
@@ -636,20 +637,27 @@ class WorkspaceController {
       return; // TipTap handles IME via extension
     }
     
+    // Check if editor is available
+    if (!this.editor) {
+      console.warn("[IME] editor not available");
+      return;
+    }
+    
     // PART B: Extract and normalize token
-    const lastToken = this.getLastLatinToken();
     const text = this.getEditorText() || '';
     const caretPos = (this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
     const tokenInfo = getTokenAtCaret(text, caretPos);
-    const { start, end } = tokenInfo;
+    const { start, end, token } = tokenInfo;
     
-    console.debug("[IME] token:", lastToken);
+    // Normalize token
+    const lastToken = token ? token.trim().toLowerCase() : '';
+    const isLatinOnly = lastToken && /^[a-z]+$/.test(lastToken);
     
-    // PART A: HARD BLOCK ONLY IF:
-    // - lastToken.length < 2
-    // - lastToken contains non-latin chars (already handled in getLastLatinToken)
-    if (lastToken.length < 2) {
-      console.debug("[IME] blocked: token too short", { lastToken, length: lastToken.length });
+    console.log("[IME] handleEditorChange called", { text: text.substring(0, 50), caretPos, token, lastToken, isLatinOnly });
+    
+    // PART A: Block only if token is empty or non-Latin
+    if (!lastToken || lastToken.length === 0 || !isLatinOnly) {
+      console.debug("[IME] blocked:", { reason: !lastToken ? 'empty token' : !isLatinOnly ? 'non-latin' : 'unknown', lastToken });
       // Clear IME state
       this.clearGhostText();
       this.imeActive = false;
@@ -660,7 +668,10 @@ class WorkspaceController {
       return;
     }
     
-    // Token is valid (2+ chars, Latin-only)
+    // Token is valid (Latin-only, any length >= 1)
+    // PART A: Determine IME mode: char (length === 1) or word (length >= 2)
+    const imeMode = lastToken.length === 1 ? 'char' : 'word';
+    
     // Update current token info
     const tokenInfoChanged = !this.currentTokenInfo || 
       this.currentTokenInfo.token !== lastToken ||
@@ -692,13 +703,20 @@ class WorkspaceController {
       }
       
       // Update previousToken only when fetch actually fires
-      const currentToken = this.getLastLatinToken();
-      if (currentToken.length >= 2) {
+      // Re-extract token to ensure we have the latest
+      const text = this.getEditorText() || '';
+      const caretPos = (this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
+      const tokenInfo = getTokenAtCaret(text, caretPos);
+      const currentToken = tokenInfo.token ? tokenInfo.token.trim().toLowerCase() : '';
+      const isValidLatin = currentToken && /^[a-z]+$/.test(currentToken);
+      
+      if (currentToken && currentToken.length >= 1 && isValidLatin) {
+        const currentMode = currentToken.length === 1 ? 'char' : 'word';
         this.previousToken = currentToken;
-        console.debug("[IME] suggest fired", { token: currentToken });
-        this.fetchRunnerSuggestions({ q: currentToken, limit: 8, mode: 'spoken' });
+        console.log("[IME] suggest fired", { token: currentToken, mode: currentMode });
+        this.fetchRunnerSuggestions({ q: currentToken, limit: 8, mode: currentMode });
       } else {
-        console.debug("[IME] blocked: token became invalid during debounce", { token: currentToken });
+        console.debug("[IME] blocked: token became invalid during debounce", { token: currentToken, isValidLatin });
       }
     }, 300);
   }
