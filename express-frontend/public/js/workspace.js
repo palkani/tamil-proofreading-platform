@@ -257,8 +257,13 @@ class WorkspaceController {
     this.lastRunnerSuggestions = [];
     this.ghostTextMarker = null; // Inline ghost text span element
     this.currentTokenInfo = null; // { token, start, end } at caret
+    this.previousToken = null; // Track previous token to avoid duplicate calls
     this.imeDebounceTimer = null; // Debounce timer for IME fetching
     this.activeSuggestionIndex = 0; // For keyboard navigation
+    
+    // PART D: Prefix cache for suggestions
+    this.suggestionCache = new Map(); // key: "mode:token", value: { suggestions, timestamp }
+    this.CACHE_TTL_MS = 2000; // 2 seconds
 
     this.init();
   }
@@ -288,15 +293,37 @@ class WorkspaceController {
       return []; // TipTap handles IME via extension
     }
     
-    console.log('IME fetchRunnerSuggestions CALLED');
     const { q = '', limit = 8, mode = 'spoken' } = params || {};
+    
+    // PART D: Check prefix cache first
+    const cacheKey = `${mode}:${q}`;
+    const cached = this.suggestionCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL_MS) {
+      if (this.DEBUG_IME) console.debug('[IME] cache hit', { q, cacheKey });
+      this.currentSuggestions = cached.suggestions;
+      this.lastRunnerSuggestions = cached.suggestions;
+      this.imeActive = true;
+      this.editorMode = EditorMode.IME_TYPING;
+      if (cached.suggestions.length > 0) {
+        this.showGhostText(cached.suggestions[0].text);
+      }
+      if (this.renderTranslitSuggestions) {
+        this.renderTranslitSuggestions(q, cached.suggestions);
+      }
+      return cached.suggestions;
+    }
+    
+    console.log('IME fetchRunnerSuggestions CALLED', { q });
     const qs = new URLSearchParams({ q, limit, mode, _ts: Date.now(), _r: Math.random().toString(36).slice(2) }).toString();
     const url = `/api/transliterate/suggest?${qs}`;
     if (this.DEBUG_IME) console.debug('IME GET:', url);
 
     try {
-      // Cancel any in-flight request
-      if (this.translitAbort) this.translitAbort.abort();
+      // PART C: AbortController discipline - only abort when new fetch is actually starting
+      if (this.translitAbort) {
+        this.translitAbort.abort();
+        if (this.DEBUG_IME) console.debug('[IME] aborted previous request', { q });
+      }
       this.translitAbort = new AbortController();
 
       const res = await fetch(url, {
@@ -358,6 +385,12 @@ class WorkspaceController {
       this.imeActive = true;
       this.editorMode = EditorMode.IME_TYPING;
 
+      // PART D: Store in cache
+      this.suggestionCache.set(cacheKey, {
+        suggestions: rankedSuggestions,
+        timestamp: Date.now(),
+      });
+
       // Show ghost text for best suggestion
       if (rankedSuggestions.length > 0) {
         this.showGhostText(rankedSuggestions[0].text);
@@ -368,6 +401,11 @@ class WorkspaceController {
       }
       return rankedSuggestions;
     } catch (err) {
+      // Ignore abort errors (expected behavior)
+      if (err.name === 'AbortError') {
+        if (this.DEBUG_IME) console.debug('[IME] request aborted', { q });
+        return [];
+      }
       console.error('[Translit] fetchRunnerSuggestions failed', err);
       return [];
     }
@@ -586,16 +624,29 @@ class WorkspaceController {
     
     if (this.DEBUG_IME) console.debug('[IME] onChange', { token, caretPos, start, end, imeActive: this.imeActive });
 
-    // Debounce IME fetching (200ms)
-    if (this.imeDebounceTimer) clearTimeout(this.imeDebounceTimer);
+    // PART B: Strong debounce - cancel previous timer
+    if (this.imeDebounceTimer) {
+      clearTimeout(this.imeDebounceTimer);
+      this.imeDebounceTimer = null;
+    }
 
-    if (token && token.length >= 1 && /^[A-Za-z]+$/.test(token)) {
+    // PART A: Hard gates before calling /suggest
+    const editorHasFocus = document.activeElement === this.editorElement || 
+                           (this.editorElement && this.editorElement.contains(document.activeElement));
+    
+    // Check all conditions
+    const hasValidToken = token && token.length >= 3; // STRICT: minimum 3 chars
+    const isLatinOnly = token && /^[a-z]+$/i.test(token);
+    const tokenChanged = token !== this.previousToken;
+    
+    // PART A: All gates must pass: valid token (3+ chars), latin only, token changed, editor focused
+    if (hasValidToken && isLatinOnly && tokenChanged && editorHasFocus) {
       // Clear ghost text if token changed
-      const tokenChanged = !this.currentTokenInfo || 
+      const tokenInfoChanged = !this.currentTokenInfo || 
         this.currentTokenInfo.token !== token ||
         this.currentTokenInfo.start !== start ||
         this.currentTokenInfo.end !== end;
-      if (tokenChanged) {
+      if (tokenInfoChanged) {
         this.clearGhostText();
       }
       
@@ -603,20 +654,33 @@ class WorkspaceController {
       this.imeActive = true;
       this.editorMode = EditorMode.IME_TYPING;
       
-      // Debounced fetch
+      // PART B: Strong debounce at 300ms minimum
       this.imeDebounceTimer = setTimeout(() => {
+        this.imeDebounceTimer = null;
+        // Update previousToken before making the call
+        this.previousToken = token;
         this.fetchRunnerSuggestions({ q: token, limit: 8, mode: 'spoken' });
-      }, 200);
+      }, 300);
       return;
     }
 
+    // PART A: If conditions not met, return immediately
+    if (!hasValidToken || !isLatinOnly || !tokenChanged || !editorHasFocus) {
+      if (this.DEBUG_IME) console.debug('[IME] gates failed', { 
+        hasValidToken, isLatinOnly, tokenChanged, editorHasFocus, token 
+      });
+    }
+
     // Deactivate IME when no token or non-latin
-    this.clearGhostText();
-    this.imeActive = false;
-    this.editorMode = EditorMode.IDLE;
-    this.currentTokenInfo = null;
-    this.clearTranslitSuggestions();
-    this.scheduleSubmitThrottled(text);
+    if (!token || !isLatinOnly || token.length < 3) {
+      this.clearGhostText();
+      this.imeActive = false;
+      this.editorMode = EditorMode.IDLE;
+      this.currentTokenInfo = null;
+      this.previousToken = null;
+      this.clearTranslitSuggestions();
+      this.scheduleSubmitThrottled(text);
+    }
   }
 
   // DEPRECATED: Use getTokenAtCaret instead
