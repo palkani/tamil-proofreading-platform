@@ -296,14 +296,14 @@ class WorkspaceController {
     if (window.USE_TIPTAP_EDITOR && tiptapWorkspaceEditor) {
       return tiptapWorkspaceEditor.getText();
     }
-    return this.editor ? (this.editor.getPlainText ? this.getEditorText() : '') : '';
+    return this.editor ? (this.editor.getPlainText ? this.editor.getPlainText() : '') : '';
   }
 
   getEditorHTML() {
     if (window.USE_TIPTAP_EDITOR && tiptapWorkspaceEditor) {
       return tiptapWorkspaceEditor.getHTML();
     }
-    return this.editor ? (this.editor.getHTML ? this.getEditorHTML() : '') : '';
+    return this.editor ? (this.editor.getHTML ? this.editor.getHTML() : '') : '';
   }
 
   setEditorContent(html) {
