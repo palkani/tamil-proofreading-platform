@@ -32,42 +32,137 @@ body {
   }
 }
 
-/* Tamil IME Ghost Text */
-.tamil-ime-ghost {
-  color: rgba(79, 70, 229, 0.5) !important;
-  pointer-events: none;
-  user-select: none;
-  font-style: italic;
-}
-
-/* Tamil IME Candidate Strip */
-.tamil-ime-candidates {
-  display: inline-flex;
-  gap: 6px;
-  margin-left: 6px;
-  background: #f6f6f7;
+/* Tamil IME Dropdown */
+.tamil-ime-dropdown {
+  display: inline-block;
+  vertical-align: top;
+  margin-left: 8px;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
-  padding: 4px 6px;
-  font-size: 14px;
-  vertical-align: baseline;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  min-width: 200px;
+  max-width: 300px;
+  z-index: 1000;
+  font-family: system-ui, -apple-system, sans-serif;
+  position: relative;
 }
 
-.tamil-ime-candidates .tamil-ime-cand {
-  padding: 2px 6px;
-  border-radius: 6px;
+/* Alternative: Position absolutely when in editor */
+.ProseMirror {
+  position: relative;
+}
+
+/* Make dropdown appear on new line below text */
+.ProseMirror .tamil-ime-dropdown {
+  display: block;
+  margin-left: 0;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.tamil-ime-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #6b7280;
   cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+  border-radius: 4px;
   transition: background-color 0.15s, color 0.15s;
+}
+
+.tamil-ime-close:hover {
+  background-color: #f3f4f6;
   color: #374151;
+}
+
+.tamil-ime-suggestions-list {
+  padding: 8px 0;
+  max-height: 200px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.tamil-ime-suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  position: relative;
+}
+
+.tamil-ime-suggestion-item:hover {
+  background-color: #f9fafb;
+}
+
+.tamil-ime-suggestion-item.active {
+  background-color: #ede9fe;
+}
+
+.tamil-ime-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #6366f1;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.tamil-ime-suggestion-item.active .tamil-ime-number {
+  background-color: #8b5cf6;
+}
+
+.tamil-ime-text {
+  flex: 1;
+  font-size: 14px;
+  color: #1f2937;
   font-weight: 500;
 }
 
-.tamil-ime-candidates .tamil-ime-cand:hover {
-  background-color: #e5e7eb;
+.tamil-ime-instruction {
+  padding: 8px 16px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 12px;
+  color: #6b7280;
+  background-color: #f9fafb;
+  border-radius: 0 0 8px 8px;
 }
 
-.tamil-ime-candidates .tamil-ime-cand.active {
-  background: #6366f1;
-  color: white;
+.tamil-ime-instruction strong {
+  color: #4b5563;
+  font-weight: 600;
+}
+
+/* Scrollbar styling for suggestions list */
+.tamil-ime-suggestions-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tamil-ime-suggestions-list::-webkit-scrollbar-track {
+  background: #f9fafb;
+  border-radius: 3px;
+}
+
+.tamil-ime-suggestions-list::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.tamil-ime-suggestions-list::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 /* Grammar Highlighting */

@@ -228,51 +228,73 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
             const state = editorView.state;
             const decos: Decoration[] = [];
 
-            if (storage.ghost && storage.start !== null && storage.end !== null) {
-              // Ghost text widget - shows the suggestion after the current token
-              const ghostWidget = Decoration.widget(storage.end, () => {
-                const span = document.createElement('span');
-                span.className = 'tamil-ime-ghost';
-                span.textContent = ' ' + storage.ghost;
-                span.setAttribute('data-ghost', storage.ghost);
-                span.style.cssText = 'color: rgba(79, 70, 229, 0.6) !important; font-style: italic !important; pointer-events: none !important; user-select: none !important; opacity: 1 !important;';
-                return span;
+            if (storage.ghost && storage.start !== null && storage.end !== null && storage.candidates.length > 0) {
+              // Suggestion dropdown widget - appears below the typed text
+              const dropdownWidget = Decoration.widget(storage.end, () => {
+                const container = document.createElement('div');
+                container.className = 'tamil-ime-dropdown';
+                container.setAttribute('data-tamil-ime', 'true');
+                
+                // Close button
+                const closeBtn = document.createElement('button');
+                closeBtn.className = 'tamil-ime-close';
+                closeBtn.innerHTML = '×';
+                closeBtn.setAttribute('aria-label', 'Close suggestions');
+                closeBtn.onclick = (e) => {
+                  e.stopPropagation();
+                  extension.clear();
+                };
+                
+                // Suggestions list
+                const list = document.createElement('div');
+                list.className = 'tamil-ime-suggestions-list';
+                
+                const maxSuggestions = Math.min(storage.candidates.length, 5);
+                for (let i = 0; i < maxSuggestions; i++) {
+                  const candidate = storage.candidates[i];
+                  const item = document.createElement('div');
+                  item.className = `tamil-ime-suggestion-item ${i === storage.index ? 'active' : ''}`;
+                  item.setAttribute('data-index', i.toString());
+                  
+                  // Number badge
+                  const number = document.createElement('span');
+                  number.className = 'tamil-ime-number';
+                  number.textContent = (i + 1).toString();
+                  
+                  // Text
+                  const text = document.createElement('span');
+                  text.className = 'tamil-ime-text';
+                  text.textContent = candidate.text;
+                  
+                  item.appendChild(number);
+                  item.appendChild(text);
+                  
+                  // Click handler
+                  item.onclick = (e) => {
+                    e.stopPropagation();
+                    storage.index = i;
+                    storage.ghost = candidate.text;
+                    extension.commit();
+                  };
+                  
+                  list.appendChild(item);
+                }
+                
+                // Instruction text
+                const instruction = document.createElement('div');
+                instruction.className = 'tamil-ime-instruction';
+                instruction.innerHTML = 'Press <strong>Space</strong> to select first option';
+                
+                container.appendChild(closeBtn);
+                container.appendChild(list);
+                container.appendChild(instruction);
+                
+                return container;
               }, {
-                side: 1,
-                key: 'tamil-ime-ghost',
+                side: 1, // Render after the position
+                key: 'tamil-ime-dropdown',
               });
-              decos.push(ghostWidget);
-
-              // Candidate strip widget (only if multiple candidates)
-              if (storage.candidates.length > 1) {
-                const widgetDeco = Decoration.widget(storage.end, () => {
-                  const el = document.createElement('span');
-                  el.className = 'tamil-ime-candidates';
-                  el.innerHTML = storage.candidates
-                    .slice(0, 5)
-                    .map(
-                      (c, i) =>
-                        `<span class="tamil-ime-cand ${i === storage.index ? 'active' : ''}" data-index="${i}">${c.text}</span>`
-                    )
-                    .join('');
-                  
-                  // Add click handlers
-                  el.addEventListener('click', (e) => {
-                    const target = (e.target as HTMLElement).closest('.tamil-ime-cand');
-                    if (target) {
-                      const index = parseInt(target.getAttribute('data-index') || '0', 10);
-                      storage.index = index;
-                      storage.ghost = storage.candidates[index]?.text || null;
-                      updateDecos();
-                    }
-                  });
-                  
-                  return el;
-                }, {
-                  side: 1, // Render after the position
-                });
-                decos.push(widgetDeco);
-              }
+              decos.push(dropdownWidget);
             }
 
             const decoSet = decos.length > 0
@@ -309,14 +331,14 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
       ArrowDown: () => {
         const storage = extension.storage as TamilIMEStorage;
         if (!storage.candidates.length) return false;
-        storage.index = (storage.index + 1) % storage.candidates.length;
+        storage.index = Math.min(storage.index + 1, storage.candidates.length - 1);
         extension.updateGhost();
         return true;
       },
       ArrowUp: () => {
         const storage = extension.storage as TamilIMEStorage;
         if (!storage.candidates.length) return false;
-        storage.index = (storage.index - 1 + storage.candidates.length) % storage.candidates.length;
+        storage.index = Math.max(storage.index - 1, 0);
         extension.updateGhost();
         return true;
       },
@@ -326,13 +348,59 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
       },
       Space: () => {
         const storage = extension.storage as TamilIMEStorage;
-        if (storage.ghost) {
+        if (storage.ghost && storage.candidates.length > 0) {
           if (extension.options.autoCommitOnSpace) {
             extension.commit();
             this.editor.commands.insertContent(' ');
           } else {
             extension.clear();
           }
+          return true;
+        }
+        return false;
+      },
+      // Number keys 1-5 to select suggestions
+      '1': () => {
+        const storage = extension.storage as TamilIMEStorage;
+        if (storage.candidates.length > 0) {
+          storage.index = 0;
+          extension.commit();
+          return true;
+        }
+        return false;
+      },
+      '2': () => {
+        const storage = extension.storage as TamilIMEStorage;
+        if (storage.candidates.length > 1) {
+          storage.index = 1;
+          extension.commit();
+          return true;
+        }
+        return false;
+      },
+      '3': () => {
+        const storage = extension.storage as TamilIMEStorage;
+        if (storage.candidates.length > 2) {
+          storage.index = 2;
+          extension.commit();
+          return true;
+        }
+        return false;
+      },
+      '4': () => {
+        const storage = extension.storage as TamilIMEStorage;
+        if (storage.candidates.length > 3) {
+          storage.index = 3;
+          extension.commit();
+          return true;
+        }
+        return false;
+      },
+      '5': () => {
+        const storage = extension.storage as TamilIMEStorage;
+        if (storage.candidates.length > 4) {
+          storage.index = 4;
+          extension.commit();
           return true;
         }
         return false;
