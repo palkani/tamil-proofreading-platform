@@ -319,11 +319,8 @@ class WorkspaceController {
     if (this.DEBUG_IME) console.debug('IME GET:', url);
 
     try {
-      // PART C: AbortController discipline - only abort when new fetch is actually starting
-      if (this.translitAbort) {
-        this.translitAbort.abort();
-        if (this.DEBUG_IME) console.debug('[IME] aborted previous request', { q });
-      }
+      // PART D: AbortController - abort should already be done in debounce, but double-check
+      // Create new abort controller for this request
       this.translitAbort = new AbortController();
 
       const res = await fetch(url, {
@@ -608,6 +605,28 @@ class WorkspaceController {
     }
   }
 
+  /**
+   * PART B: Safe token extraction - get last Latin token from caret position
+   */
+  getLastLatinToken() {
+    const text = this.getEditorText() || '';
+    const caretPos = (this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
+    const tokenInfo = getTokenAtCaret(text, caretPos);
+    const { token } = tokenInfo;
+    
+    if (!token) return '';
+    
+    // Normalize: trim and lowercase
+    const normalized = token.trim().toLowerCase();
+    
+    // Return only if it's Latin-only
+    if (/^[a-z]+$/.test(normalized)) {
+      return normalized;
+    }
+    
+    return '';
+  }
+
   handleEditorChange() {
     this.updateWordCount();
     this.scheduleSave();
@@ -617,70 +636,71 @@ class WorkspaceController {
       return; // TipTap handles IME via extension
     }
     
+    // PART B: Extract and normalize token
+    const lastToken = this.getLastLatinToken();
     const text = this.getEditorText() || '';
     const caretPos = (this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
     const tokenInfo = getTokenAtCaret(text, caretPos);
-    const { token, start, end } = tokenInfo;
+    const { start, end } = tokenInfo;
     
-    if (this.DEBUG_IME) console.debug('[IME] onChange', { token, caretPos, start, end, imeActive: this.imeActive });
-
-    // PART B: Strong debounce - cancel previous timer
-    if (this.imeDebounceTimer) {
-      clearTimeout(this.imeDebounceTimer);
-      this.imeDebounceTimer = null;
-    }
-
-    // PART A: Hard gates before calling /suggest
-    const editorHasFocus = document.activeElement === this.editorElement || 
-                           (this.editorElement && this.editorElement.contains(document.activeElement));
+    console.debug("[IME] token:", lastToken);
     
-    // Check all conditions
-    const hasValidToken = token && token.length >= 3; // STRICT: minimum 3 chars
-    const isLatinOnly = token && /^[a-z]+$/i.test(token);
-    const tokenChanged = token !== this.previousToken;
-    
-    // PART A: All gates must pass: valid token (3+ chars), latin only, token changed, editor focused
-    if (hasValidToken && isLatinOnly && tokenChanged && editorHasFocus) {
-      // Clear ghost text if token changed
-      const tokenInfoChanged = !this.currentTokenInfo || 
-        this.currentTokenInfo.token !== token ||
-        this.currentTokenInfo.start !== start ||
-        this.currentTokenInfo.end !== end;
-      if (tokenInfoChanged) {
-        this.clearGhostText();
-      }
-      
-      this.currentTokenInfo = { token, start, end };
-      this.imeActive = true;
-      this.editorMode = EditorMode.IME_TYPING;
-      
-      // PART B: Strong debounce at 300ms minimum
-      this.imeDebounceTimer = setTimeout(() => {
-        this.imeDebounceTimer = null;
-        // Update previousToken before making the call
-        this.previousToken = token;
-        this.fetchRunnerSuggestions({ q: token, limit: 8, mode: 'spoken' });
-      }, 300);
-      return;
-    }
-
-    // PART A: If conditions not met, return immediately
-    if (!hasValidToken || !isLatinOnly || !tokenChanged || !editorHasFocus) {
-      if (this.DEBUG_IME) console.debug('[IME] gates failed', { 
-        hasValidToken, isLatinOnly, tokenChanged, editorHasFocus, token 
-      });
-    }
-
-    // Deactivate IME when no token or non-latin
-    if (!token || !isLatinOnly || token.length < 3) {
+    // PART A: HARD BLOCK ONLY IF:
+    // - lastToken.length < 2
+    // - lastToken contains non-latin chars (already handled in getLastLatinToken)
+    if (lastToken.length < 2) {
+      console.debug("[IME] blocked: token too short", { lastToken, length: lastToken.length });
+      // Clear IME state
       this.clearGhostText();
       this.imeActive = false;
       this.editorMode = EditorMode.IDLE;
       this.currentTokenInfo = null;
-      this.previousToken = null;
       this.clearTranslitSuggestions();
       this.scheduleSubmitThrottled(text);
+      return;
     }
+    
+    // Token is valid (2+ chars, Latin-only)
+    // Update current token info
+    const tokenInfoChanged = !this.currentTokenInfo || 
+      this.currentTokenInfo.token !== lastToken ||
+      this.currentTokenInfo.start !== start ||
+      this.currentTokenInfo.end !== end;
+    
+    if (tokenInfoChanged) {
+      this.clearGhostText();
+    }
+    
+    this.currentTokenInfo = { token: lastToken, start, end };
+    this.imeActive = true;
+    this.editorMode = EditorMode.IME_TYPING;
+    
+    // PART C: Debounce that cannot starve - clear previous timer
+    if (this.imeDebounceTimer) {
+      clearTimeout(this.imeDebounceTimer);
+      this.imeDebounceTimer = null;
+    }
+    
+    // PART C: ONLY place where fetch() is called - inside debounce
+    this.imeDebounceTimer = setTimeout(() => {
+      this.imeDebounceTimer = null;
+      
+      // PART D: Abort previous request ONLY INSIDE debounce, right before starting new fetch
+      if (this.translitAbort) {
+        this.translitAbort.abort();
+        if (this.DEBUG_IME) console.debug('[IME] aborted previous request before new fetch');
+      }
+      
+      // Update previousToken only when fetch actually fires
+      const currentToken = this.getLastLatinToken();
+      if (currentToken.length >= 2) {
+        this.previousToken = currentToken;
+        console.debug("[IME] suggest fired", { token: currentToken });
+        this.fetchRunnerSuggestions({ q: currentToken, limit: 8, mode: 'spoken' });
+      } else {
+        console.debug("[IME] blocked: token became invalid during debounce", { token: currentToken });
+      }
+    }, 300);
   }
 
   // DEPRECATED: Use getTokenAtCaret instead
