@@ -415,14 +415,20 @@ class WorkspaceController {
     if (window.USE_TIPTAP_EDITOR && tiptapWorkspaceEditor) {
       return tiptapWorkspaceEditor.getText();
     }
-    // TamilEditor stores the editor element in this.editor.editor
+    // Use editorElement directly (it's the DOM element)
+    if (this.editorElement) {
+      const text = this.editorElement.textContent || '';
+      return text;
+    }
+    // Fallback: TamilEditor stores the editor element in this.editor.editor
     if (this.editor && this.editor.editor) {
-      return this.editor.editor.textContent || '';
+      const text = this.editor.editor.textContent || '';
+      return text;
     }
-    // Fallback: try getPlainText if it exists
-    if (this.editor && typeof this.editor.getPlainText === 'function') {
-      return this.editor.getPlainText();
-    }
+    console.warn("[IME] getEditorText: no valid source found", { 
+      hasEditorElement: !!this.editorElement,
+      hasEditor: !!this.editor 
+    });
     return '';
   }
 
@@ -460,7 +466,20 @@ class WorkspaceController {
         console.log("[IME] TamilEditor onChange callback triggered");
         this.handleEditorChange();
       };
-      console.log("[IME] Editor initialized, onChange callback set");
+      console.log("[IME] Editor initialized, onChange callback set", { 
+        editor: !!this.editor, 
+        editorElement: !!editorElement,
+        hasOnChange: typeof this.editor.onChange === 'function'
+      });
+      
+      // Also add direct input listener as fallback
+      editorElement.addEventListener('input', () => {
+        console.log("[IME] Direct input event listener fired");
+        if (this.editor && this.editor.onChange) {
+          this.editor.onChange();
+        }
+      });
+      
       this.editorElement = editorElement;
       editorElement.addEventListener('scroll', () => this.repositionTranslitDropdown());
       editorElement.addEventListener('blur', () => this.clearTranslitSuggestions());
@@ -661,18 +680,28 @@ class WorkspaceController {
     
     // PART B: Extract and normalize token
     const text = this.getEditorText() || '';
-    console.log("[IME] getEditorText returned:", text);
+    console.log("[IME] handleEditorChange - text extracted:", text.substring(0, 100), "length:", text.length);
     
     // Get cursor position - TamilEditor stores editor element in this.editor.editor
     let caretPos = text.length;
     if (this.editor && typeof this.editor.getCursorPosition === 'function') {
       caretPos = this.editor.getCursorPosition() || text.length;
+      console.log("[IME] cursor position from getCursorPosition:", caretPos);
     } else if (this.editorElement) {
       // Fallback: try to get cursor position from selection
-      const selection = window.getSelection();
-      if (selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        caretPos = range.startOffset;
+      try {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          // Try to calculate position in text
+          const preCaretRange = range.cloneRange();
+          preCaretRange.selectNodeContents(this.editorElement);
+          preCaretRange.setEnd(range.endContainer, range.endOffset);
+          caretPos = preCaretRange.toString().length;
+          console.log("[IME] cursor position from selection:", caretPos);
+        }
+      } catch (e) {
+        console.warn("[IME] error getting cursor position:", e);
       }
     }
     
@@ -683,7 +712,14 @@ class WorkspaceController {
     const lastToken = token ? token.trim().toLowerCase() : '';
     const isLatinOnly = lastToken && /^[a-z]+$/.test(lastToken);
     
-    console.log("[IME] handleEditorChange called", { text: text.substring(0, 50), caretPos, token, lastToken, isLatinOnly });
+    console.log("[IME] token extraction result:", { 
+      caretPos, 
+      token, 
+      lastToken, 
+      isLatinOnly,
+      start,
+      end
+    });
     
     // PART A: Block only if token is empty or non-Latin
     if (!lastToken || lastToken.length === 0 || !isLatinOnly) {
