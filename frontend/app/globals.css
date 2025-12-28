@@ -34,9 +34,10 @@ body {
 
 /* Tamil IME Ghost Text */
 .tamil-ime-ghost {
-  color: rgba(0, 0, 0, 0.35);
+  color: rgba(79, 70, 229, 0.5) !important;
   pointer-events: none;
   user-select: none;
+  font-style: italic;
 }
 
 /* Tamil IME Candidate Strip */

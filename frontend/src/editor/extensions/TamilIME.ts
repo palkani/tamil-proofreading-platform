@@ -10,6 +10,7 @@ interface TamilIMEStorage {
   index: number;
   ghost: string | null;
   debounce: NodeJS.Timeout | null;
+  fetching: boolean;
 }
 
 interface TamilIMEState {
@@ -185,6 +186,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
       index: 0,
       ghost: null,
       debounce: null,
+      fetching: false,
     };
   },
 
@@ -359,6 +361,12 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
     // Clear previous debounce
     if (storage.debounce) {
       clearTimeout(storage.debounce);
+      storage.debounce = null;
+    }
+
+    // Skip if already fetching for the same token
+    if (storage.fetching && storage.token === token) {
+      return;
     }
 
     // Store token info
@@ -368,21 +376,57 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
 
     // Debounced fetch
     storage.debounce = setTimeout(async () => {
+      // Check if token changed during debounce
+      if (storage.token !== token) {
+        return;
+      }
+
+      storage.fetching = true;
       try {
-        const res = await fetch(
-          `/api/transliterate/suggest?q=${encodeURIComponent(token)}&limit=8&mode=spoken`
-        );
+        // Use the backend API directly
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+        const suggestUrl = `${apiBaseUrl}/ime/suggest?q=${encodeURIComponent(token)}&limit=8&mode=spoken`;
+        
+        console.log('[TamilIME] Fetching suggestions for:', token, 'from:', suggestUrl);
+
+        const res = await fetch(suggestUrl, {
+          credentials: 'include',
+        });
+
+        // Check again if token changed during fetch
+        if (storage.token !== token) {
+          return;
+        }
 
         if (!res.ok) {
+          console.warn('[TamilIME] API returned non-OK status:', res.status);
           this.clear();
           return;
         }
 
         const data = await res.json();
-        const raw = data.suggestions || [];
+        console.log('[TamilIME] API response:', data);
+        
+        // Handle both response formats: {suggestions: [...]} or direct array
+        const suggestionsArray = data.suggestions || data.candidates || [];
+        const raw = suggestionsArray.map((s: any) => ({
+          text: s.word || s.text || s.ta || '',
+          score: s.score || 0,
+          recommended: s.recommended || s.label === 'Recommended',
+          confidence: s.confidence,
+        })).filter((s: any) => s.text);
+
+        console.log('[TamilIME] Parsed suggestions:', raw);
+
         const ranked = rankCandidates(token, raw);
 
+        // Final check if token changed
+        if (storage.token !== token) {
+          return;
+        }
+
         if (!ranked.length) {
+          console.log('[TamilIME] No ranked candidates, clearing');
           this.clear();
           return;
         }
@@ -391,13 +435,18 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         storage.index = 0;
         storage.ghost = ranked[0].text;
 
+        console.log('[TamilIME] Setting ghost text:', storage.ghost, 'candidates:', ranked.length);
+
         // Update decoration
         this.updateDecoration();
       } catch (err) {
         console.error('[TamilIME] Fetch error:', err);
         this.clear();
+      } finally {
+        storage.fetching = false;
+        storage.debounce = null;
       }
-    }, 200);
+    }, 300); // Increased debounce to 300ms to reduce duplicate calls
   },
 
   commit() {
@@ -442,6 +491,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
     storage.candidates = [];
     storage.index = 0;
     storage.ghost = null;
+    storage.fetching = false;
 
     if (storage.debounce) {
       clearTimeout(storage.debounce);
