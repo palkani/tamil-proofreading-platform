@@ -1,7 +1,7 @@
 import logging
 import re
 import time
-from typing import List, Tuple
+from typing import List, Tuple, Set
 
 from app.adapters.aksharamukha import AksharaAdapter
 from app.clients.transliterator_client import build_client
@@ -9,6 +9,68 @@ from app.core.cache import LRUCache, make_cache_key
 from app.core.config import settings
 
 tamil_regex = re.compile(r"^[\u0B80-\u0BFF\s]+$")
+
+# PART 3: Tamil dependent vowels (vowel signs that attach to consonants)
+# These cannot be stacked sequentially
+DEPENDENT_VOWELS: Set[str] = {
+    'ா', 'ி', 'ீ', 'ு', 'ூ', 'ெ', 'ே', 'ை', 'ொ', 'ோ', 'ௌ'
+}
+
+
+def has_invalid_vowel_sequence(word: str) -> bool:
+    """
+    Check if a Tamil word has invalid vowel sequences.
+    Two dependent vowels in a row is linguistically invalid.
+    """
+    if not word or len(word) < 2:
+        return False
+
+    for i in range(1, len(word)):
+        prev = word[i - 1]
+        curr = word[i]
+
+        # Two dependent vowels in a row is invalid
+        if prev in DEPENDENT_VOWELS and curr in DEPENDENT_VOWELS:
+            return True
+
+    return False
+
+
+def filter_tamil_suggestions(suggestions: List[dict], token: str) -> List[dict]:
+    """
+    PART 3: Filter Tamil suggestions to remove invalid forms.
+    - Rejects Latin/digits
+    - Rejects invalid vowel stacking
+    - Rejects overly long expansions for short inputs
+    """
+    if not suggestions:
+        return []
+
+    # For short tokens (1-2 chars), limit to 3 chars max
+    # For longer tokens, allow up to 6 chars
+    max_len = 3 if len(token) <= 2 else 6
+
+    filtered = []
+    for s in suggestions:
+        w = (s.get("word") or s.get("ta") or "").strip()
+        if not w:
+            continue
+
+        # Reject Latin / digits (must be pure Tamil)
+        if any(c.isascii() and c.isalnum() for c in w):
+            continue
+
+        # Reject invalid vowel stacking
+        if has_invalid_vowel_sequence(w):
+            continue
+
+        # Reject too-long expansions for short input
+        if len(w) > max_len:
+            continue
+
+        filtered.append(s)
+
+    return filtered
 
 
 class TransliterationService:
@@ -69,12 +131,21 @@ class TransliterationService:
                         len(outputs),
                     )
                     used_runner = True
+                    # Build suggestions list first
+                    raw_suggestions = []
                     for out in outputs:
                         if not out or not tamil_regex.match(out):
                             continue
-                        suggestions.append({"word": out, "ta": out, "score": 1.0})
-                        if len(suggestions) >= limit:
-                            break
+                        raw_suggestions.append({"word": out, "ta": out, "score": 1.0})
+                    
+                    # PART 3: Filter suggestions to remove invalid Tamil forms
+                    filtered = filter_tamil_suggestions(raw_suggestions, text)
+                    
+                    # Fallback: if everything filtered out, keep only first raw item as safe fallback
+                    if filtered:
+                        suggestions = filtered[:limit]
+                    else:
+                        suggestions = raw_suggestions[:1] if raw_suggestions else []
                 except Exception as e:
                     logging.error(
                         "transliterator_runner_failure request_id=%s error=%s", request_id, str(e)
@@ -98,12 +169,21 @@ class TransliterationService:
             logging.info(
                 "[AKSHARA] request_id=%s event=fallback_adapter outputs=%d", request_id, len(outputs)
             )
+            # Build raw suggestions list first
+            raw_suggestions = []
             for out in outputs:
                 if not out or not tamil_regex.match(out):
                     continue
-                suggestions.append({"word": out, "ta": out, "score": 1.0})
-                if len(suggestions) >= limit:
-                    break
+                raw_suggestions.append({"word": out, "ta": out, "score": 1.0})
+            
+            # PART 3: Filter suggestions to remove invalid Tamil forms
+            filtered = filter_tamil_suggestions(raw_suggestions, text)
+            
+            # Fallback: if everything filtered out, keep only first raw item as safe fallback
+            if filtered:
+                suggestions = filtered[:limit]
+            else:
+                suggestions = raw_suggestions[:1] if raw_suggestions else []
         except Exception as e:
             logging.exception("[AKSHARA] request_id=%s error=%s", request_id, e)
             return [], False, "none"
