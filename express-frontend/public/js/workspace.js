@@ -209,13 +209,6 @@ async function ensureRunnerLoaded() {
   return window.__loadingTranslitRunner;
 }
 
-const EditorMode = {
-  IDLE: 'IDLE',
-  IME_TYPING: 'IME_TYPING',
-  SUBMIT_PENDING: 'SUBMIT_PENDING',
-  SUBMITTING: 'SUBMITTING',
-};
-
 class WorkspaceController {
   constructor() {
     this.getMode = () => {
