@@ -1,5 +1,66 @@
 // Main Workspace Controller
 
+// ============================================
+// TAMIL LINGUISTIC FILTERING UTILITIES
+// ============================================
+
+/**
+ * Tamil dependent vowels (vowel signs that attach to consonants)
+ * These cannot be stacked sequentially
+ */
+const TAMIL_DEP_VOWELS = new Set([
+  'ா','ி','ீ','ு','ூ','ெ','ே','ை','ொ','ோ','ௌ'
+]);
+
+/**
+ * Check if a Tamil word has invalid vowel sequences
+ * Two dependent vowels in a row is linguistically invalid
+ */
+function hasInvalidVowelSequence(word) {
+  if (!word) return true;
+
+  for (let i = 1; i < word.length; i++) {
+    const prev = word[i - 1];
+    const curr = word[i];
+
+    // Two dependent vowels in a row is invalid
+    if (TAMIL_DEP_VOWELS.has(prev) && TAMIL_DEP_VOWELS.has(curr)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Clean Tamil suggestions by filtering out invalid forms
+ * - Rejects Latin/digits
+ * - Rejects invalid vowel stacking
+ * - Rejects overly long expansions for short inputs
+ */
+function cleanTamilSuggestions(rawSuggestions, tokenLatin) {
+  if (!rawSuggestions || rawSuggestions.length === 0) return [];
+  
+  // For short tokens (1-2 chars), limit to 3 chars max
+  // For longer tokens, allow up to 6 chars
+  const maxLen = tokenLatin.length <= 2 ? 3 : 6;
+
+  return rawSuggestions.filter(s => {
+    const w = (s.word || s.text || '').trim();
+    if (!w) return false;
+
+    // Reject Latin / digits (must be pure Tamil)
+    if (/[A-Za-z0-9]/.test(w)) return false;
+
+    // Reject invalid vowel stacking
+    if (hasInvalidVowelSequence(w)) return false;
+
+    // Reject too-long expansions for short input
+    if (w.length > maxLen) return false;
+
+    return true;
+  });
+}
+
 function getLastToken(text) {
   const match = (text || '').match(/(\S+)$/);
   return match ? match[1] : '';
@@ -61,11 +122,28 @@ function rankTamilCandidates(tokenLatin, candidates) {
       const txt = (c.text || c.word || '').trim();
       if (!txt) return null;
       const originalScore = typeof c.score === 'number' ? c.score : 0;
-      const rankingScore = tamilScore(tokenLatin, txt, { 
+      
+      // Calculate base ranking score
+      let rankingScore = tamilScore(tokenLatin, txt, { 
         recommended: c.recommended,
         confidence: c.confidence,
         score: originalScore 
       });
+      
+      // Strong preference for base syllables (e.g., "மு", "கா", "பி") - 2 chars
+      // This ensures "மு" ranks higher than "முஉ", "முஉஉ"
+      if (txt.length === 2) {
+        rankingScore += 50;
+      }
+      
+      // Penalize long expansions (prefer shorter, cleaner forms)
+      rankingScore -= txt.length * 5;
+      
+      // Use API confidence if present (scaled to 0-30)
+      if (typeof originalScore === 'number' && originalScore > 0) {
+        rankingScore += Math.round(originalScore * 30);
+      }
+      
       return {
         ...c,
         text: txt,
@@ -266,8 +344,14 @@ class WorkspaceController {
         }))
         .filter((s) => s.text);
       
-      // Rank suggestions with Tamil phonetic ranking
-      const rankedSuggestions = rankTamilCandidates(q, rawSuggestions);
+      // PART 1: Clean suggestions - filter out invalid Tamil forms
+      const cleaned = cleanTamilSuggestions(rawSuggestions, q);
+      
+      // Fallback: if everything filtered out, keep only first raw item as safe fallback
+      const usable = cleaned.length > 0 ? cleaned : rawSuggestions.slice(0, 1);
+      
+      // PART 1: Rank suggestions with Tamil phonetic ranking (prefers base syllables)
+      const rankedSuggestions = rankTamilCandidates(q, usable);
       this.lastRunnerSuggestions = rankedSuggestions;
       this.currentSuggestions = rankedSuggestions;
       this.activeSuggestionIndex = 0;

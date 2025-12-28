@@ -52,7 +52,8 @@
 </div>
 
 <!-- Transliteration suggestion strip -->
-<div id="translit-suggest-box" class="hidden bg-white border border-gray-200 rounded-lg px-3 py-2 mt-2 text-sm shadow-sm">
+<!-- PART 2: UI Safety - Suggestions rendered below to never hide typed word -->
+<div id="translit-suggest-box" class="hidden bg-white border border-gray-200 rounded-lg px-3 py-2 mt-2 text-sm shadow-sm" style="transform: translateY(1.8em);">
   <div id="translit-suggest-status" class="text-gray-600">Type English to see Tamil suggestions…</div>
   <ul id="translit-suggest-list" class="mt-1 space-y-1"></ul>
 </div>
