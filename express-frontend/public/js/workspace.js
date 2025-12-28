@@ -288,41 +288,34 @@ class WorkspaceController {
   }
 
   async fetchRunnerSuggestions(params) {
+    console.log("[IME] fetchRunnerSuggestions called", params);
+    
     // Phase 5: Disable legacy IME when TipTap is active
     if (window.USE_TIPTAP_EDITOR) {
+      console.log("[IME] fetchRunnerSuggestions blocked: TipTap active");
       return []; // TipTap handles IME via extension
     }
     
     const { q = '', limit = 8, mode = 'spoken' } = params || {};
+    console.log("[IME] fetchRunnerSuggestions - about to call API", { q, limit, mode });
     
-    // PART D: Check prefix cache first
-    const cacheKey = `${mode}:${q}`;
-    const cached = this.suggestionCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL_MS) {
-      if (this.DEBUG_IME) console.debug('[IME] cache hit', { q, cacheKey });
-      this.currentSuggestions = cached.suggestions;
-      this.lastRunnerSuggestions = cached.suggestions;
-      this.imeActive = true;
-      this.editorMode = EditorMode.IME_TYPING;
-      if (cached.suggestions.length > 0) {
-        this.showGhostText(cached.suggestions[0].text);
-      }
-      if (this.renderTranslitSuggestions) {
-        this.renderTranslitSuggestions(q, cached.suggestions);
-      }
-      return cached.suggestions;
-    }
+    // TEMPORARILY DISABLED CACHE - always call API to confirm wiring
+    // const cacheKey = `${mode}:${q}`;
+    // const cached = this.suggestionCache.get(cacheKey);
+    // if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL_MS) {
+    //   return cached.suggestions;
+    // }
     
-    console.log('IME fetchRunnerSuggestions CALLED', { q });
     const qs = new URLSearchParams({ q, limit, mode, _ts: Date.now(), _r: Math.random().toString(36).slice(2) }).toString();
     const url = `/api/transliterate/suggest?${qs}`;
-    if (this.DEBUG_IME) console.debug('IME GET:', url);
+    console.log("[IME] API URL:", url);
 
     try {
-      // PART D: AbortController - abort should already be done in debounce, but double-check
-      // Create new abort controller for this request
+      // Create new abort controller for this request (simplified - no abort logic for now)
       this.translitAbort = new AbortController();
 
+      console.log("[IME] About to fetch:", url);
+      
       const res = await fetch(url, {
         method: 'GET',
         cache: 'no-store',
@@ -346,8 +339,10 @@ class WorkspaceController {
       return this.lastRunnerSuggestions;
       }
 
+      console.log("[IME] API response status:", res.status);
+      
       if (!res.ok) {
-        console.error('[Translit] proxy returned non-200', res.status);
+        console.error('[IME] API returned non-200', res.status, { url });
         return [];
       }
 
@@ -398,12 +393,12 @@ class WorkspaceController {
       }
       return rankedSuggestions;
     } catch (err) {
+      console.error('[IME] fetchRunnerSuggestions error:', err, { q, url });
       // Ignore abort errors (expected behavior)
       if (err.name === 'AbortError') {
-        if (this.DEBUG_IME) console.debug('[IME] request aborted', { q });
+        console.log('[IME] request aborted', { q });
         return [];
       }
-      console.error('[Translit] fetchRunnerSuggestions failed', err);
       return [];
     }
   }
@@ -660,131 +655,37 @@ class WorkspaceController {
   }
 
   handleEditorChange() {
-    console.log("[IME] handleEditorChange CALLED");
+    console.log("[IME] change detected");
+    
     this.updateWordCount();
     this.scheduleSave();
     
-    // Phase 5: Disable legacy IME when TipTap is active
+    // Skip if TipTap is active
     if (window.USE_TIPTAP_EDITOR) {
-      console.log("[IME] blocked: TipTap editor active");
-      return; // TipTap handles IME via extension
-    }
-    
-    // Check if editor is available
-    if (!this.editor) {
-      console.warn("[IME] editor not available");
       return;
     }
     
-    console.log("[IME] editor available, proceeding with token extraction");
-    
-    // PART B: Extract and normalize token
+    // Extract token
     const text = this.getEditorText() || '';
-    console.log("[IME] handleEditorChange - text extracted:", text.substring(0, 100), "length:", text.length);
-    
-    // Get cursor position - TamilEditor stores editor element in this.editor.editor
-    let caretPos = text.length;
-    if (this.editor && typeof this.editor.getCursorPosition === 'function') {
-      caretPos = this.editor.getCursorPosition() || text.length;
-      console.log("[IME] cursor position from getCursorPosition:", caretPos);
-    } else if (this.editorElement) {
-      // Fallback: try to get cursor position from selection
-      try {
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          // Try to calculate position in text
-          const preCaretRange = range.cloneRange();
-          preCaretRange.selectNodeContents(this.editorElement);
-          preCaretRange.setEnd(range.endContainer, range.endOffset);
-          caretPos = preCaretRange.toString().length;
-          console.log("[IME] cursor position from selection:", caretPos);
-        }
-      } catch (e) {
-        console.warn("[IME] error getting cursor position:", e);
-      }
-    }
-    
+    const caretPos = (this.editor && typeof this.editor.getCursorPosition === 'function' && this.editor.getCursorPosition()) || text.length;
     const tokenInfo = getTokenAtCaret(text, caretPos);
-    const { start, end, token } = tokenInfo;
+    const token = tokenInfo.token ? tokenInfo.token.trim().toLowerCase() : '';
     
-    // Normalize token
-    const lastToken = token ? token.trim().toLowerCase() : '';
-    const isLatinOnly = lastToken && /^[a-z]+$/.test(lastToken);
+    console.log("[IME] token extracted:", token, "length:", token.length);
     
-    console.log("[IME] token extraction result:", { 
-      caretPos, 
-      token, 
-      lastToken, 
-      isLatinOnly,
-      start,
-      end
-    });
-    
-    // PART A: Block only if token is empty or non-Latin
-    if (!lastToken || lastToken.length === 0 || !isLatinOnly) {
-      console.debug("[IME] blocked:", { reason: !lastToken ? 'empty token' : !isLatinOnly ? 'non-latin' : 'unknown', lastToken });
-      // Clear IME state
-      this.clearGhostText();
-      this.imeActive = false;
-      this.editorMode = EditorMode.IDLE;
-      this.currentTokenInfo = null;
-      this.clearTranslitSuggestions();
-      this.scheduleSubmitThrottled(text);
+    // MINIMAL GUARDS: Only check if token exists and is Latin
+    if (!token || !/^[a-z]+$/i.test(token)) {
+      console.log("[IME] blocked: invalid token", token);
       return;
     }
     
-    // Token is valid (Latin-only, any length >= 1)
-    // PART A: Determine IME mode: char (length === 1) or word (length >= 2)
-    const imeMode = lastToken.length === 1 ? 'char' : 'word';
+    // Determine mode
+    const mode = token.length === 1 ? 'char' : 'word';
     
-    // Update current token info
-    const tokenInfoChanged = !this.currentTokenInfo || 
-      this.currentTokenInfo.token !== lastToken ||
-      this.currentTokenInfo.start !== start ||
-      this.currentTokenInfo.end !== end;
+    console.log("[IME] calling fetchRunnerSuggestions", { token, mode });
     
-    if (tokenInfoChanged) {
-      this.clearGhostText();
-    }
-    
-    this.currentTokenInfo = { token: lastToken, start, end };
-    this.imeActive = true;
-    this.editorMode = EditorMode.IME_TYPING;
-    
-    // PART C: Debounce that cannot starve - clear previous timer
-    if (this.imeDebounceTimer) {
-      clearTimeout(this.imeDebounceTimer);
-      this.imeDebounceTimer = null;
-    }
-    
-    // PART C: ONLY place where fetch() is called - inside debounce
-    this.imeDebounceTimer = setTimeout(() => {
-      this.imeDebounceTimer = null;
-      
-      // PART D: Abort previous request ONLY INSIDE debounce, right before starting new fetch
-      if (this.translitAbort) {
-        this.translitAbort.abort();
-        if (this.DEBUG_IME) console.debug('[IME] aborted previous request before new fetch');
-      }
-      
-      // Update previousToken only when fetch actually fires
-      // Re-extract token to ensure we have the latest
-      const text = this.getEditorText() || '';
-      const caretPos = (this.editor && this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
-      const tokenInfo = getTokenAtCaret(text, caretPos);
-      const currentToken = tokenInfo.token ? tokenInfo.token.trim().toLowerCase() : '';
-      const isValidLatin = currentToken && /^[a-z]+$/.test(currentToken);
-      
-      if (currentToken && currentToken.length >= 1 && isValidLatin) {
-        const currentMode = currentToken.length === 1 ? 'char' : 'word';
-        this.previousToken = currentToken;
-        console.log("[IME] suggest fired - calling API", { token: currentToken, mode: currentMode, text: text.substring(0, 50) });
-        this.fetchRunnerSuggestions({ q: currentToken, limit: 8, mode: currentMode });
-      } else {
-        console.log("[IME] blocked: token became invalid during debounce", { token: currentToken, isValidLatin, text: text.substring(0, 50) });
-      }
-    }, 300);
+    // FORCE FETCH - no debounce, no abort controller
+    this.fetchRunnerSuggestions({ q: token, limit: 8, mode: mode });
   }
 
   // DEPRECATED: Use getTokenAtCaret instead
