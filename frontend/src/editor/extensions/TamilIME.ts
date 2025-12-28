@@ -11,6 +11,8 @@ interface TamilIMEStorage {
   ghost: string | null;
   debounce: NodeJS.Timeout | null;
   fetching: boolean;
+  abortController: AbortController | null;
+  lastRequestId: number;
 }
 
 interface TamilIMEState {
@@ -187,6 +189,8 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
       ghost: null,
       debounce: null,
       fetching: false,
+      abortController: null,
+      lastRequestId: 0,
     };
   },
 
@@ -225,12 +229,19 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
             const decos: Decoration[] = [];
 
             if (storage.ghost && storage.start !== null && storage.end !== null) {
-              // Ghost text decoration
-              const ghostDeco = Decoration.inline(storage.start, storage.end, {
-                class: 'tamil-ime-ghost',
-                'data-ghost': storage.ghost,
+              // Ghost text widget - shows the suggestion after the current token
+              const ghostWidget = Decoration.widget(storage.end, () => {
+                const span = document.createElement('span');
+                span.className = 'tamil-ime-ghost';
+                span.textContent = ' ' + storage.ghost;
+                span.setAttribute('data-ghost', storage.ghost);
+                span.style.cssText = 'color: rgba(79, 70, 229, 0.6) !important; font-style: italic !important; pointer-events: none !important; user-select: none !important; opacity: 1 !important;';
+                return span;
+              }, {
+                side: 1,
+                key: 'tamil-ime-ghost',
               });
-              decos.push(ghostDeco);
+              decos.push(ghostWidget);
 
               // Candidate strip widget (only if multiple candidates)
               if (storage.candidates.length > 1) {
@@ -358,43 +369,56 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
       return;
     }
 
+    // If token hasn't changed, don't make a new request
+    if (storage.token === token && storage.fetching) {
+      return;
+    }
+
+    // Cancel any in-flight requests
+    if (storage.abortController) {
+      storage.abortController.abort();
+      storage.abortController = null;
+    }
+
     // Clear previous debounce
     if (storage.debounce) {
       clearTimeout(storage.debounce);
       storage.debounce = null;
     }
 
-    // Skip if already fetching for the same token
-    if (storage.fetching && storage.token === token) {
-      return;
-    }
-
     // Store token info
     storage.token = token;
     storage.start = start;
     storage.end = end;
+    storage.lastRequestId += 1;
+    const requestId = storage.lastRequestId;
 
     // Debounced fetch
     storage.debounce = setTimeout(async () => {
-      // Check if token changed during debounce
-      if (storage.token !== token) {
+      // Check if token changed during debounce or request was cancelled
+      if (storage.token !== token || storage.lastRequestId !== requestId) {
         return;
       }
 
+      // Create new abort controller for this request
+      const abortController = new AbortController();
+      storage.abortController = abortController;
       storage.fetching = true;
+
       try {
         // Use the backend API directly
         const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
         const suggestUrl = `${apiBaseUrl}/ime/suggest?q=${encodeURIComponent(token)}&limit=8&mode=spoken`;
         
-        console.log('[TamilIME] Fetching suggestions for:', token, 'from:', suggestUrl);
+        console.log('[TamilIME] Fetching suggestions for:', token, 'requestId:', requestId);
 
         const res = await fetch(suggestUrl, {
           credentials: 'include',
+          signal: abortController.signal,
         });
 
-        // Check again if token changed during fetch
-        if (storage.token !== token) {
+        // Check again if token changed or request was cancelled
+        if (storage.token !== token || storage.lastRequestId !== requestId || abortController.signal.aborted) {
           return;
         }
 
@@ -405,7 +429,12 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         }
 
         const data = await res.json();
-        console.log('[TamilIME] API response:', data);
+        console.log('[TamilIME] API response for', token, ':', data);
+        
+        // Final check before processing
+        if (storage.token !== token || storage.lastRequestId !== requestId || abortController.signal.aborted) {
+          return;
+        }
         
         // Handle both response formats: {suggestions: [...]} or direct array
         const suggestionsArray = data.suggestions || data.candidates || [];
@@ -416,17 +445,17 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
           confidence: s.confidence,
         })).filter((s: any) => s.text);
 
-        console.log('[TamilIME] Parsed suggestions:', raw);
+        console.log('[TamilIME] Parsed suggestions for', token, ':', raw);
 
         const ranked = rankCandidates(token, raw);
 
         // Final check if token changed
-        if (storage.token !== token) {
+        if (storage.token !== token || storage.lastRequestId !== requestId || abortController.signal.aborted) {
           return;
         }
 
         if (!ranked.length) {
-          console.log('[TamilIME] No ranked candidates, clearing');
+          console.log('[TamilIME] No ranked candidates for', token);
           this.clear();
           return;
         }
@@ -435,18 +464,32 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         storage.index = 0;
         storage.ghost = ranked[0].text;
 
-        console.log('[TamilIME] Setting ghost text:', storage.ghost, 'candidates:', ranked.length);
+        console.log('[TamilIME] Setting ghost text:', storage.ghost, 'candidates:', ranked.length, 'at position', storage.start, '-', storage.end);
 
-        // Update decoration
-        this.updateDecoration();
-      } catch (err) {
-        console.error('[TamilIME] Fetch error:', err);
-        this.clear();
+        // Update decoration - use requestAnimationFrame to ensure DOM update
+        requestAnimationFrame(() => {
+          if (storage.token === token && storage.lastRequestId === requestId) {
+            this.updateDecoration();
+          }
+        });
+      } catch (err: any) {
+        // Ignore abort errors
+        if (err.name === 'AbortError') {
+          console.log('[TamilIME] Request aborted for', token);
+          return;
+        }
+        console.error('[TamilIME] Fetch error for', token, ':', err);
+        if (storage.token === token && storage.lastRequestId === requestId) {
+          this.clear();
+        }
       } finally {
+        if (storage.abortController === abortController) {
+          storage.abortController = null;
+        }
         storage.fetching = false;
         storage.debounce = null;
       }
-    }, 300); // Increased debounce to 300ms to reduce duplicate calls
+    }, 400); // Increased debounce to 400ms to reduce duplicate calls
   },
 
   commit() {
@@ -485,6 +528,13 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
 
   clear() {
     const storage = this.storage as TamilIMEStorage;
+    
+    // Cancel any in-flight requests
+    if (storage.abortController) {
+      storage.abortController.abort();
+      storage.abortController = null;
+    }
+
     storage.token = null;
     storage.start = null;
     storage.end = null;
