@@ -650,13 +650,8 @@ class WorkspaceController {
 
     status.textContent = `Suggestions for "${word}"`;
     box.classList.remove('hidden');
-    box.style.position = 'fixed';
-    box.style.zIndex = 99999;
-    box.style.background = 'white';
-    box.style.boxShadow = '0 10px 25px rgba(0,0,0,0.08)';
-    box.style.minWidth = '180px';
-    box.style.maxHeight = '220px';
-    box.style.overflowY = 'auto';
+    // Position and styling will be set by repositionTranslitDropdown
+    // This ensures proper spacing to never hide typed text
 
     if (!suggestions.length) {
       const li = document.createElement('li');
@@ -923,7 +918,13 @@ class WorkspaceController {
       return;
     }
     if (this.DEBUG_IME) console.debug('[IME POSITION]', rect);
-    let top = rect.bottom + 6;
+    
+    // Calculate line height (use a reasonable default if not available)
+    const lineHeight = rect.height || 24; // Default to 24px if height is 0
+    const minOffset = lineHeight + 8; // Always position below the line with extra spacing
+    
+    // Default: position below the line with minimum offset to never hide text
+    let top = rect.bottom + minOffset;
     let left = rect.left;
 
     box.style.position = 'fixed';
@@ -936,9 +937,20 @@ class WorkspaceController {
     box.style.visibility = 'hidden';
     box.classList.remove('hidden');
 
-    const height = box.offsetHeight || 0;
+    // Measure actual box height after it's rendered
+    const height = box.offsetHeight || 200; // Default estimate
+    
+    // Only flip above if there's not enough space below AND it would overlap the text
+    // But always ensure we never overlap the text line itself
     if (top + height > window.innerHeight - 8) {
-      top = rect.top - height - 6;
+      // Position above, but make sure it's well above the text line
+      const topAbove = rect.top - height - minOffset;
+      if (topAbove >= 8) {
+        top = topAbove;
+      } else {
+        // If even above doesn't fit, stick to below but limit height
+        box.style.maxHeight = `${window.innerHeight - top - 16}px`;
+      }
     }
 
     box.style.left = `${left}px`;
