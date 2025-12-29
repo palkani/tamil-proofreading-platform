@@ -290,52 +290,61 @@ class WorkspaceController {
   }
 
   async fetchRunnerSuggestions(params) {
-    console.log("[IME] fetchRunnerSuggestions called", params);
+    // Define variables at the top to ensure they're always in scope
+    let cacheKey = '';
+    let q = '';
+    let limit = 8;
+    let mode = 'smart';
+    let url = '';
     
-    // Phase 5: Disable legacy IME when TipTap is active
-    if (window.USE_TIPTAP_EDITOR) {
-      console.log("[IME] fetchRunnerSuggestions blocked: TipTap active");
-      return []; // TipTap handles IME via extension
-    }
-    
-    const { q = '', limit = 8, mode = 'smart' } = params || {};
-    
-    // Define cacheKey early
-    const cacheKey = `${mode}:${q}`;
-    
-    // Prevent duplicate concurrent requests for the same query
-    if (this.fetchingSuggestions && this.currentFetchQuery === q) {
-      console.log("[IME] already fetching for query:", q);
-      return [];
-    }
-    
-    this.fetchingSuggestions = true;
-    this.currentFetchQuery = q;
-    
-    console.log("[IME] fetchRunnerSuggestions - about to call API", { q, limit, mode });
-    
-    // Check cache first
-    const cached = this.suggestionCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL_MS) {
-      console.log("[IME] Using cached suggestions for:", q);
-      this.fetchingSuggestions = false;
-      this.currentFetchQuery = null;
-      this.lastRunnerSuggestions = cached.suggestions;
-      this.currentSuggestions = cached.suggestions;
-      this.activeSuggestionIndex = 0;
-      this.imeActive = true;
-      this.editorMode = window.EditorMode ? window.EditorMode.IME_TYPING : 'IME_TYPING';
-      if (this.renderTranslitSuggestions) {
-        this.renderTranslitSuggestions(q, cached.suggestions);
-      }
-      return cached.suggestions;
-    }
-    
-    const qs = new URLSearchParams({ q, limit, mode, _ts: Date.now(), _r: Math.random().toString(36).slice(2) }).toString();
-    const url = `/api/transliterate/suggest?${qs}`;
-    console.log("[IME] API URL:", url);
-
     try {
+      console.log("[IME] fetchRunnerSuggestions called", params);
+      
+      // Phase 5: Disable legacy IME when TipTap is active
+      if (window.USE_TIPTAP_EDITOR) {
+        console.log("[IME] fetchRunnerSuggestions blocked: TipTap active");
+        return []; // TipTap handles IME via extension
+      }
+      
+      const paramsObj = params || {};
+      q = paramsObj.q || '';
+      limit = paramsObj.limit || 8;
+      mode = paramsObj.mode || 'smart';
+      
+      // Define cacheKey early
+      cacheKey = `${mode}:${q}`;
+      
+      // Prevent duplicate concurrent requests for the same query
+      if (this.fetchingSuggestions && this.currentFetchQuery === q) {
+        console.log("[IME] already fetching for query:", q);
+        return [];
+      }
+      
+      this.fetchingSuggestions = true;
+      this.currentFetchQuery = q;
+      
+      console.log("[IME] fetchRunnerSuggestions - about to call API", { q, limit, mode });
+      
+      // Check cache first
+      const cached = this.suggestionCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL_MS) {
+        console.log("[IME] Using cached suggestions for:", q);
+        this.fetchingSuggestions = false;
+        this.currentFetchQuery = null;
+        this.lastRunnerSuggestions = cached.suggestions;
+        this.currentSuggestions = cached.suggestions;
+        this.activeSuggestionIndex = 0;
+        this.imeActive = true;
+        this.editorMode = window.EditorMode ? window.EditorMode.IME_TYPING : 'IME_TYPING';
+        if (this.renderTranslitSuggestions) {
+          this.renderTranslitSuggestions(q, cached.suggestions);
+        }
+        return cached.suggestions;
+      }
+      
+      const qs = new URLSearchParams({ q, limit, mode, _ts: Date.now(), _r: Math.random().toString(36).slice(2) }).toString();
+      url = `/api/transliterate/suggest?${qs}`;
+      console.log("[IME] API URL:", url);
       // Create new abort controller for this request (simplified - no abort logic for now)
       this.translitAbort = new AbortController();
 
@@ -426,10 +435,12 @@ class WorkspaceController {
       this.editorMode = window.EditorMode ? window.EditorMode.IME_TYPING : 'IME_TYPING';
 
       // PART D: Store in cache (cacheKey is already defined at function start)
-      this.suggestionCache.set(cacheKey, {
-        suggestions: finalSuggestions,
-        timestamp: Date.now(),
-      });
+      if (cacheKey) {
+        this.suggestionCache.set(cacheKey, {
+          suggestions: finalSuggestions,
+          timestamp: Date.now(),
+        });
+      }
 
       // Show ghost text for best suggestion ONLY if it's a good match
       // Don't show ghost text for long inputs that might have poor matches
