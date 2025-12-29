@@ -98,6 +98,18 @@ app.use((req, res, next) => {
   attachUser(req, res, next);
 });
 app.use(trackPageView);
+
+// Special handling for workspace.js - no cache to ensure latest version
+app.get('/js/workspace.js', (req, res, next) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'ETag': false,
+  });
+  next();
+});
+
 app.use(
   express.static(path.join(__dirname, 'public'), {
     maxAge: '1d',

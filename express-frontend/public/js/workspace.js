@@ -291,6 +291,7 @@ class WorkspaceController {
 
   async fetchRunnerSuggestions(params) {
     // Define variables at the top to ensure they're always in scope
+    // CRITICAL: These must be declared here so they're available in catch block
     let cacheKey = '';
     let q = '';
     let limit = 8;
@@ -298,7 +299,7 @@ class WorkspaceController {
     let url = '';
     
     try {
-      console.log("[IME] fetchRunnerSuggestions called", params);
+      console.log("[IME] fetchRunnerSuggestions called (v1767028365)", params);
       
       // Phase 5: Disable legacy IME when TipTap is active
       if (window.USE_TIPTAP_EDITOR) {
