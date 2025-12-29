@@ -723,10 +723,21 @@ class WorkspaceController {
     const token = tokenInfo.token ? tokenInfo.token.trim().toLowerCase() : '';
     
     console.log('[IME] Extracted token:', token, 'from text:', text.substring(0, 50));
+    console.log('[IME] Token info:', {
+      token,
+      length: token.length,
+      isLatin: /^[a-z]+$/i.test(token),
+      caretPos,
+      textLength: text.length
+    });
     
     // MINIMAL GUARDS: Only check if token exists and is Latin
     if (!token || !/^[a-z]+$/i.test(token)) {
-      console.log('[IME] ⚠️ Token is not valid Latin:', token);
+      console.log('[IME] ⚠️ Token is not valid Latin:', token, {
+        isEmpty: !token,
+        isNotLatin: token && !/^[a-z]+$/i.test(token),
+        tokenValue: token
+      });
       // Clear suggestions if token is invalid
       if (this.lastFetchToken) {
         this.lastFetchToken = null;
@@ -736,7 +747,7 @@ class WorkspaceController {
       return;
     }
     
-    console.log('[IME] ✅ Valid Latin token found:', token);
+    console.log('[IME] ✅ Valid Latin token found:', token, '- Will fetch suggestions');
     
     // Store token info ONLY for Latin tokens (for potential replacement)
     this.currentTokenInfo = {
@@ -897,17 +908,32 @@ class WorkspaceController {
     suggestions.slice(0, 5).forEach((suggestion, index) => {
       const item = document.createElement('div');
       item.className = `tamil-suggestion-item ${index === this.activeSuggestionIndex ? 'active' : ''}`;
+      // Ensure text is visible
+      item.style.setProperty('color', '#1e293b', 'important');
+      item.style.setProperty('display', 'flex', 'important');
+      item.style.setProperty('visibility', 'visible', 'important');
       item.dataset.index = index;
       
       // Number badge
       const number = document.createElement('span');
       number.className = 'tamil-suggestion-number';
       number.textContent = (index + 1).toString();
+      // Ensure number is visible
+      number.style.setProperty('color', 'white', 'important');
+      number.style.setProperty('background-color', '#6366f1', 'important');
+      number.style.setProperty('display', 'flex', 'important');
+      number.style.setProperty('visibility', 'visible', 'important');
       
       // Text
       const text = document.createElement('span');
       text.className = 'tamil-suggestion-text';
-      text.textContent = suggestion.text;
+      text.textContent = suggestion.text || suggestion.word || '';
+      // Ensure text is visible
+      text.style.setProperty('color', '#1e293b', 'important');
+      text.style.setProperty('font-size', '15px', 'important');
+      text.style.setProperty('font-weight', '500', 'important');
+      text.style.setProperty('display', 'block', 'important');
+      text.style.setProperty('visibility', 'visible', 'important');
       
       item.appendChild(number);
       item.appendChild(text);
@@ -941,6 +967,10 @@ class WorkspaceController {
       top: dropdown.style.top
     });
 
+    // CRITICAL: Remove any display:none first, then set display:block
+    // This must happen BEFORE positioning to avoid layout issues
+    dropdown.removeAttribute('style');
+    
     // Show dropdown with explicit styles to ensure visibility
     // Use setProperty with important flag for maximum compatibility
     dropdown.style.setProperty('display', 'block', 'important');
@@ -953,25 +983,54 @@ class WorkspaceController {
     dropdown.style.setProperty('border', '1px solid #e2e8f0', 'important');
     dropdown.style.setProperty('border-radius', '12px', 'important');
     dropdown.style.setProperty('box-shadow', '0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05)', 'important');
+    dropdown.style.setProperty('min-width', '260px', 'important');
+    dropdown.style.setProperty('max-width', '350px', 'important');
     
     this.translitDropdownOpen = true;
 
     // Force a reflow to ensure styles are applied
     void dropdown.offsetHeight;
     
-    // Double-check visibility after reflow
-    setTimeout(() => {
-      const isVisible = window.getComputedStyle(dropdown).display !== 'none' && 
-                       window.getComputedStyle(dropdown).visibility !== 'hidden' &&
-                       window.getComputedStyle(dropdown).opacity !== '0';
-      console.log('[IME] 🔍 Visibility check after reflow:', isVisible);
-      if (!isVisible) {
+    // Double-check visibility after reflow - force it multiple times if needed
+    const forceVisibility = () => {
+      const computed = window.getComputedStyle(dropdown);
+      const isVisible = computed.display !== 'none' && 
+                       computed.visibility !== 'hidden' &&
+                       computed.opacity !== '0';
+      console.log('[IME] 🔍 Visibility check:', {
+        isVisible,
+        computedDisplay: computed.display,
+        computedVisibility: computed.visibility,
+        computedOpacity: computed.opacity,
+        inlineDisplay: dropdown.style.display
+      });
+      
+      if (!isVisible || computed.display === 'none') {
         console.error('[IME] ❌ Dropdown is NOT visible! Forcing visibility...');
-        dropdown.style.setProperty('display', 'block', 'important');
-        dropdown.style.setProperty('visibility', 'visible', 'important');
-        dropdown.style.setProperty('opacity', '1', 'important');
+        // Remove all styles and reapply
+        dropdown.removeAttribute('style');
+        dropdown.style.cssText = `
+          display: block !important;
+          visibility: visible !important;
+          opacity: 1 !important;
+          pointer-events: auto !important;
+          position: fixed !important;
+          z-index: 99999 !important;
+          background: white !important;
+          border: 1px solid #e2e8f0 !important;
+          border-radius: 12px !important;
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+          min-width: 260px !important;
+          max-width: 350px !important;
+        `;
+        void dropdown.offsetHeight; // Force reflow again
       }
-    }, 10);
+    };
+    
+    // Check immediately and after a short delay
+    forceVisibility();
+    setTimeout(forceVisibility, 10);
+    setTimeout(forceVisibility, 50);
 
     // Log detailed information for debugging
     const computedStyle = window.getComputedStyle(dropdown);
@@ -1119,7 +1178,7 @@ class WorkspaceController {
     }
 
     const suggestion = this.currentSuggestions[index];
-    const tamilText = suggestion.text;
+    const tamilText = suggestion.text || suggestion.word || '';
 
     if (!tamilText) {
       console.warn('[IME] Empty suggestion text');
@@ -1174,7 +1233,8 @@ class WorkspaceController {
         if (this.currentSuggestions[this.activeSuggestionIndex]) {
           const appendSpace = e.key === 'Enter';
           const suggestion = this.currentSuggestions[this.activeSuggestionIndex];
-          this.replaceTokenAtCaret(suggestion.text, appendSpace);
+          const textToInsert = suggestion.text || suggestion.word || '';
+          this.replaceTokenAtCaret(textToInsert, appendSpace);
         }
         return true;
 
@@ -1218,10 +1278,11 @@ class WorkspaceController {
         if (this.imeActive && this.currentSuggestions && this.currentSuggestions.length > 0) {
           const suggestion = this.currentSuggestions[this.activeSuggestionIndex || 0];
           // Only commit if suggestion is reasonable (not junk)
-          if (suggestion && suggestion.text && suggestion.text.length > 0) {
+          const textToInsert = suggestion && (suggestion.text || suggestion.word);
+          if (textToInsert && textToInsert.length > 0) {
             e.preventDefault();
             e.stopPropagation();
-            this.replaceTokenAtCaret(suggestion.text, true); // Append space
+            this.replaceTokenAtCaret(textToInsert, true); // Append space
             // Clear IME state after commit
             this.clearGhostText();
             this.clearTranslitSuggestions();
