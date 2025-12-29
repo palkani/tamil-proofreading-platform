@@ -1,4 +1,4 @@
-// v1766939363
+// v1767028047 - Fixed cacheKey scope issue
 // Main Workspace Controller
 
 // ============================================
@@ -311,8 +311,13 @@ class WorkspaceController {
       limit = paramsObj.limit || 8;
       mode = paramsObj.mode || 'smart';
       
-      // Define cacheKey early
+      // Define cacheKey immediately after extracting params
       cacheKey = `${mode}:${q}`;
+      
+      // Defensive: ensure cacheKey is never empty
+      if (!cacheKey) {
+        cacheKey = `smart:${q || ''}`;
+      }
       
       // Prevent duplicate concurrent requests for the same query
       if (this.fetchingSuggestions && this.currentFetchQuery === q) {
@@ -325,7 +330,10 @@ class WorkspaceController {
       
       console.log("[IME] fetchRunnerSuggestions - about to call API", { q, limit, mode });
       
-      // Check cache first
+      // Check cache first (ensure cacheKey is set)
+      if (!cacheKey) {
+        cacheKey = `${mode}:${q}`;
+      }
       const cached = this.suggestionCache.get(cacheKey);
       if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL_MS) {
         console.log("[IME] Using cached suggestions for:", q);
@@ -434,12 +442,19 @@ class WorkspaceController {
       this.imeActive = true;
       this.editorMode = window.EditorMode ? window.EditorMode.IME_TYPING : 'IME_TYPING';
 
-      // PART D: Store in cache (cacheKey is already defined at function start)
+      // PART D: Store in cache (ensure cacheKey is set)
+      if (!cacheKey && q && mode) {
+        cacheKey = `${mode}:${q}`;
+      }
       if (cacheKey) {
-        this.suggestionCache.set(cacheKey, {
-          suggestions: finalSuggestions,
-          timestamp: Date.now(),
-        });
+        try {
+          this.suggestionCache.set(cacheKey, {
+            suggestions: finalSuggestions,
+            timestamp: Date.now(),
+          });
+        } catch (cacheErr) {
+          console.warn('[IME] Cache set failed:', cacheErr);
+        }
       }
 
       // Show ghost text for best suggestion ONLY if it's a good match
@@ -487,7 +502,11 @@ class WorkspaceController {
     } catch (err) {
       this.fetchingSuggestions = false;
       this.currentFetchQuery = null;
-      console.error('[IME] fetchRunnerSuggestions error:', err, { q, url });
+      // Ensure cacheKey is defined for error logging (defensive check)
+      if (!cacheKey && q && mode) {
+        cacheKey = `${mode}:${q}`;
+      }
+      console.error('[IME] fetchRunnerSuggestions error:', err, { q, url, cacheKey: cacheKey || 'undefined' });
       // Ignore abort errors (expected behavior)
       if (err.name === 'AbortError') {
         console.log('[IME] request aborted', { q });
