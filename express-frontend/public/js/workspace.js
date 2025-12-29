@@ -1,7 +1,7 @@
-// v1767032220 - Fixed cacheKey scope issue - DO NOT CACHE THIS FILE
+// v1767032781 - Fixed ALL issues: cacheKey scope, duplicate calls, cache busting
 // Main Workspace Controller
 // VERIFICATION: If you see this message, the new file is loaded
-console.log('[WorkspaceJS] ✅ Loaded version v1767032220 - cacheKey fix applied');
+console.log('[WorkspaceJS] ✅ Loaded version v1767032781 - ALL FIXES APPLIED (cacheKey, duplicates, cache)');
 
 // ============================================
 // TAMIL LINGUISTIC FILTERING UTILITIES
@@ -300,8 +300,23 @@ class WorkspaceController {
     let mode = 'smart';
     let url = '';
     
+    // ULTRA-DEFENSIVE: Initialize cacheKey immediately to prevent any undefined errors
     try {
-      console.log("[IME] fetchRunnerSuggestions called (v1767032220 - cacheKey fix)", params);
+      const paramsObj = params || {};
+      q = paramsObj.q || '';
+      limit = paramsObj.limit || 8;
+      mode = paramsObj.mode || 'smart';
+      cacheKey = `${mode}:${q}`;
+      if (!cacheKey) cacheKey = `smart:${q || ''}`;
+    } catch (initErr) {
+      console.warn('[IME] Error initializing variables:', initErr);
+      cacheKey = `smart:${(params && params.q) || ''}`;
+      q = (params && params.q) || '';
+      mode = 'smart';
+    }
+    
+    try {
+      console.log("[IME] fetchRunnerSuggestions called (v1767032781 - all fixes)", params, { cacheKey });
       
       // Phase 5: Disable legacy IME when TipTap is active
       if (window.USE_TIPTAP_EDITOR) {
@@ -309,15 +324,16 @@ class WorkspaceController {
         return []; // TipTap handles IME via extension
       }
       
+      // Params already extracted above, but ensure they're set
       const paramsObj = params || {};
-      q = paramsObj.q || '';
-      limit = paramsObj.limit || 8;
-      mode = paramsObj.mode || 'smart';
+      if (!q) q = paramsObj.q || '';
+      if (!limit) limit = paramsObj.limit || 8;
+      if (!mode) mode = paramsObj.mode || 'smart';
       
-      // Define cacheKey immediately after extracting params
-      cacheKey = `${mode}:${q}`;
-      
-      // Defensive: ensure cacheKey is never empty
+      // Ensure cacheKey is set (should already be set above, but double-check)
+      if (!cacheKey) {
+        cacheKey = `${mode}:${q}`;
+      }
       if (!cacheKey) {
         cacheKey = `smart:${q || ''}`;
       }
@@ -505,14 +521,31 @@ class WorkspaceController {
     } catch (err) {
       this.fetchingSuggestions = false;
       this.currentFetchQuery = null;
-      // Ensure cacheKey is defined for error logging (defensive check)
-      if (!cacheKey && q && mode) {
-        cacheKey = `${mode}:${q}`;
+      // ULTRA-DEFENSIVE: Ensure cacheKey is ALWAYS defined for error logging
+      try {
+        if (!cacheKey) {
+          if (q && mode) {
+            cacheKey = `${mode}:${q}`;
+          } else if (params && params.q) {
+            cacheKey = `${(params.mode || 'smart')}:${params.q}`;
+          } else {
+            cacheKey = 'unknown:unknown';
+          }
+        }
+      } catch (cacheKeyErr) {
+        cacheKey = 'error:error';
+        console.warn('[IME] Error setting cacheKey in catch block:', cacheKeyErr);
       }
-      console.error('[IME] fetchRunnerSuggestions error:', err, { q, url, cacheKey: cacheKey || 'undefined' });
+      console.error('[IME] fetchRunnerSuggestions error:', err, { 
+        q: q || 'undefined', 
+        url: url || 'undefined', 
+        cacheKey: cacheKey || 'undefined',
+        errorMessage: err.message,
+        errorStack: err.stack
+      });
       // Ignore abort errors (expected behavior)
       if (err.name === 'AbortError') {
-        console.log('[IME] request aborted', { q });
+        console.log('[IME] request aborted', { q: q || 'unknown' });
         return [];
       }
       return [];
@@ -583,12 +616,19 @@ class WorkspaceController {
         hasOnChange: typeof this.editor.onChange === 'function'
       });
       
-      // Also add direct input listener as fallback
+      // Also add direct input listener as fallback (but debounced to prevent duplicates)
+      let inputDebounce = null;
       editorElement.addEventListener('input', () => {
-        console.log("[IME] Direct input event listener fired");
-        if (this.editor && this.editor.onChange) {
-          this.editor.onChange();
+        if (inputDebounce) {
+          clearTimeout(inputDebounce);
         }
+        inputDebounce = setTimeout(() => {
+          console.log("[IME] Direct input event listener fired");
+          if (this.editor && this.editor.onChange) {
+            this.editor.onChange();
+          }
+          inputDebounce = null;
+        }, 100); // Small debounce to prevent duplicate calls
       });
       
       this.editorElement = editorElement;
@@ -806,14 +846,20 @@ class WorkspaceController {
     // STRICT duplicate prevention: if same token and already processing, skip
     if (this.lastFetchToken === token) {
       if (this.fetchingSuggestions) {
+        console.log("[IME] Duplicate call prevented: already fetching for token:", token);
         return; // Already fetching for this token
       }
       if (this.suggestDebounce) {
+        console.log("[IME] Duplicate call prevented: debounce pending for token:", token);
         return; // Debounce already pending for this token
       }
-      // If we have suggestions for this token already, don't refetch
+      // If we have suggestions for this token already, don't refetch (unless they're stale)
       if (this.currentSuggestions && this.currentSuggestions.length > 0) {
-        return;
+        const timeSinceLastFetch = Date.now() - (this.lastFetchTime || 0);
+        if (timeSinceLastFetch < 1000) { // Don't refetch if we fetched less than 1 second ago
+          console.log("[IME] Duplicate call prevented: recent suggestions available for token:", token);
+          return;
+        }
       }
     }
     
@@ -843,10 +889,17 @@ class WorkspaceController {
       // Clear debounce reference
       this.suggestDebounce = null;
       
+      // Final duplicate check before making the call
+      if (this.fetchingSuggestions && this.currentFetchQuery === token) {
+        console.log("[IME] Duplicate call prevented: fetch already in progress for:", token);
+        return;
+      }
+      
       // Use smart mode (backend handles all modes)
       const mode = 'smart';
+      this.lastFetchTime = Date.now(); // Track when we last fetched
       this.fetchRunnerSuggestions({ q: token, limit: 8, mode: mode });
-    }, 500); // Increased to 500ms to prevent duplicates
+    }, 400); // 400ms debounce to prevent duplicates
   }
   
   clearSuggestions() {
