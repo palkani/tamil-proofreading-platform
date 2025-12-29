@@ -745,10 +745,18 @@ class WorkspaceController {
       // Clear suggestions if token is invalid
       if (this.lastFetchToken) {
         this.lastFetchToken = null;
+        this.currentTokenInfo = null; // Clear token info for non-Latin tokens
         this.clearSuggestions();
       }
       return;
     }
+    
+    // Store token info ONLY for Latin tokens (for potential replacement)
+    this.currentTokenInfo = {
+      token: token,
+      start: tokenInfo.start,
+      end: tokenInfo.end
+    };
     
     // STRICT duplicate prevention: if same token and already processing, skip
     if (this.lastFetchToken === token) {
@@ -818,21 +826,47 @@ class WorkspaceController {
   renderTranslitSuggestions(word, suggestions) {
     // Phase 5: Disable legacy IME popup when TipTap is active
     if (window.USE_TIPTAP_EDITOR) {
+      console.log("[IME] renderTranslitSuggestions: TipTap active, skipping");
       return; // TipTap handles IME inline via decorations
     }
     
     const box = document.getElementById('translit-suggest-box');
     const status = document.getElementById('translit-suggest-status');
     const list = document.getElementById('translit-suggest-list');
-    if (!box || !status || !list) return;
+    
+    console.log("[IME] renderTranslitSuggestions called", {
+      word,
+      suggestionsCount: suggestions ? suggestions.length : 0,
+      imeActive: this.imeActive,
+      boxExists: !!box,
+      statusExists: !!status,
+      listExists: !!list
+    });
+    
+    if (!box || !status || !list) {
+      console.error("[IME] renderTranslitSuggestions: DOM elements not found", {
+        box: !!box,
+        status: !!status,
+        list: !!list
+      });
+      return;
+    }
 
     list.innerHTML = '';
 
-    if (!this.imeActive || !word || !suggestions || suggestions.length === 0) {
+    // Show suggestions even if imeActive is false (might be set later)
+    if (!word || !suggestions || suggestions.length === 0) {
       status.textContent = word ? `No suggestions for "${word}"` : 'Type English to see Tamil suggestions…';
       box.classList.toggle('hidden', true);
       this.translitDropdownOpen = false;
+      console.log("[IME] renderTranslitSuggestions: No suggestions to show");
       return;
+    }
+    
+    // Ensure IME is marked as active when we have suggestions
+    if (!this.imeActive) {
+      this.imeActive = true;
+      this.editorMode = window.EditorMode ? window.EditorMode.IME_TYPING : 'IME_TYPING';
     }
 
     status.textContent = `Suggestions for "${word}"`;
@@ -886,14 +920,25 @@ class WorkspaceController {
   }
 
   acceptSuggestion(index) {
-    if (!this.currentSuggestions || !this.currentSuggestions[index]) return;
+    if (!this.currentSuggestions || !this.currentSuggestions[index]) {
+      console.warn("[IME] acceptSuggestion: invalid index or no suggestions", index);
+      return;
+    }
     const suggestion = this.currentSuggestions[index];
-    this.replaceTokenAtCaret(suggestion.text, false);
-  }
-
-  acceptSuggestion(index) {
-    if (!this.currentSuggestions || !this.currentSuggestions[index]) return;
-    const suggestion = this.currentSuggestions[index];
+    // Only replace if we have valid token info and it's a Latin token
+    if (!this.currentTokenInfo) {
+      console.warn("[IME] acceptSuggestion: no currentTokenInfo");
+      return;
+    }
+    // Verify the token is still Latin (user might have changed it)
+    const text = this.getEditorText() || '';
+    const { token, start, end } = this.currentTokenInfo;
+    const currentToken = text.slice(start, end);
+    if (currentToken !== token || !/^[a-z]+$/i.test(currentToken)) {
+      console.warn("[IME] acceptSuggestion: token mismatch or not Latin", { currentToken, token });
+      return;
+    }
+    console.log("[IME] Accepting suggestion:", suggestion.text, "for token:", token);
     this.replaceTokenAtCaret(suggestion.text, false);
   }
 
@@ -1164,11 +1209,28 @@ class WorkspaceController {
 
   // Replace token at caret position with replacement
   replaceTokenAtCaret(replacement, appendSpace = false) {
-    if (!this.currentTokenInfo || !replacement) return;
+    if (!this.currentTokenInfo || !replacement) {
+      console.warn("[IME] replaceTokenAtCaret: missing tokenInfo or replacement");
+      return;
+    }
     const { token, start, end } = this.currentTokenInfo;
     const text = this.getEditorText() || '';
+    
+    // Verify the token at this position is still the expected Latin token
+    const currentToken = text.slice(start, end);
+    if (currentToken !== token || !/^[a-z]+$/i.test(currentToken)) {
+      console.warn("[IME] replaceTokenAtCaret: token mismatch - not replacing", {
+        expected: token,
+        found: currentToken,
+        start,
+        end
+      });
+      return;
+    }
+    
     const replacementText = replacement + (appendSpace ? ' ' : '');
     const newText = text.slice(0, start) + replacementText + text.slice(end);
+    console.log("[IME] Replacing token:", token, "with:", replacementText);
     this.editor.setText(newText);
     // Set cursor after replacement
     const newPos = start + replacementText.length;
@@ -1176,8 +1238,9 @@ class WorkspaceController {
     this.clearGhostText();
     this.clearTranslitSuggestions();
     this.imeActive = false;
-    this.editorMode = EditorMode.IDLE;
+    this.editorMode = window.EditorMode ? window.EditorMode.IDLE : 'IDLE';
     this.currentTokenInfo = null;
+    this.lastFetchToken = null; // Reset to allow new suggestions
   }
 
   replaceLastWord(word, replacement) {
