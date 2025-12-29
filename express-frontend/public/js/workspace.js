@@ -388,7 +388,8 @@ class WorkspaceController {
         score: typeof s.score === 'number' ? s.score : 0,
       })).filter(s => s.text && s.text.length > 0);
 
-      console.log('[IME] Received', rawSuggestions.length, 'suggestions');
+      console.log('[IME] ✅ API call successful!');
+      console.log('[IME] Received', rawSuggestions.length, 'raw suggestions:', rawSuggestions);
 
       // Clean and rank suggestions
       const cleaned = cleanTamilSuggestions ? cleanTamilSuggestions(rawSuggestions, query) : rawSuggestions;
@@ -420,7 +421,10 @@ class WorkspaceController {
       this.imeActive = finalSuggestions.length > 0;
 
       // Display suggestions
+      console.log('[IME] About to display suggestions:', finalSuggestions.length, 'items');
+      console.log('[IME] Suggestions data:', finalSuggestions);
       this.displaySuggestions(finalSuggestions);
+      console.log('[IME] displaySuggestions called, checking if dropdown exists...');
 
       return finalSuggestions;
 
@@ -701,8 +705,11 @@ class WorkspaceController {
   }
 
   handleEditorChange() {
+    console.log('[IME] 📝 handleEditorChange called');
+    
     // Skip if TipTap is active (TipTap handles IME via extension)
     if (window.USE_TIPTAP_EDITOR) {
+      console.log('[IME] ⚠️ Skipping - TipTap is active');
       return;
     }
     
@@ -715,8 +722,11 @@ class WorkspaceController {
     const tokenInfo = getTokenAtCaret(text, caretPos);
     const token = tokenInfo.token ? tokenInfo.token.trim().toLowerCase() : '';
     
+    console.log('[IME] Extracted token:', token, 'from text:', text.substring(0, 50));
+    
     // MINIMAL GUARDS: Only check if token exists and is Latin
     if (!token || !/^[a-z]+$/i.test(token)) {
+      console.log('[IME] ⚠️ Token is not valid Latin:', token);
       // Clear suggestions if token is invalid
       if (this.lastFetchToken) {
         this.lastFetchToken = null;
@@ -725,6 +735,8 @@ class WorkspaceController {
       }
       return;
     }
+    
+    console.log('[IME] ✅ Valid Latin token found:', token);
     
     // Store token info ONLY for Latin tokens (for potential replacement)
     this.currentTokenInfo = {
@@ -788,7 +800,15 @@ class WorkspaceController {
       // Use smart mode (backend handles all modes)
       const mode = 'smart';
       this.lastFetchTime = Date.now(); // Track when we last fetched
-      this.fetchRunnerSuggestions({ q: token, limit: 8, mode: mode });
+      console.log('[IME] 🚀 Calling fetchRunnerSuggestions for token:', token);
+      this.fetchRunnerSuggestions({ q: token, limit: 8, mode: mode }).then(suggestions => {
+        console.log('[IME] ✅ fetchRunnerSuggestions returned:', suggestions ? suggestions.length : 0, 'suggestions');
+        if (suggestions && suggestions.length > 0) {
+          console.log('[IME] First suggestion:', suggestions[0]);
+        }
+      }).catch(err => {
+        console.error('[IME] ❌ fetchRunnerSuggestions error:', err);
+      });
     }, 400); // 400ms debounce to prevent duplicates
   }
   
@@ -816,18 +836,26 @@ class WorkspaceController {
    * @param {Array} suggestions - Array of suggestion objects with {text, score}
    */
   displaySuggestions(suggestions) {
+    console.log('[IME] 🔍 displaySuggestions called with:', suggestions ? suggestions.length : 0, 'suggestions');
+    console.log('[IME] Suggestions data:', suggestions);
+    
     // Skip if TipTap is active
     if (window.USE_TIPTAP_EDITOR) {
+      console.log('[IME] ⚠️ Skipping - TipTap is active');
       return;
     }
 
     // Get or create dropdown elements
     let dropdown = document.getElementById('tamil-suggestions-dropdown');
     if (!dropdown) {
+      console.log('[IME] 📦 Creating new dropdown element');
       dropdown = document.createElement('div');
       dropdown.id = 'tamil-suggestions-dropdown';
       dropdown.className = 'tamil-suggestions-dropdown';
       document.body.appendChild(dropdown);
+      console.log('[IME] ✅ Dropdown created and added to body');
+    } else {
+      console.log('[IME] ♻️ Using existing dropdown element');
     }
 
     // Clear existing content
@@ -835,10 +863,13 @@ class WorkspaceController {
 
     // Hide if no suggestions
     if (!suggestions || suggestions.length === 0) {
+      console.log('[IME] ⚠️ No suggestions to display, hiding dropdown');
       dropdown.style.display = 'none';
       this.translitDropdownOpen = false;
       return;
     }
+
+    console.log('[IME] 🎨 Building dropdown UI for', suggestions.length, 'suggestions');
 
     // Create close button
     const closeBtn = document.createElement('button');
@@ -891,13 +922,63 @@ class WorkspaceController {
     dropdown.appendChild(instruction);
 
     // Position dropdown near cursor
+    console.log('[IME] Positioning dropdown...');
     this.positionDropdown(dropdown);
+    console.log('[IME] Dropdown positioned, computed style:', {
+      display: window.getComputedStyle(dropdown).display,
+      visibility: window.getComputedStyle(dropdown).visibility,
+      opacity: window.getComputedStyle(dropdown).opacity,
+      zIndex: window.getComputedStyle(dropdown).zIndex,
+      left: dropdown.style.left,
+      top: dropdown.style.top
+    });
 
-    // Show dropdown
-    dropdown.style.display = 'block';
+    // Show dropdown with explicit styles to ensure visibility
+    dropdown.style.cssText += `
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      position: fixed !important;
+      z-index: 10000 !important;
+    `;
     this.translitDropdownOpen = true;
 
-    console.log('[IME] Displayed', suggestions.length, 'suggestions');
+    // Force a reflow to ensure styles are applied
+    void dropdown.offsetHeight;
+
+    // Log detailed information for debugging
+    const computedStyle = window.getComputedStyle(dropdown);
+    console.log('[IME] ✅✅✅ Dropdown should be visible now!');
+    console.log('[IME] 📊 Dropdown debug info:', {
+      element: dropdown,
+      inDOM: document.body.contains(dropdown),
+      innerHTML: dropdown.innerHTML.substring(0, 100),
+      inlineStyles: {
+        display: dropdown.style.display,
+        visibility: dropdown.style.visibility,
+        opacity: dropdown.style.opacity,
+        position: dropdown.style.position,
+        left: dropdown.style.left,
+        top: dropdown.style.top,
+        zIndex: dropdown.style.zIndex
+      },
+      computedStyles: {
+        display: computedStyle.display,
+        visibility: computedStyle.visibility,
+        opacity: computedStyle.opacity,
+        position: computedStyle.position,
+        left: computedStyle.left,
+        top: computedStyle.top,
+        zIndex: computedStyle.zIndex,
+        width: computedStyle.width,
+        height: computedStyle.height
+      }
+    });
+    
+    // Also log to help user debug
+    console.log('[IME] 🔍 To debug: Check if dropdown element exists in DOM');
+    console.log('[IME] 🔍 Run in console: document.getElementById("tamil-suggestions-dropdown")');
   }
 
   /**
@@ -914,6 +995,7 @@ class WorkspaceController {
         dropdown.style.left = `${rect.left}px`;
         dropdown.style.top = `${rect.bottom + 8}px`;
         dropdown.style.zIndex = '10000';
+        console.log('[IME] Positioned dropdown at cursor:', { left: rect.left, top: rect.bottom + 8 });
       } else if (this.editorElement) {
         // Fallback: position relative to editor
         const editorRect = this.editorElement.getBoundingClientRect();
@@ -921,9 +1003,22 @@ class WorkspaceController {
         dropdown.style.left = `${editorRect.left + 50}px`;
         dropdown.style.top = `${editorRect.top + 100}px`;
         dropdown.style.zIndex = '10000';
+        console.log('[IME] Positioned dropdown relative to editor:', { left: editorRect.left + 50, top: editorRect.top + 100 });
+      } else {
+        // Last resort: position at top-left of viewport
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = '50px';
+        dropdown.style.top = '100px';
+        dropdown.style.zIndex = '10000';
+        console.log('[IME] Positioned dropdown at fallback location (50, 100)');
       }
     } catch (error) {
-      console.warn('[IME] Error positioning dropdown:', error);
+      console.error('[IME] Error positioning dropdown:', error);
+      // Fallback positioning
+      dropdown.style.position = 'fixed';
+      dropdown.style.left = '50px';
+      dropdown.style.top = '100px';
+      dropdown.style.zIndex = '10000';
     }
   }
 
