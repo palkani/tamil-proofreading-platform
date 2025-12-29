@@ -229,8 +229,16 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
             const decos: Decoration[] = [];
 
             if (storage.ghost && storage.start !== null && storage.end !== null && storage.candidates.length > 0) {
+              console.log('[TamilIME] 🎨 Creating dropdown widget at position', storage.end, 'with', storage.candidates.length, 'candidates');
+              
               // Get the position coordinates for proper positioning
-              const pos = editorView.coordsAtPos(storage.end);
+              let pos: { left: number; top: number; bottom: number } | null = null;
+              try {
+                pos = editorView.coordsAtPos(storage.end);
+                console.log('[TamilIME] 🎨 Dropdown position:', pos);
+              } catch (e) {
+                console.warn('[TamilIME] ⚠️ Could not get coordinates:', e);
+              }
               
               // Suggestion dropdown widget - appears below the typed text
               const dropdownWidget = Decoration.widget(storage.end, () => {
@@ -238,8 +246,14 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                 container.className = 'tamil-ime-dropdown';
                 container.setAttribute('data-tamil-ime', 'true');
                 
-                // Position absolutely relative to viewport
-                const rect = editorView.coordsAtPos(storage.end);
+                // Get position coordinates (use cached pos or get fresh)
+                let rect: { left: number; top: number; bottom: number };
+                try {
+                  rect = editorView.coordsAtPos(storage.end);
+                } catch (e) {
+                  rect = pos || { left: 0, top: 0, bottom: 100 };
+                }
+                
                 container.style.cssText = `
                   position: fixed !important;
                   display: block !important;
@@ -249,6 +263,8 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                   left: ${rect.left}px !important;
                   top: ${rect.bottom + 8}px !important;
                 `;
+                
+                console.log('[TamilIME] 🎨 Dropdown container created with style:', container.style.cssText);
                 
                 // Close button
                 const closeBtn = document.createElement('button');
@@ -349,9 +365,29 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
               ? DecorationSet.create(state.doc, decos)
               : DecorationSet.empty;
 
+            console.log('[TamilIME] 🎨 updateDecos: Created', decos.length, 'decorations, decoSet size:', decoSet.size);
+
             // Update plugin state via transaction
             const tr = state.tr.setMeta(TamilIMEPluginKey, { decorations: decoSet });
             editorView.dispatch(tr);
+            
+            // Verify the decorations were applied
+            setTimeout(() => {
+              const appliedState = TamilIMEPluginKey.getState(editorView.state);
+              console.log('[TamilIME] 🎨 Applied decorations state:', {
+                hasDecorations: !!appliedState?.decorations,
+                decorationSize: appliedState?.decorations?.size || 0
+              });
+              
+              // Check if dropdown is in DOM
+              const dropdown = document.querySelector('.tamil-ime-dropdown');
+              console.log('[TamilIME] 🎨 Dropdown in DOM:', !!dropdown, dropdown ? {
+                visible: dropdown instanceof HTMLElement ? window.getComputedStyle(dropdown).visibility : 'unknown',
+                display: dropdown instanceof HTMLElement ? window.getComputedStyle(dropdown).display : 'unknown',
+                opacity: dropdown instanceof HTMLElement ? window.getComputedStyle(dropdown).opacity : 'unknown',
+                zIndex: dropdown instanceof HTMLElement ? window.getComputedStyle(dropdown).zIndex : 'unknown'
+              } : null);
+            }, 50);
           };
 
           // Expose update function to extension
@@ -420,14 +456,29 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
       },
       Space: () => {
         const storage = extension.storage as TamilIMEStorage;
-        if (storage.ghost && storage.candidates.length > 0) {
-          if (extension.options.autoCommitOnSpace) {
-            extension.commit();
-            this.editor.commands.insertContent(' ');
+        // Only commit if we have a ghost suggestion AND the current token is Latin (not Tamil)
+        if (storage.ghost && storage.candidates.length > 0 && storage.token) {
+          // Verify the token is still Latin (user might have changed it)
+          const currentToken = getTokenAtCaret(this.editor.state);
+          if (isLatinToken(currentToken.token) && isLatinToken(storage.token)) {
+            if (extension.options.autoCommitOnSpace) {
+              extension.commit();
+              this.editor.commands.insertContent(' ');
+              return true;
+            } else {
+              extension.clear();
+              return true;
+            }
           } else {
+            // Token is now Tamil, don't commit
+            console.log('[TamilIME] ⚠️ Space pressed but token is Tamil, clearing suggestions');
             extension.clear();
+            return false; // Let space through normally
           }
-          return true;
+        }
+        // No ghost or token is Tamil - let space through normally
+        if (storage.ghost) {
+          extension.clear();
         }
         return false;
       },
@@ -663,9 +714,28 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
   commit() {
     const storage = this.storage as TamilIMEStorage;
     if (!storage.ghost || storage.start === null || storage.end === null) {
+      console.log('[TamilIME] ⚠️ Cannot commit - missing ghost or positions');
       return false;
     }
 
+    // Verify the token at this position is still Latin (not Tamil)
+    const currentToken = getTokenAtCaret(this.editor.state);
+    if (!isLatinToken(currentToken.token)) {
+      console.log('[TamilIME] ⚠️ Cannot commit - token is not Latin:', currentToken.token);
+      this.clear();
+      return false;
+    }
+
+    // Double-check the token matches what we expect
+    const docText = this.editor.state.doc.textBetween(0, this.editor.state.doc.content.size, '\n', '\n');
+    const tokenAtPosition = docText.slice(storage.start, storage.end);
+    if (!isLatinToken(tokenAtPosition)) {
+      console.log('[TamilIME] ⚠️ Cannot commit - token at position is not Latin:', tokenAtPosition);
+      this.clear();
+      return false;
+    }
+
+    console.log('[TamilIME] ✅ Committing suggestion:', storage.ghost, 'replacing:', tokenAtPosition);
     this.editor
       .chain()
       .focus()

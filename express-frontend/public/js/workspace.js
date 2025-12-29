@@ -300,6 +300,9 @@ class WorkspaceController {
     
     const { q = '', limit = 8, mode = 'smart' } = params || {};
     
+    // Define cacheKey early
+    const cacheKey = `${mode}:${q}`;
+    
     // Prevent duplicate concurrent requests for the same query
     if (this.fetchingSuggestions && this.currentFetchQuery === q) {
       console.log("[IME] already fetching for query:", q);
@@ -311,12 +314,22 @@ class WorkspaceController {
     
     console.log("[IME] fetchRunnerSuggestions - about to call API", { q, limit, mode });
     
-    // TEMPORARILY DISABLED CACHE - always call API to confirm wiring
-    // const cacheKey = `${mode}:${q}`;
-    // const cached = this.suggestionCache.get(cacheKey);
-    // if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL_MS) {
-    //   return cached.suggestions;
-    // }
+    // Check cache first
+    const cached = this.suggestionCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL_MS) {
+      console.log("[IME] Using cached suggestions for:", q);
+      this.fetchingSuggestions = false;
+      this.currentFetchQuery = null;
+      this.lastRunnerSuggestions = cached.suggestions;
+      this.currentSuggestions = cached.suggestions;
+      this.activeSuggestionIndex = 0;
+      this.imeActive = true;
+      this.editorMode = window.EditorMode ? window.EditorMode.IME_TYPING : 'IME_TYPING';
+      if (this.renderTranslitSuggestions) {
+        this.renderTranslitSuggestions(q, cached.suggestions);
+      }
+      return cached.suggestions;
+    }
     
     const qs = new URLSearchParams({ q, limit, mode, _ts: Date.now(), _r: Math.random().toString(36).slice(2) }).toString();
     const url = `/api/transliterate/suggest?${qs}`;
@@ -410,10 +423,9 @@ class WorkspaceController {
       this.currentSuggestions = finalSuggestions;
       this.activeSuggestionIndex = 0;
       this.imeActive = true;
-      this.editorMode = EditorMode.IME_TYPING;
+      this.editorMode = window.EditorMode ? window.EditorMode.IME_TYPING : 'IME_TYPING';
 
-      // PART D: Store in cache (cacheKey is defined earlier in the function)
-      const cacheKey = `${mode}:${q}`;
+      // PART D: Store in cache (cacheKey is already defined at function start)
       this.suggestionCache.set(cacheKey, {
         suggestions: finalSuggestions,
         timestamp: Date.now(),
