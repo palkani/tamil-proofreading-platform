@@ -1,5 +1,7 @@
-// v1767028365 - Fixed cacheKey scope issue - DO NOT CACHE THIS FILE
+// v1767032220 - Fixed cacheKey scope issue - DO NOT CACHE THIS FILE
 // Main Workspace Controller
+// VERIFICATION: If you see this message, the new file is loaded
+console.log('[WorkspaceJS] ✅ Loaded version v1767032220 - cacheKey fix applied');
 
 // ============================================
 // TAMIL LINGUISTIC FILTERING UTILITIES
@@ -299,7 +301,7 @@ class WorkspaceController {
     let url = '';
     
     try {
-      console.log("[IME] fetchRunnerSuggestions called (v1767028365)", params);
+      console.log("[IME] fetchRunnerSuggestions called (v1767032220 - cacheKey fix)", params);
       
       // Phase 5: Disable legacy IME when TipTap is active
       if (window.USE_TIPTAP_EDITOR) {

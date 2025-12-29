@@ -101,12 +101,16 @@ app.use(trackPageView);
 
 // Special handling for workspace.js - no cache to ensure latest version
 app.get('/js/workspace.js', (req, res, next) => {
+  // Force no caching - multiple headers for maximum compatibility
   res.set({
-    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private',
     'Pragma': 'no-cache',
     'Expires': '0',
+    'Last-Modified': new Date().toUTCString(),
     'ETag': false,
   });
+  // Remove any existing cache headers
+  res.removeHeader('ETag');
   next();
 });
 
