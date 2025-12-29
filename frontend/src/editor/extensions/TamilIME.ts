@@ -437,15 +437,18 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
       return;
     }
 
-    // If token hasn't changed, don't make a new request
-    if (storage.token === token && storage.fetching) {
-      return;
+    // If token is the same and we already have candidates or are fetching, skip
+    if (storage.token === token) {
+      if (storage.fetching || storage.candidates.length > 0) {
+        return;
+      }
     }
 
-    // Cancel any in-flight requests
-    if (storage.abortController) {
+    // Cancel any in-flight requests for different tokens
+    if (storage.abortController && storage.token !== token) {
       storage.abortController.abort();
       storage.abortController = null;
+      storage.fetching = false;
     }
 
     // Clear previous debounce
@@ -458,13 +461,20 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
     storage.token = token;
     storage.start = start;
     storage.end = end;
-    storage.lastRequestId += 1;
+    storage.lastRequestId = (storage.lastRequestId || 0) + 1;
     const requestId = storage.lastRequestId;
 
-    // Debounced fetch
+    // Debounced fetch with longer delay to prevent duplicates
     storage.debounce = setTimeout(async () => {
       // Check if token changed during debounce or request was cancelled
       if (storage.token !== token || storage.lastRequestId !== requestId) {
+        console.log('[TamilIME] Request cancelled - token changed or new request started');
+        return;
+      }
+
+      // Double-check we're not already fetching for this token
+      if (storage.fetching && storage.token === token) {
+        console.log('[TamilIME] Already fetching for this token, skipping duplicate');
         return;
       }
 
@@ -474,9 +484,9 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
       storage.fetching = true;
 
       try {
-        // Use the backend API directly
+        // Use the backend API directly - use smart mode (backend will handle mapping)
         const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
-        const suggestUrl = `${apiBaseUrl}/ime/suggest?q=${encodeURIComponent(token)}&limit=8&mode=spoken`;
+        const suggestUrl = `${apiBaseUrl}/ime/suggest?q=${encodeURIComponent(token)}&limit=8&mode=smart`;
         
         console.log('[TamilIME] Fetching suggestions for:', token, 'requestId:', requestId);
 

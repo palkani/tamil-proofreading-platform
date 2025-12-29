@@ -242,6 +242,10 @@ class WorkspaceController {
     this.translitCache = new Map();
     this.translitAbort = null;
     this.translitTimer = null;
+    this.lastFetchToken = null;
+    this.fetchingSuggestions = false;
+    this.currentFetchQuery = null;
+    this.suggestDebounce = null;
     this.lastRunnerSuggestions = [];
     this.editorMode = EditorMode.IDLE;
     this.imeActive = false;
@@ -294,7 +298,17 @@ class WorkspaceController {
       return []; // TipTap handles IME via extension
     }
     
-    const { q = '', limit = 8, mode = 'spoken' } = params || {};
+    const { q = '', limit = 8, mode = 'smart' } = params || {};
+    
+    // Prevent duplicate concurrent requests for the same query
+    if (this.fetchingSuggestions && this.currentFetchQuery === q) {
+      console.log("[IME] already fetching for query:", q);
+      return [];
+    }
+    
+    this.fetchingSuggestions = true;
+    this.currentFetchQuery = q;
+    
     console.log("[IME] fetchRunnerSuggestions - about to call API", { q, limit, mode });
     
     // TEMPORARILY DISABLED CACHE - always call API to confirm wiring
@@ -389,8 +403,12 @@ class WorkspaceController {
       if (this.renderTranslitSuggestions) {
         this.renderTranslitSuggestions(q, rankedSuggestions);
       }
+      this.fetchingSuggestions = false;
+      this.currentFetchQuery = null;
       return rankedSuggestions;
     } catch (err) {
+      this.fetchingSuggestions = false;
+      this.currentFetchQuery = null;
       console.error('[IME] fetchRunnerSuggestions error:', err, { q, url });
       // Ignore abort errors (expected behavior)
       if (err.name === 'AbortError') {
@@ -677,13 +695,39 @@ class WorkspaceController {
       return;
     }
     
-    // Determine mode
-    const mode = token.length === 1 ? 'char' : 'word';
+    // Use smart mode (backend handles all modes)
+    const mode = 'smart';
     
-    console.log("[IME] calling fetchRunnerSuggestions", { token, mode });
+    // Prevent duplicate calls for the same token
+    if (this.lastFetchToken === token && this.fetchingSuggestions) {
+      console.log("[IME] skipping duplicate fetch for token:", token);
+      return;
+    }
     
-    // FORCE FETCH - no debounce, no abort controller
-    this.fetchRunnerSuggestions({ q: token, limit: 8, mode: mode });
+    // Cancel previous request if token changed
+    if (this.translitAbort && this.lastFetchToken !== token) {
+      this.translitAbort.abort();
+      this.translitAbort = null;
+    }
+    
+    // Clear previous debounce
+    if (this.suggestDebounce) {
+      clearTimeout(this.suggestDebounce);
+      this.suggestDebounce = null;
+    }
+    
+    this.lastFetchToken = token;
+    
+    // Debounce the fetch to prevent duplicate calls
+    this.suggestDebounce = setTimeout(() => {
+      // Check if token changed during debounce
+      if (this.lastFetchToken !== token) {
+        return;
+      }
+      
+      console.log("[IME] calling fetchRunnerSuggestions", { token, mode });
+      this.fetchRunnerSuggestions({ q: token, limit: 8, mode: mode });
+    }, 300); // 300ms debounce
   }
 
   // DEPRECATED: Use getTokenAtCaret instead
