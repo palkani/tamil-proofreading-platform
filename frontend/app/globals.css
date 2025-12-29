@@ -34,19 +34,20 @@ body {
 
 /* Tamil IME Dropdown */
 .tamil-ime-dropdown {
-  display: inline-block;
-  vertical-align: top;
-  margin-left: 8px;
-  margin-top: 4px;
+  position: absolute;
+  display: block;
   background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  min-width: 200px;
-  max-width: 300px;
-  z-index: 1000;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 240px;
+  max-width: 320px;
+  z-index: 10000;
   font-family: system-ui, -apple-system, sans-serif;
-  position: relative;
+  padding: 12px;
+  margin-top: 8px;
+  left: 0;
+  top: 100%;
 }
 
 /* Alternative: Position absolutely when in editor */
@@ -56,10 +57,13 @@ body {
 
 /* Make dropdown appear on new line below text */
 .ProseMirror .tamil-ime-dropdown {
-  display: block;
+  display: block !important;
+  position: absolute !important;
   margin-left: 0;
   margin-top: 8px;
   margin-bottom: 4px;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .tamil-ime-close {
@@ -104,7 +108,8 @@ body {
 }
 
 .tamil-ime-suggestion-item.active {
-  background-color: #ede9fe;
+  background-color: #f3e8ff;
+  border-left: 3px solid #8b5cf6;
 }
 
 .tamil-ime-number {
@@ -133,12 +138,14 @@ body {
 }
 
 .tamil-ime-instruction {
-  padding: 8px 16px;
+  padding: 10px 16px;
   border-top: 1px solid #e5e7eb;
   font-size: 12px;
   color: #6b7280;
   background-color: #f9fafb;
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 12px 12px;
+  text-align: center;
+  margin-top: 4px;
 }
 
 .tamil-ime-instruction strong {

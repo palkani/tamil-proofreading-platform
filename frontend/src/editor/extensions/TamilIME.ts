@@ -222,18 +222,33 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
           },
         },
         view(editorView) {
-          // Helper to update decorations from storage
+            // Helper to update decorations from storage
           const updateDecos = () => {
             const storage = extension.storage as TamilIMEStorage;
             const state = editorView.state;
             const decos: Decoration[] = [];
 
             if (storage.ghost && storage.start !== null && storage.end !== null && storage.candidates.length > 0) {
+              // Get the position coordinates for proper positioning
+              const pos = editorView.coordsAtPos(storage.end);
+              
               // Suggestion dropdown widget - appears below the typed text
               const dropdownWidget = Decoration.widget(storage.end, () => {
                 const container = document.createElement('div');
                 container.className = 'tamil-ime-dropdown';
                 container.setAttribute('data-tamil-ime', 'true');
+                
+                // Position absolutely relative to viewport
+                const rect = editorView.coordsAtPos(storage.end);
+                container.style.cssText = `
+                  position: fixed !important;
+                  display: block !important;
+                  visibility: visible !important;
+                  opacity: 1 !important;
+                  z-index: 10000 !important;
+                  left: ${rect.left}px !important;
+                  top: ${rect.bottom + 8}px !important;
+                `;
                 
                 // Close button
                 const closeBtn = document.createElement('button');
@@ -289,6 +304,39 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                 container.appendChild(list);
                 container.appendChild(instruction);
                 
+                // Update position when editor scrolls or resizes
+                const updatePosition = () => {
+                  if (container.parentElement) {
+                    try {
+                      const rect = editorView.coordsAtPos(storage.end);
+                      container.style.left = `${rect.left}px`;
+                      container.style.top = `${rect.bottom + 8}px`;
+                    } catch (e) {
+                      console.warn('[TamilIME] Error updating position:', e);
+                    }
+                  }
+                };
+                
+                // Update position on scroll/resize
+                const scrollHandler = () => updatePosition();
+                const resizeHandler = () => updatePosition();
+                window.addEventListener('scroll', scrollHandler, true);
+                window.addEventListener('resize', resizeHandler);
+                editorView.dom.addEventListener('scroll', scrollHandler);
+                
+                // Cleanup on remove
+                const originalParent = container.parentElement;
+                const observer = new MutationObserver(() => {
+                  if (!container.parentElement && originalParent) {
+                    window.removeEventListener('scroll', scrollHandler, true);
+                    window.removeEventListener('resize', resizeHandler);
+                    observer.disconnect();
+                  }
+                });
+                if (originalParent) {
+                  observer.observe(originalParent, { childList: true });
+                }
+                
                 return container;
               }, {
                 side: 1, // Render after the position
@@ -310,10 +358,34 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
           (extension as any)._updateDecorations = updateDecos;
 
           return {
-            update() {
+            update(view, prevState) {
+              // Cleanup old dropdowns
+              const oldDecos = TamilIMEPluginKey.getState(prevState)?.decorations;
+              if (oldDecos) {
+                oldDecos.forEach((deco: any) => {
+                  if (deco.spec?.key === 'tamil-ime-dropdown') {
+                    const widget = deco.spec.widget;
+                    if (widget && (widget as any)._cleanup) {
+                      (widget as any)._cleanup();
+                    }
+                  }
+                });
+              }
               // Decorations will be updated via updateDecos() call
             },
             destroy() {
+              // Cleanup all dropdowns
+              const state = TamilIMEPluginKey.getState(editorView.state);
+              if (state?.decorations) {
+                state.decorations.forEach((deco: any) => {
+                  if (deco.spec?.key === 'tamil-ime-dropdown') {
+                    const widget = deco.spec.widget;
+                    if (widget && (widget as any)._cleanup) {
+                      (widget as any)._cleanup();
+                    }
+                  }
+                });
+              }
               delete (extension as any)._updateDecorations;
             },
           };
@@ -542,17 +614,32 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         storage.index = 0;
         storage.ghost = ranked[0].text;
 
-        console.log('[TamilIME] Setting ghost text:', storage.ghost, 'candidates:', ranked.length, 'at position', storage.start, '-', storage.end);
+        console.log('[TamilIME] ✅ Setting ghost text:', storage.ghost, 'candidates:', ranked.length, 'at position', storage.start, '-', storage.end);
+        console.log('[TamilIME] ✅ All candidates:', ranked.map(c => c.text));
 
-        // Update decoration - use requestAnimationFrame to ensure DOM update
-        requestAnimationFrame(() => {
-          if (storage.token === token && storage.lastRequestId === requestId) {
-            console.log('[TamilIME] Updating decorations with', storage.candidates.length, 'candidates');
-            this.updateDecoration();
-          } else {
-            console.log('[TamilIME] Skipping decoration update - token/request changed');
-          }
-        });
+        // Force update decoration immediately and again after a delay
+        if (storage.token === token && storage.lastRequestId === requestId) {
+          console.log('[TamilIME] ✅ Updating decorations immediately');
+          this.updateDecoration();
+          
+          // Update again after DOM settles
+          requestAnimationFrame(() => {
+            if (storage.token === token && storage.lastRequestId === requestId) {
+              console.log('[TamilIME] ✅ Updating decorations in RAF');
+              this.updateDecoration();
+              
+              // Final update after a short delay to ensure positioning is correct
+              setTimeout(() => {
+                if (storage.token === token && storage.lastRequestId === requestId) {
+                  console.log('[TamilIME] ✅ Final decoration update');
+                  this.updateDecoration();
+                }
+              }, 100);
+            }
+          });
+        } else {
+          console.log('[TamilIME] ⚠️ Skipping decoration update - token/request changed');
+        }
       } catch (err: any) {
         // Ignore abort errors
         if (err.name === 'AbortError') {
