@@ -391,8 +391,23 @@ class WorkspaceController {
       const rankedSuggestions = rankTamilCandidates(q, usable);
       console.log("[IME] Ranked suggestions:", rankedSuggestions.length, rankedSuggestions);
       
-      this.lastRunnerSuggestions = rankedSuggestions;
-      this.currentSuggestions = rankedSuggestions;
+      // Filter out junk suggestions for longer inputs
+      // For inputs longer than 3 chars, only keep suggestions with reasonable scores
+      let finalSuggestions = rankedSuggestions;
+      if (q.length > 3) {
+        finalSuggestions = rankedSuggestions.filter(s => {
+          // Keep suggestions with score > 0.3 or if they're short (likely valid)
+          return s.score > 0.3 || s.text.length <= q.length + 1;
+        });
+        // If filtering removed everything, keep at least the top 3
+        if (finalSuggestions.length === 0 && rankedSuggestions.length > 0) {
+          finalSuggestions = rankedSuggestions.slice(0, 3);
+        }
+        console.log("[IME] Filtered suggestions for long input:", finalSuggestions.length, "from", rankedSuggestions.length);
+      }
+      
+      this.lastRunnerSuggestions = finalSuggestions;
+      this.currentSuggestions = finalSuggestions;
       this.activeSuggestionIndex = 0;
       this.imeActive = true;
       this.editorMode = EditorMode.IME_TYPING;
@@ -400,23 +415,39 @@ class WorkspaceController {
       // PART D: Store in cache (cacheKey is defined earlier in the function)
       const cacheKey = `${mode}:${q}`;
       this.suggestionCache.set(cacheKey, {
-        suggestions: rankedSuggestions,
+        suggestions: finalSuggestions,
         timestamp: Date.now(),
       });
 
-      // Show ghost text for best suggestion
-      if (rankedSuggestions.length > 0) {
-        console.log("[IME] Showing ghost text:", rankedSuggestions[0].text);
-        this.showGhostText(rankedSuggestions[0].text);
+      // Show ghost text for best suggestion ONLY if it's a good match
+      // Don't show ghost text for long inputs that might have poor matches
+      if (finalSuggestions.length > 0) {
+        const bestSuggestion = finalSuggestions[0];
+        // Only show ghost text if:
+        // 1. Input is short (1-3 chars) OR
+        // 2. The suggestion has a good score (>0.5) OR
+        // 3. The suggestion text is reasonable length (not too long)
+        const shouldShowGhost = q.length <= 3 || 
+                                bestSuggestion.score > 0.5 || 
+                                bestSuggestion.text.length <= q.length + 2;
+        
+        if (shouldShowGhost) {
+          console.log("[IME] Showing ghost text:", bestSuggestion.text, "score:", bestSuggestion.score);
+          this.showGhostText(bestSuggestion.text);
+        } else {
+          console.log("[IME] Skipping ghost text - poor match for long input:", q, "suggestion:", bestSuggestion.text, "score:", bestSuggestion.score);
+          this.clearGhostText();
+        }
       } else {
         console.warn("[IME] No suggestions to show!");
+        this.clearGhostText();
       }
 
       // Always render suggestions if we have them
-      if (rankedSuggestions.length > 0) {
-        console.log("[IME] Rendering translit suggestions for word:", q, "count:", rankedSuggestions.length);
+      if (finalSuggestions.length > 0) {
+        console.log("[IME] Rendering translit suggestions for word:", q, "count:", finalSuggestions.length);
         if (this.renderTranslitSuggestions) {
-          this.renderTranslitSuggestions(q, rankedSuggestions);
+          this.renderTranslitSuggestions(q, finalSuggestions);
         } else {
           console.error("[IME] renderTranslitSuggestions function not found!");
         }
@@ -429,7 +460,7 @@ class WorkspaceController {
       
       this.fetchingSuggestions = false;
       this.currentFetchQuery = null;
-      return rankedSuggestions;
+      return finalSuggestions;
     } catch (err) {
       this.fetchingSuggestions = false;
       this.currentFetchQuery = null;
@@ -928,22 +959,39 @@ class WorkspaceController {
         return true;
 
       case ' ':
-        // Space commits current suggestion
-        e.preventDefault();
-        e.stopPropagation();
-        if (this.currentSuggestions[this.activeSuggestionIndex]) {
-          const suggestion = this.currentSuggestions[this.activeSuggestionIndex];
-          this.replaceTokenAtCaret(suggestion.text, true); // Append space
-        } else {
-          // If no selection, just close IME
-          this.clearGhostText();
-          this.clearTranslitSuggestions();
-          this.imeActive = false;
-          this.editorMode = EditorMode.IDLE;
+        // Space commits current suggestion ONLY if IME is active and we have a good suggestion
+        if (this.imeActive && this.currentSuggestions && this.currentSuggestions.length > 0) {
+          const suggestion = this.currentSuggestions[this.activeSuggestionIndex || 0];
+          // Only commit if suggestion is reasonable (not junk)
+          if (suggestion && suggestion.text && suggestion.text.length > 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.replaceTokenAtCaret(suggestion.text, true); // Append space
+            // Clear IME state after commit
+            this.clearGhostText();
+            this.clearTranslitSuggestions();
+            this.imeActive = false;
+            this.editorMode = window.EditorMode ? window.EditorMode.IDLE : 'IDLE';
+            this.lastFetchToken = null; // Reset to allow new suggestions
+          } else {
+            // If suggestion is invalid, just close IME
+            this.clearGhostText();
+            this.clearTranslitSuggestions();
+            this.imeActive = false;
+            this.editorMode = window.EditorMode ? window.EditorMode.IDLE : 'IDLE';
+          }
+          return true;
         }
-        return true;
+        // If IME not active, let space through normally
+        return false;
 
       default:
+        // If user continues typing, clear ghost text to prevent accidental commits
+        // Only clear if it's a regular character (not modifier keys)
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          // User is typing - clear ghost text but keep suggestions dropdown open
+          this.clearGhostText();
+        }
         // Let other keys through (typing continues)
         return false;
     }
