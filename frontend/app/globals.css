@@ -32,22 +32,23 @@ body {
   }
 }
 
-/* Tamil IME Dropdown */
+/* Tamil IME Dropdown - Enhanced styling to match screenshot */
 .tamil-ime-dropdown {
-  position: absolute;
-  display: block;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  min-width: 240px;
-  max-width: 320px;
-  z-index: 10000;
-  font-family: system-ui, -apple-system, sans-serif;
-  padding: 12px;
-  margin-top: 8px;
-  left: 0;
-  top: 100%;
+  position: fixed !important;
+  display: block !important;
+  background: white !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+  min-width: 260px !important;
+  max-width: 350px !important;
+  z-index: 10000 !important;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 /* Alternative: Position absolutely when in editor */
@@ -67,74 +68,91 @@ body {
 }
 
 .tamil-ime-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: none;
-  border: none;
-  font-size: 18px;
-  color: #6b7280;
-  cursor: pointer;
-  padding: 2px 6px;
-  line-height: 1;
-  border-radius: 4px;
-  transition: background-color 0.15s, color 0.15s;
+  position: absolute !important;
+  top: 10px !important;
+  right: 10px !important;
+  background: transparent !important;
+  border: none !important;
+  font-size: 20px !important;
+  color: #94a3b8 !important;
+  cursor: pointer !important;
+  padding: 4px 8px !important;
+  line-height: 1 !important;
+  border-radius: 6px !important;
+  transition: all 0.15s ease !important;
+  z-index: 10001 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
 }
 
 .tamil-ime-close:hover {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+}
+
+.tamil-ime-close:active {
+  background-color: #e2e8f0 !important;
 }
 
 .tamil-ime-suggestions-list {
-  padding: 8px 0;
-  max-height: 200px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  padding: 8px 0 !important;
+  max-height: 240px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  margin: 0 !important;
 }
 
 .tamil-ime-suggestion-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  cursor: pointer;
-  transition: background-color 0.15s;
-  position: relative;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 10px 16px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  position: relative !important;
+  margin: 0 4px !important;
+  border-radius: 8px !important;
 }
 
 .tamil-ime-suggestion-item:hover {
-  background-color: #f9fafb;
+  background-color: #f8fafc !important;
 }
 
 .tamil-ime-suggestion-item.active {
-  background-color: #f3e8ff;
-  border-left: 3px solid #8b5cf6;
+  background-color: #f3e8ff !important;
+  border-left: 3px solid #8b5cf6 !important;
+  box-shadow: 0 1px 3px rgba(139, 92, 246, 0.1) !important;
 }
 
 .tamil-ime-number {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background-color: #6366f1;
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-  flex-shrink: 0;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 50% !important;
+  background-color: #6366f1 !important;
+  color: white !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  flex-shrink: 0 !important;
+  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2) !important;
 }
 
 .tamil-ime-suggestion-item.active .tamil-ime-number {
-  background-color: #8b5cf6;
+  background-color: #8b5cf6 !important;
+  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3) !important;
 }
 
 .tamil-ime-text {
-  flex: 1;
-  font-size: 14px;
-  color: #1f2937;
-  font-weight: 500;
+  flex: 1 !important;
+  font-size: 15px !important;
+  color: #1e293b !important;
+  font-weight: 500 !important;
+  line-height: 1.5 !important;
 }
 
 .tamil-ime-instruction {

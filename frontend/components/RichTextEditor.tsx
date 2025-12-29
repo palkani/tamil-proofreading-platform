@@ -33,7 +33,14 @@ export default function RichTextEditor({
   onPasteContent,
   onPlainTextChange,
 }: RichTextEditorProps) {
-  const [tamilIMEEnabled, setTamilIMEEnabled] = useState(true);
+  // Load Tamil IME preference from localStorage, default to true
+  const [tamilIMEEnabled, setTamilIMEEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('tamilIMEEnabled');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
   const updateTimerRef = useRef<number | null>(null);
   const pasteCallbackRef = useRef<typeof onPasteContent>(onPasteContent);
   const isUpdatingFromPropsRef = useRef(false);
@@ -302,15 +309,19 @@ export default function RichTextEditor({
         </div>
         <button
           type="button"
-          onClick={() => setTamilIMEEnabled(!tamilIMEEnabled)}
-          className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+          onClick={() => {
+            setTamilIMEEnabled(!tamilIMEEnabled);
+            // Persist preference to localStorage
+            localStorage.setItem('tamilIMEEnabled', String(!tamilIMEEnabled));
+          }}
+          className={`px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
             tamilIMEEnabled
-              ? 'bg-[#4F46E5] text-white'
-              : 'bg-white text-[#475569] hover:bg-gray-100 border border-[#E2E8F0]'
+              ? 'bg-[#4F46E5] text-white shadow-md hover:bg-[#4338CA]'
+              : 'bg-white text-[#475569] hover:bg-gray-50 border border-[#E2E8F0] hover:border-[#CBD5E1]'
           }`}
-          title={tamilIMEEnabled ? 'Disable Tamil IME' : 'Enable Tamil IME'}
+          title={tamilIMEEnabled ? 'Disable Tamil transliteration' : 'Enable Tamil transliteration'}
         >
-          <span className="text-sm">த</span>
+          <span className="text-base font-bold">தமிழ்</span>
         </button>
       </div>
 

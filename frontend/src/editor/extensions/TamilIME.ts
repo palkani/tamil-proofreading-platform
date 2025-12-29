@@ -249,11 +249,29 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                 // Get position coordinates (use cached pos or get fresh)
                 let rect: { left: number; top: number; bottom: number };
                 try {
-                  rect = editorView.coordsAtPos(storage.end);
+                  const coords = editorView.coordsAtPos(storage.end);
+                  // For fixed positioning, coordsAtPos already returns viewport coordinates
+                  rect = {
+                    left: coords.left,
+                    top: coords.top,
+                    bottom: coords.bottom
+                  };
                 } catch (e) {
-                  rect = pos || { left: 0, top: 0, bottom: 100 };
+                  // Fallback: try to get position from cached pos
+                  if (pos) {
+                    rect = pos;
+                  } else {
+                    // Last resort: use editor viewport position
+                    const editorRect = editorView.dom.getBoundingClientRect();
+                    rect = {
+                      left: editorRect.left + 50,
+                      top: editorRect.top + 100,
+                      bottom: editorRect.top + 120
+                    };
+                  }
                 }
                 
+                // Ensure dropdown is visible and properly positioned
                 container.style.cssText = `
                   position: fixed !important;
                   display: block !important;
@@ -262,9 +280,10 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                   z-index: 10000 !important;
                   left: ${rect.left}px !important;
                   top: ${rect.bottom + 8}px !important;
+                  pointer-events: auto !important;
                 `;
                 
-                console.log('[TamilIME] 🎨 Dropdown container created with style:', container.style.cssText);
+                console.log('[TamilIME] 🎨 Dropdown container created at:', { left: rect.left, top: rect.bottom + 8 });
                 
                 // Close button
                 const closeBtn = document.createElement('button');
@@ -322,30 +341,58 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                 
                 // Update position when editor scrolls or resizes
                 const updatePosition = () => {
-                  if (container.parentElement) {
+                  if (container.parentElement && storage.end !== null) {
                     try {
-                      const rect = editorView.coordsAtPos(storage.end);
-                      container.style.left = `${rect.left}px`;
-                      container.style.top = `${rect.bottom + 8}px`;
+                      const coords = editorView.coordsAtPos(storage.end);
+                      container.style.left = `${coords.left}px`;
+                      container.style.top = `${coords.bottom + 8}px`;
+                      console.log('[TamilIME] 🎨 Position updated to:', { left: coords.left, top: coords.bottom + 8 });
                     } catch (e) {
-                      console.warn('[TamilIME] Error updating position:', e);
+                      console.warn('[TamilIME] ⚠️ Position update failed:', e);
                     }
                   }
                 };
                 
-                // Update position on scroll/resize
-                const scrollHandler = () => updatePosition();
-                const resizeHandler = () => updatePosition();
-                window.addEventListener('scroll', scrollHandler, true);
-                window.addEventListener('resize', resizeHandler);
-                editorView.dom.addEventListener('scroll', scrollHandler);
+                // Update position on scroll/resize (with throttling)
+                let updateTimeout: NodeJS.Timeout | null = null;
+                const throttledUpdate = () => {
+                  if (updateTimeout) return;
+                  updateTimeout = setTimeout(() => {
+                    updatePosition();
+                    updateTimeout = null;
+                  }, 50);
+                };
+                
+                // Add event listeners for position updates
+                window.addEventListener('scroll', throttledUpdate, true);
+                window.addEventListener('resize', throttledUpdate);
+                if (editorView.dom) {
+                  editorView.dom.addEventListener('scroll', throttledUpdate);
+                }
+                
+                // Initial position update after DOM is ready
+                setTimeout(updatePosition, 10);
+                
+                // Cleanup function
+                const cleanup = () => {
+                  window.removeEventListener('scroll', throttledUpdate, true);
+                  window.removeEventListener('resize', throttledUpdate);
+                  if (editorView.dom) {
+                    editorView.dom.removeEventListener('scroll', throttledUpdate);
+                  }
+                  if (updateTimeout) {
+                    clearTimeout(updateTimeout);
+                  }
+                };
+                
+                // Store cleanup on container for later removal
+                (container as any)._cleanup = cleanup;
                 
                 // Cleanup on remove
                 const originalParent = container.parentElement;
                 const observer = new MutationObserver(() => {
                   if (!container.parentElement && originalParent) {
-                    window.removeEventListener('scroll', scrollHandler, true);
-                    window.removeEventListener('resize', resizeHandler);
+                    cleanup();
                     observer.disconnect();
                   }
                 });
