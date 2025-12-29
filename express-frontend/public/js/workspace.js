@@ -412,12 +412,21 @@ class WorkspaceController {
         console.warn("[IME] No suggestions to show!");
       }
 
-      if (this.renderTranslitSuggestions) {
+      // Always render suggestions if we have them
+      if (rankedSuggestions.length > 0) {
         console.log("[IME] Rendering translit suggestions for word:", q, "count:", rankedSuggestions.length);
-        this.renderTranslitSuggestions(q, rankedSuggestions);
+        if (this.renderTranslitSuggestions) {
+          this.renderTranslitSuggestions(q, rankedSuggestions);
+        } else {
+          console.error("[IME] renderTranslitSuggestions function not found!");
+        }
       } else {
-        console.error("[IME] renderTranslitSuggestions function not found!");
+        console.warn("[IME] No suggestions to render for:", q);
+        if (this.renderTranslitSuggestions) {
+          this.renderTranslitSuggestions(q, []);
+        }
       }
+      
       this.fetchingSuggestions = false;
       this.currentFetchQuery = null;
       return rankedSuggestions;
@@ -686,15 +695,13 @@ class WorkspaceController {
   }
 
   handleEditorChange() {
-    console.log("[IME] change detected");
-    
-    this.updateWordCount();
-    this.scheduleSave();
-    
-    // Skip if TipTap is active
+    // Skip if TipTap is active (TipTap handles IME via extension)
     if (window.USE_TIPTAP_EDITOR) {
       return;
     }
+    
+    this.updateWordCount();
+    this.scheduleSave();
     
     // Extract token
     const text = this.getEditorText() || '';
@@ -702,32 +709,32 @@ class WorkspaceController {
     const tokenInfo = getTokenAtCaret(text, caretPos);
     const token = tokenInfo.token ? tokenInfo.token.trim().toLowerCase() : '';
     
-    console.log("[IME] token extracted:", token, "length:", token.length);
-    
     // MINIMAL GUARDS: Only check if token exists and is Latin
     if (!token || !/^[a-z]+$/i.test(token)) {
-      console.log("[IME] blocked: invalid token", token);
+      // Clear suggestions if token is invalid
+      if (this.lastFetchToken) {
+        this.lastFetchToken = null;
+        this.clearSuggestions();
+      }
       return;
     }
     
-    // Use smart mode (backend handles all modes)
-    const mode = 'smart';
-    
-    // Prevent duplicate calls for the same token (check before debounce)
+    // STRICT duplicate prevention: if same token and already processing, skip
     if (this.lastFetchToken === token) {
       if (this.fetchingSuggestions) {
-        console.log("[IME] skipping duplicate fetch for token (already fetching):", token);
-        return;
+        return; // Already fetching for this token
       }
       if (this.suggestDebounce) {
-        console.log("[IME] skipping duplicate fetch for token (debounce pending):", token);
+        return; // Debounce already pending for this token
+      }
+      // If we have suggestions for this token already, don't refetch
+      if (this.currentSuggestions && this.currentSuggestions.length > 0) {
         return;
       }
     }
     
     // Cancel previous request if token changed
     if (this.translitAbort && this.lastFetchToken && this.lastFetchToken !== token) {
-      console.log("[IME] cancelling previous request for token:", this.lastFetchToken);
       this.translitAbort.abort();
       this.translitAbort = null;
       this.fetchingSuggestions = false;
@@ -739,22 +746,33 @@ class WorkspaceController {
       this.suggestDebounce = null;
     }
     
+    // Store token BEFORE debounce
     this.lastFetchToken = token;
     
     // Debounce the fetch to prevent duplicate calls
     this.suggestDebounce = setTimeout(() => {
-      // Check if token changed during debounce
+      // Final check: token must still match
       if (this.lastFetchToken !== token) {
-        console.log("[IME] token changed during debounce, cancelling");
         return;
       }
       
       // Clear debounce reference
       this.suggestDebounce = null;
       
-      console.log("[IME] calling fetchRunnerSuggestions", { token, mode });
+      // Use smart mode (backend handles all modes)
+      const mode = 'smart';
       this.fetchRunnerSuggestions({ q: token, limit: 8, mode: mode });
-    }, 400); // 400ms debounce to prevent duplicates
+    }, 500); // Increased to 500ms to prevent duplicates
+  }
+  
+  clearSuggestions() {
+    this.currentSuggestions = [];
+    this.lastRunnerSuggestions = [];
+    this.imeActive = false;
+    this.editorMode = window.EditorMode ? window.EditorMode.IDLE : 'IDLE';
+    if (this.renderTranslitSuggestions) {
+      this.renderTranslitSuggestions('', []);
+    }
   }
 
   // DEPRECATED: Use getTokenAtCaret instead
