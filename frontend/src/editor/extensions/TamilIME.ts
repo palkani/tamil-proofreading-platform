@@ -547,7 +547,10 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         // Update decoration - use requestAnimationFrame to ensure DOM update
         requestAnimationFrame(() => {
           if (storage.token === token && storage.lastRequestId === requestId) {
+            console.log('[TamilIME] Updating decorations with', storage.candidates.length, 'candidates');
             this.updateDecoration();
+          } else {
+            console.log('[TamilIME] Skipping decoration update - token/request changed');
           }
         });
       } catch (err: any) {
@@ -600,7 +603,17 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
   updateDecoration() {
     const updateFn = (this as any)._updateDecorations;
     if (updateFn) {
-      updateFn();
+      console.log('[TamilIME] updateDecoration called, _updateDecorations exists:', !!updateFn);
+      requestAnimationFrame(() => {
+        try {
+          updateFn();
+          console.log('[TamilIME] Decorations updated successfully');
+        } catch (err) {
+          console.error('[TamilIME] Error updating decorations:', err);
+        }
+      });
+    } else {
+      console.warn('[TamilIME] _updateDecorations function not found - decorations may not update');
     }
   },
 

@@ -368,6 +368,8 @@ class WorkspaceController {
         }
       }
       const raw = (data && data.suggestions) || data || [];
+      console.log("[IME] Raw suggestions from API:", raw.length, raw);
+      
       const rawSuggestions = (raw || [])
         .map((s) => ({
           text: s.ta || s.word || s.text || '',
@@ -375,21 +377,28 @@ class WorkspaceController {
         }))
         .filter((s) => s.text);
       
+      console.log("[IME] Parsed suggestions:", rawSuggestions.length, rawSuggestions);
+      
       // PART 1: Clean suggestions - filter out invalid Tamil forms
       const cleaned = cleanTamilSuggestions(rawSuggestions, q);
+      console.log("[IME] Cleaned suggestions:", cleaned.length, cleaned);
       
       // Fallback: if everything filtered out, keep only first raw item as safe fallback
       const usable = cleaned.length > 0 ? cleaned : rawSuggestions.slice(0, 1);
+      console.log("[IME] Usable suggestions:", usable.length, usable);
       
       // PART 1: Rank suggestions with Tamil phonetic ranking (prefers base syllables)
       const rankedSuggestions = rankTamilCandidates(q, usable);
+      console.log("[IME] Ranked suggestions:", rankedSuggestions.length, rankedSuggestions);
+      
       this.lastRunnerSuggestions = rankedSuggestions;
       this.currentSuggestions = rankedSuggestions;
       this.activeSuggestionIndex = 0;
       this.imeActive = true;
       this.editorMode = EditorMode.IME_TYPING;
 
-      // PART D: Store in cache
+      // PART D: Store in cache (cacheKey is defined earlier in the function)
+      const cacheKey = `${mode}:${q}`;
       this.suggestionCache.set(cacheKey, {
         suggestions: rankedSuggestions,
         timestamp: Date.now(),
@@ -397,11 +406,17 @@ class WorkspaceController {
 
       // Show ghost text for best suggestion
       if (rankedSuggestions.length > 0) {
+        console.log("[IME] Showing ghost text:", rankedSuggestions[0].text);
         this.showGhostText(rankedSuggestions[0].text);
+      } else {
+        console.warn("[IME] No suggestions to show!");
       }
 
       if (this.renderTranslitSuggestions) {
+        console.log("[IME] Rendering translit suggestions for word:", q, "count:", rankedSuggestions.length);
         this.renderTranslitSuggestions(q, rankedSuggestions);
+      } else {
+        console.error("[IME] renderTranslitSuggestions function not found!");
       }
       this.fetchingSuggestions = false;
       this.currentFetchQuery = null;
@@ -698,16 +713,24 @@ class WorkspaceController {
     // Use smart mode (backend handles all modes)
     const mode = 'smart';
     
-    // Prevent duplicate calls for the same token
-    if (this.lastFetchToken === token && this.fetchingSuggestions) {
-      console.log("[IME] skipping duplicate fetch for token:", token);
-      return;
+    // Prevent duplicate calls for the same token (check before debounce)
+    if (this.lastFetchToken === token) {
+      if (this.fetchingSuggestions) {
+        console.log("[IME] skipping duplicate fetch for token (already fetching):", token);
+        return;
+      }
+      if (this.suggestDebounce) {
+        console.log("[IME] skipping duplicate fetch for token (debounce pending):", token);
+        return;
+      }
     }
     
     // Cancel previous request if token changed
-    if (this.translitAbort && this.lastFetchToken !== token) {
+    if (this.translitAbort && this.lastFetchToken && this.lastFetchToken !== token) {
+      console.log("[IME] cancelling previous request for token:", this.lastFetchToken);
       this.translitAbort.abort();
       this.translitAbort = null;
+      this.fetchingSuggestions = false;
     }
     
     // Clear previous debounce
@@ -722,12 +745,16 @@ class WorkspaceController {
     this.suggestDebounce = setTimeout(() => {
       // Check if token changed during debounce
       if (this.lastFetchToken !== token) {
+        console.log("[IME] token changed during debounce, cancelling");
         return;
       }
       
+      // Clear debounce reference
+      this.suggestDebounce = null;
+      
       console.log("[IME] calling fetchRunnerSuggestions", { token, mode });
       this.fetchRunnerSuggestions({ q: token, limit: 8, mode: mode });
-    }, 300); // 300ms debounce
+    }, 400); // 400ms debounce to prevent duplicates
   }
 
   // DEPRECATED: Use getTokenAtCaret instead
