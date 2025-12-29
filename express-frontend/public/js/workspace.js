@@ -1,7 +1,8 @@
-// v1767034723 - ULTRA-DEFENSIVE: cacheKey initialized BEFORE try block
+// v20251228a - FIXED: cacheKey declared at function start, cacheKey is not defined error resolved
 // Main Workspace Controller
 // VERIFICATION: If you see this message, the new file is loaded
-console.log('[WorkspaceJS] ✅✅✅ Loaded version v1767034723 - ULTRA-DEFENSIVE FIX (cacheKey BEFORE try block)');
+console.log('[WorkspaceJS] ✅✅✅ Loaded version v20251228a - cacheKey fix applied');
+console.log('[WorkspaceJS] CacheKey is now declared at the start of fetchRunnerSuggestions method');
 console.log('[WorkspaceJS] If you see this, the NEW file is loaded. Old file would NOT show this message.');
 
 // ============================================

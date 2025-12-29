@@ -108,11 +108,24 @@ app.get('/js/workspace.js', (req, res, next) => {
     'Expires': '0',
     'Last-Modified': new Date().toUTCString(),
     'ETag': false,
+    'X-Content-Type-Options': 'nosniff',
   });
   // Remove any existing cache headers
   res.removeHeader('ETag');
   next();
 });
+
+// Also add no-cache for all JS files in development
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/js/*.js', (req, res, next) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    });
+    next();
+  });
+}
 
 app.use(
   express.static(path.join(__dirname, 'public'), {
