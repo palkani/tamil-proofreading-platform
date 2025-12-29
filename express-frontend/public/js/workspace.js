@@ -1,7 +1,8 @@
-// v1767032781 - Fixed ALL issues: cacheKey scope, duplicate calls, cache busting
+// v1767034723 - ULTRA-DEFENSIVE: cacheKey initialized BEFORE try block
 // Main Workspace Controller
 // VERIFICATION: If you see this message, the new file is loaded
-console.log('[WorkspaceJS] ✅ Loaded version v1767032781 - ALL FIXES APPLIED (cacheKey, duplicates, cache)');
+console.log('[WorkspaceJS] ✅✅✅ Loaded version v1767034723 - ULTRA-DEFENSIVE FIX (cacheKey BEFORE try block)');
+console.log('[WorkspaceJS] If you see this, the NEW file is loaded. Old file would NOT show this message.');
 
 // ============================================
 // TAMIL LINGUISTIC FILTERING UTILITIES
@@ -292,31 +293,32 @@ class WorkspaceController {
   }
 
   async fetchRunnerSuggestions(params) {
-    // Define variables at the top to ensure they're always in scope
-    // CRITICAL: These must be declared here so they're available in catch block
-    let cacheKey = '';
+    // ULTRA-DEFENSIVE: Initialize ALL variables IMMEDIATELY at function start
+    // This ensures they're ALWAYS in scope, even in catch blocks
+    let cacheKey = 'unknown:unknown';
     let q = '';
     let limit = 8;
     let mode = 'smart';
     let url = '';
     
-    // ULTRA-DEFENSIVE: Initialize cacheKey immediately to prevent any undefined errors
-    try {
-      const paramsObj = params || {};
-      q = paramsObj.q || '';
-      limit = paramsObj.limit || 8;
-      mode = paramsObj.mode || 'smart';
-      cacheKey = `${mode}:${q}`;
-      if (!cacheKey) cacheKey = `smart:${q || ''}`;
-    } catch (initErr) {
-      console.warn('[IME] Error initializing variables:', initErr);
-      cacheKey = `smart:${(params && params.q) || ''}`;
-      q = (params && params.q) || '';
-      mode = 'smart';
+    // Initialize from params immediately (before any try block)
+    if (params) {
+      q = params.q || '';
+      limit = params.limit || 8;
+      mode = params.mode || 'smart';
+    }
+    
+    // Set cacheKey immediately (before try block)
+    cacheKey = `${mode}:${q}`;
+    if (!cacheKey || cacheKey === ':') {
+      cacheKey = `smart:${q || ''}`;
+    }
+    if (!cacheKey || cacheKey === ':') {
+      cacheKey = 'unknown:unknown';
     }
     
     try {
-      console.log("[IME] fetchRunnerSuggestions called (v1767032781 - all fixes)", params, { cacheKey });
+      console.log("[IME] fetchRunnerSuggestions called (v1767034723 - ULTRA-DEFENSIVE)", params, { cacheKey, q, mode });
       
       // Phase 5: Disable legacy IME when TipTap is active
       if (window.USE_TIPTAP_EDITOR) {
@@ -324,18 +326,21 @@ class WorkspaceController {
         return []; // TipTap handles IME via extension
       }
       
-      // Params already extracted above, but ensure they're set
+      // Params already extracted above, but ensure they're set (defensive)
       const paramsObj = params || {};
       if (!q) q = paramsObj.q || '';
       if (!limit) limit = paramsObj.limit || 8;
       if (!mode) mode = paramsObj.mode || 'smart';
       
-      // Ensure cacheKey is set (should already be set above, but double-check)
-      if (!cacheKey) {
+      // Ensure cacheKey is set (should already be set above, but triple-check)
+      if (!cacheKey || cacheKey === 'unknown:unknown' || cacheKey === ':') {
         cacheKey = `${mode}:${q}`;
       }
-      if (!cacheKey) {
+      if (!cacheKey || cacheKey === ':') {
         cacheKey = `smart:${q || ''}`;
+      }
+      if (!cacheKey || cacheKey === ':') {
+        cacheKey = 'unknown:unknown';
       }
       
       // Prevent duplicate concurrent requests for the same query
