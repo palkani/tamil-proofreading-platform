@@ -975,42 +975,29 @@ class WorkspaceController {
     instruction.innerHTML = 'Press <strong>Space</strong> to select first option';
     dropdown.appendChild(instruction);
 
-    // Position dropdown near cursor
+    // Position dropdown near cursor - MUST happen after content is added
     console.log('[IME] Positioning dropdown...');
+    
+    // Force a layout calculation before positioning
+    void dropdown.offsetHeight;
+    
     this.positionDropdown(dropdown);
+    
+    // Force another reflow after positioning
+    void dropdown.offsetHeight;
+    
     console.log('[IME] Dropdown positioned, computed style:', {
       display: window.getComputedStyle(dropdown).display,
       visibility: window.getComputedStyle(dropdown).visibility,
       opacity: window.getComputedStyle(dropdown).opacity,
       zIndex: window.getComputedStyle(dropdown).zIndex,
       left: dropdown.style.left,
-      top: dropdown.style.top
+      top: dropdown.style.top,
+      width: window.getComputedStyle(dropdown).width,
+      height: window.getComputedStyle(dropdown).height
     });
 
-    // CRITICAL: Remove any display:none first, then set display:block
-    // This must happen BEFORE positioning to avoid layout issues
-    dropdown.removeAttribute('style');
-    
-    // Show dropdown with explicit styles to ensure visibility
-    // Use cssText for maximum compatibility and to override any existing styles
-    dropdown.style.cssText = `
-      display: block !important;
-      visibility: visible !important;
-      opacity: 1 !important;
-      pointer-events: auto !important;
-      position: fixed !important;
-      z-index: 999999 !important;
-      background: white !important;
-      border: 2px solid #4F46E5 !important;
-      border-radius: 12px !important;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 4px 6px rgba(0, 0, 0, 0.1) !important;
-      min-width: 260px !important;
-      max-width: 350px !important;
-      padding: 0 !important;
-      margin: 0 !important;
-      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif !important;
-    `;
-    
+    // Styles are already set above, just mark as open
     this.translitDropdownOpen = true;
 
     // Force a reflow to ensure styles are applied
@@ -1138,59 +1125,93 @@ class WorkspaceController {
    */
   positionDropdown(dropdown) {
     try {
-      // First, ensure dropdown has basic styles
-      if (!dropdown.style.position || dropdown.style.position !== 'fixed') {
-        dropdown.style.setProperty('position', 'fixed', 'important');
+      // CRITICAL: Ensure dropdown has content and dimensions before positioning
+      if (!dropdown.innerHTML || dropdown.innerHTML.trim().length === 0) {
+        console.warn('[IME] Dropdown has no content, cannot position');
+        return;
       }
-      if (!dropdown.style.zIndex || parseInt(dropdown.style.zIndex) < 999999) {
-        dropdown.style.setProperty('z-index', '999999', 'important');
+      
+      // First, ensure dropdown has basic styles and is visible
+      dropdown.style.setProperty('position', 'fixed', 'important');
+      dropdown.style.setProperty('z-index', '999999', 'important');
+      dropdown.style.setProperty('display', 'block', 'important');
+      dropdown.style.setProperty('visibility', 'visible', 'important');
+      
+      // Force a layout to get actual dimensions - try multiple times if needed
+      void dropdown.offsetHeight;
+      let currentRect = dropdown.getBoundingClientRect();
+      let dropdownWidth = currentRect.width;
+      let dropdownHeight = currentRect.height;
+      
+      // If dimensions are still 0, wait a bit and try again
+      if (dropdownWidth === 0 || dropdownHeight === 0) {
+        console.warn('[IME] Dropdown has zero dimensions, waiting for layout...');
+        // Force layout again
+        void dropdown.offsetHeight;
+        currentRect = dropdown.getBoundingClientRect();
+        dropdownWidth = currentRect.width || 300;
+        dropdownHeight = currentRect.height || 200;
       }
+      
+      console.log('[IME] Dropdown dimensions:', { width: dropdownWidth, height: dropdownHeight, rect: currentRect });
       
       const selection = window.getSelection();
       let left, top;
       
       if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        
-        // Ensure it's within viewport bounds
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-        const dropdownWidth = 300; // approximate width
-        const dropdownHeight = 200; // approximate height
-        
-        left = Math.max(10, Math.min(rect.left, viewportWidth - dropdownWidth - 10));
-        top = rect.bottom + 8;
-        
-        // Adjust if dropdown would go off-screen
-        if (top + dropdownHeight > viewportHeight) {
-          top = Math.max(10, rect.top - dropdownHeight - 8); // Show above cursor instead
+        try {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          
+          // Ensure it's within viewport bounds
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+          
+          left = rect.left;
+          top = rect.bottom + 8;
+          
+          // Adjust if dropdown would go off-screen horizontally
+          if (left + dropdownWidth > viewportWidth) {
+            left = viewportWidth - dropdownWidth - 10;
+          }
+          if (left < 0) left = 10;
+          
+          // Adjust if dropdown would go off-screen vertically
+          if (top + dropdownHeight > viewportHeight) {
+            top = Math.max(10, rect.top - dropdownHeight - 8); // Show above cursor instead
+          }
+          if (top < 0) top = 10;
+          
+          console.log('[IME] Positioned dropdown at cursor:', { 
+            left, 
+            top, 
+            cursorRect: { left: rect.left, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height },
+            dropdownSize: { width: dropdownWidth, height: dropdownHeight },
+            viewport: { width: viewportWidth, height: viewportHeight },
+            finalPosition: { left, top }
+          });
+        } catch (rangeError) {
+          console.warn('[IME] Error getting selection range, using fallback:', rangeError);
+          // Fall through to editorElement fallback
+          left = 100;
+          top = 100;
         }
-        if (top < 0) top = 10;
-        
-        console.log('[IME] Positioned dropdown at cursor:', { 
-          left, 
-          top, 
-          cursorRect: { left: rect.left, top: rect.top, bottom: rect.bottom },
-          viewport: { width: viewportWidth, height: viewportHeight },
-          finalPosition: { left, top }
-        });
       } else if (this.editorElement) {
         // Fallback: position relative to editor
         const editorRect = this.editorElement.getBoundingClientRect();
         left = Math.max(10, editorRect.left + 50);
         top = Math.max(10, editorRect.top + 100);
-        console.log('[IME] Positioned dropdown relative to editor:', { left, top });
+        console.log('[IME] Positioned dropdown relative to editor:', { left, top, editorRect });
       } else {
-        // Last resort: position at center of viewport (very visible for debugging)
-        left = Math.max(10, (window.innerWidth - 300) / 2);
-        top = Math.max(10, (window.innerHeight - 200) / 2);
+        // Last resort: position at center of viewport
+        left = Math.max(10, (window.innerWidth - dropdownWidth) / 2);
+        top = Math.max(10, (window.innerHeight - dropdownHeight) / 2);
         console.log('[IME] Positioned dropdown at center viewport:', { left, top });
       }
       
-      // Use cssText to append positioning (preserves existing styles)
-      const currentStyles = dropdown.style.cssText;
-      dropdown.style.cssText = currentStyles + ` left: ${left}px !important; top: ${top}px !important;`;
+      // Apply positioning - use setProperty to ensure it works
+      dropdown.style.setProperty('left', `${left}px`, 'important');
+      dropdown.style.setProperty('top', `${top}px`, 'important');
       
       // Force a reflow and verify position
       void dropdown.offsetHeight;
@@ -1203,14 +1224,25 @@ class WorkspaceController {
         visible: finalRect.width > 0 && finalRect.height > 0,
         inViewport: finalRect.top >= 0 && finalRect.left >= 0 && 
                    finalRect.bottom <= window.innerHeight && 
-                   finalRect.right <= window.innerWidth
+                   finalRect.right <= window.innerWidth,
+        styleLeft: dropdown.style.left,
+        styleTop: dropdown.style.top
       });
+      
+      // If still has zero dimensions, force minimum size
+      if (finalRect.width === 0 || finalRect.height === 0) {
+        console.error('[IME] ⚠️ Dropdown has zero dimensions! Forcing size...');
+        dropdown.style.setProperty('min-width', '260px', 'important');
+        dropdown.style.setProperty('min-height', '100px', 'important');
+        void dropdown.offsetHeight; // Force reflow again
+      }
     } catch (error) {
       console.error('[IME] Error positioning dropdown:', error);
-      // Fallback positioning - center of screen (very visible)
+      // Fallback positioning - center of screen
       const left = Math.max(10, (window.innerWidth - 300) / 2);
       const top = Math.max(10, (window.innerHeight - 200) / 2);
-      dropdown.style.cssText += ` left: ${left}px !important; top: ${top}px !important;`;
+      dropdown.style.setProperty('left', `${left}px`, 'important');
+      dropdown.style.setProperty('top', `${top}px`, 'important');
     }
   }
 
