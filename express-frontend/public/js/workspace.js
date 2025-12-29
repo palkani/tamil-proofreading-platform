@@ -243,10 +243,16 @@ class WorkspaceController {
     this.proofreadSnapshots = [];
     // Transliteration typeahead state
     this.translitCache = new Map();
+    this.suggestionCache = new Map(); // Initialize suggestion cache
+    this.CACHE_TTL_MS = 300000; // 5 minutes cache TTL
     this.translitAbort = null;
     this.translitTimer = null;
     this.lastFetchToken = null;
     this.fetchingSuggestions = false;
+    this.currentFetchQuery = null;
+    this.currentSuggestions = [];
+    this.activeSuggestionIndex = 0;
+    this.imeActive = false;
     this.currentFetchQuery = null;
     this.suggestDebounce = null;
     this.lastRunnerSuggestions = [];
@@ -298,24 +304,30 @@ class WorkspaceController {
    * @returns {Promise<Array>} Array of suggestion objects
    */
   async fetchRunnerSuggestions(params) {
+    // CRITICAL: Declare cacheKey at the very beginning to prevent ReferenceError
+    // Extract parameters first
+    const query = (params && params.q) ? String(params.q).trim() : '';
+    const mode = (params && params.mode) || 'smart';
+    const limit = (params && params.limit) || 8;
+    
+    // Create cache key IMMEDIATELY - this prevents "cacheKey is not defined" errors
+    const cacheKey = `${mode}:${query}`;
+    
+    // Ensure suggestionCache is initialized
+    if (!this.suggestionCache) {
+      this.suggestionCache = new Map();
+    }
+    
     // Skip if TipTap is active
     if (window.USE_TIPTAP_EDITOR) {
       return [];
     }
-
-    // Extract and validate parameters
-    const query = (params && params.q) ? String(params.q).trim() : '';
-    const mode = (params && params.mode) || 'smart';
-    const limit = (params && params.limit) || 8;
 
     // Validate query
     if (!query || query.length === 0) {
       this.displaySuggestions([]);
       return [];
     }
-
-    // Create cache key
-    const cacheKey = `${mode}:${query}`;
 
     // Check cache first
     if (this.suggestionCache) {
