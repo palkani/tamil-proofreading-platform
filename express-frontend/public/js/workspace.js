@@ -292,268 +292,140 @@ class WorkspaceController {
     return response;
   }
 
+  /**
+   * Fetch Tamil transliteration suggestions for a given query
+   * @param {Object} params - { q: string, mode: string, limit: number }
+   * @returns {Promise<Array>} Array of suggestion objects
+   */
   async fetchRunnerSuggestions(params) {
-    // ULTRA-DEFENSIVE: Initialize ALL variables IMMEDIATELY at function start
-    // This ensures they're ALWAYS in scope, even in catch blocks
-    let cacheKey = 'unknown:unknown';
-    let q = '';
-    let limit = 8;
-    let mode = 'smart';
-    let url = '';
-    
-    // Initialize from params immediately (before any try block)
-    if (params) {
-      q = params.q || '';
-      limit = params.limit || 8;
-      mode = params.mode || 'smart';
+    // Skip if TipTap is active
+    if (window.USE_TIPTAP_EDITOR) {
+      return [];
     }
-    
-    // Set cacheKey immediately (before try block)
-    cacheKey = `${mode}:${q}`;
-    if (!cacheKey || cacheKey === ':') {
-      cacheKey = `smart:${q || ''}`;
+
+    // Extract and validate parameters
+    const query = (params && params.q) ? String(params.q).trim() : '';
+    const mode = (params && params.mode) || 'smart';
+    const limit = (params && params.limit) || 8;
+
+    // Validate query
+    if (!query || query.length === 0) {
+      this.displaySuggestions([]);
+      return [];
     }
-    if (!cacheKey || cacheKey === ':') {
-      cacheKey = 'unknown:unknown';
-    }
-    
-    try {
-      console.log("[IME] fetchRunnerSuggestions called (v1767034723 - ULTRA-DEFENSIVE)", params, { cacheKey, q, mode });
-      
-      // Phase 5: Disable legacy IME when TipTap is active
-      if (window.USE_TIPTAP_EDITOR) {
-        console.log("[IME] fetchRunnerSuggestions blocked: TipTap active");
-        return []; // TipTap handles IME via extension
-      }
-      
-      // Params already extracted above, but ensure they're set (defensive)
-      const paramsObj = params || {};
-      if (!q) q = paramsObj.q || '';
-      if (!limit) limit = paramsObj.limit || 8;
-      if (!mode) mode = paramsObj.mode || 'smart';
-      
-      // Ensure cacheKey is set (should already be set above, but triple-check)
-      if (!cacheKey || cacheKey === 'unknown:unknown' || cacheKey === ':') {
-        cacheKey = `${mode}:${q}`;
-      }
-      if (!cacheKey || cacheKey === ':') {
-        cacheKey = `smart:${q || ''}`;
-      }
-      if (!cacheKey || cacheKey === ':') {
-        cacheKey = 'unknown:unknown';
-      }
-      
-      // Prevent duplicate concurrent requests for the same query
-      if (this.fetchingSuggestions && this.currentFetchQuery === q) {
-        console.log("[IME] already fetching for query:", q);
-        return [];
-      }
-      
-      this.fetchingSuggestions = true;
-      this.currentFetchQuery = q;
-      
-      console.log("[IME] fetchRunnerSuggestions - about to call API", { q, limit, mode });
-      
-      // Check cache first (ensure cacheKey is set)
-      if (!cacheKey) {
-        cacheKey = `${mode}:${q}`;
-      }
+
+    // Create cache key
+    const cacheKey = `${mode}:${query}`;
+
+    // Check cache first
+    if (this.suggestionCache) {
       const cached = this.suggestionCache.get(cacheKey);
-      if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL_MS) {
-        console.log("[IME] Using cached suggestions for:", q);
-        this.fetchingSuggestions = false;
-        this.currentFetchQuery = null;
-        this.lastRunnerSuggestions = cached.suggestions;
+      if (cached && (Date.now() - cached.timestamp) < (this.CACHE_TTL_MS || 300000)) {
+        console.log('[IME] Using cached suggestions for:', query);
         this.currentSuggestions = cached.suggestions;
         this.activeSuggestionIndex = 0;
-        this.imeActive = true;
-        this.editorMode = window.EditorMode ? window.EditorMode.IME_TYPING : 'IME_TYPING';
-        if (this.renderTranslitSuggestions) {
-          this.renderTranslitSuggestions(q, cached.suggestions);
-        }
+        this.displaySuggestions(cached.suggestions);
         return cached.suggestions;
       }
+    }
+
+    // Prevent duplicate requests
+    if (this.fetchingSuggestions && this.currentFetchQuery === query) {
+      console.log('[IME] Already fetching for query:', query);
+      return [];
+    }
+
+    // Set fetching state
+    this.fetchingSuggestions = true;
+    this.currentFetchQuery = query;
+
+    try {
+      // Build API URL
+      const url = `/api/transliterate/suggest?q=${encodeURIComponent(query)}&limit=${limit}&mode=${encodeURIComponent(mode)}&_ts=${Date.now()}&_r=${Math.random().toString(36).slice(2)}`;
       
-      const qs = new URLSearchParams({ q, limit, mode, _ts: Date.now(), _r: Math.random().toString(36).slice(2) }).toString();
-      url = `/api/transliterate/suggest?${qs}`;
-      console.log("[IME] API URL:", url);
-      // Create new abort controller for this request (simplified - no abort logic for now)
+      console.log('[IME] Fetching suggestions for:', query, 'from:', url);
+
+      // Create abort controller
+      if (this.translitAbort) {
+        this.translitAbort.abort();
+      }
       this.translitAbort = new AbortController();
 
-      console.log("[IME] About to fetch:", url);
-      
-      const res = await fetch(url, {
+      // Fetch from API
+      const response = await fetch(url, {
         method: 'GET',
         cache: 'no-store',
         signal: this.translitAbort.signal,
         headers: {
           'Accept': 'application/json',
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
         },
       });
 
-      if (res.status === 304) {
-        if (this.DEBUG_IME) console.debug('[IME] suggest 304 - reusing lastSuggestions', { q });
-        this.currentSuggestions = this.lastRunnerSuggestions;
-        this.imeActive = true;
-        this.editorMode = EditorMode.IME_TYPING;
-      if (this.renderTranslitSuggestions) {
-        this.renderTranslitSuggestions(q, this.lastRunnerSuggestions);
-      }
-      return this.lastRunnerSuggestions;
-      }
-
-      console.log("[IME] API response status:", res.status);
-      
-      if (!res.ok) {
-        console.error('[IME] API returned non-200', res.status, { url });
+      // Handle response
+      if (!response.ok) {
+        console.error('[IME] API error:', response.status, response.statusText);
+        this.displaySuggestions([]);
         return [];
       }
 
-      const text = await res.text();
-      let data = null;
-      if (text) {
-        try {
-          data = JSON.parse(text);
-        } catch (err) {
-          console.error('[Translit] failed to parse JSON', err);
+      // Parse response
+      const data = await response.json();
+      const rawSuggestions = (data.suggestions || []).map(s => ({
+        text: s.word || s.text || s.ta || '',
+        score: typeof s.score === 'number' ? s.score : 0,
+      })).filter(s => s.text && s.text.length > 0);
+
+      console.log('[IME] Received', rawSuggestions.length, 'suggestions');
+
+      // Clean and rank suggestions
+      const cleaned = cleanTamilSuggestions ? cleanTamilSuggestions(rawSuggestions, query) : rawSuggestions;
+      const ranked = rankTamilCandidates ? rankTamilCandidates(query, cleaned) : cleaned;
+      
+      // Filter low-quality suggestions for longer inputs
+      let finalSuggestions = ranked;
+      if (query.length > 3) {
+        finalSuggestions = ranked.filter(s => s.score > 0.3 || s.text.length <= query.length + 1);
+        if (finalSuggestions.length === 0 && ranked.length > 0) {
+          finalSuggestions = ranked.slice(0, 3);
         }
       }
-      const raw = (data && data.suggestions) || data || [];
-      console.log("[IME] Raw suggestions from API:", raw.length, raw);
-      
-      const rawSuggestions = (raw || [])
-        .map((s) => ({
-          text: s.ta || s.word || s.text || '',
-          score: typeof s.score === 'number' ? s.score : 0,
-        }))
-        .filter((s) => s.text);
-      
-      console.log("[IME] Parsed suggestions:", rawSuggestions.length, rawSuggestions);
-      
-      // PART 1: Clean suggestions - filter out invalid Tamil forms
-      const cleaned = cleanTamilSuggestions(rawSuggestions, q);
-      console.log("[IME] Cleaned suggestions:", cleaned.length, cleaned);
-      
-      // Fallback: if everything filtered out, keep only first raw item as safe fallback
-      const usable = cleaned.length > 0 ? cleaned : rawSuggestions.slice(0, 1);
-      console.log("[IME] Usable suggestions:", usable.length, usable);
-      
-      // PART 1: Rank suggestions with Tamil phonetic ranking (prefers base syllables)
-      const rankedSuggestions = rankTamilCandidates(q, usable);
-      console.log("[IME] Ranked suggestions:", rankedSuggestions.length, rankedSuggestions);
-      
-      // Filter out junk suggestions for longer inputs
-      // For inputs longer than 3 chars, only keep suggestions with reasonable scores
-      let finalSuggestions = rankedSuggestions;
-      if (q.length > 3) {
-        finalSuggestions = rankedSuggestions.filter(s => {
-          // Keep suggestions with score > 0.3 or if they're short (likely valid)
-          return s.score > 0.3 || s.text.length <= q.length + 1;
+
+      // Limit to 5 suggestions
+      finalSuggestions = finalSuggestions.slice(0, 5);
+
+      // Cache results
+      if (this.suggestionCache && cacheKey) {
+        this.suggestionCache.set(cacheKey, {
+          suggestions: finalSuggestions,
+          timestamp: Date.now(),
         });
-        // If filtering removed everything, keep at least the top 3
-        if (finalSuggestions.length === 0 && rankedSuggestions.length > 0) {
-          finalSuggestions = rankedSuggestions.slice(0, 3);
-        }
-        console.log("[IME] Filtered suggestions for long input:", finalSuggestions.length, "from", rankedSuggestions.length);
       }
-      
-      this.lastRunnerSuggestions = finalSuggestions;
+
+      // Update state
       this.currentSuggestions = finalSuggestions;
       this.activeSuggestionIndex = 0;
-      this.imeActive = true;
-      this.editorMode = window.EditorMode ? window.EditorMode.IME_TYPING : 'IME_TYPING';
+      this.imeActive = finalSuggestions.length > 0;
 
-      // PART D: Store in cache (ensure cacheKey is set)
-      if (!cacheKey && q && mode) {
-        cacheKey = `${mode}:${q}`;
-      }
-      if (cacheKey) {
-        try {
-          this.suggestionCache.set(cacheKey, {
-            suggestions: finalSuggestions,
-            timestamp: Date.now(),
-          });
-        } catch (cacheErr) {
-          console.warn('[IME] Cache set failed:', cacheErr);
-        }
-      }
+      // Display suggestions
+      this.displaySuggestions(finalSuggestions);
 
-      // Show ghost text for best suggestion ONLY if it's a good match
-      // Don't show ghost text for long inputs that might have poor matches
-      if (finalSuggestions.length > 0) {
-        const bestSuggestion = finalSuggestions[0];
-        // Only show ghost text if:
-        // 1. Input is short (1-3 chars) OR
-        // 2. The suggestion has a good score (>0.5) OR
-        // 3. The suggestion text is reasonable length (not too long)
-        const shouldShowGhost = q.length <= 3 || 
-                                bestSuggestion.score > 0.5 || 
-                                bestSuggestion.text.length <= q.length + 2;
-        
-        if (shouldShowGhost) {
-          console.log("[IME] Showing ghost text:", bestSuggestion.text, "score:", bestSuggestion.score);
-          this.showGhostText(bestSuggestion.text);
-        } else {
-          console.log("[IME] Skipping ghost text - poor match for long input:", q, "suggestion:", bestSuggestion.text, "score:", bestSuggestion.score);
-          this.clearGhostText();
-        }
-      } else {
-        console.warn("[IME] No suggestions to show!");
-        this.clearGhostText();
-      }
-
-      // Always render suggestions if we have them
-      if (finalSuggestions.length > 0) {
-        console.log("[IME] Rendering translit suggestions for word:", q, "count:", finalSuggestions.length);
-        if (this.renderTranslitSuggestions) {
-          this.renderTranslitSuggestions(q, finalSuggestions);
-        } else {
-          console.error("[IME] renderTranslitSuggestions function not found!");
-        }
-      } else {
-        console.warn("[IME] No suggestions to render for:", q);
-        if (this.renderTranslitSuggestions) {
-          this.renderTranslitSuggestions(q, []);
-        }
-      }
-      
-      this.fetchingSuggestions = false;
-      this.currentFetchQuery = null;
       return finalSuggestions;
-    } catch (err) {
-      this.fetchingSuggestions = false;
-      this.currentFetchQuery = null;
-      // ULTRA-DEFENSIVE: Ensure cacheKey is ALWAYS defined for error logging
-      try {
-        if (!cacheKey) {
-          if (q && mode) {
-            cacheKey = `${mode}:${q}`;
-          } else if (params && params.q) {
-            cacheKey = `${(params.mode || 'smart')}:${params.q}`;
-          } else {
-            cacheKey = 'unknown:unknown';
-          }
-        }
-      } catch (cacheKeyErr) {
-        cacheKey = 'error:error';
-        console.warn('[IME] Error setting cacheKey in catch block:', cacheKeyErr);
-      }
-      console.error('[IME] fetchRunnerSuggestions error:', err, { 
-        q: q || 'undefined', 
-        url: url || 'undefined', 
-        cacheKey: cacheKey || 'undefined',
-        errorMessage: err.message,
-        errorStack: err.stack
-      });
-      // Ignore abort errors (expected behavior)
-      if (err.name === 'AbortError') {
-        console.log('[IME] request aborted', { q: q || 'unknown' });
+
+    } catch (error) {
+      // Handle errors gracefully
+      if (error.name === 'AbortError') {
+        console.log('[IME] Request aborted');
         return [];
       }
+      
+      console.error('[IME] Error fetching suggestions:', error);
+      this.displaySuggestions([]);
       return [];
+      
+    } finally {
+      // Reset fetching state
+      this.fetchingSuggestions = false;
+      this.currentFetchQuery = null;
     }
   }
 
@@ -926,123 +798,190 @@ class WorkspaceController {
     return token || '';
   }
 
-  renderTranslitSuggestions(word, suggestions) {
-    // Phase 5: Disable legacy IME popup when TipTap is active
+  /**
+   * Display suggestions in a dropdown near the cursor
+   * @param {Array} suggestions - Array of suggestion objects with {text, score}
+   */
+  displaySuggestions(suggestions) {
+    // Skip if TipTap is active
     if (window.USE_TIPTAP_EDITOR) {
-      console.log("[IME] renderTranslitSuggestions: TipTap active, skipping");
-      return; // TipTap handles IME inline via decorations
+      return;
     }
-    
-    const box = document.getElementById('translit-suggest-box');
-    const status = document.getElementById('translit-suggest-status');
-    const list = document.getElementById('translit-suggest-list');
-    
-    console.log("[IME] renderTranslitSuggestions called", {
-      word,
-      suggestionsCount: suggestions ? suggestions.length : 0,
-      imeActive: this.imeActive,
-      boxExists: !!box,
-      statusExists: !!status,
-      listExists: !!list
+
+    // Get or create dropdown elements
+    let dropdown = document.getElementById('tamil-suggestions-dropdown');
+    if (!dropdown) {
+      dropdown = document.createElement('div');
+      dropdown.id = 'tamil-suggestions-dropdown';
+      dropdown.className = 'tamil-suggestions-dropdown';
+      document.body.appendChild(dropdown);
+    }
+
+    // Clear existing content
+    dropdown.innerHTML = '';
+
+    // Hide if no suggestions
+    if (!suggestions || suggestions.length === 0) {
+      dropdown.style.display = 'none';
+      this.translitDropdownOpen = false;
+      return;
+    }
+
+    // Create close button
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'tamil-suggestions-close';
+    closeBtn.innerHTML = '×';
+    closeBtn.setAttribute('aria-label', 'Close suggestions');
+    closeBtn.onclick = () => {
+      this.hideSuggestions();
+    };
+    dropdown.appendChild(closeBtn);
+
+    // Create suggestions list
+    const list = document.createElement('div');
+    list.className = 'tamil-suggestions-list';
+
+    // Render each suggestion (max 5)
+    suggestions.slice(0, 5).forEach((suggestion, index) => {
+      const item = document.createElement('div');
+      item.className = `tamil-suggestion-item ${index === this.activeSuggestionIndex ? 'active' : ''}`;
+      item.dataset.index = index;
+      
+      // Number badge
+      const number = document.createElement('span');
+      number.className = 'tamil-suggestion-number';
+      number.textContent = (index + 1).toString();
+      
+      // Text
+      const text = document.createElement('span');
+      text.className = 'tamil-suggestion-text';
+      text.textContent = suggestion.text;
+      
+      item.appendChild(number);
+      item.appendChild(text);
+      
+      // Click handler
+      item.onclick = (e) => {
+        e.stopPropagation();
+        this.selectSuggestion(index);
+      };
+      
+      list.appendChild(item);
     });
-    
-    if (!box || !status || !list) {
-      console.error("[IME] renderTranslitSuggestions: DOM elements not found", {
-        box: !!box,
-        status: !!status,
-        list: !!list
-      });
-      return;
-    }
 
-    list.innerHTML = '';
+    dropdown.appendChild(list);
 
-    // Show suggestions even if imeActive is false (might be set later)
-    if (!word || !suggestions || suggestions.length === 0) {
-      status.textContent = word ? `No suggestions for "${word}"` : 'Type English to see Tamil suggestions…';
-      box.classList.toggle('hidden', true);
-      this.translitDropdownOpen = false;
-      console.log("[IME] renderTranslitSuggestions: No suggestions to show");
-      return;
-    }
-    
-    // Ensure IME is marked as active when we have suggestions
-    if (!this.imeActive) {
-      this.imeActive = true;
-      this.editorMode = window.EditorMode ? window.EditorMode.IME_TYPING : 'IME_TYPING';
-    }
+    // Add instruction text
+    const instruction = document.createElement('div');
+    instruction.className = 'tamil-suggestions-instruction';
+    instruction.innerHTML = 'Press <strong>Space</strong> to select first option';
+    dropdown.appendChild(instruction);
 
-    status.textContent = `Suggestions for "${word}"`;
-    box.classList.remove('hidden');
-    // Position and styling will be set by repositionTranslitDropdown
-    // This ensures proper spacing to never hide typed text
+    // Position dropdown near cursor
+    this.positionDropdown(dropdown);
 
-    if (!suggestions.length) {
-      const li = document.createElement('li');
-      li.className = 'flex px-2 py-1 text-sm text-gray-500';
-      li.textContent = 'No suggestions found';
-      list.appendChild(li);
-      this.translitDropdownOpen = false;
-      return;
-    }
-
+    // Show dropdown
+    dropdown.style.display = 'block';
     this.translitDropdownOpen = true;
-    suggestions.slice(0, 5).forEach((sugg, idx) => {
-      const li = document.createElement('li');
-      li.dataset.index = idx;
-      li.className = 'flex items-center justify-between px-3 py-2 rounded cursor-pointer';
-      if (idx === this.activeSuggestionIndex) {
-        li.className += ' bg-purple-100';
-      } else {
-        li.className += ' hover:bg-purple-50';
-      }
-      li.innerHTML = `
-        <span class="font-semibold text-purple-700">${sugg.text || sugg.word}</span>
-        <span class="text-xs text-gray-500">${Math.round((sugg.score || 0) * 100)}%</span>
-      `;
-      li.addEventListener('click', () => {
-        this.acceptSuggestion(idx);
-      });
-      list.appendChild(li);
-    });
-    this.highlightActiveSuggestion();
-    this.repositionTranslitDropdown();
+
+    console.log('[IME] Displayed', suggestions.length, 'suggestions');
   }
 
+  /**
+   * Position the dropdown near the cursor
+   */
+  positionDropdown(dropdown) {
+    try {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = `${rect.left}px`;
+        dropdown.style.top = `${rect.bottom + 8}px`;
+        dropdown.style.zIndex = '10000';
+      } else if (this.editorElement) {
+        // Fallback: position relative to editor
+        const editorRect = this.editorElement.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = `${editorRect.left + 50}px`;
+        dropdown.style.top = `${editorRect.top + 100}px`;
+        dropdown.style.zIndex = '10000';
+      }
+    } catch (error) {
+      console.warn('[IME] Error positioning dropdown:', error);
+    }
+  }
+
+  /**
+   * Hide the suggestions dropdown
+   */
+  hideSuggestions() {
+    const dropdown = document.getElementById('tamil-suggestions-dropdown');
+    if (dropdown) {
+      dropdown.style.display = 'none';
+    }
+    this.translitDropdownOpen = false;
+  }
+
+  // Legacy method - redirects to new method
+  renderTranslitSuggestions(word, suggestions) {
+    this.displaySuggestions(suggestions);
+  }
+
+  // Legacy method - redirects to new method
   highlightActiveSuggestion() {
-    const list = document.getElementById('translit-suggest-list');
-    if (!list) return;
-    const items = list.querySelectorAll('li');
-    items.forEach((li, idx) => {
-      if (idx === this.activeSuggestionIndex) {
-        li.className = 'flex items-center justify-between px-3 py-2 rounded cursor-pointer bg-purple-100';
-      } else {
-        li.className = 'flex items-center justify-between px-3 py-2 rounded cursor-pointer hover:bg-purple-50';
-      }
-    });
+    this.updateActiveSuggestion();
   }
 
+  // Legacy method - redirects to new method
   acceptSuggestion(index) {
+    this.selectSuggestion(index);
+  }
+
+  /**
+   * Select and insert a suggestion at the cursor position
+   * @param {number} index - Index of the suggestion to select
+   */
+  selectSuggestion(index) {
     if (!this.currentSuggestions || !this.currentSuggestions[index]) {
-      console.warn("[IME] acceptSuggestion: invalid index or no suggestions", index);
+      console.warn('[IME] Invalid suggestion index:', index);
       return;
     }
+
     const suggestion = this.currentSuggestions[index];
-    // Only replace if we have valid token info and it's a Latin token
-    if (!this.currentTokenInfo) {
-      console.warn("[IME] acceptSuggestion: no currentTokenInfo");
+    const tamilText = suggestion.text;
+
+    if (!tamilText) {
+      console.warn('[IME] Empty suggestion text');
       return;
     }
-    // Verify the token is still Latin (user might have changed it)
+
+    console.log('[IME] Selecting suggestion:', tamilText, 'at index:', index);
+
+    // Get current token info
     const text = this.getEditorText() || '';
-    const { token, start, end } = this.currentTokenInfo;
-    const currentToken = text.slice(start, end);
-    if (currentToken !== token || !/^[a-z]+$/i.test(currentToken)) {
-      console.warn("[IME] acceptSuggestion: token mismatch or not Latin", { currentToken, token });
+    const caretPos = (this.editor && this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
+    const tokenInfo = getTokenAtCaret(text, caretPos);
+    const { token, start, end } = tokenInfo;
+
+    // Only replace if token is Latin
+    if (!token || !/^[a-z]+$/i.test(token)) {
+      console.warn('[IME] Current token is not Latin, not replacing');
+      this.hideSuggestions();
       return;
     }
-    console.log("[IME] Accepting suggestion:", suggestion.text, "for token:", token);
-    this.replaceTokenAtCaret(suggestion.text, false);
+
+    // Replace the token with Tamil text
+    this.replaceTokenAtCaret(tamilText, false);
+
+    // Hide dropdown and clear state
+    this.hideSuggestions();
+    this.currentSuggestions = [];
+    this.activeSuggestionIndex = 0;
+    this.imeActive = false;
+    this.currentTokenInfo = null;
   }
 
   // Keyboard navigation handler

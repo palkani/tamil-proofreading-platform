@@ -34,6 +34,141 @@
       border-top: 1px solid #e5e7eb;
     }
   }
+
+  /* Tamil Suggestions Dropdown Styles */
+  .tamil-suggestions-dropdown {
+    position: fixed;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+    min-width: 260px;
+    max-width: 350px;
+    z-index: 10000;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    padding: 0;
+    margin: 0;
+    display: none;
+  }
+
+  .tamil-suggestions-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    z-index: 10001;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tamil-suggestions-close:hover {
+    background-color: #f1f5f9;
+    color: #475569;
+  }
+
+  .tamil-suggestions-list {
+    padding: 8px 0;
+    max-height: 240px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    margin: 0;
+  }
+
+  .tamil-suggestion-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+    margin: 0 4px;
+    border-radius: 8px;
+  }
+
+  .tamil-suggestion-item:hover {
+    background-color: #f8fafc;
+  }
+
+  .tamil-suggestion-item.active {
+    background-color: #f3e8ff;
+    border-left: 3px solid #8b5cf6;
+    box-shadow: 0 1px 3px rgba(139, 92, 246, 0.1);
+  }
+
+  .tamil-suggestion-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background-color: #6366f1;
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+  }
+
+  .tamil-suggestion-item.active .tamil-suggestion-number {
+    background-color: #8b5cf6;
+    box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
+  }
+
+  .tamil-suggestion-text {
+    flex: 1;
+    font-size: 15px;
+    color: #1e293b;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  .tamil-suggestions-instruction {
+    padding: 10px 16px;
+    border-top: 1px solid #e5e7eb;
+    font-size: 12px;
+    color: #64748b;
+    background-color: #f8fafc;
+    border-radius: 0 0 12px 12px;
+    text-align: center;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .tamil-suggestions-instruction strong {
+    color: #475569;
+    font-weight: 600;
+  }
+
+  .tamil-suggestions-list::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .tamil-suggestions-list::-webkit-scrollbar-track {
+    background: #f9fafb;
+    border-radius: 3px;
+  }
+
+  .tamil-suggestions-list::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+  }
+
+  .tamil-suggestions-list::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
 </style>
 
 <div id="workspace-auth-banner" class="hidden bg-yellow-50 border-b border-yellow-200 text-yellow-800 px-4 py-3 flex items-center justify-between">
