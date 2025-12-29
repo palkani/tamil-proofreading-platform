@@ -37,18 +37,26 @@
 
   /* Tamil Suggestions Dropdown Styles */
   .tamil-suggestions-dropdown {
-    position: fixed;
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
-    min-width: 260px;
-    max-width: 350px;
-    z-index: 10000;
-    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-    padding: 0;
-    margin: 0;
-    display: none;
+    position: fixed !important;
+    background: white !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+    min-width: 260px !important;
+    max-width: 350px !important;
+    z-index: 99999 !important;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    /* Don't set display:none here - let JS control it */
+  }
+  
+  /* Ensure dropdown is visible when shown */
+  .tamil-suggestions-dropdown[style*="display: block"],
+  .tamil-suggestions-dropdown:not([style*="display: none"]) {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   }
 
   .tamil-suggestions-close {

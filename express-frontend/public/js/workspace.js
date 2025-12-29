@@ -852,10 +852,18 @@ class WorkspaceController {
       dropdown = document.createElement('div');
       dropdown.id = 'tamil-suggestions-dropdown';
       dropdown.className = 'tamil-suggestions-dropdown';
+      // Append to body (not inside editor) to avoid overflow issues
       document.body.appendChild(dropdown);
       console.log('[IME] ✅ Dropdown created and added to body');
+      console.log('[IME] Body children count:', document.body.children.length);
     } else {
       console.log('[IME] ♻️ Using existing dropdown element');
+      // Remove from current parent and re-append to body to ensure it's not hidden
+      if (dropdown.parentElement && dropdown.parentElement !== document.body) {
+        console.log('[IME] Moving dropdown to body (was in:', dropdown.parentElement.tagName, ')');
+        dropdown.parentElement.removeChild(dropdown);
+        document.body.appendChild(dropdown);
+      }
     }
 
     // Clear existing content
@@ -934,18 +942,36 @@ class WorkspaceController {
     });
 
     // Show dropdown with explicit styles to ensure visibility
-    dropdown.style.cssText += `
-      display: block !important;
-      visibility: visible !important;
-      opacity: 1 !important;
-      pointer-events: auto !important;
-      position: fixed !important;
-      z-index: 10000 !important;
-    `;
+    // Use setProperty with important flag for maximum compatibility
+    dropdown.style.setProperty('display', 'block', 'important');
+    dropdown.style.setProperty('visibility', 'visible', 'important');
+    dropdown.style.setProperty('opacity', '1', 'important');
+    dropdown.style.setProperty('pointer-events', 'auto', 'important');
+    dropdown.style.setProperty('position', 'fixed', 'important');
+    dropdown.style.setProperty('z-index', '99999', 'important');
+    dropdown.style.setProperty('background', 'white', 'important');
+    dropdown.style.setProperty('border', '1px solid #e2e8f0', 'important');
+    dropdown.style.setProperty('border-radius', '12px', 'important');
+    dropdown.style.setProperty('box-shadow', '0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05)', 'important');
+    
     this.translitDropdownOpen = true;
 
     // Force a reflow to ensure styles are applied
     void dropdown.offsetHeight;
+    
+    // Double-check visibility after reflow
+    setTimeout(() => {
+      const isVisible = window.getComputedStyle(dropdown).display !== 'none' && 
+                       window.getComputedStyle(dropdown).visibility !== 'hidden' &&
+                       window.getComputedStyle(dropdown).opacity !== '0';
+      console.log('[IME] 🔍 Visibility check after reflow:', isVisible);
+      if (!isVisible) {
+        console.error('[IME] ❌ Dropdown is NOT visible! Forcing visibility...');
+        dropdown.style.setProperty('display', 'block', 'important');
+        dropdown.style.setProperty('visibility', 'visible', 'important');
+        dropdown.style.setProperty('opacity', '1', 'important');
+      }
+    }, 10);
 
     // Log detailed information for debugging
     const computedStyle = window.getComputedStyle(dropdown);
@@ -979,6 +1005,16 @@ class WorkspaceController {
     // Also log to help user debug
     console.log('[IME] 🔍 To debug: Check if dropdown element exists in DOM');
     console.log('[IME] 🔍 Run in console: document.getElementById("tamil-suggestions-dropdown")');
+    
+    // TEMPORARY: Add a bright border for debugging visibility
+    dropdown.style.setProperty('border', '3px solid red', 'important');
+    dropdown.style.setProperty('background', '#ffffcc', 'important'); // Bright yellow background for debugging
+    
+    // Remove debug styles after 2 seconds
+    setTimeout(() => {
+      dropdown.style.setProperty('border', '1px solid #e2e8f0', 'important');
+      dropdown.style.setProperty('background', 'white', 'important');
+    }, 2000);
   }
 
   /**
@@ -991,34 +1027,58 @@ class WorkspaceController {
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
         
-        dropdown.style.position = 'fixed';
-        dropdown.style.left = `${rect.left}px`;
-        dropdown.style.top = `${rect.bottom + 8}px`;
-        dropdown.style.zIndex = '10000';
-        console.log('[IME] Positioned dropdown at cursor:', { left: rect.left, top: rect.bottom + 8 });
+        // Use setProperty for better compatibility
+        dropdown.style.setProperty('position', 'fixed', 'important');
+        dropdown.style.setProperty('left', `${rect.left}px`, 'important');
+        dropdown.style.setProperty('top', `${rect.bottom + 8}px`, 'important');
+        dropdown.style.setProperty('z-index', '99999', 'important');
+        
+        // Ensure it's within viewport bounds
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const dropdownWidth = 300; // approximate width
+        const dropdownHeight = 200; // approximate height
+        
+        let left = rect.left;
+        let top = rect.bottom + 8;
+        
+        // Adjust if dropdown would go off-screen
+        if (left + dropdownWidth > viewportWidth) {
+          left = viewportWidth - dropdownWidth - 10;
+        }
+        if (top + dropdownHeight > viewportHeight) {
+          top = rect.top - dropdownHeight - 8; // Show above cursor instead
+        }
+        if (left < 0) left = 10;
+        if (top < 0) top = 10;
+        
+        dropdown.style.setProperty('left', `${left}px`, 'important');
+        dropdown.style.setProperty('top', `${top}px`, 'important');
+        
+        console.log('[IME] Positioned dropdown at cursor:', { left, top, viewport: { width: viewportWidth, height: viewportHeight } });
       } else if (this.editorElement) {
         // Fallback: position relative to editor
         const editorRect = this.editorElement.getBoundingClientRect();
-        dropdown.style.position = 'fixed';
-        dropdown.style.left = `${editorRect.left + 50}px`;
-        dropdown.style.top = `${editorRect.top + 100}px`;
-        dropdown.style.zIndex = '10000';
+        dropdown.style.setProperty('position', 'fixed', 'important');
+        dropdown.style.setProperty('left', `${editorRect.left + 50}px`, 'important');
+        dropdown.style.setProperty('top', `${editorRect.top + 100}px`, 'important');
+        dropdown.style.setProperty('z-index', '99999', 'important');
         console.log('[IME] Positioned dropdown relative to editor:', { left: editorRect.left + 50, top: editorRect.top + 100 });
       } else {
         // Last resort: position at top-left of viewport
-        dropdown.style.position = 'fixed';
-        dropdown.style.left = '50px';
-        dropdown.style.top = '100px';
-        dropdown.style.zIndex = '10000';
+        dropdown.style.setProperty('position', 'fixed', 'important');
+        dropdown.style.setProperty('left', '50px', 'important');
+        dropdown.style.setProperty('top', '100px', 'important');
+        dropdown.style.setProperty('z-index', '99999', 'important');
         console.log('[IME] Positioned dropdown at fallback location (50, 100)');
       }
     } catch (error) {
       console.error('[IME] Error positioning dropdown:', error);
       // Fallback positioning
-      dropdown.style.position = 'fixed';
-      dropdown.style.left = '50px';
-      dropdown.style.top = '100px';
-      dropdown.style.zIndex = '10000';
+      dropdown.style.setProperty('position', 'fixed', 'important');
+      dropdown.style.setProperty('left', '50px', 'important');
+      dropdown.style.setProperty('top', '100px', 'important');
+      dropdown.style.setProperty('z-index', '99999', 'important');
     }
   }
 
