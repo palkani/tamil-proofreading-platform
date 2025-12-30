@@ -935,21 +935,15 @@ class WorkspaceController {
     suggestions.slice(0, 5).forEach((suggestion, index) => {
       const item = document.createElement('div');
       item.className = `tamil-suggestion-item ${index === this.activeSuggestionIndex ? 'active' : ''}`;
-      // Ensure text is visible
-      item.style.setProperty('color', '#1e293b', 'important');
+      // Only set essential display properties - let CSS handle styling
       item.style.setProperty('display', 'flex', 'important');
-      item.style.setProperty('visibility', 'visible', 'important');
       item.dataset.index = index;
       
       // Number badge
       const number = document.createElement('span');
       number.className = 'tamil-suggestion-number';
       number.textContent = (index + 1).toString();
-      // Ensure number is visible
-      number.style.setProperty('color', 'white', 'important');
-      number.style.setProperty('background-color', '#6366f1', 'important');
-      number.style.setProperty('display', 'flex', 'important');
-      number.style.setProperty('visibility', 'visible', 'important');
+      // CSS handles all styling for number badge
       
       // Text - clean any remaining formatting characters
       let cleanText = (suggestion.text || suggestion.word || '').toString();
@@ -959,12 +953,7 @@ class WorkspaceController {
       const text = document.createElement('span');
       text.className = 'tamil-suggestion-text';
       text.textContent = cleanText;
-      // Ensure text is visible
-      text.style.setProperty('color', '#1e293b', 'important');
-      text.style.setProperty('font-size', '15px', 'important');
-      text.style.setProperty('font-weight', '500', 'important');
-      text.style.setProperty('display', 'block', 'important');
-      text.style.setProperty('visibility', 'visible', 'important');
+      // CSS handles all styling for text
       
       item.appendChild(number);
       item.appendChild(text);
@@ -1046,7 +1035,7 @@ class WorkspaceController {
       
       if (!isVisible || computed.display === 'none' || rect.width === 0 || rect.height === 0) {
         console.error('[IME] ❌ Dropdown is NOT visible! Forcing visibility...');
-        // Remove all styles and reapply with even more aggressive settings
+        // Remove all styles and reapply with premium theme styling
         dropdown.removeAttribute('style');
         dropdown.style.cssText = `
           display: block !important;
@@ -1055,15 +1044,15 @@ class WorkspaceController {
           pointer-events: auto !important;
           position: fixed !important;
           z-index: 999999 !important;
-          background: #ffff00 !important;
-          border: 5px solid #ff0000 !important;
-          border-radius: 12px !important;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 4px 6px rgba(0, 0, 0, 0.1) !important;
-          min-width: 300px !important;
-          max-width: 400px !important;
+          background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%) !important;
+          border: 1px solid rgba(79, 70, 229, 0.15) !important;
+          border-radius: 16px !important;
+          box-shadow: 0 20px 40px rgba(79, 70, 229, 0.12), 0 8px 16px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(79, 70, 229, 0.05) !important;
+          min-width: 280px !important;
+          max-width: 380px !important;
           padding: 0 !important;
           margin: 0 !important;
-          font-family: system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+          font-family: system-ui, -apple-system, 'Segoe UI', 'Inter', sans-serif !important;
         `;
         void dropdown.offsetHeight; // Force reflow again
         
@@ -1120,15 +1109,7 @@ class WorkspaceController {
     console.log('[IME] 🔍 To debug: Check if dropdown element exists in DOM');
     console.log('[IME] 🔍 Run in console: document.getElementById("tamil-suggestions-dropdown")');
     
-    // TEMPORARY: Add a bright border for debugging visibility
-    dropdown.style.setProperty('border', '3px solid red', 'important');
-    dropdown.style.setProperty('background', '#ffffcc', 'important'); // Bright yellow background for debugging
-    
-    // Remove debug styles after 2 seconds
-    setTimeout(() => {
-      dropdown.style.setProperty('border', '1px solid #e2e8f0', 'important');
-      dropdown.style.setProperty('background', 'white', 'important');
-    }, 2000);
+    // No debug styles - use premium theme styling from CSS
   }
 
   /**

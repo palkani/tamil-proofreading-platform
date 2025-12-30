@@ -35,25 +35,31 @@
     }
   }
 
-  /* Tamil Suggestions Dropdown Styles */
+  /* Tamil Suggestions Dropdown Styles - Premium Design */
   #tamil-suggestions-dropdown {
     position: fixed !important;
-    background: white !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 12px !important;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 4px 6px rgba(0, 0, 0, 0.1) !important;
-    min-width: 260px !important;
-    max-width: 350px !important;
+    background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%) !important;
+    border: 1px solid rgba(79, 70, 229, 0.15) !important;
+    border-radius: 16px !important;
+    box-shadow: 
+      0 20px 40px rgba(79, 70, 229, 0.12),
+      0 8px 16px rgba(0, 0, 0, 0.08),
+      0 0 0 1px rgba(79, 70, 229, 0.05) !important;
+    min-width: 280px !important;
+    max-width: 380px !important;
     z-index: 999999 !important;
-    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+    font-family: system-ui, -apple-system, 'Segoe UI', 'Inter', sans-serif !important;
     padding: 0 !important;
     margin: 0 !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
     /* CRITICAL: Never set display:none in CSS - JS controls visibility */
     /* Ensure it's always a popup, never inline */
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
     pointer-events: auto !important;
+    overflow: hidden !important;
   }
   
   /* Container for dropdown - ensure it doesn't interfere */
@@ -77,33 +83,41 @@
 
   .tamil-suggestions-close {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    background: transparent;
-    border: none;
-    font-size: 20px;
-    color: #94a3b8;
+    top: 12px;
+    right: 12px;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(79, 70, 229, 0.1);
+    font-size: 18px;
+    color: #64748b;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 6px;
     line-height: 1;
-    border-radius: 6px;
-    transition: all 0.15s ease;
+    border-radius: 8px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 10001;
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   }
 
   .tamil-suggestions-close:hover {
-    background-color: #f1f5f9;
-    color: #475569;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    color: #4F46E5;
+    border-color: rgba(79, 70, 229, 0.2);
+    box-shadow: 0 4px 8px rgba(79, 70, 229, 0.15);
+    transform: scale(1.05);
+  }
+
+  .tamil-suggestions-close:active {
+    transform: scale(0.95);
   }
 
   .tamil-suggestions-list {
-    padding: 8px 0;
-    max-height: 240px;
+    padding: 8px 6px;
+    max-height: 280px;
     overflow-y: auto;
     overflow-x: hidden;
     margin: 0;
@@ -112,86 +126,117 @@
   .tamil-suggestion-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
+    gap: 14px;
+    padding: 12px 16px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
-    margin: 0 4px;
-    border-radius: 8px;
+    margin: 2px 4px;
+    border-radius: 10px;
+    border: 1px solid transparent;
   }
 
   .tamil-suggestion-item:hover {
-    background-color: #f8fafc;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-color: rgba(79, 70, 229, 0.1);
+    transform: translateX(2px);
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08);
   }
 
   .tamil-suggestion-item.active {
-    background-color: #f3e8ff;
-    border-left: 3px solid #8b5cf6;
-    box-shadow: 0 1px 3px rgba(139, 92, 246, 0.1);
+    background: linear-gradient(135deg, #f3e8ff 0%, #ede9fe 100%);
+    border-left: 4px solid #4F46E5;
+    border-color: rgba(79, 70, 229, 0.2);
+    box-shadow: 
+      0 4px 12px rgba(79, 70, 229, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    transform: translateX(2px);
   }
 
   .tamil-suggestion-number {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background-color: #6366f1;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #4F46E5 0%, #6366f1 100%);
     color: white;
     font-size: 13px;
     font-weight: 700;
     flex-shrink: 0;
-    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+    box-shadow: 
+      0 4px 8px rgba(79, 70, 229, 0.25),
+      0 2px 4px rgba(79, 70, 229, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .tamil-suggestion-item.active .tamil-suggestion-number {
-    background-color: #8b5cf6;
-    box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    box-shadow: 
+      0 6px 12px rgba(99, 102, 241, 0.35),
+      0 2px 6px rgba(139, 92, 246, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
   }
 
   .tamil-suggestion-text {
     flex: 1;
-    font-size: 15px;
-    color: #1e293b;
-    font-weight: 500;
-    line-height: 1.5;
+    font-size: 16px;
+    color: #0f172a;
+    font-weight: 600;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+  }
+
+  .tamil-suggestion-item.active .tamil-suggestion-text {
+    color: #312e81;
+    font-weight: 700;
   }
 
   .tamil-suggestions-instruction {
-    padding: 10px 16px;
-    border-top: 1px solid #e5e7eb;
+    padding: 12px 16px;
+    border-top: 1px solid rgba(79, 70, 229, 0.1);
     font-size: 12px;
     color: #64748b;
-    background-color: #f8fafc;
-    border-radius: 0 0 12px 12px;
+    background: linear-gradient(180deg, #fafbfc 0%, #f8fafc 100%);
+    border-radius: 0 0 16px 16px;
     text-align: center;
     margin: 0;
-    line-height: 1.5;
+    line-height: 1.6;
+    font-weight: 500;
   }
 
   .tamil-suggestions-instruction strong {
-    color: #475569;
-    font-weight: 600;
+    color: #4F46E5;
+    font-weight: 700;
+    background: linear-gradient(135deg, #4F46E5 0%, #6366f1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   .tamil-suggestions-list::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
   }
 
   .tamil-suggestions-list::-webkit-scrollbar-track {
-    background: #f9fafb;
-    border-radius: 3px;
+    background: rgba(241, 245, 249, 0.5);
+    border-radius: 4px;
+    margin: 4px 0;
   }
 
   .tamil-suggestions-list::-webkit-scrollbar-thumb {
-    background: #d1d5db;
-    border-radius: 3px;
+    background: linear-gradient(180deg, #c7d2fe 0%, #a5b4fc 100%);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
 
   .tamil-suggestions-list::-webkit-scrollbar-thumb:hover {
-    background: #9ca3af;
+    background: linear-gradient(180deg, #a5b4fc 0%, #818cf8 100%);
+    background-clip: padding-box;
   }
 </style>
 
