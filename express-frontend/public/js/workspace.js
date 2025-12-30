@@ -383,10 +383,17 @@ class WorkspaceController {
 
       // Parse response
       const data = await response.json();
-      const rawSuggestions = (data.suggestions || []).map(s => ({
-        text: s.word || s.text || s.ta || '',
-        score: typeof s.score === 'number' ? s.score : 0,
-      })).filter(s => s.text && s.text.length > 0);
+      const rawSuggestions = (data.suggestions || []).map(s => {
+        let text = s.word || s.text || s.ta || '';
+        // Clean text: remove superscript numbers (¹²³), formatting characters, and normalize
+        text = text.replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰]/g, ''); // Remove superscript numbers
+        text = text.replace(/[²³]/g, ''); // Remove other formatting
+        text = text.trim();
+        return {
+          text: text,
+          score: typeof s.score === 'number' ? s.score : 0,
+        };
+      }).filter(s => s.text && s.text.length > 0);
 
       console.log('[IME] ✅ API call successful!');
       console.log('[IME] Received', rawSuggestions.length, 'raw suggestions:', rawSuggestions);
@@ -869,7 +876,7 @@ class WorkspaceController {
       if (!container) {
         container = document.createElement('div');
         container.id = 'tamil-ime-container';
-        container.style.cssText = 'position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 999999; pointer-events: none;';
+        container.style.cssText = 'position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 999999; pointer-events: none; overflow: visible;';
         document.body.appendChild(container);
       }
       container.appendChild(dropdown);
@@ -882,7 +889,7 @@ class WorkspaceController {
       if (!container) {
         container = document.createElement('div');
         container.id = 'tamil-ime-container';
-        container.style.cssText = 'position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 999999; pointer-events: none;';
+        container.style.cssText = 'position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 999999; pointer-events: none; overflow: visible;';
         document.body.appendChild(container);
       }
       // Remove from current parent and re-append to container
@@ -944,10 +951,14 @@ class WorkspaceController {
       number.style.setProperty('display', 'flex', 'important');
       number.style.setProperty('visibility', 'visible', 'important');
       
-      // Text
+      // Text - clean any remaining formatting characters
+      let cleanText = (suggestion.text || suggestion.word || '').toString();
+      // Remove any superscript numbers or formatting characters
+      cleanText = cleanText.replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰²³]/g, '').trim();
+      
       const text = document.createElement('span');
       text.className = 'tamil-suggestion-text';
-      text.textContent = suggestion.text || suggestion.word || '';
+      text.textContent = cleanText;
       // Ensure text is visible
       text.style.setProperty('color', '#1e293b', 'important');
       text.style.setProperty('font-size', '15px', 'important');

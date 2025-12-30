@@ -41,14 +41,31 @@
     background: white !important;
     border: 1px solid #e2e8f0 !important;
     border-radius: 12px !important;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 4px 6px rgba(0, 0, 0, 0.1) !important;
     min-width: 260px !important;
     max-width: 350px !important;
-    z-index: 99999 !important;
+    z-index: 999999 !important;
     font-family: system-ui, -apple-system, 'Segoe UI', sans-serif !important;
     padding: 0 !important;
     margin: 0 !important;
     /* CRITICAL: Never set display:none in CSS - JS controls visibility */
+    /* Ensure it's always a popup, never inline */
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+  
+  /* Container for dropdown - ensure it doesn't interfere */
+  #tamil-ime-container {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    z-index: 999999 !important;
+    pointer-events: none !important;
+    overflow: visible !important;
   }
   
   /* Force visibility when inline style has display:block */
