@@ -900,7 +900,6 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         storage.fetching = false;
         
         console.log('[TamilIME] ✅ Updated storage - token:', storage.token, 'candidates:', storage.candidates.length, 'ghost:', storage.ghost);
-
         console.log('[TamilIME] ✅ Setting candidates:', ranked.length, 'ghost:', storage.ghost, 'at position', storage.start, '-', storage.end);
         console.log('[TamilIME] ✅ All candidates:', ranked.map(c => c.text));
         console.log('[TamilIME] ✅ Storage state:', {
@@ -917,15 +916,22 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         if (storage.candidates.length > 0 && storage.start !== null && storage.end !== null) {
           console.log('[TamilIME] ✅ Updating decorations immediately with', storage.candidates.length, 'candidates');
           
-          // Force immediate update (synchronous)
+          // Force immediate update (synchronous) - call updateDecoration multiple times
           this.updateDecoration();
+          this.updateDecoration(); // Call twice to ensure it triggers
           
           // Force multiple updates to ensure visibility
           requestAnimationFrame(() => {
             const currentStorage = this.storage as TamilIMEStorage;
+            console.log('[TamilIME] ✅ RAF - storage state:', {
+              candidates: currentStorage.candidates.length,
+              start: currentStorage.start,
+              end: currentStorage.end
+            });
             if (currentStorage.candidates.length > 0 && currentStorage.start !== null && currentStorage.end !== null) {
               console.log('[TamilIME] ✅ Updating decorations in RAF - candidates:', currentStorage.candidates.length);
               this.updateDecoration();
+              this.updateDecoration(); // Call twice
             }
           });
           
@@ -947,6 +953,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
               // Verify dropdown is visible
               setTimeout(() => {
                 const dropdown = document.querySelector('.tamil-ime-dropdown');
+                console.log('[TamilIME] 🔍 Checking for dropdown in DOM...');
                 if (dropdown) {
                   const styles = window.getComputedStyle(dropdown as HTMLElement);
                   console.log('[TamilIME] ✅ Dropdown found in DOM - display:', styles.display, 'visibility:', styles.visibility, 'opacity:', styles.opacity, 'z-index:', styles.zIndex);
@@ -961,7 +968,13 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                     htmlEl.style.setProperty('z-index', '999999', 'important');
                   }
                 } else {
-                  console.warn('[TamilIME] ⚠️ Dropdown NOT found in DOM after all updates - forcing one more update');
+                  console.error('[TamilIME] ❌ Dropdown NOT found in DOM after all updates!');
+                  console.error('[TamilIME] ❌ Storage state:', {
+                    candidates: currentStorage.candidates.length,
+                    start: currentStorage.start,
+                    end: currentStorage.end,
+                    token: currentStorage.token
+                  });
                   // Force one more update if dropdown still not visible
                   this.updateDecoration();
                 }
@@ -969,7 +982,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
             }
           }, 100);
         } else {
-          console.warn('[TamilIME] ⚠️ Cannot update decorations - missing candidates or positions', {
+          console.error('[TamilIME] ❌ Cannot update decorations - missing candidates or positions', {
             candidates: storage.candidates.length,
             start: storage.start,
             end: storage.end
