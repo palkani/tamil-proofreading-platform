@@ -1022,18 +1022,32 @@ class WorkspaceController {
         itemHTML: item.innerHTML.substring(0, 100)
       });
       
-      // Click handler
+      // Click handler - ensure it works
       item.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        console.log('[IME] Clicked suggestion', i + 1, ':', cleanText);
         this.selectSuggestion(i);
       });
       
-      // Hover handler to update active index
+      // Also handle mousedown for better responsiveness
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[IME] Mousedown on suggestion', i + 1, ':', cleanText);
+        this.selectSuggestion(i);
+      });
+      
+      // Hover handler to update active index with purple highlight
       item.addEventListener('mouseenter', () => {
         this.activeSuggestionIndex = i;
         this.updateActiveSuggestion();
+        console.log('[IME] Hovering suggestion', i + 1, ':', cleanText);
       });
+      
+      // Ensure item is clickable
+      item.style.setProperty('pointer-events', 'auto', 'important');
+      item.style.setProperty('cursor', 'pointer', 'important');
       
       list.appendChild(item);
     }
@@ -1406,17 +1420,53 @@ class WorkspaceController {
       // Force a reflow and verify position
       void dropdown.offsetHeight;
       const finalRect = dropdown.getBoundingClientRect();
+      
+      // CRITICAL: Verify and fix if dropdown is outside viewport
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      let needsReposition = false;
+      let adjustedLeft = finalRect.left;
+      let adjustedTop = finalRect.top;
+      
+      // Check if dropdown is outside viewport
+      if (finalRect.left < 0) {
+        adjustedLeft = 20;
+        needsReposition = true;
+      }
+      if (finalRect.right > viewportWidth) {
+        adjustedLeft = viewportWidth - finalRect.width - 20;
+        needsReposition = true;
+      }
+      if (finalRect.top < 0) {
+        adjustedTop = 20;
+        needsReposition = true;
+      }
+      if (finalRect.bottom > viewportHeight) {
+        adjustedTop = viewportHeight - finalRect.height - 20;
+        needsReposition = true;
+      }
+      
+      // If dropdown is outside viewport, reposition it
+      if (needsReposition) {
+        console.warn('[IME] ⚠️ Dropdown is outside viewport! Repositioning...', {
+          original: { left: finalRect.left, top: finalRect.top },
+          adjusted: { left: adjustedLeft, top: adjustedTop },
+          viewport: { width: viewportWidth, height: viewportHeight }
+        });
+        dropdown.style.setProperty('left', `${adjustedLeft}px`, 'important');
+        dropdown.style.setProperty('top', `${adjustedTop}px`, 'important');
+        void dropdown.offsetHeight; // Force reflow
+      }
+      
       console.log('[IME] Final dropdown position:', {
-        left: finalRect.left,
-        top: finalRect.top,
+        left: dropdown.style.left,
+        top: dropdown.style.top,
         width: finalRect.width,
         height: finalRect.height,
         visible: finalRect.width > 0 && finalRect.height > 0,
         inViewport: finalRect.top >= 0 && finalRect.left >= 0 && 
-                   finalRect.bottom <= window.innerHeight && 
-                   finalRect.right <= window.innerWidth,
-        styleLeft: dropdown.style.left,
-        styleTop: dropdown.style.top
+                   finalRect.bottom <= viewportHeight && 
+                   finalRect.right <= viewportWidth
       });
       
       // If still has zero dimensions, force minimum size
@@ -1425,6 +1475,13 @@ class WorkspaceController {
         dropdown.style.setProperty('min-width', '260px', 'important');
         dropdown.style.setProperty('min-height', '100px', 'important');
         void dropdown.offsetHeight; // Force reflow again
+      }
+      
+      // CRITICAL: Ensure dropdown is clickable
+      dropdown.style.setProperty('pointer-events', 'auto', 'important');
+      const list = dropdown.querySelector('.tamil-suggestions-list');
+      if (list) {
+        list.style.setProperty('pointer-events', 'auto', 'important');
       }
     } catch (error) {
       console.error('[IME] Error positioning dropdown:', error);
