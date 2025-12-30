@@ -709,13 +709,27 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         }
 
         if (!res.ok) {
-          console.warn('[TamilIME] API returned non-OK status:', res.status);
+          console.warn('[TamilIME] ⚠️ API returned non-OK status:', res.status, res.statusText);
+          // Try to parse error response
+          try {
+            const errorData = await res.json();
+            console.warn('[TamilIME] ⚠️ Error response:', errorData);
+          } catch {
+            // Ignore parse errors
+          }
           this.clear();
           return;
         }
 
         const data = await res.json();
         console.log('[TamilIME] ✅ API response received for', token, ':', data);
+        
+        // Validate response structure
+        if (!data || typeof data !== 'object') {
+          console.warn('[TamilIME] ⚠️ Invalid API response format:', data);
+          this.clear();
+          return;
+        }
         
         // Check if token changed - but be more lenient: if current token starts with requested token, accept it
         const currentToken = storage.token || '';
