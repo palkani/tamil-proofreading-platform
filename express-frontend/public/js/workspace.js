@@ -518,19 +518,36 @@ class WorkspaceController {
       });
       
       // Also add direct input listener as fallback (but debounced to prevent duplicates)
+      // This ensures handleEditorChange is called even if editor.onChange doesn't fire
       let inputDebounce = null;
-      editorElement.addEventListener('input', () => {
+      editorElement.addEventListener('input', (e) => {
+        console.log("[IME] 🔔 Input event detected on editor element");
         if (inputDebounce) {
           clearTimeout(inputDebounce);
         }
         inputDebounce = setTimeout(() => {
-        console.log("[IME] Direct input event listener fired");
-        if (this.editor && this.editor.onChange) {
-          this.editor.onChange();
-        }
+          console.log("[IME] 🔔 Direct input event listener fired - calling handleEditorChange");
+          // Call handleEditorChange directly (it will check USE_TIPTAP_EDITOR itself)
+          this.handleEditorChange();
           inputDebounce = null;
-        }, 100); // Small debounce to prevent duplicate calls
-      });
+        }, 150); // Small debounce to prevent duplicate calls
+      }, { passive: true });
+      
+      // Also listen to keyup events as additional fallback
+      editorElement.addEventListener('keyup', (e) => {
+        // Only trigger for letter keys (not modifiers, arrows, etc.)
+        if (e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
+          console.log("[IME] 🔔 Keyup event for letter:", e.key);
+          if (inputDebounce) {
+            clearTimeout(inputDebounce);
+          }
+          inputDebounce = setTimeout(() => {
+            console.log("[IME] 🔔 Keyup triggered handleEditorChange");
+            this.handleEditorChange();
+            inputDebounce = null;
+          }, 150);
+        }
+      }, { passive: true });
       
       this.editorElement = editorElement;
       editorElement.addEventListener('scroll', () => this.repositionTranslitDropdown());
@@ -739,20 +756,39 @@ class WorkspaceController {
     });
     
     // MINIMAL GUARDS: Only check if token exists and is Latin
-    if (!token || !/^[a-z]+$/i.test(token)) {
+    // Allow single character tokens to trigger API calls
+    if (!token || token.length === 0) {
+      console.log('[IME] ⚠️ Token is empty');
+      // Clear suggestions if token is invalid
+      if (this.lastFetchToken) {
+        this.lastFetchToken = null;
+        this.currentTokenInfo = null;
+        this.clearSuggestions();
+      }
+      return;
+    }
+    
+    // Check if token is Latin (allow single characters)
+    if (!/^[a-z]+$/i.test(token)) {
       console.log('[IME] ⚠️ Token is not valid Latin:', token, {
-        isEmpty: !token,
-        isNotLatin: token && !/^[a-z]+$/i.test(token),
+        isNotLatin: !/^[a-z]+$/i.test(token),
         tokenValue: token
       });
       // Clear suggestions if token is invalid
       if (this.lastFetchToken) {
         this.lastFetchToken = null;
-        this.currentTokenInfo = null; // Clear token info for non-Latin tokens
+        this.currentTokenInfo = null;
         this.clearSuggestions();
       }
       return;
     }
+    
+    // Log token validation success
+    console.log('[IME] ✅ Token validation passed:', {
+      token,
+      length: token.length,
+      isLatin: /^[a-z]+$/i.test(token)
+    });
     
     console.log('[IME] ✅ Valid Latin token found:', token, '- Will fetch suggestions');
     
@@ -2744,14 +2780,19 @@ window.switchWorkspaceEditor = switchWorkspaceEditor;
 window.setupTipTapToolbar = setupTipTapToolbar;
 
 // Initialize workspace when DOM is ready
+let workspaceControllerInstance = null;
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    new WorkspaceController();
+    workspaceControllerInstance = new WorkspaceController();
+    window.workspaceController = workspaceControllerInstance; // Expose globally for debugging
+    console.log('[WorkspaceJS] ✅ WorkspaceController initialized and exposed as window.workspaceController');
     // Phase 4: Switch to TipTap if flag is enabled
     setTimeout(() => switchWorkspaceEditor(), 500); // Wait a bit for TipTap to load
   });
 } else {
-  new WorkspaceController();
+  workspaceControllerInstance = new WorkspaceController();
+  window.workspaceController = workspaceControllerInstance; // Expose globally for debugging
+  console.log('[WorkspaceJS] ✅ WorkspaceController initialized and exposed as window.workspaceController');
   // Phase 4: Switch to TipTap if flag is enabled
   setTimeout(() => switchWorkspaceEditor(), 500); // Wait a bit for TipTap to load
 }
