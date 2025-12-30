@@ -931,19 +931,18 @@ class WorkspaceController {
     const list = document.createElement('div');
     list.className = 'tamil-suggestions-list';
 
-    // Render each suggestion (max 5)
-    suggestions.slice(0, 5).forEach((suggestion, index) => {
+    // Render each suggestion (max 5) - match screenshot exactly
+    const maxSuggestions = Math.min(suggestions.length, 5);
+    for (let i = 0; i < maxSuggestions; i++) {
+      const suggestion = suggestions[i];
       const item = document.createElement('div');
-      item.className = `tamil-suggestion-item ${index === this.activeSuggestionIndex ? 'active' : ''}`;
-      // Only set essential display properties - let CSS handle styling
-      item.style.setProperty('display', 'flex', 'important');
-      item.dataset.index = index;
+      item.className = `tamil-suggestion-item ${i === this.activeSuggestionIndex ? 'active' : ''}`;
+      item.dataset.index = i;
       
-      // Number badge
+      // Number badge - purple gradient (matches screenshot)
       const number = document.createElement('span');
       number.className = 'tamil-suggestion-number';
-      number.textContent = (index + 1).toString();
-      // CSS handles all styling for number badge
+      number.textContent = (i + 1).toString();
       
       // Text - clean any remaining formatting characters
       let cleanText = (suggestion.text || suggestion.word || '').toString();
@@ -953,19 +952,25 @@ class WorkspaceController {
       const text = document.createElement('span');
       text.className = 'tamil-suggestion-text';
       text.textContent = cleanText;
-      // CSS handles all styling for text
       
       item.appendChild(number);
       item.appendChild(text);
       
       // Click handler
-      item.onclick = (e) => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
         e.stopPropagation();
-        this.selectSuggestion(index);
-      };
+        this.selectSuggestion(i);
+      });
+      
+      // Hover handler to update active index
+      item.addEventListener('mouseenter', () => {
+        this.activeSuggestionIndex = i;
+        this.updateActiveSuggestion();
+      });
       
       list.appendChild(item);
-    });
+    }
 
     dropdown.appendChild(list);
 
@@ -1259,6 +1264,23 @@ class WorkspaceController {
     this.updateActiveSuggestion();
   }
 
+  /**
+   * Update visual state of active suggestion
+   */
+  updateActiveSuggestion() {
+    const dropdown = document.getElementById('tamil-suggestions-dropdown');
+    if (!dropdown) return;
+
+    const items = dropdown.querySelectorAll('.tamil-suggestion-item');
+    items.forEach((item, index) => {
+      if (index === this.activeSuggestionIndex) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
+    });
+  }
+
   // Legacy method - redirects to new method
   acceptSuggestion(index) {
     this.selectSuggestion(index);
@@ -1374,39 +1396,40 @@ class WorkspaceController {
         return true;
 
       case ' ':
-        // Space commits current suggestion ONLY if IME is active and we have a good suggestion
+        // Space commits first/active suggestion
         if (this.imeActive && this.currentSuggestions && this.currentSuggestions.length > 0) {
           const suggestion = this.currentSuggestions[this.activeSuggestionIndex || 0];
-          // Only commit if suggestion is reasonable (not junk)
           const textToInsert = suggestion && (suggestion.text || suggestion.word);
           if (textToInsert && textToInsert.length > 0) {
             e.preventDefault();
             e.stopPropagation();
-            this.replaceTokenAtCaret(textToInsert, true); // Append space
-            // Clear IME state after commit
-            this.clearGhostText();
-            this.clearTranslitSuggestions();
-            this.imeActive = false;
-            this.editorMode = window.EditorMode ? window.EditorMode.IDLE : 'IDLE';
-            this.lastFetchToken = null; // Reset to allow new suggestions
-            // Manually trigger editor change to allow new suggestions for next word
+            this.selectSuggestion(this.activeSuggestionIndex || 0);
+            // Insert space after Tamil word
             setTimeout(() => {
+              this.replaceTokenAtCaret(' ', false);
+              // Trigger editor change for next word suggestions
               if (this.editor && this.editor.onChange) {
                 this.editor.onChange();
               } else {
                 this.handleEditorChange();
               }
-            }, 50);
-          } else {
-            // If suggestion is invalid, just close IME
-            this.clearGhostText();
-            this.clearTranslitSuggestions();
-            this.imeActive = false;
-            this.editorMode = window.EditorMode ? window.EditorMode.IDLE : 'IDLE';
+            }, 10);
           }
           return true;
         }
-        // If IME not active, let space through normally - this will trigger editor change
+        return false;
+      
+      case '1': case '2': case '3': case '4': case '5':
+        // Number keys select specific suggestion
+        if (this.imeActive && this.currentSuggestions) {
+          const index = parseInt(e.key) - 1;
+          if (index >= 0 && index < this.currentSuggestions.length) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.selectSuggestion(index);
+            return true;
+          }
+        }
         return false;
 
       default:
@@ -2729,4 +2752,6 @@ if (document.readyState === 'loading') {
   new WorkspaceController();
   // Phase 4: Switch to TipTap if flag is enabled
   setTimeout(() => switchWorkspaceEditor(), 500); // Wait a bit for TipTap to load
+}
+
 }
