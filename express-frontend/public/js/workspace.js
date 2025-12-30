@@ -902,45 +902,32 @@ class WorkspaceController {
     }
 
     // Get or create dropdown elements
+    // CRITICAL: Append directly to body, not a container, to avoid pointer-events issues
     let dropdown = document.getElementById('tamil-suggestions-dropdown');
     if (!dropdown) {
       console.log('[IME] 📦 Creating new dropdown element');
       dropdown = document.createElement('div');
       dropdown.id = 'tamil-suggestions-dropdown';
       dropdown.className = 'tamil-suggestions-dropdown';
-      // Append to body (not inside editor) to avoid overflow issues
-      // Use a dedicated container to avoid any parent styling issues
-      let container = document.getElementById('tamil-ime-container');
-      if (!container) {
-        container = document.createElement('div');
-        container.id = 'tamil-ime-container';
-        container.style.cssText = 'position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 999999; pointer-events: none; overflow: visible;';
-        document.body.appendChild(container);
-      }
-      container.appendChild(dropdown);
-      console.log('[IME] ✅ Dropdown created and added to container');
-      console.log('[IME] Body children count:', document.body.children.length);
+      // Append directly to body to avoid any parent styling/pointer-events issues
+      document.body.appendChild(dropdown);
+      console.log('[IME] ✅ Dropdown created and added directly to body');
     } else {
       console.log('[IME] ♻️ Using existing dropdown element');
-      // Ensure it's in the right container
-      let container = document.getElementById('tamil-ime-container');
-      if (!container) {
-        container = document.createElement('div');
-        container.id = 'tamil-ime-container';
-        container.style.cssText = 'position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 999999; pointer-events: none; overflow: visible;';
-        document.body.appendChild(container);
-      }
-      // Remove from current parent and re-append to container
-      if (dropdown.parentElement && dropdown.parentElement !== container) {
-        console.log('[IME] Moving dropdown to container (was in:', dropdown.parentElement.tagName || dropdown.parentElement.id, ')');
+      // Ensure it's directly in body, not in a container
+      if (dropdown.parentElement && dropdown.parentElement !== document.body) {
+        console.log('[IME] Moving dropdown to body (was in:', dropdown.parentElement.tagName || dropdown.parentElement.id, ')');
         if (dropdown.parentElement.removeChild) {
           dropdown.parentElement.removeChild(dropdown);
         }
-        container.appendChild(dropdown);
+        document.body.appendChild(dropdown);
       } else if (!dropdown.parentElement) {
-        container.appendChild(dropdown);
+        document.body.appendChild(dropdown);
       }
     }
+    
+    // CRITICAL: Set pointer-events on dropdown itself (not parent)
+    dropdown.style.pointerEvents = 'auto';
 
     // Clear existing content
     dropdown.innerHTML = '';
@@ -1065,11 +1052,25 @@ class WorkspaceController {
       height: window.getComputedStyle(dropdown).height
     });
 
-    // CRITICAL: Explicitly show the dropdown
-    dropdown.style.display = 'block';
-    dropdown.style.visibility = 'visible';
-    dropdown.style.opacity = '1';
-    dropdown.style.pointerEvents = 'auto';
+    // CRITICAL: Explicitly show the dropdown with all necessary styles
+    // Use setProperty with !important to override any CSS
+    dropdown.style.setProperty('display', 'block', 'important');
+    dropdown.style.setProperty('visibility', 'visible', 'important');
+    dropdown.style.setProperty('opacity', '1', 'important');
+    dropdown.style.setProperty('pointer-events', 'auto', 'important');
+    dropdown.style.setProperty('position', 'fixed', 'important');
+    dropdown.style.setProperty('z-index', '999999', 'important');
+    
+    // Also set via cssText as backup
+    const existingStyles = dropdown.style.cssText;
+    dropdown.style.cssText = existingStyles + `
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      position: fixed !important;
+      z-index: 999999 !important;
+    `;
     
     // Mark as open
     this.translitDropdownOpen = true;
@@ -1149,47 +1150,6 @@ class WorkspaceController {
     setTimeout(forceVisibility, 10);
     setTimeout(forceVisibility, 50);
     setTimeout(forceVisibility, 100);
-    setTimeout(forceVisibility, 200);
-    
-    // Final verification after all updates
-    setTimeout(() => {
-      const finalCheck = document.getElementById('tamil-suggestions-dropdown');
-      if (finalCheck) {
-        const finalComputed = window.getComputedStyle(finalCheck);
-        const finalRect = finalCheck.getBoundingClientRect();
-        console.log('[IME] 🔍 FINAL CHECK - Dropdown visibility:', {
-          exists: !!finalCheck,
-          display: finalComputed.display,
-          visibility: finalComputed.visibility,
-          opacity: finalComputed.opacity,
-          width: finalRect.width,
-          height: finalRect.height,
-          top: finalRect.top,
-          left: finalRect.left,
-          visible: finalComputed.display !== 'none' && finalRect.width > 0 && finalRect.height > 0
-        });
-        
-        // If still not visible, force it one more time
-        if (finalComputed.display === 'none' || finalRect.width === 0 || finalRect.height === 0) {
-          console.error('[IME] ❌❌❌ Dropdown still not visible after all attempts!');
-          finalCheck.style.cssText = `
-            display: block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            position: fixed !important;
-            z-index: 999999 !important;
-            top: 200px !important;
-            left: 200px !important;
-            background: white !important;
-            border: 2px solid red !important;
-            padding: 20px !important;
-            min-width: 300px !important;
-          `;
-        }
-      } else {
-        console.error('[IME] ❌❌❌ Dropdown element not found in DOM!');
-      }
-    }, 300);
     setTimeout(forceVisibility, 200);
     
     // Final verification after all updates
