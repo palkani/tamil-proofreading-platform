@@ -36,18 +36,19 @@ body {
 .tamil-ime-dropdown {
   position: fixed !important;
   display: block !important;
-  background: white !important;
-  border: 1px solid #e2e8f0 !important;
-  border-radius: 12px !important;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05) !important;
-  min-width: 260px !important;
-  max-width: 350px !important;
-  z-index: 10000 !important;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif !important;
-  padding: 0 !important;
-  margin: 0 !important;
   visibility: visible !important;
   opacity: 1 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  border: 1px solid rgba(79, 70, 229, 0.3) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 15px 35px rgba(79, 70, 229, 0.15), 0 5px 15px rgba(79, 70, 229, 0.1) !important;
+  backdrop-filter: blur(8px) !important;
+  min-width: 280px !important;
+  max-width: 380px !important;
+  z-index: 999999 !important;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+  padding: 0 !important;
+  margin: 0 !important;
   pointer-events: auto !important;
 }
 
@@ -122,53 +123,66 @@ body {
 }
 
 .tamil-ime-suggestion-item.active {
-  background-color: #f3e8ff !important;
-  border-left: 3px solid #8b5cf6 !important;
-  box-shadow: 0 1px 3px rgba(139, 92, 246, 0.1) !important;
+  background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%) !important;
+  border-left: 4px solid #4F46E5 !important;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2) !important;
+  color: white !important;
 }
 
 .tamil-ime-number {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 28px !important;
-  height: 28px !important;
-  border-radius: 50% !important;
-  background-color: #6366f1 !important;
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #6366f1 0%, #4F46E5 100%) !important;
   color: white !important;
-  font-size: 13px !important;
+  font-size: 14px !important;
   font-weight: 700 !important;
   flex-shrink: 0 !important;
-  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2) !important;
+  box-shadow: inset 0 1px 2px rgba(255,255,255,0.3), 0 3px 8px rgba(79, 70, 229, 0.3) !important;
 }
 
 .tamil-ime-suggestion-item.active .tamil-ime-number {
-  background-color: #8b5cf6 !important;
-  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3) !important;
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%) !important;
+  box-shadow: inset 0 1px 2px rgba(255,255,255,0.4), 0 4px 10px rgba(139, 92, 246, 0.4) !important;
+  transform: scale(1.05) !important;
 }
 
 .tamil-ime-text {
   flex: 1 !important;
-  font-size: 15px !important;
+  font-size: 16px !important;
   color: #1e293b !important;
-  font-weight: 500 !important;
-  line-height: 1.5 !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+}
+
+.tamil-ime-suggestion-item.active .tamil-ime-text {
+  color: white !important;
 }
 
 .tamil-ime-instruction {
-  padding: 10px 16px;
-  border-top: 1px solid #e5e7eb;
-  font-size: 12px;
-  color: #6b7280;
-  background-color: #f9fafb;
-  border-radius: 0 0 12px 12px;
-  text-align: center;
-  margin-top: 4px;
+  padding: 12px 18px !important;
+  border-top: 1px solid #e5e7eb !important;
+  font-size: 13px !important;
+  color: #64748b !important;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  border-radius: 0 0 16px 16px !important;
+  text-align: center !important;
+  margin: 0 !important;
+  line-height: 1.5 !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5) !important;
 }
 
 .tamil-ime-instruction strong {
-  color: #4b5563;
-  font-weight: 600;
+  color: #4F46E5 !important;
+  font-weight: 700 !important;
+  background: linear-gradient(45deg, #6366f1, #4F46E5) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  text-fill-color: transparent !important;
 }
 
 /* Scrollbar styling for suggestions list */

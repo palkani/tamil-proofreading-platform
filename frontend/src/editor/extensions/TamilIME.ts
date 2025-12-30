@@ -228,7 +228,14 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
             const state = editorView.state;
             const decos: Decoration[] = [];
 
-            if (storage.ghost && storage.start !== null && storage.end !== null && storage.candidates.length > 0) {
+            // Show dropdown if we have candidates (even without ghost text)
+            if (storage.candidates.length > 0 && storage.start !== null && storage.end !== null) {
+              // Ensure ghost text is set if not already
+              if (!storage.ghost && storage.candidates.length > 0) {
+                storage.ghost = storage.candidates[0].text;
+                storage.index = 0;
+              }
+              
               console.log('[TamilIME] 🎨 Creating dropdown widget at position', storage.end, 'with', storage.candidates.length, 'candidates');
               
               // Get the position coordinates for proper positioning
@@ -454,7 +461,12 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                   }
                 });
               }
-              // Decorations will be updated via updateDecos() call
+              // Always update decorations on view update to ensure dropdown shows
+              const storage = extension.storage as TamilIMEStorage;
+              if (storage.candidates.length > 0 && storage.start !== null && storage.end !== null) {
+                console.log('[TamilIME] 🎨 View update - triggering decoration update');
+                updateDecos();
+              }
             },
             destroy() {
               // Cleanup all dropdowns
@@ -711,11 +723,20 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         storage.candidates = ranked;
         storage.index = 0;
         storage.ghost = ranked[0].text;
+        storage.fetching = false;
 
-        console.log('[TamilIME] ✅ Setting ghost text:', storage.ghost, 'candidates:', ranked.length, 'at position', storage.start, '-', storage.end);
+        console.log('[TamilIME] ✅ Setting candidates:', ranked.length, 'ghost:', storage.ghost, 'at position', storage.start, '-', storage.end);
         console.log('[TamilIME] ✅ All candidates:', ranked.map(c => c.text));
+        console.log('[TamilIME] ✅ Storage state:', {
+          token: storage.token,
+          start: storage.start,
+          end: storage.end,
+          candidates: storage.candidates.length,
+          ghost: storage.ghost,
+          index: storage.index
+        });
 
-        // Force update decoration immediately and again after a delay
+        // Force update decoration immediately and multiple times to ensure it renders
         if (storage.token === token && storage.lastRequestId === requestId) {
           console.log('[TamilIME] ✅ Updating decorations immediately');
           this.updateDecoration();
@@ -726,13 +747,21 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
               console.log('[TamilIME] ✅ Updating decorations in RAF');
               this.updateDecoration();
               
-              // Final update after a short delay to ensure positioning is correct
+              // Update again after a short delay
               setTimeout(() => {
                 if (storage.token === token && storage.lastRequestId === requestId) {
                   console.log('[TamilIME] ✅ Final decoration update');
                   this.updateDecoration();
+                  
+                  // One more update to ensure visibility
+                  setTimeout(() => {
+                    if (storage.token === token && storage.lastRequestId === requestId) {
+                      console.log('[TamilIME] ✅ Extra decoration update for visibility');
+                      this.updateDecoration();
+                    }
+                  }, 50);
                 }
-              }, 100);
+              }, 50);
             }
           });
         } else {
