@@ -249,9 +249,12 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
               
               // Suggestion dropdown widget - appears below the typed text
               const dropdownWidget = Decoration.widget(storage.end, () => {
+                console.log('[TamilIME] 🎨 Widget function called - creating dropdown DOM');
                 const container = document.createElement('div');
                 container.className = 'tamil-ime-dropdown';
                 container.setAttribute('data-tamil-ime', 'true');
+                container.setAttribute('data-token', storage.token || '');
+                container.setAttribute('data-candidates', storage.candidates.length.toString());
                 
                 // Get position coordinates (use cached pos or get fresh)
                 let rect: { left: number; top: number; bottom: number };
@@ -424,6 +427,14 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
             // Update plugin state via transaction
             const tr = state.tr.setMeta(TamilIMEPluginKey, { decorations: decoSet });
             editorView.dispatch(tr);
+            console.log('[TamilIME] 🎨 Dispatched transaction with', decoSet.size, 'decorations');
+            
+            // Force multiple updates to ensure dropdown appears
+            requestAnimationFrame(() => {
+              const tr2 = editorView.state.tr.setMeta(TamilIMEPluginKey, { decorations: decoSet });
+              editorView.dispatch(tr2);
+              console.log('[TamilIME] 🎨 Dispatched second transaction in RAF');
+            });
             
             // Verify the decorations were applied
             setTimeout(() => {
@@ -435,13 +446,23 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
               
               // Check if dropdown is in DOM
               const dropdown = document.querySelector('.tamil-ime-dropdown');
-              console.log('[TamilIME] 🎨 Dropdown in DOM:', !!dropdown, dropdown ? {
-                visible: dropdown instanceof HTMLElement ? window.getComputedStyle(dropdown).visibility : 'unknown',
-                display: dropdown instanceof HTMLElement ? window.getComputedStyle(dropdown).display : 'unknown',
-                opacity: dropdown instanceof HTMLElement ? window.getComputedStyle(dropdown).opacity : 'unknown',
-                zIndex: dropdown instanceof HTMLElement ? window.getComputedStyle(dropdown).zIndex : 'unknown'
-              } : null);
-            }, 50);
+              if (dropdown) {
+                console.log('[TamilIME] ✅ Dropdown found in DOM');
+                const htmlEl = dropdown as HTMLElement;
+                // Force visibility
+                htmlEl.style.setProperty('display', 'block', 'important');
+                htmlEl.style.setProperty('visibility', 'visible', 'important');
+                htmlEl.style.setProperty('opacity', '1', 'important');
+                htmlEl.style.setProperty('z-index', '999999', 'important');
+                console.log('[TamilIME] ✅ Forced dropdown visibility styles');
+              } else {
+                console.warn('[TamilIME] ⚠️ Dropdown NOT found in DOM - retrying updateDecos');
+                // Retry if dropdown not found
+                if (storage.candidates.length > 0) {
+                  updateDecos();
+                }
+              }
+            }, 100);
           };
 
           // Expose update function to extension
@@ -619,15 +640,20 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
       return;
     }
 
-    // If token is the same and we already have candidates or are fetching, skip
-    if (storage.token === token) {
-      if (storage.fetching || storage.candidates.length > 0) {
-        return;
-      }
+    // If token is the same and we already have candidates, skip (but allow refetch if fetching failed)
+    if (storage.token === token && storage.candidates.length > 0) {
+      // Keep existing suggestions if we have them
+      return;
     }
 
-    // Cancel any in-flight requests for different tokens
-    if (storage.abortController && storage.token !== token) {
+    // Only cancel previous request if token is completely different (not just extended)
+    // This prevents cancelling "mu" -> "mur" -> "muru" requests
+    const previousToken = storage.token || '';
+    const isTokenExtension = previousToken && token.startsWith(previousToken);
+    
+    if (storage.abortController && storage.token !== token && !isTokenExtension) {
+      // Only cancel if it's a completely different token
+      console.log('[TamilIME] Cancelling previous request for different token:', storage.token, '->', token);
       storage.abortController.abort();
       storage.abortController = null;
       storage.fetching = false;
@@ -646,7 +672,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
     storage.lastRequestId = (storage.lastRequestId || 0) + 1;
     const requestId = storage.lastRequestId;
 
-    // Debounced fetch with shorter delay to trigger faster (200ms)
+    // Debounced fetch with slightly longer delay to reduce cancellations (300ms)
     storage.debounce = setTimeout(async () => {
       // Check if token changed during debounce or request was cancelled
       if (storage.token !== token || storage.lastRequestId !== requestId) {
@@ -689,11 +715,18 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         }
 
         const data = await res.json();
-        console.log('[TamilIME] API response for', token, ':', data);
+        console.log('[TamilIME] ✅ API response received for', token, ':', data);
         
-        // Final check before processing
-        if (storage.token !== token || storage.lastRequestId !== requestId || abortController.signal.aborted) {
-          return;
+        // Check if token changed - but be more lenient: if current token starts with requested token, accept it
+        const currentToken = storage.token || '';
+        const tokenStillValid = currentToken === token || currentToken.startsWith(token);
+        
+        if (!tokenStillValid || storage.lastRequestId !== requestId || abortController.signal.aborted) {
+          console.log('[TamilIME] ⚠️ Token changed after response - requested:', token, 'current:', currentToken);
+          // Still try to use suggestions if current token is an extension of requested token
+          if (!currentToken.startsWith(token)) {
+            return;
+          }
         }
         
         // Handle both response formats: {suggestions: [...]} or direct array
@@ -707,23 +740,40 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
 
         console.log('[TamilIME] Parsed suggestions for', token, ':', raw);
 
-        const ranked = rankCandidates(token, raw);
-
-        // Final check if token changed
-        if (storage.token !== token || storage.lastRequestId !== requestId || abortController.signal.aborted) {
-          return;
-        }
-
-        if (!ranked.length) {
-          console.log('[TamilIME] No ranked candidates for', token);
+        if (raw.length === 0) {
+          console.log('[TamilIME] ⚠️ No suggestions in API response');
           this.clear();
           return;
         }
 
+        const ranked = rankCandidates(currentToken || token, raw);
+
+        // Final check - but be lenient with token changes
+        if (!tokenStillValid && !currentToken.startsWith(token)) {
+          console.log('[TamilIME] ⚠️ Token changed too much, discarding suggestions');
+          return;
+        }
+
+        if (!ranked.length) {
+          console.log('[TamilIME] ⚠️ No ranked candidates after processing');
+          this.clear();
+          return;
+        }
+
+        // Update storage with candidates - use current token if it changed
         storage.candidates = ranked;
         storage.index = 0;
         storage.ghost = ranked[0].text;
         storage.fetching = false;
+        
+        // Update token to current if it changed (so suggestions match current input)
+        if (currentToken !== token && currentToken.startsWith(token)) {
+          storage.token = currentToken;
+          // Re-extract positions for current token
+          const currentTokenInfo = getTokenAtCaret(this.editor.state);
+          storage.start = currentTokenInfo.start;
+          storage.end = currentTokenInfo.end;
+        }
 
         console.log('[TamilIME] ✅ Setting candidates:', ranked.length, 'ghost:', storage.ghost, 'at position', storage.start, '-', storage.end);
         console.log('[TamilIME] ✅ All candidates:', ranked.map(c => c.text));
@@ -736,28 +786,38 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
           index: storage.index
         });
 
-        // Force update decoration immediately and multiple times to ensure it renders
-        if (storage.token === token && storage.lastRequestId === requestId) {
-          console.log('[TamilIME] ✅ Updating decorations immediately');
+        // Force update decoration immediately - always update if we have candidates
+        if (storage.candidates.length > 0 && storage.start !== null && storage.end !== null) {
+          console.log('[TamilIME] ✅ Updating decorations immediately with', storage.candidates.length, 'candidates');
           this.updateDecoration();
           
           // Update again after DOM settles
           requestAnimationFrame(() => {
-            if (storage.token === token && storage.lastRequestId === requestId) {
+            if (storage.candidates.length > 0) {
               console.log('[TamilIME] ✅ Updating decorations in RAF');
               this.updateDecoration();
               
               // Update again after a short delay
               setTimeout(() => {
-                if (storage.token === token && storage.lastRequestId === requestId) {
+                if (storage.candidates.length > 0) {
                   console.log('[TamilIME] ✅ Final decoration update');
                   this.updateDecoration();
                   
                   // One more update to ensure visibility
                   setTimeout(() => {
-                    if (storage.token === token && storage.lastRequestId === requestId) {
+                    if (storage.candidates.length > 0) {
                       console.log('[TamilIME] ✅ Extra decoration update for visibility');
                       this.updateDecoration();
+                      
+                      // Verify dropdown is visible
+                      setTimeout(() => {
+                        const dropdown = document.querySelector('.tamil-ime-dropdown');
+                        if (dropdown) {
+                          console.log('[TamilIME] ✅ Dropdown exists in DOM');
+                        } else {
+                          console.warn('[TamilIME] ⚠️ Dropdown NOT found in DOM after all updates');
+                        }
+                      }, 100);
                     }
                   }, 50);
                 }
@@ -765,7 +825,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
             }
           });
         } else {
-          console.log('[TamilIME] ⚠️ Skipping decoration update - token/request changed');
+          console.log('[TamilIME] ⚠️ Cannot update decorations - missing candidates or positions');
         }
       } catch (err: any) {
         // Ignore abort errors
@@ -784,7 +844,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         storage.fetching = false;
         storage.debounce = null;
       }
-    }, 200); // Reduced debounce to 200ms to trigger suggest API faster
+    }, 300); // Increased debounce to 300ms to reduce cancellations and allow requests to complete
   },
 
   commit() {
