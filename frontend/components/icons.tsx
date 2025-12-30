@@ -151,3 +151,24 @@ export function IconSearch(props: IconProps) {
     </svg>
   );
 }
+
+export function IconMicrophone(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props} viewBox="0 0 24 24">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <path d="M12 19v4" />
+      <path d="M8 23h8" />
+    </svg>
+  );
+}
+
+export function IconFontSize(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props} viewBox="0 0 24 24">
+      <path d="M4 20V4" />
+      <path d="M13 4v16" />
+      <path d="M4 12h9" />
+    </svg>
+  );
+}

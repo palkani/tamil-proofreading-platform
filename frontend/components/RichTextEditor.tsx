@@ -1,16 +1,27 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EditorContent, useEditor, BubbleMenu } from '@tiptap/react';
+import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
+// Note: Install these packages: npm install @tiptap/extension-underline @tiptap/extension-link
+// For now, we'll use what's available in StarterKit (strike is included)
 import {
   IconUndo,
   IconRedo,
   IconBold,
   IconItalic,
+  IconUnderline,
+  IconStrikethrough,
   IconBulletList,
   IconNumberList,
+  IconAlignLeft,
+  IconAlignCenter,
+  IconAlignRight,
+  IconLink,
+  IconSearch,
+  IconMicrophone,
+  IconFontSize,
 } from './icons';
 import { convertEnglishToTamil } from '@/utils/transliterate';
 import { TamilIME } from '@/src/editor/extensions/TamilIME';
@@ -57,10 +68,21 @@ export default function RichTextEditor({
         heading: false,
         bulletList: { keepMarks: true },
         orderedList: { keepMarks: true },
+        // Strike is included in StarterKit
       }),
       TextAlign.configure({
         types: ['paragraph', 'heading'],
       }),
+      // Note: To enable Underline and Link, install:
+      // npm install @tiptap/extension-underline @tiptap/extension-link
+      // Then uncomment:
+      // Underline,
+      // Link.configure({
+      //   openOnClick: false,
+      //   HTMLAttributes: {
+      //     class: 'text-blue-600 underline cursor-pointer',
+      //   },
+      // }),
       TamilIME.configure({
         enabled: tamilIMEEnabled,
         autoCommitOnSpace: true,
@@ -286,10 +308,26 @@ export default function RichTextEditor({
     );
   }
 
+  const [linkUrl, setLinkUrl] = useState('');
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [fontSize, setFontSize] = useState('16px');
+
+  const handleSetLink = useCallback(() => {
+    if (linkUrl) {
+      editor.chain().focus().setLink({ href: linkUrl }).run();
+    } else {
+      editor.chain().focus().unsetLink().run();
+    }
+    setShowLinkInput(false);
+    setLinkUrl('');
+  }, [editor, linkUrl]);
+
   return (
     <div className="flex h-full flex-col bg-white rounded-3xl border-2 border-[#E2E8F0] shadow-xl overflow-hidden">
-      <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-[#E2E8F0] bg-[#F8FAFC]">
-        <div className="flex items-center gap-2">
+      {/* Full Toolbar - Always Visible */}
+      <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-[#E2E8F0] bg-[#F8FAFC] flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap">
+          {/* Undo/Redo */}
           <button
             type="button"
             onClick={() => editor.chain().focus().undo().run()}
@@ -306,24 +344,241 @@ export default function RichTextEditor({
           >
             <IconRedo width={16} height={16} />
           </button>
+          
+          <div className="w-px h-6 bg-[#E2E8F0] mx-1" />
+          
+          {/* Font Size Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              className="flex items-center justify-center h-8 px-2 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors text-xs font-medium"
+              title="Font Size"
+            >
+              <IconFontSize width={14} height={14} className="mr-1" />
+              <span className="text-xs">T</span>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="ml-1">
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </div>
+          
+          <div className="w-px h-6 bg-[#E2E8F0] mx-1" />
+          
+          {/* Text Formatting */}
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            className={`flex items-center justify-center h-8 w-8 rounded transition-colors ${
+              editor.isActive('bold')
+                ? 'bg-[#4F46E5] text-white'
+                : 'text-[#475569] hover:bg-white hover:text-[#4F46E5]'
+            }`}
+            title="Bold (Ctrl+B)"
+          >
+            <IconBold width={16} height={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            className={`flex items-center justify-center h-8 w-8 rounded transition-colors ${
+              editor.isActive('italic')
+                ? 'bg-[#4F46E5] text-white'
+                : 'text-[#475569] hover:bg-white hover:text-[#4F46E5]'
+            }`}
+            title="Italic (Ctrl+I)"
+          >
+            <IconItalic width={16} height={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              // Note: Requires @tiptap/extension-underline package
+              // editor.chain().focus().toggleUnderline().run();
+              console.log('Underline - requires @tiptap/extension-underline package');
+            }}
+            className="flex items-center justify-center h-8 w-8 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors opacity-50"
+            title="Underline (requires package installation)"
+          >
+            <IconUnderline width={16} height={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleStrike().run()}
+            className={`flex items-center justify-center h-8 w-8 rounded transition-colors ${
+              editor.isActive('strike')
+                ? 'bg-[#4F46E5] text-white'
+                : 'text-[#475569] hover:bg-white hover:text-[#4F46E5]'
+            }`}
+            title="Strikethrough"
+          >
+            <IconStrikethrough width={16} height={16} />
+          </button>
+          
+          <div className="w-px h-6 bg-[#E2E8F0] mx-1" />
+          
+          {/* Lists */}
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            className={`flex items-center justify-center h-8 w-8 rounded transition-colors ${
+              editor.isActive('bulletList')
+                ? 'bg-[#4F46E5] text-white'
+                : 'text-[#475569] hover:bg-white hover:text-[#4F46E5]'
+            }`}
+            title="Bullet List"
+          >
+            <IconBulletList width={16} height={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            className={`flex items-center justify-center h-8 w-8 rounded transition-colors ${
+              editor.isActive('orderedList')
+                ? 'bg-[#4F46E5] text-white'
+                : 'text-[#475569] hover:bg-white hover:text-[#4F46E5]'
+            }`}
+            title="Numbered List"
+          >
+            <IconNumberList width={16} height={16} />
+          </button>
+          
+          <div className="w-px h-6 bg-[#E2E8F0] mx-1" />
+          
+          {/* Alignment */}
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().setTextAlign('left').run()}
+            className={`flex items-center justify-center h-8 w-8 rounded transition-colors ${
+              editor.isActive({ textAlign: 'left' })
+                ? 'bg-[#4F46E5] text-white'
+                : 'text-[#475569] hover:bg-white hover:text-[#4F46E5]'
+            }`}
+            title="Align Left"
+          >
+            <IconAlignLeft width={16} height={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().setTextAlign('center').run()}
+            className={`flex items-center justify-center h-8 w-8 rounded transition-colors ${
+              editor.isActive({ textAlign: 'center' })
+                ? 'bg-[#4F46E5] text-white'
+                : 'text-[#475569] hover:bg-white hover:text-[#4F46E5]'
+            }`}
+            title="Align Center"
+          >
+            <IconAlignCenter width={16} height={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().setTextAlign('right').run()}
+            className={`flex items-center justify-center h-8 w-8 rounded transition-colors ${
+              editor.isActive({ textAlign: 'right' })
+                ? 'bg-[#4F46E5] text-white'
+                : 'text-[#475569] hover:bg-white hover:text-[#4F46E5]'
+            }`}
+            title="Align Right"
+          >
+            <IconAlignRight width={16} height={16} />
+          </button>
+          
+          <div className="w-px h-6 bg-[#E2E8F0] mx-1" />
+          
+          {/* Link */}
+          <button
+            type="button"
+            onClick={() => {
+              // Note: Requires @tiptap/extension-link package
+              // const url = editor.getAttributes('link').href;
+              // if (url) {
+              //   setLinkUrl(url);
+              // }
+              // setShowLinkInput(!showLinkInput);
+              console.log('Link - requires @tiptap/extension-link package');
+            }}
+            className="flex items-center justify-center h-8 w-8 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors opacity-50"
+            title="Insert Link (requires package installation)"
+          >
+            <IconLink width={16} height={16} />
+          </button>
+          
+          {/* Search */}
+          <button
+            type="button"
+            className="flex items-center justify-center h-8 w-8 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors"
+            title="Search"
+          >
+            <IconSearch width={16} height={16} />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setTamilIMEEnabled(!tamilIMEEnabled);
-            // Persist preference to localStorage
-            localStorage.setItem('tamilIMEEnabled', String(!tamilIMEEnabled));
-          }}
-          className={`px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
-            tamilIMEEnabled
-              ? 'bg-[#4F46E5] text-white shadow-md hover:bg-[#4338CA]'
-              : 'bg-white text-[#475569] hover:bg-gray-50 border border-[#E2E8F0] hover:border-[#CBD5E1]'
-          }`}
-          title={tamilIMEEnabled ? 'Disable Tamil transliteration' : 'Enable Tamil transliteration'}
-        >
-          <span className="text-base font-bold">தமிழ்</span>
-        </button>
+        
+        <div className="flex items-center gap-2">
+          {/* Tamil Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              setTamilIMEEnabled(!tamilIMEEnabled);
+              localStorage.setItem('tamilIMEEnabled', String(!tamilIMEEnabled));
+            }}
+            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
+              tamilIMEEnabled
+                ? 'bg-[#4F46E5] text-white shadow-md hover:bg-[#4338CA]'
+                : 'bg-white text-[#475569] hover:bg-gray-50 border border-[#E2E8F0] hover:border-[#CBD5E1]'
+            }`}
+            title={tamilIMEEnabled ? 'Disable Tamil transliteration' : 'Enable Tamil transliteration'}
+          >
+            <span className="text-base font-bold">தமிழ்</span>
+          </button>
+          
+          {/* Microphone */}
+          <button
+            type="button"
+            className="flex items-center justify-center h-8 w-8 text-[#4F46E5] hover:bg-[#4F46E5]/10 rounded transition-colors"
+            title="Voice Input"
+          >
+            <IconMicrophone width={18} height={18} />
+          </button>
+        </div>
       </div>
+      
+      {/* Link Input */}
+      {showLinkInput && (
+        <div className="px-4 py-2 border-b border-[#E2E8F0] bg-white flex items-center gap-2">
+          <input
+            type="text"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            placeholder="Enter URL..."
+            className="flex-1 px-3 py-1.5 text-sm border border-[#E2E8F0] rounded focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleSetLink();
+              } else if (e.key === 'Escape') {
+                setShowLinkInput(false);
+                setLinkUrl('');
+              }
+            }}
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={handleSetLink}
+            className="px-3 py-1.5 text-sm bg-[#4F46E5] text-white rounded hover:bg-[#4338CA] transition-colors"
+          >
+            Set
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowLinkInput(false);
+              setLinkUrl('');
+            }}
+            className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div 
         className="flex-1 min-h-0 overflow-auto px-6 py-4" 
@@ -336,62 +591,6 @@ export default function RichTextEditor({
         <EditorContent editor={editor} />
       </div>
 
-      {editor && (
-        <BubbleMenu
-          editor={editor}
-          tippyOptions={{ duration: 100 }}
-          className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg shadow-lg p-1"
-        >
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
-              editor.isActive('bold')
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-            title="Bold (Ctrl+B)"
-          >
-            <IconBold width={16} height={16} />
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
-              editor.isActive('italic')
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-            title="Italic (Ctrl+I)"
-          >
-            <IconItalic width={16} height={16} />
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
-              editor.isActive('bulletList')
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-            title="Bullet List"
-          >
-            <IconBulletList width={16} height={16} />
-          </button>
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
-              editor.isActive('orderedList')
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-            title="Numbered List"
-          >
-            <IconNumberList width={16} height={16} />
-          </button>
-        </BubbleMenu>
-      )}
     </div>
   );
 }
