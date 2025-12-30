@@ -524,10 +524,10 @@ class WorkspaceController {
           clearTimeout(inputDebounce);
         }
         inputDebounce = setTimeout(() => {
-          console.log("[IME] Direct input event listener fired");
-          if (this.editor && this.editor.onChange) {
-            this.editor.onChange();
-          }
+        console.log("[IME] Direct input event listener fired");
+        if (this.editor && this.editor.onChange) {
+          this.editor.onChange();
+        }
           inputDebounce = null;
         }, 100); // Small debounce to prevent duplicate calls
       });
@@ -763,23 +763,18 @@ class WorkspaceController {
       end: tokenInfo.end
     };
     
-    // STRICT duplicate prevention: if same token and already processing, skip
+    // Prevent duplicate requests ONLY if actively fetching the same token
+    // Allow refetching if token changed or if debounce expired
     if (this.lastFetchToken === token) {
-      if (this.fetchingSuggestions) {
-        console.log("[IME] Duplicate call prevented: already fetching for token:", token);
-        return; // Already fetching for this token
+      // Only skip if actively fetching the exact same token
+      if (this.fetchingSuggestions && this.currentFetchQuery === token) {
+        console.log("[IME] Already fetching for token:", token);
+        return;
       }
+      // If debounce is pending for same token, let it continue (don't create new one)
       if (this.suggestDebounce) {
-        console.log("[IME] Duplicate call prevented: debounce pending for token:", token);
-        return; // Debounce already pending for this token
-      }
-      // If we have suggestions for this token already, don't refetch (unless they're stale)
-      if (this.currentSuggestions && this.currentSuggestions.length > 0) {
-        const timeSinceLastFetch = Date.now() - (this.lastFetchTime || 0);
-        if (timeSinceLastFetch < 1000) { // Don't refetch if we fetched less than 1 second ago
-          console.log("[IME] Duplicate call prevented: recent suggestions available for token:", token);
-          return;
-        }
+        console.log("[IME] Debounce pending for token:", token, "- will use existing");
+        return;
       }
     }
     
@@ -818,16 +813,23 @@ class WorkspaceController {
       // Use smart mode (backend handles all modes)
       const mode = 'smart';
       this.lastFetchTime = Date.now(); // Track when we last fetched
-      console.log('[IME] 🚀 Calling fetchRunnerSuggestions for token:', token);
+      console.log('[IME] 🚀 Calling fetchRunnerSuggestions for token:', token, 'URL will be:', `/api/transliterate/suggest?q=${encodeURIComponent(token)}&limit=8&mode=${mode}`);
+      
+      // Make the API call
       this.fetchRunnerSuggestions({ q: token, limit: 8, mode: mode }).then(suggestions => {
         console.log('[IME] ✅ fetchRunnerSuggestions returned:', suggestions ? suggestions.length : 0, 'suggestions');
         if (suggestions && suggestions.length > 0) {
           console.log('[IME] First suggestion:', suggestions[0]);
+        } else {
+          console.log('[IME] ⚠️ No suggestions returned');
         }
       }).catch(err => {
         console.error('[IME] ❌ fetchRunnerSuggestions error:', err);
+        // Reset state on error so next call can proceed
+        this.fetchingSuggestions = false;
+        this.currentFetchQuery = null;
       });
-    }, 400); // 400ms debounce to prevent duplicates
+    }, 300); // 300ms debounce - reduced for better responsiveness
   }
   
   clearSuggestions() {
@@ -1401,8 +1403,8 @@ class WorkspaceController {
           const suggestion = this.currentSuggestions[this.activeSuggestionIndex || 0];
           const textToInsert = suggestion && (suggestion.text || suggestion.word);
           if (textToInsert && textToInsert.length > 0) {
-            e.preventDefault();
-            e.stopPropagation();
+        e.preventDefault();
+        e.stopPropagation();
             this.selectSuggestion(this.activeSuggestionIndex || 0);
             // Insert space after Tamil word
             setTimeout(() => {
@@ -1410,12 +1412,12 @@ class WorkspaceController {
               // Trigger editor change for next word suggestions
               if (this.editor && this.editor.onChange) {
                 this.editor.onChange();
-              } else {
+        } else {
                 this.handleEditorChange();
               }
             }, 10);
-          }
-          return true;
+        }
+        return true;
         }
         return false;
       
