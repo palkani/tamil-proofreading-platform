@@ -735,8 +735,8 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
     }
 
     // If token is the same and we already have candidates, skip (but allow refetch if fetching failed)
-    if (storage.token === token && storage.candidates.length > 0) {
-      // Keep existing suggestions if we have them
+    if (storage.token === token && storage.candidates.length > 0 && !storage.fetching) {
+      // Keep existing suggestions if we have them and not currently fetching
       return;
     }
 
@@ -744,13 +744,22 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
     // This prevents cancelling "mu" -> "mur" -> "muru" requests
     const previousToken = storage.token || '';
     const isTokenExtension = previousToken && token.startsWith(previousToken);
+    const isTokenContinuation = previousToken && token.length > previousToken.length && token.startsWith(previousToken);
     
-    if (storage.abortController && storage.token !== token && !isTokenExtension) {
-      // Only cancel if it's a completely different token
-      console.log('[TamilIME] Cancelling previous request for different token:', storage.token, '->', token);
-      storage.abortController.abort();
-      storage.abortController = null;
-      storage.fetching = false;
+    // Only cancel if:
+    // 1. Token is completely different (not an extension)
+    // 2. AND we're not in the middle of a continuation (e.g., "mu" -> "mur" is OK, but "mu" -> "ka" should cancel)
+    if (storage.abortController && storage.token && storage.token !== token) {
+      if (!isTokenExtension && !isTokenContinuation) {
+        // Completely different token - cancel previous request
+        console.log('[TamilIME] ⚠️ Cancelling previous request for different token:', storage.token, '->', token);
+        storage.abortController.abort();
+        storage.abortController = null;
+        storage.fetching = false;
+      } else {
+        // Token is an extension - let previous request complete, but don't process its response
+        console.log('[TamilIME] Token extended from', storage.token, 'to', token, '- letting previous request complete');
+      }
     }
 
     // Clear previous debounce
@@ -766,17 +775,24 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
     storage.lastRequestId = (storage.lastRequestId || 0) + 1;
     const requestId = storage.lastRequestId;
 
-    // Debounced fetch with slightly longer delay to reduce cancellations (300ms)
+    // Debounced fetch with longer delay to reduce cancellations (500ms for better stability)
     storage.debounce = setTimeout(async () => {
       // Check if token changed during debounce or request was cancelled
-      if (storage.token !== token || storage.lastRequestId !== requestId) {
-        console.log('[TamilIME] Request cancelled - token changed or new request started');
+      const currentToken = storage.token;
+      if (currentToken !== token || storage.lastRequestId !== requestId) {
+        console.log('[TamilIME] Request cancelled - token changed from', token, 'to', currentToken, 'or new request started');
         return;
       }
 
-      // Double-check we're not already fetching for this token
+      // Double-check we're not already fetching for this exact token
       if (storage.fetching && storage.token === token) {
         console.log('[TamilIME] Already fetching for this token, skipping duplicate');
+        return;
+      }
+      
+      // If we already have candidates for this token, skip fetching
+      if (storage.candidates.length > 0 && storage.token === token) {
+        console.log('[TamilIME] Already have candidates for this token, skipping fetch');
         return;
       }
 
@@ -798,7 +814,9 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         });
 
         // Check again if token changed or request was cancelled
-        if (storage.token !== token || storage.lastRequestId !== requestId || abortController.signal.aborted) {
+        const currentTokenAfterFetch = storage.token;
+        if (currentTokenAfterFetch !== token || storage.lastRequestId !== requestId || abortController.signal.aborted) {
+          console.log('[TamilIME] ⚠️ Skipping response - token changed from', token, 'to', currentTokenAfterFetch, 'or request cancelled');
           return;
         }
 
@@ -974,7 +992,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         storage.fetching = false;
         storage.debounce = null;
       }
-    }, 300); // Increased debounce to 300ms to reduce cancellations and allow requests to complete
+    }, 500); // Increased debounce to 500ms to reduce cancellations and allow requests to complete
   },
 
   commit() {
