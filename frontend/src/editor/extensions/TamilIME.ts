@@ -424,16 +424,110 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
 
             console.log('[TamilIME] 🎨 updateDecos: Created', decos.length, 'decorations, decoSet size:', decoSet.size);
 
-            // Update plugin state via transaction
+            // Update plugin state via transaction - dispatch immediately
             const tr = state.tr.setMeta(TamilIMEPluginKey, { decorations: decoSet });
             editorView.dispatch(tr);
             console.log('[TamilIME] 🎨 Dispatched transaction with', decoSet.size, 'decorations');
             
             // Force multiple updates to ensure dropdown appears
             requestAnimationFrame(() => {
-              const tr2 = editorView.state.tr.setMeta(TamilIMEPluginKey, { decorations: decoSet });
+              const currentState = editorView.state;
+              const currentStorage = extension.storage as TamilIMEStorage;
+              // Recreate decorations with fresh storage reference
+              const freshDecos: Decoration[] = [];
+              if (currentStorage.candidates.length > 0 && currentStorage.start !== null && currentStorage.end !== null) {
+                const freshWidget = Decoration.widget(currentStorage.end, () => {
+                  // Use fresh storage reference directly
+                  const widgetStorage = extension.storage as TamilIMEStorage;
+                  console.log('[TamilIME] 🎨 Creating fresh dropdown widget with', widgetStorage.candidates.length, 'candidates');
+                  
+                  const container = document.createElement('div');
+                  container.className = 'tamil-ime-dropdown';
+                  container.setAttribute('data-tamil-ime', 'true');
+                  
+                  // Get position
+                  let rect: { left: number; top: number; bottom: number };
+                  try {
+                    const coords = editorView.coordsAtPos(widgetStorage.end);
+                    rect = { left: coords.left, top: coords.top, bottom: coords.bottom };
+                  } catch (e) {
+                    const editorRect = editorView.dom.getBoundingClientRect();
+                    rect = { left: editorRect.left + 50, top: editorRect.top + 100, bottom: editorRect.top + 120 };
+                  }
+                  
+                  container.style.cssText = `
+                    position: fixed !important;
+                    display: block !important;
+                    visibility: visible !important;
+                    opacity: 1 !important;
+                    z-index: 999999 !important;
+                    left: ${rect.left}px !important;
+                    top: ${rect.bottom + 8}px !important;
+                    pointer-events: auto !important;
+                  `;
+                  
+                  // Close button
+                  const closeBtn = document.createElement('button');
+                  closeBtn.className = 'tamil-ime-close';
+                  closeBtn.innerHTML = '×';
+                  closeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    extension.clear();
+                  };
+                  
+                  // Suggestions list
+                  const list = document.createElement('div');
+                  list.className = 'tamil-ime-suggestions-list';
+                  
+                  const maxSuggestions = Math.min(widgetStorage.candidates.length, 5);
+                  for (let i = 0; i < maxSuggestions; i++) {
+                    const candidate = widgetStorage.candidates[i];
+                    const item = document.createElement('div');
+                    item.className = `tamil-ime-suggestion-item ${i === widgetStorage.index ? 'active' : ''}`;
+                    
+                    const number = document.createElement('span');
+                    number.className = 'tamil-ime-number';
+                    number.textContent = (i + 1).toString();
+                    
+                    const text = document.createElement('span');
+                    text.className = 'tamil-ime-text';
+                    text.textContent = candidate.text;
+                    
+                    item.appendChild(number);
+                    item.appendChild(text);
+                    
+                    item.onclick = (e) => {
+                      e.stopPropagation();
+                      widgetStorage.index = i;
+                      widgetStorage.ghost = candidate.text;
+                      extension.commit();
+                    };
+                    
+                    list.appendChild(item);
+                  }
+                  
+                  // Instruction
+                  const instruction = document.createElement('div');
+                  instruction.className = 'tamil-ime-instruction';
+                  instruction.innerHTML = 'Press <strong>Space</strong> to select first option';
+                  
+                  container.appendChild(closeBtn);
+                  container.appendChild(list);
+                  container.appendChild(instruction);
+                  
+                  return container;
+                }, {
+                  side: 1,
+                  key: 'tamil-ime-dropdown',
+                });
+                freshDecos.push(freshWidget);
+              }
+              const freshDecoSet = freshDecos.length > 0
+                ? DecorationSet.create(currentState.doc, freshDecos)
+                : DecorationSet.empty;
+              const tr2 = currentState.tr.setMeta(TamilIMEPluginKey, { decorations: freshDecoSet });
               editorView.dispatch(tr2);
-              console.log('[TamilIME] 🎨 Dispatched second transaction in RAF');
+              console.log('[TamilIME] 🎨 Dispatched second transaction in RAF with', freshDecoSet.size, 'decorations');
             });
             
             // Verify the decorations were applied
@@ -805,48 +899,57 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         if (storage.candidates.length > 0 && storage.start !== null && storage.end !== null) {
           console.log('[TamilIME] ✅ Updating decorations immediately with', storage.candidates.length, 'candidates');
           
-          // Force immediate update
+          // Force immediate update (synchronous)
           this.updateDecoration();
           
-          // Force multiple updates to ensure visibility - use fresh storage references
+          // Force multiple updates to ensure visibility
           requestAnimationFrame(() => {
             const currentStorage = this.storage as TamilIMEStorage;
             if (currentStorage.candidates.length > 0 && currentStorage.start !== null && currentStorage.end !== null) {
               console.log('[TamilIME] ✅ Updating decorations in RAF - candidates:', currentStorage.candidates.length);
               this.updateDecoration();
+            }
+          });
+          
+          // Additional updates after delays
+          setTimeout(() => {
+            const currentStorage = this.storage as TamilIMEStorage;
+            if (currentStorage.candidates.length > 0 && currentStorage.start !== null && currentStorage.end !== null) {
+              console.log('[TamilIME] ✅ Updating decorations after 50ms - candidates:', currentStorage.candidates.length);
+              this.updateDecoration();
+            }
+          }, 50);
+          
+          setTimeout(() => {
+            const currentStorage = this.storage as TamilIMEStorage;
+            if (currentStorage.candidates.length > 0 && currentStorage.start !== null && currentStorage.end !== null) {
+              console.log('[TamilIME] ✅ Updating decorations after 100ms - candidates:', currentStorage.candidates.length);
+              this.updateDecoration();
               
-              // Update again after a short delay
+              // Verify dropdown is visible
               setTimeout(() => {
-                const currentStorage2 = this.storage as TamilIMEStorage;
-                if (currentStorage2.candidates.length > 0 && currentStorage2.start !== null && currentStorage2.end !== null) {
-                  console.log('[TamilIME] ✅ Final decoration update - candidates:', currentStorage2.candidates.length);
-                  this.updateDecoration();
+                const dropdown = document.querySelector('.tamil-ime-dropdown');
+                if (dropdown) {
+                  const styles = window.getComputedStyle(dropdown as HTMLElement);
+                  console.log('[TamilIME] ✅ Dropdown found in DOM - display:', styles.display, 'visibility:', styles.visibility, 'opacity:', styles.opacity, 'z-index:', styles.zIndex);
                   
-                  // One more update to ensure visibility
-                  setTimeout(() => {
-                    const currentStorage3 = this.storage as TamilIMEStorage;
-                    if (currentStorage3.candidates.length > 0 && currentStorage3.start !== null && currentStorage3.end !== null) {
-                      console.log('[TamilIME] ✅ Extra decoration update for visibility - candidates:', currentStorage3.candidates.length);
-                      this.updateDecoration();
-                      
-                      // Verify dropdown is visible after all updates
-                      setTimeout(() => {
-                        const dropdown = document.querySelector('.tamil-ime-dropdown');
-                        if (dropdown) {
-                          const styles = window.getComputedStyle(dropdown as HTMLElement);
-                          console.log('[TamilIME] ✅ Dropdown found in DOM - display:', styles.display, 'visibility:', styles.visibility, 'opacity:', styles.opacity);
-                        } else {
-                          console.warn('[TamilIME] ⚠️ Dropdown NOT found in DOM after all updates - forcing one more update');
-                          // Force one more update if dropdown still not visible
-                          this.updateDecoration();
-                        }
-                      }, 100);
-                    }
-                  }, 50);
+                  // Force visibility if needed
+                  const htmlEl = dropdown as HTMLElement;
+                  if (styles.display === 'none' || styles.visibility === 'hidden' || styles.opacity === '0') {
+                    console.warn('[TamilIME] ⚠️ Dropdown is hidden, forcing visibility');
+                    htmlEl.style.setProperty('display', 'block', 'important');
+                    htmlEl.style.setProperty('visibility', 'visible', 'important');
+                    htmlEl.style.setProperty('opacity', '1', 'important');
+                    htmlEl.style.setProperty('z-index', '999999', 'important');
+                  }
+                } else {
+                  console.warn('[TamilIME] ⚠️ Dropdown NOT found in DOM after all updates - forcing one more update');
+                  // Force one more update if dropdown still not visible
+                  this.updateDecoration();
                 }
               }, 50);
             }
-          });
+          }, 100);
         } else {
           console.warn('[TamilIME] ⚠️ Cannot update decorations - missing candidates or positions', {
             candidates: storage.candidates.length,
@@ -924,14 +1027,22 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
     const updateFn = (this as any)._updateDecorations;
     if (updateFn) {
       console.log('[TamilIME] updateDecoration called, _updateDecorations exists:', !!updateFn);
-      requestAnimationFrame(() => {
-        try {
-          updateFn();
-          console.log('[TamilIME] Decorations updated successfully');
-        } catch (err) {
-          console.error('[TamilIME] Error updating decorations:', err);
-        }
-      });
+      // Call immediately (not in RAF) to ensure fast updates
+      try {
+        updateFn();
+        console.log('[TamilIME] Decorations updated successfully');
+        // Also call in RAF as backup
+        requestAnimationFrame(() => {
+          try {
+            updateFn();
+            console.log('[TamilIME] Decorations updated in RAF as backup');
+          } catch (err) {
+            console.error('[TamilIME] Error updating decorations in RAF:', err);
+          }
+        });
+      } catch (err) {
+        console.error('[TamilIME] Error updating decorations:', err);
+      }
     } else {
       console.warn('[TamilIME] _updateDecorations function not found - decorations may not update');
     }
