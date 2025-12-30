@@ -2796,5 +2796,3 @@ if (document.readyState === 'loading') {
   // Phase 4: Switch to TipTap if flag is enabled
   setTimeout(() => switchWorkspaceEditor(), 500); // Wait a bit for TipTap to load
 }
-
-}
