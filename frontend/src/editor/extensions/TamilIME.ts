@@ -646,7 +646,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
     storage.lastRequestId = (storage.lastRequestId || 0) + 1;
     const requestId = storage.lastRequestId;
 
-    // Debounced fetch with longer delay to prevent duplicates
+    // Debounced fetch with shorter delay to trigger faster (200ms)
     storage.debounce = setTimeout(async () => {
       // Check if token changed during debounce or request was cancelled
       if (storage.token !== token || storage.lastRequestId !== requestId) {
@@ -670,7 +670,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
         const suggestUrl = `${apiBaseUrl}/ime/suggest?q=${encodeURIComponent(token)}&limit=8&mode=smart`;
         
-        console.log('[TamilIME] Fetching suggestions for:', token, 'requestId:', requestId);
+        console.log('[TamilIME] 🚀 Fetching suggestions for:', token, 'requestId:', requestId, 'URL:', suggestUrl);
 
         const res = await fetch(suggestUrl, {
           credentials: 'include',
@@ -784,7 +784,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         storage.fetching = false;
         storage.debounce = null;
       }
-    }, 400); // Increased debounce to 400ms to reduce duplicate calls
+    }, 200); // Reduced debounce to 200ms to trigger suggest API faster
   },
 
   commit() {

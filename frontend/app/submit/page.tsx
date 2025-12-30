@@ -751,6 +751,13 @@ export default function SubmitPage() {
     async (plainText: string, htmlText: string) => {
       if (loading) return;
 
+      // Check word count - require at least 10 words
+      const words = plainText.trim().split(/\s+/).filter((w) => w.length > 0);
+      if (words.length < 10) {
+        setError(`Please enter at least 10 words before submitting. Current: ${words.length} words.`);
+        return;
+      }
+
       setLoading(true);
       setError('');
       setInfoMessage('');
@@ -777,9 +784,8 @@ export default function SubmitPage() {
       
       setText(convertedPlain);
       setEditorHTML(convertedHtml);
-      if (!loading) {
-        submitForProofreading(convertedPlain, convertedHtml);
-      }
+      // Don't auto-submit on paste - user should manually submit when ready
+      // Only submit if explicitly requested (e.g., from a button)
     },
     [loading, submitForProofreading]
   );
