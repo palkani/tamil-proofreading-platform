@@ -1053,6 +1053,9 @@ class WorkspaceController {
     });
 
     // CRITICAL: Explicitly show the dropdown with all necessary styles
+    // Remove any existing inline styles first, then apply fresh
+    dropdown.removeAttribute('style');
+    
     // Use setProperty with !important to override any CSS
     dropdown.style.setProperty('display', 'block', 'important');
     dropdown.style.setProperty('visibility', 'visible', 'important');
@@ -1060,17 +1063,18 @@ class WorkspaceController {
     dropdown.style.setProperty('pointer-events', 'auto', 'important');
     dropdown.style.setProperty('position', 'fixed', 'important');
     dropdown.style.setProperty('z-index', '999999', 'important');
+    dropdown.style.setProperty('background', '#ffffff', 'important');
+    dropdown.style.setProperty('border', '1px solid rgba(79, 70, 229, 0.15)', 'important');
+    dropdown.style.setProperty('border-radius', '16px', 'important');
+    dropdown.style.setProperty('box-shadow', '0 20px 40px rgba(79, 70, 229, 0.12), 0 8px 16px rgba(0, 0, 0, 0.08)', 'important');
+    dropdown.style.setProperty('min-width', '280px', 'important');
+    dropdown.style.setProperty('max-width', '380px', 'important');
+    dropdown.style.setProperty('padding', '0', 'important');
+    dropdown.style.setProperty('margin', '0', 'important');
+    dropdown.style.setProperty('font-family', 'system-ui, -apple-system, "Segoe UI", "Inter", sans-serif', 'important');
     
-    // Also set via cssText as backup
-    const existingStyles = dropdown.style.cssText;
-    dropdown.style.cssText = existingStyles + `
-      display: block !important;
-      visibility: visible !important;
-      opacity: 1 !important;
-      pointer-events: auto !important;
-      position: fixed !important;
-      z-index: 999999 !important;
-    `;
+    // Force a reflow
+    void dropdown.offsetHeight;
     
     // Mark as open
     this.translitDropdownOpen = true;
@@ -1170,9 +1174,10 @@ class WorkspaceController {
           visible: finalComputed.display !== 'none' && finalRect.width > 0 && finalRect.height > 0
         });
         
-        // If still not visible, force it one more time
+        // If still not visible, force it one more time with DEBUG styling
         if (finalComputed.display === 'none' || finalRect.width === 0 || finalRect.height === 0) {
           console.error('[IME] ❌❌❌ Dropdown still not visible after all attempts!');
+          console.error('[IME] Forcing visibility with DEBUG red border...');
           finalCheck.style.cssText = `
             display: block !important;
             visibility: visible !important;
@@ -1182,10 +1187,31 @@ class WorkspaceController {
             top: 200px !important;
             left: 200px !important;
             background: white !important;
-            border: 2px solid red !important;
+            border: 3px solid red !important;
             padding: 20px !important;
             min-width: 300px !important;
+            min-height: 200px !important;
+            box-shadow: 0 0 20px rgba(255,0,0,0.5) !important;
           `;
+        } else {
+          // Even if visible, ensure it's on top and has proper styling
+          console.log('[IME] ✅ Dropdown is visible, ensuring it stays on top...');
+          finalCheck.style.setProperty('z-index', '999999', 'important');
+          finalCheck.style.setProperty('position', 'fixed', 'important');
+          finalCheck.style.setProperty('pointer-events', 'auto', 'important');
+          
+          // Check if it's actually in viewport
+          const rect = finalCheck.getBoundingClientRect();
+          const inViewport = rect.top >= 0 && rect.left >= 0 && 
+                           rect.bottom <= window.innerHeight && 
+                           rect.right <= window.innerWidth;
+          
+          if (!inViewport) {
+            console.warn('[IME] ⚠️ Dropdown is outside viewport! Moving to center...');
+            finalCheck.style.top = '50%';
+            finalCheck.style.left = '50%';
+            finalCheck.style.transform = 'translate(-50%, -50%)';
+          }
         }
       } else {
         console.error('[IME] ❌❌❌ Dropdown element not found in DOM!');
