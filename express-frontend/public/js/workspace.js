@@ -954,6 +954,14 @@ class WorkspaceController {
     }
 
     console.log('[IME] 🎨 Building dropdown UI for', suggestions.length, 'suggestions');
+    console.log('[IME] 📋 Suggestions array:', JSON.stringify(suggestions, null, 2));
+
+    // Validate suggestions format
+    if (!Array.isArray(suggestions)) {
+      console.error('[IME] ❌ Suggestions is not an array:', typeof suggestions, suggestions);
+      dropdown.style.display = 'none';
+      return;
+    }
 
     // Create close button
     const closeBtn = document.createElement('button');
@@ -971,8 +979,30 @@ class WorkspaceController {
 
     // Render each suggestion (max 5) - match screenshot exactly
     const maxSuggestions = Math.min(suggestions.length, 5);
+    console.log('[IME] 🎯 Rendering', maxSuggestions, 'suggestions');
+    
     for (let i = 0; i < maxSuggestions; i++) {
       const suggestion = suggestions[i];
+      
+      // Extract text from suggestion object (handle both {text: ...} and {word: ...} formats)
+      let cleanText = '';
+      if (typeof suggestion === 'string') {
+        cleanText = suggestion;
+      } else if (suggestion && typeof suggestion === 'object') {
+        cleanText = (suggestion.text || suggestion.word || suggestion.ta || '').toString();
+      }
+      
+      // Remove any superscript numbers or formatting characters
+      cleanText = cleanText.replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰²³]/g, '').trim();
+      
+      // Skip if no text
+      if (!cleanText || cleanText.length === 0) {
+        console.warn('[IME] ⚠️ Skipping empty suggestion at index', i, ':', suggestion);
+        continue;
+      }
+      
+      console.log('[IME] ✅ Rendering suggestion', i + 1, ':', cleanText);
+      
       const item = document.createElement('div');
       item.className = `tamil-suggestion-item ${i === this.activeSuggestionIndex ? 'active' : ''}`;
       item.dataset.index = i;
@@ -981,11 +1011,6 @@ class WorkspaceController {
       const number = document.createElement('span');
       number.className = 'tamil-suggestion-number';
       number.textContent = (i + 1).toString();
-      
-      // Text - clean any remaining formatting characters
-      let cleanText = (suggestion.text || suggestion.word || '').toString();
-      // Remove any superscript numbers or formatting characters
-      cleanText = cleanText.replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰²³]/g, '').trim();
       
       const text = document.createElement('span');
       text.className = 'tamil-suggestion-text';
@@ -1040,7 +1065,13 @@ class WorkspaceController {
       height: window.getComputedStyle(dropdown).height
     });
 
-    // Styles are already set above, just mark as open
+    // CRITICAL: Explicitly show the dropdown
+    dropdown.style.display = 'block';
+    dropdown.style.visibility = 'visible';
+    dropdown.style.opacity = '1';
+    dropdown.style.pointerEvents = 'auto';
+    
+    // Mark as open
     this.translitDropdownOpen = true;
 
     // Force a reflow to ensure styles are applied
@@ -1118,6 +1149,88 @@ class WorkspaceController {
     setTimeout(forceVisibility, 10);
     setTimeout(forceVisibility, 50);
     setTimeout(forceVisibility, 100);
+    setTimeout(forceVisibility, 200);
+    
+    // Final verification after all updates
+    setTimeout(() => {
+      const finalCheck = document.getElementById('tamil-suggestions-dropdown');
+      if (finalCheck) {
+        const finalComputed = window.getComputedStyle(finalCheck);
+        const finalRect = finalCheck.getBoundingClientRect();
+        console.log('[IME] 🔍 FINAL CHECK - Dropdown visibility:', {
+          exists: !!finalCheck,
+          display: finalComputed.display,
+          visibility: finalComputed.visibility,
+          opacity: finalComputed.opacity,
+          width: finalRect.width,
+          height: finalRect.height,
+          top: finalRect.top,
+          left: finalRect.left,
+          visible: finalComputed.display !== 'none' && finalRect.width > 0 && finalRect.height > 0
+        });
+        
+        // If still not visible, force it one more time
+        if (finalComputed.display === 'none' || finalRect.width === 0 || finalRect.height === 0) {
+          console.error('[IME] ❌❌❌ Dropdown still not visible after all attempts!');
+          finalCheck.style.cssText = `
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            position: fixed !important;
+            z-index: 999999 !important;
+            top: 200px !important;
+            left: 200px !important;
+            background: white !important;
+            border: 2px solid red !important;
+            padding: 20px !important;
+            min-width: 300px !important;
+          `;
+        }
+      } else {
+        console.error('[IME] ❌❌❌ Dropdown element not found in DOM!');
+      }
+    }, 300);
+    setTimeout(forceVisibility, 200);
+    
+    // Final verification after all updates
+    setTimeout(() => {
+      const finalCheck = document.getElementById('tamil-suggestions-dropdown');
+      if (finalCheck) {
+        const finalComputed = window.getComputedStyle(finalCheck);
+        const finalRect = finalCheck.getBoundingClientRect();
+        console.log('[IME] 🔍 FINAL CHECK - Dropdown visibility:', {
+          exists: !!finalCheck,
+          display: finalComputed.display,
+          visibility: finalComputed.visibility,
+          opacity: finalComputed.opacity,
+          width: finalRect.width,
+          height: finalRect.height,
+          top: finalRect.top,
+          left: finalRect.left,
+          visible: finalComputed.display !== 'none' && finalRect.width > 0 && finalRect.height > 0
+        });
+        
+        // If still not visible, force it one more time
+        if (finalComputed.display === 'none' || finalRect.width === 0 || finalRect.height === 0) {
+          console.error('[IME] ❌❌❌ Dropdown still not visible after all attempts!');
+          finalCheck.style.cssText = `
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            position: fixed !important;
+            z-index: 999999 !important;
+            top: 200px !important;
+            left: 200px !important;
+            background: white !important;
+            border: 2px solid red !important;
+            padding: 20px !important;
+            min-width: 300px !important;
+          `;
+        }
+      } else {
+        console.error('[IME] ❌❌❌ Dropdown element not found in DOM!');
+      }
+    }, 300);
 
     // Log detailed information for debugging
     const computedStyle = window.getComputedStyle(dropdown);
