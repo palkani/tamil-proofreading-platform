@@ -749,14 +749,22 @@ export default function SubmitPage() {
 
   const submitForProofreading = useCallback(
     async (plainText: string, htmlText: string) => {
-      if (loading) return;
+      if (loading) {
+        console.log('[Submit] Already loading, skipping submit');
+        return;
+      }
 
       // Check word count - require at least 10 words
       const words = plainText.trim().split(/\s+/).filter((w) => w.length > 0);
+      console.log('[Submit] Word count check:', words.length, 'words');
       if (words.length < 10) {
-        setError(`Please enter at least 10 words before submitting. Current: ${words.length} words.`);
+        const errorMsg = `Please enter at least 10 words before submitting. Current: ${words.length} words.`;
+        console.warn('[Submit] Word count too low:', errorMsg);
+        setError(errorMsg);
         return;
       }
+      
+      console.log('[Submit] Word count OK, proceeding with submit');
 
       setLoading(true);
       setError('');
