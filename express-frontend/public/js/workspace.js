@@ -692,10 +692,13 @@ class WorkspaceController {
       createFirstDraftBtn.addEventListener('click', () => this.createNewDraft());
     }
 
-    // Show Drafts button
+    // Show Drafts button - Navigate to drafts page
     const showDraftsBtn = document.getElementById('show-drafts-btn');
     if (showDraftsBtn) {
-      showDraftsBtn.addEventListener('click', () => this.showDraftsList());
+      showDraftsBtn.addEventListener('click', () => {
+        // Navigate to the drafts page instead of showing in workspace
+        window.location.href = '/drafts';
+      });
     }
 
     // Translate English to Tamil button
@@ -2529,7 +2532,8 @@ class WorkspaceController {
     if (noDataEl) noDataEl.classList.add('hidden');
     
     try {
-      const response = await this.apiFetch('/api/submissions?limit=50');
+      // Use /api/v1/submissions to match backend endpoint
+      const response = await this.apiFetch('/api/v1/submissions?limit=50');
       
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);
