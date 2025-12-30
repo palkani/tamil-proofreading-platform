@@ -1002,9 +1002,22 @@ class WorkspaceController {
       const text = document.createElement('span');
       text.className = 'tamil-suggestion-text';
       text.textContent = cleanText;
+      // CRITICAL: Ensure text is visible
+      text.style.setProperty('color', '#1e293b', 'important');
+      text.style.setProperty('display', 'inline-block', 'important');
+      text.style.setProperty('visibility', 'visible', 'important');
+      text.style.setProperty('opacity', '1', 'important');
       
       item.appendChild(number);
       item.appendChild(text);
+      
+      // Log to verify text is set
+      console.log('[IME] ✅ Added suggestion item:', {
+        index: i + 1,
+        text: cleanText,
+        textLength: cleanText.length,
+        itemHTML: item.innerHTML.substring(0, 100)
+      });
       
       // Click handler
       item.addEventListener('click', (e) => {
@@ -1023,11 +1036,33 @@ class WorkspaceController {
     }
 
     dropdown.appendChild(list);
+    
+    // Verify list has items
+    const listItems = list.querySelectorAll('.tamil-suggestion-item');
+    console.log('[IME] 📋 List created with', listItems.length, 'items');
+    if (listItems.length === 0) {
+      console.error('[IME] ❌ No items in list! Suggestions array:', suggestions);
+    } else {
+      listItems.forEach((item, idx) => {
+        const textEl = item.querySelector('.tamil-suggestion-text');
+        console.log('[IME] Item', idx + 1, ':', {
+          exists: !!item,
+          textEl: !!textEl,
+          textContent: textEl?.textContent || 'MISSING',
+          innerHTML: item.innerHTML.substring(0, 100)
+        });
+      });
+    }
 
     // Add instruction text
     const instruction = document.createElement('div');
     instruction.className = 'tamil-suggestions-instruction';
     instruction.innerHTML = 'Press <strong>Space</strong> to select first option';
+    // Ensure instruction is visible
+    instruction.style.setProperty('color', '#64748b', 'important');
+    instruction.style.setProperty('display', 'block', 'important');
+    instruction.style.setProperty('visibility', 'visible', 'important');
+    instruction.style.setProperty('opacity', '1', 'important');
     dropdown.appendChild(instruction);
 
     // Position dropdown near cursor - MUST happen after content is added
@@ -1206,11 +1241,20 @@ class WorkspaceController {
                            rect.bottom <= window.innerHeight && 
                            rect.right <= window.innerWidth;
           
-          if (!inViewport) {
-            console.warn('[IME] ⚠️ Dropdown is outside viewport! Moving to center...');
-            finalCheck.style.top = '50%';
-            finalCheck.style.left = '50%';
-            finalCheck.style.transform = 'translate(-50%, -50%)';
+          if (!inViewport || rect.left < 0) {
+            console.warn('[IME] ⚠️ Dropdown is outside viewport! Moving to center...', {
+              left: rect.left,
+              top: rect.top,
+              right: rect.right,
+              bottom: rect.bottom,
+              viewport: { width: window.innerWidth, height: window.innerHeight }
+            });
+            // Position at center of viewport
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            finalCheck.style.setProperty('left', `${centerX - 150}px`, 'important');
+            finalCheck.style.setProperty('top', `${centerY - 100}px`, 'important');
+            finalCheck.style.setProperty('transform', 'none', 'important');
           }
         }
       } else {
@@ -1304,11 +1348,20 @@ class WorkspaceController {
           left = rect.left;
           top = rect.bottom + 8;
           
+          // CRITICAL FIX: Ensure dropdown is always within viewport
           // Adjust if dropdown would go off-screen horizontally
           if (left + dropdownWidth > viewportWidth) {
-            left = viewportWidth - dropdownWidth - 10;
+            left = Math.max(10, viewportWidth - dropdownWidth - 10);
           }
-          if (left < 0) left = 10;
+          // Ensure left is never negative
+          if (left < 10) {
+            left = 10;
+          }
+          // Also check if cursor is too far left
+          if (rect.left < 0) {
+            // If cursor is off-screen, position dropdown at a safe location
+            left = 50;
+          }
           
           // Adjust if dropdown would go off-screen vertically
           if (top + dropdownHeight > viewportHeight) {
