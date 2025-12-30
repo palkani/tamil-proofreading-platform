@@ -20,7 +20,7 @@ export default function LoginPage() {
 
     try {
       await authAPI.login(email, password);
-      router.push('/dashboard');
+      router.push('/drafts');
     } catch (error) {
       setError(extractApiErrorMessage(error, 'Login failed'));
     } finally {

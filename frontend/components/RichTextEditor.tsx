@@ -22,6 +22,8 @@ import {
   IconSearch,
   IconMicrophone,
   IconFontSize,
+  IconHeading,
+  IconParagraph,
 } from './icons';
 import { convertEnglishToTamil } from '@/utils/transliterate';
 import { TamilIME } from '@/src/editor/extensions/TamilIME';
@@ -65,7 +67,9 @@ export default function RichTextEditor({
   const extensions = useMemo(() => {
     const base = [
       StarterKit.configure({
-        heading: false,
+        heading: {
+          levels: [1, 2, 3, 4, 5, 6],
+        },
         bulletList: { keepMarks: true },
         orderedList: { keepMarks: true },
         // Strike is included in StarterKit
@@ -311,6 +315,20 @@ export default function RichTextEditor({
   const [linkUrl, setLinkUrl] = useState('');
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [fontSize, setFontSize] = useState('16px');
+  const [showHeadingMenu, setShowHeadingMenu] = useState(false);
+  
+  // Close heading menu when clicking outside
+  useEffect(() => {
+    if (!showHeadingMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-heading-menu]')) {
+        setShowHeadingMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showHeadingMenu]);
 
   const handleSetLink = useCallback(() => {
     if (linkUrl) {
@@ -344,6 +362,64 @@ export default function RichTextEditor({
           >
             <IconRedo width={16} height={16} />
           </button>
+          
+          <div className="w-px h-6 bg-[#E2E8F0] mx-1" />
+          
+          {/* Heading/Paragraph Dropdown */}
+          <div className="relative" data-heading-menu>
+            <button
+              type="button"
+              onClick={() => setShowHeadingMenu(!showHeadingMenu)}
+              className={`flex items-center justify-center h-8 px-2 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors text-xs font-medium ${
+                editor.isActive('heading') ? 'bg-[#4F46E5] text-white' : ''
+              }`}
+              title="Heading & Paragraph"
+            >
+              <IconHeading width={14} height={14} className="mr-1" />
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="ml-1">
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            {showHeadingMenu && (
+              <div className="absolute top-full left-0 mt-1 bg-white border border-[#E2E8F0] rounded-lg shadow-lg z-50 min-w-[180px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    editor.chain().focus().setParagraph().run();
+                    setShowHeadingMenu(false);
+                  }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-[#F8FAFC] transition-colors ${
+                    editor.isActive('paragraph') ? 'bg-[#F8FAFC] text-[#4F46E5] font-semibold' : 'text-[#475569]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <IconParagraph width={14} height={14} />
+                    <span>Paragraph</span>
+                  </div>
+                </button>
+                {[1, 2, 3, 4, 5, 6].map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => {
+                      editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 }).run();
+                      setShowHeadingMenu(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-[#F8FAFC] transition-colors ${
+                      editor.isActive('heading', { level: level as 1 | 2 | 3 | 4 | 5 | 6 })
+                        ? 'bg-[#F8FAFC] text-[#4F46E5] font-semibold'
+                        : 'text-[#475569]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <IconHeading width={14} height={14} />
+                      <span style={{ fontSize: `${24 - level * 2}px`, fontWeight: 'bold' }}>Heading {level}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           
           <div className="w-px h-6 bg-[#E2E8F0] mx-1" />
           
