@@ -1310,14 +1310,17 @@ class WorkspaceController {
 
   // Keyboard navigation handler
   handleKeyDown(e) {
+    // Always allow typing to proceed - don't block editor change events
+    // Only intercept when IME is active and we have suggestions
     if (!this.imeActive || !this.currentSuggestions || this.currentSuggestions.length === 0) {
-      // If not in IME mode, handle space/enter/punctuation normally
+      // If not in IME mode, clear any stale state but don't block events
       if (e.key === ' ' || e.key === 'Enter' || e.key === '.' || e.key === ',' || e.key === ';') {
         this.clearGhostText();
         this.clearTranslitSuggestions();
         this.imeActive = false;
         this.editorMode = EditorMode.IDLE;
       }
+      // Return false to allow normal typing and editor change events
       return false;
     }
 
@@ -1386,6 +1389,14 @@ class WorkspaceController {
             this.imeActive = false;
             this.editorMode = window.EditorMode ? window.EditorMode.IDLE : 'IDLE';
             this.lastFetchToken = null; // Reset to allow new suggestions
+            // Manually trigger editor change to allow new suggestions for next word
+            setTimeout(() => {
+              if (this.editor && this.editor.onChange) {
+                this.editor.onChange();
+              } else {
+                this.handleEditorChange();
+              }
+            }, 50);
           } else {
             // If suggestion is invalid, just close IME
             this.clearGhostText();
@@ -1395,7 +1406,7 @@ class WorkspaceController {
           }
           return true;
         }
-        // If IME not active, let space through normally
+        // If IME not active, let space through normally - this will trigger editor change
         return false;
 
       default:
@@ -1609,6 +1620,17 @@ class WorkspaceController {
     this.editorMode = window.EditorMode ? window.EditorMode.IDLE : 'IDLE';
     this.currentTokenInfo = null;
     this.lastFetchToken = null; // Reset to allow new suggestions
+    
+    // Manually trigger editor change to allow new suggestions for next word
+    // Use setTimeout to ensure the text is set first
+    setTimeout(() => {
+      console.log("[IME] Manually triggering editor change after token replacement");
+      if (this.editor && this.editor.onChange) {
+        this.editor.onChange();
+      } else {
+        this.handleEditorChange();
+      }
+    }, 10);
   }
 
   replaceLastWord(word, replacement) {
