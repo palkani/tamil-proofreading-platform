@@ -904,6 +904,29 @@ class WorkspaceController {
       return;
     }
 
+    // CRITICAL: Store suggestions in instance variable FIRST so selectSuggestion can access them
+    // Normalize suggestions to ensure consistent format
+    if (Array.isArray(suggestions) && suggestions.length > 0) {
+      this.currentSuggestions = suggestions.map(s => {
+        if (typeof s === 'string') {
+          return { text: s, word: s };
+        } else if (s && typeof s === 'object') {
+          return {
+            text: s.text || s.word || s.ta || '',
+            word: s.word || s.text || s.ta || '',
+            score: s.score || 1.0
+          };
+        }
+        return { text: '', word: '' };
+      }).filter(s => s.text && s.text.trim().length > 0);
+      
+      console.log('[IME] ✅ Stored', this.currentSuggestions.length, 'suggestions in currentSuggestions');
+      console.log('[IME] Stored suggestions:', this.currentSuggestions);
+    } else {
+      this.currentSuggestions = [];
+      console.warn('[IME] ⚠️ No valid suggestions to store');
+    }
+
     // Get or create dropdown elements
     // CRITICAL: Append directly to body, not a container, to avoid pointer-events issues
     let dropdown = document.getElementById('tamil-suggestions-dropdown');
@@ -1027,21 +1050,55 @@ class WorkspaceController {
         itemHTML: item.innerHTML.substring(0, 100)
       });
       
-      // Click handler - ensure it works
-      item.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[IME] Clicked suggestion', i + 1, ':', cleanText);
-        this.selectSuggestion(i);
-      });
+      // Click handler - use closure to capture index correctly
+      // This ensures the correct index is used even if the loop variable changes
+      const selectHandler = ((index) => {
+        return (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('[IME] Clicked suggestion', index + 1, ':', cleanText, 'index:', index);
+          console.log('[IME] Current suggestions available:', this.currentSuggestions ? this.currentSuggestions.length : 0);
+          if (this.currentSuggestions && this.currentSuggestions[index]) {
+            this.selectSuggestion(index);
+          } else {
+            console.error('[IME] Suggestion at index', index, 'not found in currentSuggestions:', this.currentSuggestions);
+          }
+        };
+      })(i);
       
-      // Also handle mousedown for better responsiveness
-      item.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[IME] Mousedown on suggestion', i + 1, ':', cleanText);
-        this.selectSuggestion(i);
-      });
+      item.addEventListener('click', selectHandler);
+      
+      // Also handle mousedown for better responsiveness (especially for touchpad)
+      const mousedownHandler = ((index) => {
+        return (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('[IME] Mousedown on suggestion', index + 1, ':', cleanText, 'index:', index);
+          if (this.currentSuggestions && this.currentSuggestions[index]) {
+            this.selectSuggestion(index);
+          } else {
+            console.error('[IME] Suggestion at index', index, 'not found in currentSuggestions:', this.currentSuggestions);
+          }
+        };
+      })(i);
+      
+      item.addEventListener('mousedown', mousedownHandler);
+      
+      // Also handle touch events for mobile/touchpad
+      const touchHandler = ((index) => {
+        return (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('[IME] Touch end on suggestion', index + 1, ':', cleanText, 'index:', index);
+          if (this.currentSuggestions && this.currentSuggestions[index]) {
+            this.selectSuggestion(index);
+          } else {
+            console.error('[IME] Suggestion at index', index, 'not found in currentSuggestions:', this.currentSuggestions);
+          }
+        };
+      })(i);
+      
+      item.addEventListener('touchend', touchHandler);
       
       // Hover handler to update active index with purple highlight
       item.addEventListener('mouseenter', () => {
@@ -1576,8 +1633,28 @@ class WorkspaceController {
    * @param {number} index - Index of the suggestion to select
    */
   selectSuggestion(index) {
-    if (!this.currentSuggestions || !this.currentSuggestions[index]) {
-      console.warn('[IME] Invalid suggestion index:', index);
+    console.log('[IME] selectSuggestion called with index:', index, 'currentSuggestions length:', this.currentSuggestions ? this.currentSuggestions.length : 0);
+    
+    // Validate index and suggestions array
+    if (!this.currentSuggestions || !Array.isArray(this.currentSuggestions) || this.currentSuggestions.length === 0) {
+      console.error('[IME] Invalid suggestions array:', {
+        hasSuggestions: !!this.currentSuggestions,
+        isArray: Array.isArray(this.currentSuggestions),
+        length: this.currentSuggestions ? this.currentSuggestions.length : 0
+      });
+      this.hideSuggestions();
+      return;
+    }
+    
+    if (index < 0 || index >= this.currentSuggestions.length) {
+      console.error('[IME] Invalid suggestion index:', index, 'valid range: 0 to', this.currentSuggestions.length - 1);
+      this.hideSuggestions();
+      return;
+    }
+    
+    if (!this.currentSuggestions[index]) {
+      console.error('[IME] Suggestion at index', index, 'is undefined:', this.currentSuggestions);
+      this.hideSuggestions();
       return;
     }
 
