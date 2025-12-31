@@ -1025,10 +1025,18 @@ class WorkspaceController {
         item.classList.add('active');
       }
       
-      // Number badge - purple gradient (matches screenshot)
+      // Number with period format: "1. word"
       const number = document.createElement('span');
       number.className = 'tamil-suggestion-number';
-      number.textContent = (i + 1).toString();
+      number.textContent = (i + 1).toString() + '.';
+      // CRITICAL: Ensure number is always visible
+      number.style.setProperty('color', '#4F46E5', 'important');
+      number.style.setProperty('display', 'inline-block', 'important');
+      number.style.setProperty('visibility', 'visible', 'important');
+      number.style.setProperty('opacity', '1', 'important');
+      number.style.setProperty('font-weight', '700', 'important');
+      number.style.setProperty('font-size', '16px', 'important');
+      number.style.setProperty('min-width', '24px', 'important');
       
       const text = document.createElement('span');
       text.className = 'tamil-suggestion-text';
