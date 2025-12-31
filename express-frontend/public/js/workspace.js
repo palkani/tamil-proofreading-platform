@@ -79,11 +79,21 @@ function getCaretClientRect() {
 }
 
 function getTokenAtCaret(text, caretPos) {
+  // CRITICAL: Only detect Latin (English) tokens for transliteration
+  // Don't include Tamil characters or other non-Latin characters
   let start = caretPos;
-  while (start > 0 && /\S/.test(text[start - 1])) start--;
+  // Move backwards to find start of Latin word
+  while (start > 0 && /[a-zA-Z]/.test(text[start - 1])) start--;
   let end = caretPos;
-  while (end < text.length && /\S/.test(text[end])) end++;
-  return { token: text.slice(start, end), start, end };
+  // Move forwards to find end of Latin word
+  while (end < text.length && /[a-zA-Z]/.test(text[end])) end++;
+  const token = text.slice(start, end);
+  // Only return if it's a valid Latin word (not empty and only Latin characters)
+  if (token && /^[a-zA-Z]+$/.test(token)) {
+    return { token, start, end };
+  }
+  // Return empty token if not a valid Latin word
+  return { token: '', start: caretPos, end: caretPos };
 }
 
 // Tamil phonetic scoring: comprehensive ranking for IME suggestions
@@ -411,8 +421,8 @@ class WorkspaceController {
         }
       }
 
-      // Limit to 5 suggestions
-      finalSuggestions = finalSuggestions.slice(0, 5);
+      // Limit to 4 suggestions for better performance and smaller dropdown
+      finalSuggestions = finalSuggestions.slice(0, 4);
 
       // Cache results
       if (this.suggestionCache && cacheKey) {
@@ -868,7 +878,7 @@ class WorkspaceController {
         this.fetchingSuggestions = false;
         this.currentFetchQuery = null;
       });
-    }, 300); // 300ms debounce - reduced for better responsiveness
+    }, 200); // 200ms debounce - optimized for faster response
   }
   
   clearSuggestions() {
@@ -909,22 +919,38 @@ class WorkspaceController {
     if (Array.isArray(suggestions) && suggestions.length > 0) {
       this.currentSuggestions = suggestions.map(s => {
         if (typeof s === 'string') {
-          return { text: s, word: s };
+          // Clean the string: remove any invalid characters
+          const cleaned = s.replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰²³]/g, '').trim();
+          return cleaned ? { text: cleaned, word: cleaned } : null;
         } else if (s && typeof s === 'object') {
+          const text = (s.text || s.word || s.ta || '').toString();
+          // Clean the text: remove superscript numbers and invalid characters
+          const cleaned = text.replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰²³]/g, '').trim();
+          if (!cleaned || cleaned.length === 0) return null;
+          // Validate: should contain Tamil characters (basic check)
+          if (!/[\u0B80-\u0BFF]/.test(cleaned)) {
+            console.warn('[IME] Skipping non-Tamil suggestion:', cleaned);
+            return null;
+          }
           return {
-            text: s.text || s.word || s.ta || '',
-            word: s.word || s.text || s.ta || '',
-            score: s.score || 1.0
+            text: cleaned,
+            word: cleaned,
+            score: typeof s.score === 'number' ? s.score : 1.0
           };
         }
-        return { text: '', word: '' };
-      }).filter(s => s.text && s.text.trim().length > 0);
+        return null;
+      }).filter(s => s !== null && s.text && s.text.trim().length > 0);
       
-      console.log('[IME] ✅ Stored', this.currentSuggestions.length, 'suggestions in currentSuggestions');
-      console.log('[IME] Stored suggestions:', this.currentSuggestions);
+      if (this.currentSuggestions.length > 0) {
+        console.log('[IME] ✅ Stored', this.currentSuggestions.length, 'valid suggestions in currentSuggestions');
+        console.log('[IME] Stored suggestions:', this.currentSuggestions.map(s => s.text));
+      } else {
+        this.currentSuggestions = [];
+        console.warn('[IME] ⚠️ No valid suggestions to store after filtering');
+      }
     } else {
       this.currentSuggestions = [];
-      console.warn('[IME] ⚠️ No valid suggestions to store');
+      console.log('[IME] No suggestions provided (empty array or null)');
     }
 
     // Get or create dropdown elements
@@ -990,8 +1016,8 @@ class WorkspaceController {
     const list = document.createElement('div');
     list.className = 'tamil-suggestions-list';
 
-    // Render each suggestion (max 5) - match screenshot exactly
-    const maxSuggestions = Math.min(suggestions.length, 5);
+    // Render each suggestion (max 4) - optimized for performance
+    const maxSuggestions = Math.min(this.currentSuggestions.length, 4);
     console.log('[IME] 🎯 Rendering', maxSuggestions, 'suggestions');
     
     for (let i = 0; i < maxSuggestions; i++) {
@@ -1732,35 +1758,46 @@ class WorkspaceController {
    */
   performReplacement(tamilText) {
 
-    // CRITICAL: Use stored tokenInfo from when suggestions were fetched (when token was Latin)
-    // Don't get fresh token info as it might already be Tamil after previous selection
-    if (!this.currentTokenInfo) {
-      // Fallback: try to get current token info
-      const text = this.getEditorText() || '';
-      const caretPos = (this.editor && this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
-      const tokenInfo = getTokenAtCaret(text, caretPos);
-      const { token, start, end } = tokenInfo;
-      
-      // Only proceed if token is Latin
-      if (!token || !/^[a-z]+$/i.test(token)) {
-        console.warn('[IME] No stored tokenInfo and current token is not Latin, not replacing');
-        console.warn('[IME] Current token:', token, 'isLatin:', /^[a-z]+$/i.test(token || ''));
+      // CRITICAL: Use stored tokenInfo from when suggestions were fetched (when token was Latin)
+      // Don't get fresh token info as it might already be Tamil after previous selection
+      if (!this.currentTokenInfo) {
+        // Fallback: try to get current token info
+        const text = this.getEditorText() || '';
+        const caretPos = (this.editor && this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
+        const tokenInfo = getTokenAtCaret(text, caretPos);
+        const { token, start, end } = tokenInfo;
+        
+        // Only proceed if token is Latin (getTokenAtCaret now only returns Latin tokens)
+        if (!token || !/^[a-zA-Z]+$/.test(token)) {
+          console.warn('[IME] No stored tokenInfo and current token is not Latin, not replacing');
+          console.warn('[IME] Current token:', token, 'isLatin:', /^[a-zA-Z]+$/.test(token || ''));
+          this.hideSuggestions();
+          return;
+        }
+        
+        // Store it for replacement
+        this.currentTokenInfo = { token, start, end };
+        console.log('[IME] Stored tokenInfo:', this.currentTokenInfo);
+      }
+
+      // Verify stored token is Latin - CRITICAL: Only replace if token is Latin
+      if (this.currentTokenInfo.token && !/^[a-zA-Z]+$/.test(this.currentTokenInfo.token)) {
+        console.warn('[IME] Stored token is not Latin:', this.currentTokenInfo.token);
         this.hideSuggestions();
+        this.currentTokenInfo = null;
         return;
       }
       
-      // Store it for replacement
-      this.currentTokenInfo = { token, start, end };
-      console.log('[IME] Stored tokenInfo:', this.currentTokenInfo);
-    }
-
-    // Verify stored token is Latin - CRITICAL: Only replace if token is Latin
-    if (this.currentTokenInfo.token && !/^[a-z]+$/i.test(this.currentTokenInfo.token)) {
-      console.warn('[IME] Stored token is not Latin:', this.currentTokenInfo.token);
-      this.hideSuggestions();
-      this.currentTokenInfo = null;
-      return;
-    }
+      // Double-check: verify the token at the stored position is still Latin
+      const text = this.getEditorText() || '';
+      const currentTokenAtPos = text.slice(this.currentTokenInfo.start, this.currentTokenInfo.end);
+      if (currentTokenAtPos && !/^[a-zA-Z]+$/.test(currentTokenAtPos)) {
+        console.warn('[IME] Token at stored position is no longer Latin:', currentTokenAtPos);
+        console.warn('[IME] This might cause junk word replacement. Aborting.');
+        this.hideSuggestions();
+        this.currentTokenInfo = null;
+        return;
+      }
 
     console.log('[IME] Replacing token:', this.currentTokenInfo.token, 'with:', tamilText);
     console.log('[IME] Token position:', this.currentTokenInfo.start, 'to', this.currentTokenInfo.end);
@@ -2081,27 +2118,33 @@ class WorkspaceController {
     // Get current token at position (might have changed if user continued typing)
     const currentToken = text.slice(start, end);
     
-    // More lenient check: allow replacement if:
-    // 1. Current token matches stored token (exact match), OR
-    // 2. Current token is still Latin (user might have typed more), OR
-    // 3. Current token starts with stored token (user extended the word)
+    // CRITICAL: Only replace if current token is still Latin (English word)
+    // This prevents junk word replacement when Tamil characters are present
     const isExactMatch = currentToken === token;
-    const isStillLatin = /^[a-z]+$/i.test(currentToken);
+    const isStillLatin = /^[a-zA-Z]+$/.test(currentToken);
     const startsWithToken = currentToken.toLowerCase().startsWith(token.toLowerCase());
     
-    // CRITICAL: Only replace if current token is still Latin (English word)
-    // If user has already selected a suggestion, the token might be Tamil - don't replace in that case
-    if (!isStillLatin && !isExactMatch && !startsWithToken) {
-      console.warn("[IME] replaceTokenAtCaret: Current token is not Latin, skipping replacement to avoid adding instead of replacing", {
+    // STRICT CHECK: Only allow replacement if token is still Latin
+    if (!isStillLatin) {
+      console.warn("[IME] replaceTokenAtCaret: Current token is not Latin, skipping replacement to prevent junk words", {
         expected: token,
         found: currentToken,
         start,
         end,
         isExactMatch,
         isStillLatin,
-        startsWithToken
+        startsWithToken,
+        textAround: text.substring(Math.max(0, start - 5), Math.min(text.length, end + 5))
       });
-      return; // Don't replace if token is not Latin
+      return; // Don't replace if token is not Latin - this prevents "மஉரஉஅ" type errors
+    }
+    
+    // Additional safety: if token doesn't match and doesn't start with stored token, be cautious
+    if (!isExactMatch && !startsWithToken && currentToken.length > token.length + 3) {
+      console.warn("[IME] replaceTokenAtCaret: Token mismatch detected, but still Latin - proceeding with caution", {
+        expected: token,
+        found: currentToken
+      });
     }
     
     // Use the stored end position, but if user typed more, use current end
