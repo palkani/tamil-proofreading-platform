@@ -282,6 +282,7 @@ class WorkspaceController {
     this.previousToken = null; // Track previous token to avoid duplicate calls
     this.imeDebounceTimer = null; // Debounce timer for IME fetching
     this.activeSuggestionIndex = 0; // For keyboard navigation
+    this.isSelectingSuggestion = false; // Flag to prevent duplicate selection calls
     
     // PART D: Prefix cache for suggestions
     this.suggestionCache = new Map(); // key: "mode:token", value: { suggestions, timestamp }
@@ -1048,6 +1049,12 @@ class WorkspaceController {
       // CRITICAL: Store suggestion text directly in dataset so we can access it even if currentSuggestions is cleared
       item.dataset.suggestionText = cleanText;
       item.dataset.suggestionIndex = i.toString();
+      // CRITICAL: Store tokenInfo in dataset so we can use it even if currentTokenInfo is cleared
+      if (this.currentTokenInfo) {
+        item.dataset.tokenStart = this.currentTokenInfo.start.toString();
+        item.dataset.tokenEnd = this.currentTokenInfo.end.toString();
+        item.dataset.token = this.currentTokenInfo.token;
+      }
       
       // Ensure first item is active by default
       if (i === 0 && this.activeSuggestionIndex === 0) {
@@ -1096,6 +1103,21 @@ class WorkspaceController {
           console.log('[IME] Clicked suggestion', index + 1, ':', suggestionText, 'index:', index);
           console.log('[IME] Current suggestions available:', this.currentSuggestions ? this.currentSuggestions.length : 0);
           
+          // CRITICAL: Restore currentTokenInfo from dataset if it was cleared
+          if (!this.currentTokenInfo) {
+            const tokenStart = e.currentTarget.dataset.tokenStart;
+            const tokenEnd = e.currentTarget.dataset.tokenEnd;
+            const token = e.currentTarget.dataset.token;
+            if (tokenStart && tokenEnd && token) {
+              this.currentTokenInfo = {
+                token: token,
+                start: parseInt(tokenStart, 10),
+                end: parseInt(tokenEnd, 10)
+              };
+              console.log('[IME] Restored currentTokenInfo from dataset:', this.currentTokenInfo);
+            }
+          }
+          
           // Use stored suggestion data from closure, fallback to dataset, then currentSuggestions
           let finalText = suggestionText;
           let finalIndex = index;
@@ -1121,12 +1143,31 @@ class WorkspaceController {
       
       item.addEventListener('click', selectHandler);
       
-      // Also handle mousedown for better responsiveness (especially for touchpad)
+      // Also handle mousedown for touch devices only
+      // For regular mouse clicks, the click handler will work fine
+      // The isSelectingSuggestion flag will prevent double-firing
       const mousedownHandler = ((index, suggestionText) => {
         return (e) => {
+          // Only handle mousedown on touch devices to avoid double-firing with click
+          // The isSelectingSuggestion flag in selectSuggestionWithText will prevent duplicates
           e.preventDefault();
           e.stopPropagation();
           console.log('[IME] Mousedown on suggestion', index + 1, ':', suggestionText, 'index:', index);
+          
+          // CRITICAL: Restore currentTokenInfo from dataset if it was cleared
+          if (!this.currentTokenInfo) {
+            const tokenStart = e.currentTarget.dataset.tokenStart;
+            const tokenEnd = e.currentTarget.dataset.tokenEnd;
+            const token = e.currentTarget.dataset.token;
+            if (tokenStart && tokenEnd && token) {
+              this.currentTokenInfo = {
+                token: token,
+                start: parseInt(tokenStart, 10),
+                end: parseInt(tokenEnd, 10)
+              };
+              console.log('[IME] Restored currentTokenInfo from dataset (mousedown):', this.currentTokenInfo);
+            }
+          }
           
           let finalText = suggestionText;
           if (this.currentSuggestions && this.currentSuggestions[index]) {
@@ -1136,6 +1177,7 @@ class WorkspaceController {
             if (datasetText) finalText = datasetText;
           }
           
+          // The isSelectingSuggestion flag will prevent this from running if click already fired
           this.selectSuggestionWithText(index, finalText);
         };
       })(i, cleanText);
@@ -1148,6 +1190,21 @@ class WorkspaceController {
           e.preventDefault();
           e.stopPropagation();
           console.log('[IME] Touch end on suggestion', index + 1, ':', suggestionText, 'index:', index);
+          
+          // CRITICAL: Restore currentTokenInfo from dataset if it was cleared
+          if (!this.currentTokenInfo) {
+            const tokenStart = e.currentTarget.dataset.tokenStart;
+            const tokenEnd = e.currentTarget.dataset.tokenEnd;
+            const token = e.currentTarget.dataset.token;
+            if (tokenStart && tokenEnd && token) {
+              this.currentTokenInfo = {
+                token: token,
+                start: parseInt(tokenStart, 10),
+                end: parseInt(tokenEnd, 10)
+              };
+              console.log('[IME] Restored currentTokenInfo from dataset (touch):', this.currentTokenInfo);
+            }
+          }
           
           let finalText = suggestionText;
           if (this.currentSuggestions && this.currentSuggestions[index]) {
@@ -1217,6 +1274,38 @@ class WorkspaceController {
     
     // Force a layout calculation before positioning
     void dropdown.offsetHeight;
+    
+    // Calculate optimal width based on content
+    const suggestionsList = dropdown.querySelector('.tamil-suggestions-list');
+    if (suggestionsList) {
+      // Measure the widest item
+      let maxWidth = 200; // Minimum width
+      const items = suggestionsList.querySelectorAll('.tamil-suggestion-item');
+      items.forEach(item => {
+        const textEl = item.querySelector('.tamil-suggestion-text');
+        if (textEl) {
+          // Create a temporary span to measure text width
+          const temp = document.createElement('span');
+          temp.style.visibility = 'hidden';
+          temp.style.position = 'absolute';
+          temp.style.fontSize = window.getComputedStyle(textEl).fontSize;
+          temp.style.fontFamily = window.getComputedStyle(textEl).fontFamily;
+          temp.style.fontWeight = window.getComputedStyle(textEl).fontWeight;
+          temp.textContent = textEl.textContent;
+          document.body.appendChild(temp);
+          const textWidth = temp.offsetWidth;
+          document.body.removeChild(temp);
+          // Add padding for number, spacing, and dropdown padding
+          const itemWidth = textWidth + 60; // Number (24px) + spacing (8px) + padding (24px) + margin (4px)
+          if (itemWidth > maxWidth) {
+            maxWidth = itemWidth;
+          }
+        }
+      });
+      // Set width with some padding
+      dropdown.style.width = `${Math.min(maxWidth + 40, 500)}px`;
+      console.log('[IME] Set dropdown width to:', dropdown.style.width, 'based on content');
+    }
     
     this.positionDropdown(dropdown);
     
@@ -1697,15 +1786,30 @@ class WorkspaceController {
    * @param {string} tamilText - The Tamil text to insert
    */
   selectSuggestionWithText(index, tamilText) {
+    // CRITICAL: Prevent duplicate calls from both click and mousedown events
+    if (this.isSelectingSuggestion) {
+      console.log('[IME] Already selecting suggestion, ignoring duplicate call');
+      return;
+    }
+    
     if (!tamilText || !tamilText.trim()) {
       console.warn('[IME] Empty suggestion text provided');
       return;
     }
 
+    // Set flag to prevent duplicate calls
+    this.isSelectingSuggestion = true;
     console.log('[IME] Selecting suggestion with text:', tamilText, 'at index:', index);
     
-    // Proceed with replacement using the provided text
-    this.performReplacement(tamilText);
+    try {
+      // Proceed with replacement using the provided text
+      this.performReplacement(tamilText);
+    } finally {
+      // Reset flag after a short delay to allow replacement to complete
+      setTimeout(() => {
+        this.isSelectingSuggestion = false;
+      }, 100);
+    }
   }
 
   /**
@@ -1757,10 +1861,15 @@ class WorkspaceController {
    * @param {string} tamilText - The Tamil text to insert
    */
   performReplacement(tamilText) {
-
+      console.log('[IME] performReplacement called with text:', tamilText);
+      console.log('[IME] currentTokenInfo available:', !!this.currentTokenInfo, this.currentTokenInfo);
+      
       // CRITICAL: Use stored tokenInfo from when suggestions were fetched (when token was Latin)
       // Don't get fresh token info as it might already be Tamil after previous selection
       if (!this.currentTokenInfo) {
+        console.warn('[IME] ⚠️ currentTokenInfo is null! This should not happen if tokenInfo was stored in dataset.');
+        console.warn('[IME] Attempting fallback: getting token from current cursor position...');
+        
         // Fallback: try to get current token info
         const text = this.getEditorText() || '';
         const caretPos = (this.editor && this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
@@ -1769,15 +1878,18 @@ class WorkspaceController {
         
         // Only proceed if token is Latin (getTokenAtCaret now only returns Latin tokens)
         if (!token || !/^[a-zA-Z]+$/.test(token)) {
-          console.warn('[IME] No stored tokenInfo and current token is not Latin, not replacing');
-          console.warn('[IME] Current token:', token, 'isLatin:', /^[a-zA-Z]+$/.test(token || ''));
+          console.error('[IME] ❌ No stored tokenInfo and current token is not Latin, cannot replace');
+          console.error('[IME] Current token:', token, 'isLatin:', /^[a-zA-Z]+$/.test(token || ''));
+          console.error('[IME] Cursor position:', caretPos, 'Text around cursor:', text.substring(Math.max(0, caretPos - 10), Math.min(text.length, caretPos + 10)));
           this.hideSuggestions();
           return;
         }
         
         // Store it for replacement
         this.currentTokenInfo = { token, start, end };
-        console.log('[IME] Stored tokenInfo:', this.currentTokenInfo);
+        console.log('[IME] ✅ Fallback: Stored tokenInfo from cursor:', this.currentTokenInfo);
+      } else {
+        console.log('[IME] ✅ Using stored currentTokenInfo:', this.currentTokenInfo);
       }
 
       // Verify stored token is Latin - CRITICAL: Only replace if token is Latin
