@@ -1019,6 +1019,9 @@ class WorkspaceController {
       const item = document.createElement('div');
       item.className = `tamil-suggestion-item ${i === this.activeSuggestionIndex ? 'active' : ''}`;
       item.dataset.index = i;
+      // CRITICAL: Store suggestion text directly in dataset so we can access it even if currentSuggestions is cleared
+      item.dataset.suggestionText = cleanText;
+      item.dataset.suggestionIndex = i.toString();
       
       // Ensure first item is active by default
       if (i === 0 && this.activeSuggestionIndex === 0) {
@@ -1058,53 +1061,79 @@ class WorkspaceController {
         itemHTML: item.innerHTML.substring(0, 100)
       });
       
-      // Click handler - use closure to capture index correctly
-      // This ensures the correct index is used even if the loop variable changes
-      const selectHandler = ((index) => {
+      // Click handler - use closure to capture data directly from item
+      // Store suggestion data in closure to avoid relying on currentSuggestions
+      const selectHandler = ((index, suggestionText, suggestionData) => {
         return (e) => {
           e.preventDefault();
           e.stopPropagation();
-          console.log('[IME] Clicked suggestion', index + 1, ':', cleanText, 'index:', index);
+          console.log('[IME] Clicked suggestion', index + 1, ':', suggestionText, 'index:', index);
           console.log('[IME] Current suggestions available:', this.currentSuggestions ? this.currentSuggestions.length : 0);
+          
+          // Use stored suggestion data from closure, fallback to dataset, then currentSuggestions
+          let finalText = suggestionText;
+          let finalIndex = index;
+          
+          // Try to get from currentSuggestions first (most reliable)
           if (this.currentSuggestions && this.currentSuggestions[index]) {
-            this.selectSuggestion(index);
+            finalText = this.currentSuggestions[index].text || this.currentSuggestions[index].word || suggestionText;
+            console.log('[IME] Using suggestion from currentSuggestions');
           } else {
-            console.error('[IME] Suggestion at index', index, 'not found in currentSuggestions:', this.currentSuggestions);
+            // Fallback to stored data in closure or dataset
+            const datasetText = e.currentTarget.dataset.suggestionText;
+            if (datasetText) {
+              finalText = datasetText;
+              console.log('[IME] Using suggestion from dataset');
+            }
+            console.warn('[IME] currentSuggestions not available, using stored data');
           }
+          
+          // Call selectSuggestionWithText to bypass currentSuggestions check
+          this.selectSuggestionWithText(finalIndex, finalText);
         };
-      })(i);
+      })(i, cleanText, suggestion);
       
       item.addEventListener('click', selectHandler);
       
       // Also handle mousedown for better responsiveness (especially for touchpad)
-      const mousedownHandler = ((index) => {
+      const mousedownHandler = ((index, suggestionText) => {
         return (e) => {
           e.preventDefault();
           e.stopPropagation();
-          console.log('[IME] Mousedown on suggestion', index + 1, ':', cleanText, 'index:', index);
+          console.log('[IME] Mousedown on suggestion', index + 1, ':', suggestionText, 'index:', index);
+          
+          let finalText = suggestionText;
           if (this.currentSuggestions && this.currentSuggestions[index]) {
-            this.selectSuggestion(index);
+            finalText = this.currentSuggestions[index].text || this.currentSuggestions[index].word || suggestionText;
           } else {
-            console.error('[IME] Suggestion at index', index, 'not found in currentSuggestions:', this.currentSuggestions);
+            const datasetText = e.currentTarget.dataset.suggestionText;
+            if (datasetText) finalText = datasetText;
           }
+          
+          this.selectSuggestionWithText(index, finalText);
         };
-      })(i);
+      })(i, cleanText);
       
       item.addEventListener('mousedown', mousedownHandler);
       
       // Also handle touch events for mobile/touchpad
-      const touchHandler = ((index) => {
+      const touchHandler = ((index, suggestionText) => {
         return (e) => {
           e.preventDefault();
           e.stopPropagation();
-          console.log('[IME] Touch end on suggestion', index + 1, ':', cleanText, 'index:', index);
+          console.log('[IME] Touch end on suggestion', index + 1, ':', suggestionText, 'index:', index);
+          
+          let finalText = suggestionText;
           if (this.currentSuggestions && this.currentSuggestions[index]) {
-            this.selectSuggestion(index);
+            finalText = this.currentSuggestions[index].text || this.currentSuggestions[index].word || suggestionText;
           } else {
-            console.error('[IME] Suggestion at index', index, 'not found in currentSuggestions:', this.currentSuggestions);
+            const datasetText = e.currentTarget.dataset.suggestionText;
+            if (datasetText) finalText = datasetText;
           }
+          
+          this.selectSuggestionWithText(index, finalText);
         };
-      })(i);
+      })(i, cleanText);
       
       item.addEventListener('touchend', touchHandler);
       
@@ -1637,6 +1666,23 @@ class WorkspaceController {
   }
 
   /**
+   * Select and insert a suggestion at the cursor position (internal method with text)
+   * @param {number} index - Index of the suggestion
+   * @param {string} tamilText - The Tamil text to insert
+   */
+  selectSuggestionWithText(index, tamilText) {
+    if (!tamilText || !tamilText.trim()) {
+      console.warn('[IME] Empty suggestion text provided');
+      return;
+    }
+
+    console.log('[IME] Selecting suggestion with text:', tamilText, 'at index:', index);
+    
+    // Proceed with replacement using the provided text
+    this.performReplacement(tamilText);
+  }
+
+  /**
    * Select and insert a suggestion at the cursor position
    * @param {number} index - Index of the suggestion to select
    */
@@ -1675,6 +1721,16 @@ class WorkspaceController {
     }
 
     console.log('[IME] Selecting suggestion:', tamilText, 'at index:', index);
+    
+    // Use the internal method
+    this.performReplacement(tamilText);
+  }
+
+  /**
+   * Perform the actual replacement of the Latin token with Tamil text
+   * @param {string} tamilText - The Tamil text to insert
+   */
+  performReplacement(tamilText) {
 
     // CRITICAL: Use stored tokenInfo from when suggestions were fetched (when token was Latin)
     // Don't get fresh token info as it might already be Tamil after previous selection
@@ -1688,15 +1744,17 @@ class WorkspaceController {
       // Only proceed if token is Latin
       if (!token || !/^[a-z]+$/i.test(token)) {
         console.warn('[IME] No stored tokenInfo and current token is not Latin, not replacing');
+        console.warn('[IME] Current token:', token, 'isLatin:', /^[a-z]+$/i.test(token || ''));
         this.hideSuggestions();
         return;
       }
       
       // Store it for replacement
       this.currentTokenInfo = { token, start, end };
+      console.log('[IME] Stored tokenInfo:', this.currentTokenInfo);
     }
 
-    // Verify stored token is Latin
+    // Verify stored token is Latin - CRITICAL: Only replace if token is Latin
     if (this.currentTokenInfo.token && !/^[a-z]+$/i.test(this.currentTokenInfo.token)) {
       console.warn('[IME] Stored token is not Latin:', this.currentTokenInfo.token);
       this.hideSuggestions();
@@ -1705,12 +1763,13 @@ class WorkspaceController {
     }
 
     console.log('[IME] Replacing token:', this.currentTokenInfo.token, 'with:', tamilText);
+    console.log('[IME] Token position:', this.currentTokenInfo.start, 'to', this.currentTokenInfo.end);
 
     // Replace the token with Tamil text using stored token info
     // Use the existing replaceTokenAtCaret method which handles everything properly
     this.replaceTokenAtCaret(tamilText, false);
 
-    // Hide dropdown and clear state
+    // Hide dropdown and clear state AFTER replacement
     this.hideSuggestions();
     this.currentSuggestions = [];
     this.activeSuggestionIndex = 0;
@@ -2030,8 +2089,10 @@ class WorkspaceController {
     const isStillLatin = /^[a-z]+$/i.test(currentToken);
     const startsWithToken = currentToken.toLowerCase().startsWith(token.toLowerCase());
     
-    if (!isExactMatch && !isStillLatin && !startsWithToken) {
-      console.warn("[IME] replaceTokenAtCaret: token mismatch - not replacing", {
+    // CRITICAL: Only replace if current token is still Latin (English word)
+    // If user has already selected a suggestion, the token might be Tamil - don't replace in that case
+    if (!isStillLatin && !isExactMatch && !startsWithToken) {
+      console.warn("[IME] replaceTokenAtCaret: Current token is not Latin, skipping replacement to avoid adding instead of replacing", {
         expected: token,
         found: currentToken,
         start,
@@ -2040,8 +2101,7 @@ class WorkspaceController {
         isStillLatin,
         startsWithToken
       });
-      // Still try to replace if we have valid positions - be more aggressive
-      // This handles cases where user might have continued typing
+      return; // Don't replace if token is not Latin
     }
     
     // Use the stored end position, but if user typed more, use current end
@@ -2053,9 +2113,12 @@ class WorkspaceController {
       console.log("[IME] User extended token, using extended end position:", actualEnd);
     }
     
+    // CRITICAL: Only replace the Latin token, don't add to it
     const replacementText = replacement + (appendSpace ? ' ' : '');
     const newText = text.slice(0, start) + replacementText + text.slice(actualEnd);
     console.log("[IME] Replacing token at position", start, "-", actualEnd, ":", currentToken, "with:", replacementText);
+    console.log("[IME] Text before replacement:", text.substring(Math.max(0, start - 10), Math.min(text.length, actualEnd + 10)));
+    console.log("[IME] Text after replacement:", newText.substring(Math.max(0, start - 10), Math.min(newText.length, start + replacementText.length + 10)));
     
     // Set the new text
     if (this.editor && this.editor.setText) {
