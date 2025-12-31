@@ -1945,10 +1945,18 @@ class WorkspaceController {
       const text = this.getEditorText() || '';
       const currentTokenAtPos = text.slice(this.currentTokenInfo.start, this.currentTokenInfo.end);
       if (currentTokenAtPos && !/^[a-zA-Z]+$/.test(currentTokenAtPos)) {
-        console.warn('[IME] Token at stored position is no longer Latin:', currentTokenAtPos);
-        console.warn('[IME] This might cause junk word replacement. Aborting.');
+        // Token is no longer Latin - this can happen if:
+        // 1. User already selected a suggestion (token was replaced)
+        // 2. User typed Tamil characters manually
+        // 3. Another operation replaced the token
+        // In this case, just clear state and abort gracefully
+        console.log('[IME] Token at stored position is no longer Latin (likely already replaced):', currentTokenAtPos);
+        console.log('[IME] Clearing IME state and aborting replacement');
         this.hideSuggestions();
         this.currentTokenInfo = null;
+        this.currentSuggestions = [];
+        this.imeActive = false;
+        this.isSelectingSuggestion = false; // Reset selection flag
         return;
       }
 
@@ -1960,11 +1968,16 @@ class WorkspaceController {
     this.replaceTokenAtCaret(tamilText, false);
 
     // Hide dropdown and clear state AFTER replacement
+    // CRITICAL: Clear currentTokenInfo immediately to prevent race conditions
+    const tokenInfoToClear = this.currentTokenInfo;
+    this.currentTokenInfo = null; // Clear immediately
     this.hideSuggestions();
     this.currentSuggestions = [];
     this.activeSuggestionIndex = 0;
     this.imeActive = false;
-    this.currentTokenInfo = null;
+    this.isSelectingSuggestion = false; // Reset selection flag
+    
+    console.log('[IME] ✅ Replacement complete, cleared currentTokenInfo:', tokenInfoToClear);
   }
 
   // Keyboard navigation handler
@@ -2315,6 +2328,10 @@ class WorkspaceController {
     console.log("[IME] Replacing token at position", start, "-", actualEnd, ":", currentToken, "with:", replacementText);
     console.log("[IME] Text before replacement:", text.substring(Math.max(0, start - 10), Math.min(text.length, actualEnd + 10)));
     console.log("[IME] Text after replacement:", newText.substring(Math.max(0, start - 10), Math.min(newText.length, start + replacementText.length + 10)));
+    
+    // CRITICAL: Clear currentTokenInfo BEFORE replacement to prevent race conditions
+    // This ensures that if performReplacement is called again, it won't use stale tokenInfo
+    this.currentTokenInfo = null;
     
     // Set the new text
     if (this.editor && this.editor.setText) {
