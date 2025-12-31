@@ -410,20 +410,54 @@ class WorkspaceController {
       console.log('[IME] Received', rawSuggestions.length, 'raw suggestions:', rawSuggestions);
 
       // Clean and rank suggestions
-      const cleaned = cleanTamilSuggestions ? cleanTamilSuggestions(rawSuggestions, query) : rawSuggestions;
-      const ranked = rankTamilCandidates ? rankTamilCandidates(query, cleaned) : cleaned;
+      // Check if helper functions exist, if not use raw suggestions
+      let cleaned = rawSuggestions;
+      let ranked = rawSuggestions;
+      
+      if (typeof cleanTamilSuggestions === 'function') {
+        cleaned = cleanTamilSuggestions(rawSuggestions, query);
+        console.log('[IME] After cleaning:', cleaned.length, 'suggestions');
+      } else {
+        console.log('[IME] cleanTamilSuggestions not available, using raw suggestions');
+      }
+      
+      if (typeof rankTamilCandidates === 'function') {
+        ranked = rankTamilCandidates(query, cleaned);
+        console.log('[IME] After ranking:', ranked.length, 'suggestions');
+      } else {
+        console.log('[IME] rankTamilCandidates not available, using cleaned suggestions');
+        ranked = cleaned;
+      }
+      
+      // If cleaning/ranking removed everything, use raw suggestions
+      if (ranked.length === 0 && rawSuggestions.length > 0) {
+        console.warn('[IME] ⚠️ Cleaning/ranking removed all suggestions, using raw suggestions');
+        ranked = rawSuggestions;
+      }
       
       // Filter low-quality suggestions for longer inputs
+      // BUT: Be more lenient to ensure we always have suggestions
       let finalSuggestions = ranked;
       if (query.length > 3) {
-        finalSuggestions = ranked.filter(s => s.score > 0.3 || s.text.length <= query.length + 1);
+        // More lenient filtering: lower score threshold and allow longer words
+        finalSuggestions = ranked.filter(s => s.score > 0.1 || s.text.length <= query.length + 3);
+        // If still empty, just take top suggestions regardless of score
         if (finalSuggestions.length === 0 && ranked.length > 0) {
-          finalSuggestions = ranked.slice(0, 3);
+          finalSuggestions = ranked.slice(0, 4);
+          console.log('[IME] Using all ranked suggestions (filter was too strict)');
         }
       }
 
       // Limit to 4 suggestions for better performance and smaller dropdown
       finalSuggestions = finalSuggestions.slice(0, 4);
+      
+      // CRITICAL: If we still have no suggestions but rawSuggestions had items, use them
+      if (finalSuggestions.length === 0 && rawSuggestions.length > 0) {
+        console.warn('[IME] ⚠️ All suggestions filtered out, using raw suggestions');
+        finalSuggestions = rawSuggestions.slice(0, 4);
+      }
+      
+      console.log('[IME] Final suggestions after filtering:', finalSuggestions.length, finalSuggestions);
 
       // Cache results
       if (this.suggestionCache && cacheKey) {
@@ -917,22 +951,28 @@ class WorkspaceController {
 
     // CRITICAL: Store suggestions in instance variable FIRST so selectSuggestion can access them
     // Normalize suggestions to ensure consistent format
+    // NOTE: Suggestions are already cleaned and validated in fetchRunnerSuggestions, so we can trust them
     if (Array.isArray(suggestions) && suggestions.length > 0) {
       this.currentSuggestions = suggestions.map(s => {
         if (typeof s === 'string') {
           // Clean the string: remove any invalid characters
           const cleaned = s.replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰²³]/g, '').trim();
-          return cleaned ? { text: cleaned, word: cleaned } : null;
+          return cleaned ? { text: cleaned, word: cleaned, score: 1.0 } : null;
         } else if (s && typeof s === 'object') {
+          // Use the text/word that was already cleaned in fetchRunnerSuggestions
           const text = (s.text || s.word || s.ta || '').toString();
-          // Clean the text: remove superscript numbers and invalid characters
+          // Additional cleaning: remove superscript numbers and invalid characters
           const cleaned = text.replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰²³]/g, '').trim();
-          if (!cleaned || cleaned.length === 0) return null;
-          // Validate: should contain Tamil characters (basic check)
-          if (!/[\u0B80-\u0BFF]/.test(cleaned)) {
-            console.warn('[IME] Skipping non-Tamil suggestion:', cleaned);
+          if (!cleaned || cleaned.length === 0) {
+            console.warn('[IME] Empty suggestion after cleaning:', s);
             return null;
           }
+          // REMOVED: Tamil character validation - too strict, might filter valid suggestions
+          // The API should return valid Tamil suggestions, so we trust them
+          // if (!/[\u0B80-\u0BFF]/.test(cleaned)) {
+          //   console.warn('[IME] Skipping non-Tamil suggestion:', cleaned);
+          //   return null;
+          // }
           return {
             text: cleaned,
             word: cleaned,
@@ -948,6 +988,7 @@ class WorkspaceController {
       } else {
         this.currentSuggestions = [];
         console.warn('[IME] ⚠️ No valid suggestions to store after filtering');
+        console.warn('[IME] Original suggestions:', suggestions);
       }
     } else {
       this.currentSuggestions = [];
