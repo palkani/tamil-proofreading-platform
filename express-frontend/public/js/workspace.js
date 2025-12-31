@@ -997,6 +997,11 @@ class WorkspaceController {
       item.className = `tamil-suggestion-item ${i === this.activeSuggestionIndex ? 'active' : ''}`;
       item.dataset.index = i;
       
+      // Ensure first item is active by default
+      if (i === 0 && this.activeSuggestionIndex === 0) {
+        item.classList.add('active');
+      }
+      
       // Number badge - purple gradient (matches screenshot)
       const number = document.createElement('span');
       number.className = 'tamil-suggestion-number';
@@ -1069,6 +1074,11 @@ class WorkspaceController {
           innerHTML: item.innerHTML.substring(0, 100)
         });
       });
+    }
+    
+    // Ensure first item is highlighted by default
+    if (this.activeSuggestionIndex === 0 && listItems.length > 0) {
+      this.updateActiveSuggestion();
     }
 
     // Add instruction text
@@ -1519,16 +1529,41 @@ class WorkspaceController {
    */
   updateActiveSuggestion() {
     const dropdown = document.getElementById('tamil-suggestions-dropdown');
-    if (!dropdown) return;
+    if (!dropdown) {
+      console.warn('[IME] updateActiveSuggestion: dropdown not found');
+      return;
+    }
 
     const items = dropdown.querySelectorAll('.tamil-suggestion-item');
+    if (items.length === 0) {
+      console.warn('[IME] updateActiveSuggestion: no items found');
+      return;
+    }
+
     items.forEach((item, index) => {
       if (index === this.activeSuggestionIndex) {
         item.classList.add('active');
+        // Ensure active class is applied with important styles for purple highlight
+        item.style.setProperty('background', 'linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%)', 'important');
+        item.style.setProperty('color', 'white', 'important');
+        const textEl = item.querySelector('.tamil-suggestion-text');
+        if (textEl) {
+          textEl.style.setProperty('color', 'white', 'important');
+        }
+        console.log('[IME] Highlighted suggestion', index + 1, 'as active');
       } else {
         item.classList.remove('active');
+        // Reset to default styles
+        item.style.removeProperty('background');
+        item.style.removeProperty('color');
+        const textEl = item.querySelector('.tamil-suggestion-text');
+        if (textEl) {
+          textEl.style.setProperty('color', '#1e293b', 'important');
+        }
       }
     });
+    
+    console.log('[IME] Updated active suggestion to index:', this.activeSuggestionIndex);
   }
 
   // Legacy method - redirects to new method
@@ -1556,20 +1591,38 @@ class WorkspaceController {
 
     console.log('[IME] Selecting suggestion:', tamilText, 'at index:', index);
 
-    // Get current token info
-    const text = this.getEditorText() || '';
-    const caretPos = (this.editor && this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
-    const tokenInfo = getTokenAtCaret(text, caretPos);
-    const { token, start, end } = tokenInfo;
+    // CRITICAL: Use stored tokenInfo from when suggestions were fetched (when token was Latin)
+    // Don't get fresh token info as it might already be Tamil after previous selection
+    if (!this.currentTokenInfo) {
+      // Fallback: try to get current token info
+      const text = this.getEditorText() || '';
+      const caretPos = (this.editor && this.editor.getCursorPosition && this.editor.getCursorPosition()) || text.length;
+      const tokenInfo = getTokenAtCaret(text, caretPos);
+      const { token, start, end } = tokenInfo;
+      
+      // Only proceed if token is Latin
+      if (!token || !/^[a-z]+$/i.test(token)) {
+        console.warn('[IME] No stored tokenInfo and current token is not Latin, not replacing');
+        this.hideSuggestions();
+        return;
+      }
+      
+      // Store it for replacement
+      this.currentTokenInfo = { token, start, end };
+    }
 
-    // Only replace if token is Latin
-    if (!token || !/^[a-z]+$/i.test(token)) {
-      console.warn('[IME] Current token is not Latin, not replacing');
+    // Verify stored token is Latin
+    if (this.currentTokenInfo.token && !/^[a-z]+$/i.test(this.currentTokenInfo.token)) {
+      console.warn('[IME] Stored token is not Latin:', this.currentTokenInfo.token);
       this.hideSuggestions();
+      this.currentTokenInfo = null;
       return;
     }
 
-    // Replace the token with Tamil text
+    console.log('[IME] Replacing token:', this.currentTokenInfo.token, 'with:', tamilText);
+
+    // Replace the token with Tamil text using stored token info
+    // Use the existing replaceTokenAtCaret method which handles everything properly
     this.replaceTokenAtCaret(tamilText, false);
 
     // Hide dropdown and clear state
