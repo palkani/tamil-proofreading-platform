@@ -1915,31 +1915,88 @@ class WorkspaceController {
   // Replace token at caret position with replacement
   replaceTokenAtCaret(replacement, appendSpace = false) {
     if (!this.currentTokenInfo || !replacement) {
-      console.warn("[IME] replaceTokenAtCaret: missing tokenInfo or replacement");
+      console.warn("[IME] replaceTokenAtCaret: missing tokenInfo or replacement", {
+        hasTokenInfo: !!this.currentTokenInfo,
+        hasReplacement: !!replacement
+      });
       return;
     }
     const { token, start, end } = this.currentTokenInfo;
     const text = this.getEditorText() || '';
     
-    // Verify the token at this position is still the expected Latin token
-    const currentToken = text.slice(start, end);
-    if (currentToken !== token || !/^[a-z]+$/i.test(currentToken)) {
-      console.warn("[IME] replaceTokenAtCaret: token mismatch - not replacing", {
-        expected: token,
-        found: currentToken,
+    // CRITICAL FIX: Check bounds to prevent errors
+    if (start < 0 || end > text.length || start > end) {
+      console.warn("[IME] replaceTokenAtCaret: invalid token positions", {
         start,
-        end
+        end,
+        textLength: text.length
       });
       return;
     }
     
+    // Get current token at position (might have changed if user continued typing)
+    const currentToken = text.slice(start, end);
+    
+    // More lenient check: allow replacement if:
+    // 1. Current token matches stored token (exact match), OR
+    // 2. Current token is still Latin (user might have typed more), OR
+    // 3. Current token starts with stored token (user extended the word)
+    const isExactMatch = currentToken === token;
+    const isStillLatin = /^[a-z]+$/i.test(currentToken);
+    const startsWithToken = currentToken.toLowerCase().startsWith(token.toLowerCase());
+    
+    if (!isExactMatch && !isStillLatin && !startsWithToken) {
+      console.warn("[IME] replaceTokenAtCaret: token mismatch - not replacing", {
+        expected: token,
+        found: currentToken,
+        start,
+        end,
+        isExactMatch,
+        isStillLatin,
+        startsWithToken
+      });
+      // Still try to replace if we have valid positions - be more aggressive
+      // This handles cases where user might have continued typing
+    }
+    
+    // Use the stored end position, but if user typed more, use current end
+    // Calculate actual end position: use stored end or find where Latin token ends
+    let actualEnd = end;
+    if (isStillLatin && currentToken.length > token.length) {
+      // User continued typing - use the extended token
+      actualEnd = start + currentToken.length;
+      console.log("[IME] User extended token, using extended end position:", actualEnd);
+    }
+    
     const replacementText = replacement + (appendSpace ? ' ' : '');
-    const newText = text.slice(0, start) + replacementText + text.slice(end);
-    console.log("[IME] Replacing token:", token, "with:", replacementText);
-    this.editor.setText(newText);
+    const newText = text.slice(0, start) + replacementText + text.slice(actualEnd);
+    console.log("[IME] Replacing token at position", start, "-", actualEnd, ":", currentToken, "with:", replacementText);
+    
+    // Set the new text
+    if (this.editor && this.editor.setText) {
+      this.editor.setText(newText);
+    } else if (this.editorElement) {
+      // Fallback: directly set text content
+      this.editorElement.textContent = newText;
+      // Trigger input event
+      const event = new Event('input', { bubbles: true });
+      this.editorElement.dispatchEvent(event);
+    }
+    
     // Set cursor after replacement
     const newPos = start + replacementText.length;
-    this.editor.setCursorPosition(newPos);
+    if (this.editor && this.editor.setCursorPosition) {
+      this.editor.setCursorPosition(newPos);
+    } else if (this.editorElement) {
+      // Fallback: set cursor using selection
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.setStart(this.editorElement.firstChild || this.editorElement, Math.min(newPos, this.editorElement.textContent.length));
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    
     this.clearGhostText();
     this.clearTranslitSuggestions();
     this.imeActive = false;
