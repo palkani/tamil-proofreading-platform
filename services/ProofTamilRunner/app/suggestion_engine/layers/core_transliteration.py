@@ -97,6 +97,12 @@ class CoreTransliterationLayer:
         candidates.extend(runner_candidates)
         candidates.extend(adapter_candidates)
 
+        # For multi-character words, generate variations from existing transliterations
+        if len(q_lower) > 1 and q_lower.isalpha() and candidates:
+            # Generate variations for common Tamil spelling patterns
+            variations = self._generate_word_variations(candidates)
+            candidates.extend(variations)
+
         # For single consonant inputs, ensure base + pulli forms
         if len(q_lower) == 1 and q_lower.isalpha():
             consonant_base = get_consonant_base(q_lower)
@@ -127,4 +133,72 @@ class CoreTransliterationLayer:
                 seen[word] = cand
 
         return list(seen.values())
+
+    def _generate_word_variations(
+        self, existing_candidates: List[Candidate]
+    ) -> List[Candidate]:
+        """
+        Generate common Tamil spelling variations for multi-character words.
+        
+        For words like "enathu" -> "எநது", generates variations like:
+        - எனது (alternative spelling with "ன" instead of "ந")
+        - எநது (original)
+        """
+        variations: List[Candidate] = []
+        
+        # If we already have a transliteration, generate variations from it
+        if not existing_candidates:
+            return variations
+            
+        base_word = existing_candidates[0].word
+        
+        # Common Tamil spelling variations
+        # Pattern: Replace similar sounding characters that are commonly interchanged
+        variation_patterns = [
+            # "ந" <-> "ன" variations (very common in Tamil)
+            (("ந", "ன"), 0.85),
+            (("ன", "ந"), 0.85),
+            # "த" <-> "ட" variations (less common, lower score)
+            (("த", "ட"), 0.75),
+            (("ட", "த"), 0.75),
+            # "ர" <-> "ற" variations
+            (("ர", "ற"), 0.80),
+            (("ற", "ர"), 0.80),
+            # "ல" <-> "ள" variations
+            (("ல", "ள"), 0.80),
+            (("ள", "ல"), 0.80),
+        ]
+        
+        seen_variations = {base_word}  # Track to avoid duplicates
+        
+        for (char1, char2), score_multiplier in variation_patterns:
+            if char1 in base_word:
+                # Generate variation by replacing first occurrence
+                variant = base_word.replace(char1, char2, 1)
+                if variant != base_word and variant not in seen_variations and is_valid_tamil_word(variant):
+                    seen_variations.add(variant)
+                    variations.append(
+                        Candidate(
+                            word=normalize_unicode(variant),
+                            base_score=0.80 * score_multiplier,
+                            source_layer="core_variation",
+                            debug={"variation": f"{char1}->{char2}"},
+                        )
+                    )
+                
+                # Also try replacing all occurrences for some patterns
+                if char1 in variant and char1 != char2:
+                    variant_all = variant.replace(char1, char2)
+                    if variant_all != base_word and variant_all not in seen_variations and is_valid_tamil_word(variant_all):
+                        seen_variations.add(variant_all)
+                        variations.append(
+                            Candidate(
+                                word=normalize_unicode(variant_all),
+                                base_score=0.75 * score_multiplier,
+                                source_layer="core_variation",
+                                debug={"variation": f"{char1}->{char2} (all)"},
+                            )
+                        )
+        
+        return variations
 
