@@ -139,6 +139,16 @@ router.get('/archive', (req, res) => {
   });
 });
 
+// Drafts page - client-side auth only
+router.get('/drafts', (req, res) => {
+  const seo = getSeoData('drafts');
+  res.render('pages/drafts', { 
+    title: seo.title || 'My Drafts',
+    seo: seo,
+    user: req.user
+  });
+});
+
 // Contact page - accessible to everyone
 router.get('/contact', (req, res) => {
   const user = getCurrentUser(req);

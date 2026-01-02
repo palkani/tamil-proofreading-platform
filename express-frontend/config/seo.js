@@ -94,6 +94,17 @@ const seoConfig = {
     pageType: 'legal'
   },
 
+  drafts: {
+    title: 'My Drafts - Tamil Writing Drafts | ProofTamil',
+    description: 'View and manage your Tamil writing drafts. Access all your saved drafts and continue editing.',
+    keywords: 'tamil drafts, tamil writing drafts, tamil proofreading drafts, saved tamil text',
+    canonical: BASE_URL + '/drafts',
+    ogTitle: 'My Drafts - ProofTamil',
+    ogDescription: 'View and manage your Tamil writing drafts.',
+    pageType: 'drafts',
+    noIndex: true
+  },
+
   archive: {
     title: 'Archive - Your Tamil Drafts | ProofTamil',
     description: 'Access your archived Tamil writing drafts. Review past proofreading sessions and grammar corrections.',
