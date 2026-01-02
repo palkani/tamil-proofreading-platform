@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
-// Note: Install these packages: npm install @tiptap/extension-underline @tiptap/extension-link
-// For now, we'll use what's available in StarterKit (strike is included)
+import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
+import Strike from '@tiptap/extension-strike';
 import {
   IconUndo,
   IconRedo,
@@ -77,16 +78,14 @@ export default function RichTextEditor({
       TextAlign.configure({
         types: ['paragraph', 'heading'],
       }),
-      // Note: To enable Underline and Link, install:
-      // npm install @tiptap/extension-underline @tiptap/extension-link
-      // Then uncomment:
-      // Underline,
-      // Link.configure({
-      //   openOnClick: false,
-      //   HTMLAttributes: {
-      //     class: 'text-blue-600 underline cursor-pointer',
-      //   },
-      // }),
+      Underline,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'text-blue-600 underline cursor-pointer hover:text-blue-800',
+        },
+      }),
+      Strike,
       TamilIME.configure({
         enabled: tamilIMEEnabled,
         autoCommitOnSpace: true,
@@ -365,17 +364,27 @@ export default function RichTextEditor({
           
           <div className="w-px h-6 bg-[#E2E8F0] mx-1" />
           
-          {/* Heading/Paragraph Dropdown */}
+          {/* Heading/Paragraph Dropdown - Match screenshot exactly */}
           <div className="relative" data-heading-menu>
             <button
               type="button"
               onClick={() => setShowHeadingMenu(!showHeadingMenu)}
-              className={`flex items-center justify-center h-8 px-2 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors text-xs font-medium ${
-                editor.isActive('heading') ? 'bg-[#4F46E5] text-white' : ''
-              }`}
+              className="flex items-center justify-center h-8 px-2 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors text-xs font-medium"
               title="Heading & Paragraph"
             >
-              <IconHeading width={14} height={14} className="mr-1" />
+              {editor.isActive('heading', { level: 1 }) && 'H1'}
+              {editor.isActive('heading', { level: 2 }) && 'H2'}
+              {editor.isActive('heading', { level: 3 }) && 'H3'}
+              {editor.isActive('heading', { level: 4 }) && 'H4'}
+              {editor.isActive('heading', { level: 5 }) && 'H5'}
+              {editor.isActive('heading', { level: 6 }) && 'H6'}
+              {editor.isActive('paragraph') && 'Paragraph'}
+              {!editor.isActive('heading') && !editor.isActive('paragraph') && (
+                <>
+                  <IconHeading width={14} height={14} className="mr-1" />
+                  <span className="text-xs">Format</span>
+                </>
+              )}
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="ml-1">
                 <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -388,33 +397,41 @@ export default function RichTextEditor({
                     editor.chain().focus().setParagraph().run();
                     setShowHeadingMenu(false);
                   }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-[#F8FAFC] transition-colors ${
-                    editor.isActive('paragraph') ? 'bg-[#F8FAFC] text-[#4F46E5] font-semibold' : 'text-[#475569]'
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-[#F8FAFC] transition-colors flex items-center gap-2 ${
+                    editor.isActive('paragraph') ? 'bg-[#8B5CF6] text-white font-semibold' : 'text-[#475569]'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <IconParagraph width={14} height={14} />
-                    <span>Paragraph</span>
-                  </div>
+                  <IconParagraph width={16} height={16} />
+                  <span>Paragraph</span>
+                  {editor.isActive('paragraph') && (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="ml-auto">
+                      <path d="M13 4L6 11L3 8" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
                 </button>
-                {[1, 2, 3, 4, 5, 6].map((level) => (
+                {[1, 2, 3, 4].map((level) => (
                   <button
                     key={level}
                     type="button"
                     onClick={() => {
-                      editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 }).run();
+                      editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 | 4 }).run();
                       setShowHeadingMenu(false);
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-[#F8FAFC] transition-colors ${
-                      editor.isActive('heading', { level: level as 1 | 2 | 3 | 4 | 5 | 6 })
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-[#F8FAFC] transition-colors flex items-center gap-2 ${
+                      editor.isActive('heading', { level: level as 1 | 2 | 3 | 4 })
                         ? 'bg-[#F8FAFC] text-[#4F46E5] font-semibold'
                         : 'text-[#475569]'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <IconHeading width={14} height={14} />
-                      <span style={{ fontSize: `${24 - level * 2}px`, fontWeight: 'bold' }}>Heading {level}</span>
+                    <div className="w-4 h-4 bg-gray-200 rounded flex items-center justify-center">
+                      <span className="text-xs font-bold">H{level}</span>
                     </div>
+                    <span className="font-bold">Heading {level}</span>
+                    {editor.isActive('heading', { level: level as 1 | 2 | 3 | 4 }) && (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="ml-auto">
+                        <path d="M13 4L6 11L3 8" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
                   </button>
                 ))}
               </div>
@@ -423,15 +440,14 @@ export default function RichTextEditor({
           
           <div className="w-px h-6 bg-[#E2E8F0] mx-1" />
           
-          {/* Font Size Dropdown */}
+          {/* Font Size Dropdown - Simplified to match screenshot */}
           <div className="relative">
             <button
               type="button"
               className="flex items-center justify-center h-8 px-2 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors text-xs font-medium"
               title="Font Size"
             >
-              <IconFontSize width={14} height={14} className="mr-1" />
-              <span className="text-xs">T</span>
+              <span className="text-xs font-medium">T</span>
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="ml-1">
                 <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -467,13 +483,13 @@ export default function RichTextEditor({
           </button>
           <button
             type="button"
-            onClick={() => {
-              // Note: Requires @tiptap/extension-underline package
-              // editor.chain().focus().toggleUnderline().run();
-              console.log('Underline - requires @tiptap/extension-underline package');
-            }}
-            className="flex items-center justify-center h-8 w-8 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors opacity-50"
-            title="Underline (requires package installation)"
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+            className={`flex items-center justify-center h-8 w-8 rounded transition-colors ${
+              editor.isActive('underline')
+                ? 'bg-[#4F46E5] text-white'
+                : 'text-[#475569] hover:bg-white hover:text-[#4F46E5]'
+            }`}
+            title="Underline (Ctrl+U)"
           >
             <IconUnderline width={16} height={16} />
           </button>
@@ -564,16 +580,18 @@ export default function RichTextEditor({
           <button
             type="button"
             onClick={() => {
-              // Note: Requires @tiptap/extension-link package
-              // const url = editor.getAttributes('link').href;
-              // if (url) {
-              //   setLinkUrl(url);
-              // }
-              // setShowLinkInput(!showLinkInput);
-              console.log('Link - requires @tiptap/extension-link package');
+              const url = editor.getAttributes('link').href;
+              if (url) {
+                setLinkUrl(url);
+              }
+              setShowLinkInput(!showLinkInput);
             }}
-            className="flex items-center justify-center h-8 w-8 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors opacity-50"
-            title="Insert Link (requires package installation)"
+            className={`flex items-center justify-center h-8 w-8 rounded transition-colors ${
+              editor.isActive('link')
+                ? 'bg-[#4F46E5] text-white'
+                : 'text-[#475569] hover:bg-white hover:text-[#4F46E5]'
+            }`}
+            title="Insert Link (Ctrl+K)"
           >
             <IconLink width={16} height={16} />
           </button>
@@ -581,8 +599,17 @@ export default function RichTextEditor({
           {/* Search */}
           <button
             type="button"
+            onClick={() => {
+              // TODO: Implement search functionality
+              const searchTerm = window.prompt('Search in document:');
+              if (searchTerm) {
+                // Basic search - highlight matches
+                console.log('Searching for:', searchTerm);
+                // You can implement more advanced search here
+              }
+            }}
             className="flex items-center justify-center h-8 w-8 text-[#475569] hover:bg-white hover:text-[#4F46E5] rounded transition-colors"
-            title="Search"
+            title="Search (Ctrl+F)"
           >
             <IconSearch width={16} height={16} />
           </button>
@@ -606,9 +633,33 @@ export default function RichTextEditor({
             <span className="text-base font-bold">தமிழ்</span>
           </button>
           
-          {/* Microphone */}
+          {/* Microphone - Voice Input */}
           <button
             type="button"
+            onClick={() => {
+              // TODO: Implement voice input functionality
+              if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+                const recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'ta-IN'; // Tamil
+                
+                recognition.onresult = (event: any) => {
+                  const transcript = event.results[0][0].transcript;
+                  editor.chain().focus().insertContent(transcript).run();
+                };
+                
+                recognition.onerror = (event: any) => {
+                  console.error('Speech recognition error:', event.error);
+                  alert('Voice input not available. Please check your microphone permissions.');
+                };
+                
+                recognition.start();
+              } else {
+                alert('Voice input is not supported in your browser.');
+              }
+            }}
             className="flex items-center justify-center h-8 w-8 text-[#4F46E5] hover:bg-[#4F46E5]/10 rounded transition-colors"
             title="Voice Input"
           >

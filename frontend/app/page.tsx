@@ -4,13 +4,17 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import AppHeader from '@/components/AppHeader';
 import { authAPI } from '@/lib/api';
+
+const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 
 export default function Home() {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState('');
   const [showAdmin, setShowAdmin] = useState(false);
+  const [demoEditorContent, setDemoEditorContent] = useState('');
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -153,6 +157,40 @@ export default function Home() {
             )}
           </div>
         </div>
+
+        {/* Demo Editor Section - Only show for non-logged-in users */}
+        {!userEmail && (
+          <div className="mt-24 max-w-7xl mx-auto px-6 sm:px-12 lg:px-16">
+            <div className="bg-white rounded-3xl border-2 border-[#E2E8F0] shadow-2xl overflow-hidden">
+              <div className="bg-gradient-to-r from-[#4F46E5] to-[#6366F1] px-8 py-4">
+                <h2 className="text-2xl font-bold text-white text-center">
+                  Try Our Rich Text Editor
+                </h2>
+                <p className="text-sm text-white/90 text-center mt-2">
+                  Experience the full-featured Tamil editor with auto-suggestions, formatting, and more
+                </p>
+              </div>
+              <div className="h-[600px]">
+                <RichTextEditor
+                  value={demoEditorContent}
+                  onChange={(html) => setDemoEditorContent(html)}
+                  placeholder="Type in English (e.g., vanakkam) or paste Tamil text to see auto-suggestions..."
+                />
+              </div>
+              <div className="bg-[#F8FAFC] border-t border-[#E2E8F0] px-8 py-4 text-center">
+                <p className="text-sm text-[#64748B]">
+                  ✨ All features available: Tamil transliteration, formatting, headings, lists, and more
+                </p>
+                <Link
+                  href="/register"
+                  className="inline-block mt-4 px-6 py-2 bg-[#4F46E5] text-white rounded-full font-semibold text-sm hover:bg-[#4338CA] transition-colors"
+                >
+                  Sign Up to Save Your Work
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Features Grid */}
         <div className="mt-32 grid grid-cols-1 md:grid-cols-3 gap-8">

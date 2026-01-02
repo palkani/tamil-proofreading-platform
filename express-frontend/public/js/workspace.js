@@ -283,6 +283,7 @@ class WorkspaceController {
     this.imeDebounceTimer = null; // Debounce timer for IME fetching
     this.activeSuggestionIndex = 0; // For keyboard navigation
     this.isSelectingSuggestion = false; // Flag to prevent duplicate selection calls
+    this.justReplacedToken = false; // Flag to prevent fetching suggestions immediately after replacement
     
     // PART D: Prefix cache for suggestions
     this.suggestionCache = new Map(); // key: "mode:token", value: { suggestions, timestamp }
@@ -461,10 +462,10 @@ class WorkspaceController {
 
       // Cache results
       if (this.suggestionCache && cacheKey) {
-        this.suggestionCache.set(cacheKey, {
+      this.suggestionCache.set(cacheKey, {
           suggestions: finalSuggestions,
-          timestamp: Date.now(),
-        });
+        timestamp: Date.now(),
+      });
       }
 
       // Update state
@@ -782,6 +783,15 @@ class WorkspaceController {
     // Skip if TipTap is active (TipTap handles IME via extension)
     if (window.USE_TIPTAP_EDITOR) {
       console.log('[IME] ⚠️ Skipping - TipTap is active');
+      return;
+    }
+    
+    // CRITICAL: Skip fetching suggestions if we just replaced a token
+    // This prevents the dropdown from showing again immediately after selection
+    if (this.justReplacedToken) {
+      console.log('[IME] ⏭️ Skipping suggestion fetch - just replaced token');
+      this.updateWordCount();
+      this.scheduleSave();
       return;
     }
     
@@ -1167,7 +1177,7 @@ class WorkspaceController {
           if (this.currentSuggestions && this.currentSuggestions[index]) {
             finalText = this.currentSuggestions[index].text || this.currentSuggestions[index].word || suggestionText;
             console.log('[IME] Using suggestion from currentSuggestions');
-          } else {
+      } else {
             // Fallback to stored data in closure or dataset
             const datasetText = e.currentTarget.dataset.suggestionText;
             if (datasetText) {
@@ -1757,11 +1767,26 @@ class WorkspaceController {
    * Hide the suggestions dropdown
    */
   hideSuggestions() {
+    console.log('[IME] hideSuggestions called');
     const dropdown = document.getElementById('tamil-suggestions-dropdown');
     if (dropdown) {
+      // Force hide with multiple methods to ensure it's hidden
       dropdown.style.display = 'none';
+      dropdown.style.visibility = 'hidden';
+      dropdown.style.opacity = '0';
+      dropdown.classList.add('hidden');
+      console.log('[IME] ✅ Dropdown hidden');
     }
     this.translitDropdownOpen = false;
+    this.imeActive = false;
+    this.currentSuggestions = [];
+    this.activeSuggestionIndex = 0;
+    // CRITICAL: Clear currentTokenInfo when hiding suggestions to prevent stale state
+    // This prevents the "Token at stored position is no longer Latin" error
+    if (this.currentTokenInfo) {
+      console.log('[IME] Clearing currentTokenInfo when hiding suggestions');
+      this.currentTokenInfo = null;
+    }
   }
 
   // Legacy method - redirects to new method
@@ -2335,7 +2360,7 @@ class WorkspaceController {
     
     // Set the new text
     if (this.editor && this.editor.setText) {
-      this.editor.setText(newText);
+    this.editor.setText(newText);
     } else if (this.editorElement) {
       // Fallback: directly set text content
       this.editorElement.textContent = newText;
@@ -2347,7 +2372,7 @@ class WorkspaceController {
     // Set cursor after replacement
     const newPos = start + replacementText.length;
     if (this.editor && this.editor.setCursorPosition) {
-      this.editor.setCursorPosition(newPos);
+    this.editor.setCursorPosition(newPos);
     } else if (this.editorElement) {
       // Fallback: set cursor using selection
       const range = document.createRange();
@@ -2364,6 +2389,17 @@ class WorkspaceController {
     this.editorMode = window.EditorMode ? window.EditorMode.IDLE : 'IDLE';
     this.currentTokenInfo = null;
     this.lastFetchToken = null; // Reset to allow new suggestions
+    
+    // CRITICAL: Set flag to prevent fetching suggestions immediately after replacement
+    // This prevents the dropdown from showing again right after selection
+    this.justReplacedToken = true;
+    this.hideSuggestions(); // Ensure dropdown is hidden
+    
+    // Clear the flag after a short delay to allow normal suggestion fetching for next word
+    setTimeout(() => {
+      this.justReplacedToken = false;
+      console.log('[IME] ✅ Flag cleared, suggestions can be fetched again');
+    }, 500); // 500ms delay to prevent immediate refetch
     
     // Manually trigger editor change to allow new suggestions for next word
     // Use setTimeout to ensure the text is set first
