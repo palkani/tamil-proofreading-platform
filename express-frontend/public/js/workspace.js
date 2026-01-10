@@ -5,6 +5,15 @@ console.log('[WorkspaceJS] ✅✅✅ Loaded version v20251229a - cacheKey fix ap
 console.log('[WorkspaceJS] CacheKey is now declared at the start of fetchRunnerSuggestions method (line 315)');
 console.log('[WorkspaceJS] If you see this, the NEW file is loaded. Old file would NOT show this message.');
 
+// CRITICAL: Ensure USE_TIPTAP_EDITOR is set to false at the very top
+// This prevents any initialization issues
+if (typeof window.USE_TIPTAP_EDITOR === 'undefined') {
+  window.USE_TIPTAP_EDITOR = false;
+  console.log('[WorkspaceJS] ✅ USE_TIPTAP_EDITOR initialized to false');
+} else {
+  console.log('[WorkspaceJS] USE_TIPTAP_EDITOR already set to:', window.USE_TIPTAP_EDITOR);
+}
+
 // ============================================
 // TAMIL LINGUISTIC FILTERING UTILITIES
 // ============================================
@@ -365,8 +374,8 @@ class WorkspaceController {
     this.currentFetchQuery = query;
 
     try {
-      // Build API URL
-      const url = `/api/transliterate/suggest?q=${encodeURIComponent(query)}&limit=${limit}&mode=${encodeURIComponent(mode)}&_ts=${Date.now()}&_r=${Math.random().toString(36).slice(2)}`;
+      // Build API URL - use /ime/suggest endpoint which forwards to /api/v1/ime/suggest on backend
+      const url = `/api/ime/suggest?q=${encodeURIComponent(query)}&limit=${limit}&mode=${encodeURIComponent(mode)}&_ts=${Date.now()}&_r=${Math.random().toString(36).slice(2)}`;
       
       console.log('[IME] Fetching suggestions for:', query, 'from:', url);
 
@@ -543,6 +552,9 @@ class WorkspaceController {
   }
 
   init() {
+    // CRITICAL: Check USE_TIPTAP_EDITOR flag - ensure it's actually false
+    console.log('[WorkspaceJS] Initializing - USE_TIPTAP_EDITOR:', window.USE_TIPTAP_EDITOR);
+    
     // Initialize editor (only if TipTap is not active)
     if (window.USE_TIPTAP_EDITOR) {
       // Skip legacy editor initialization when TipTap is active
@@ -551,6 +563,7 @@ class WorkspaceController {
     }
 
     const editorElement = document.getElementById('editor');
+    console.log('[WorkspaceJS] Editor element found:', !!editorElement);
     if (editorElement) {
       this.editor = new TamilEditor(editorElement);
       this.editor.onChange = () => {
@@ -567,7 +580,7 @@ class WorkspaceController {
       // This ensures handleEditorChange is called even if editor.onChange doesn't fire
       let inputDebounce = null;
       editorElement.addEventListener('input', (e) => {
-        console.log("[IME] 🔔 Input event detected on editor element");
+        console.log("[IME] 🔔 Input event detected on editor element, key:", e.inputType, 'data:', e.data);
         if (inputDebounce) {
           clearTimeout(inputDebounce);
         }
@@ -578,6 +591,8 @@ class WorkspaceController {
           inputDebounce = null;
         }, 150); // Small debounce to prevent duplicate calls
       }, { passive: true });
+      
+      console.log('[WorkspaceJS] ✅ Input event listener attached to editor element');
       
       // Also listen to keyup events as additional fallback
       editorElement.addEventListener('keyup', (e) => {
@@ -806,13 +821,20 @@ class WorkspaceController {
       return;
     }
     
-    // CRITICAL: Skip fetching suggestions if we just replaced a token
-    // This prevents the dropdown from showing again immediately after selection
-    if (this.justReplacedToken) {
-      console.log('[IME] ⏭️ Skipping suggestion fetch - just replaced token');
+    // CRITICAL: Skip fetching suggestions ONLY if we just replaced a token AND it's the same token
+    // This prevents the dropdown from showing again immediately after selection for the SAME word
+    // But allows fetching for the NEXT word
+    if (this.justReplacedToken && this.lastFetchToken && token === this.lastFetchToken) {
+      console.log('[IME] ⏭️ Skipping suggestion fetch - just replaced this same token:', token);
       this.updateWordCount();
       this.scheduleSave();
       return;
+    }
+    
+    // If flag is set but token changed, clear it and proceed (user moved to next word)
+    if (this.justReplacedToken && (!this.lastFetchToken || token !== this.lastFetchToken)) {
+      console.log('[IME] ✅ Token changed after replacement, clearing flag and allowing fetch');
+      this.justReplacedToken = false;
     }
     
     this.updateWordCount();
@@ -909,9 +931,13 @@ class WorkspaceController {
     this.lastFetchToken = token;
     
     // Debounce the fetch to prevent duplicate calls
+    console.log('[IME] ⏳ Setting up debounce for token:', token, 'delay: 200ms');
     this.suggestDebounce = setTimeout(() => {
+      console.log('[IME] ⏰ Debounce timer fired for token:', token);
+      
       // Final check: token must still match
       if (this.lastFetchToken !== token) {
+        console.log('[IME] ⚠️ Token changed during debounce, skipping fetch. Expected:', token, 'Got:', this.lastFetchToken);
         return;
       }
       
@@ -920,30 +946,45 @@ class WorkspaceController {
       
       // Final duplicate check before making the call
       if (this.fetchingSuggestions && this.currentFetchQuery === token) {
-        console.log("[IME] Duplicate call prevented: fetch already in progress for:", token);
+        console.log("[IME] ⚠️ Duplicate call prevented: fetch already in progress for:", token);
         return;
       }
       
       // Use smart mode (backend handles all modes)
       const mode = 'smart';
       this.lastFetchTime = Date.now(); // Track when we last fetched
-      console.log('[IME] 🚀 Calling fetchRunnerSuggestions for token:', token, 'URL will be:', `/api/transliterate/suggest?q=${encodeURIComponent(token)}&limit=8&mode=${mode}`);
+      console.log('[IME] 🚀 DEBOUNCE COMPLETE - About to call fetchRunnerSuggestions for token:', token);
+      console.log('[IME] 🚀 API URL will be:', `/api/ime/suggest?q=${encodeURIComponent(token)}&limit=8&mode=${mode}`);
+      console.log('[IME] 🚀 Current state:', {
+        fetchingSuggestions: this.fetchingSuggestions,
+        currentFetchQuery: this.currentFetchQuery,
+        lastFetchToken: this.lastFetchToken,
+        justReplacedToken: this.justReplacedToken
+      });
       
       // Make the API call
+      console.log('[IME] 🚀 Calling fetchRunnerSuggestions NOW...');
       this.fetchRunnerSuggestions({ q: token, limit: 8, mode: mode }).then(suggestions => {
         console.log('[IME] ✅ fetchRunnerSuggestions returned:', suggestions ? suggestions.length : 0, 'suggestions');
         if (suggestions && suggestions.length > 0) {
-          console.log('[IME] First suggestion:', suggestions[0]);
+          console.log('[IME] ✅ First suggestion:', suggestions[0]);
+          console.log('[IME] ✅ All suggestions:', suggestions.map(s => s.text || s.word));
         } else {
-          console.log('[IME] ⚠️ No suggestions returned');
+          console.log('[IME] ⚠️ No suggestions returned from API');
         }
       }).catch(err => {
         console.error('[IME] ❌ fetchRunnerSuggestions error:', err);
+        console.error('[IME] ❌ Error details:', {
+          name: err.name,
+          message: err.message,
+          stack: err.stack
+        });
         // Reset state on error so next call can proceed
         this.fetchingSuggestions = false;
         this.currentFetchQuery = null;
       });
     }, 200); // 200ms debounce - optimized for faster response
+    console.log('[IME] ✅ Debounce timer set, will fire in 200ms');
   }
   
   clearSuggestions() {
@@ -2520,27 +2561,25 @@ class WorkspaceController {
     this.currentTokenInfo = null;
     this.lastFetchToken = null; // Reset to allow new suggestions
     
-    // CRITICAL: Set flag to prevent fetching suggestions immediately after replacement
-    // This prevents the dropdown from showing again right after selection
+    // CRITICAL: Set flag to prevent fetching suggestions for the SAME token that was just replaced
+    // This prevents the dropdown from showing again right after selection for the same word
     this.justReplacedToken = true;
     this.hideSuggestions(); // Ensure dropdown is hidden
     
-    // Clear the flag after a short delay to allow normal suggestion fetching for next word
+    // Clear the flag after replacement completes to allow normal suggestion fetching for next word
+    // Reset immediately after a brief delay to allow next word suggestions
     setTimeout(() => {
       this.justReplacedToken = false;
       console.log('[IME] ✅ Flag cleared, suggestions can be fetched again');
-    }, 500); // 500ms delay to prevent immediate refetch
-    
-    // Manually trigger editor change to allow new suggestions for next word
-    // Use setTimeout to ensure the text is set first
-    setTimeout(() => {
+      
+      // Manually trigger editor change AFTER flag is cleared to allow new suggestions for next word
       console.log("[IME] Manually triggering editor change after token replacement");
       if (this.editor && this.editor.onChange) {
         this.editor.onChange();
       } else {
         this.handleEditorChange();
       }
-    }, 10);
+    }, 300); // 300ms delay - enough to prevent duplicate fetch but short enough for next word
   }
 
   replaceLastWord(word, replacement) {

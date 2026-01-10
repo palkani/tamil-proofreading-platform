@@ -37,8 +37,8 @@
       // Persist token for auth guard and API usage
       localStorage.setItem('access_token', token);
       document.cookie = `access_token=${token}; path=/; SameSite=Lax`;
-      // Redirect immediately to workspace after storing token
-      window.location.replace('/workspace');
+      // Redirect immediately to drafts page after storing token
+      window.location.replace('/drafts');
     }
   })();
 </script>
@@ -75,7 +75,7 @@
         </div>
       </div>
 
-      <form method="POST" action="/login" class="space-y-6">
+      <form id="login-form" method="POST" action="/api/auth/login" class="space-y-6">
         <div>
           <label for="email" class="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
           <input 
@@ -148,12 +148,56 @@ document.getElementById('google-signin-btn')?.addEventListener('click', () => {
     errorDiv.classList.remove('hidden');
   }
 });
+
+// Handle login form submission
+document.getElementById('login-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  const errorDiv = document.getElementById('error-message');
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Signing in...';
+  errorDiv.classList.add('hidden');
+  
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      const errorMessage = data?.error || data?.message || 'Login failed';
+      throw new Error(String(errorMessage));
+    }
+    
+    // Login successful - store access token if provided
+    if (data.access_token) {
+      localStorage.setItem('access_token', data.access_token);
+      document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax`;
+    }
+    
+    // Redirect to drafts page
+    window.location.href = '/drafts';
+  } catch (error) {
+    const errorMessage = error?.message || 'An unexpected error occurred';
+    errorDiv.textContent = errorMessage;
+    errorDiv.classList.remove('hidden');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Sign In';
+  }
+});
 </script>
 
 <%- include('../partials/footer') %>
 
 <script>
-  // Auto-consume ?redirect=/workspace?access_token=... on page load
+  // Auto-consume ?redirect=/drafts?access_token=... on page load
   (function handleRedirectToken() {
     const params = new URLSearchParams(window.location.search);
     const redirectParam = params.get('redirect');
@@ -188,8 +232,8 @@ document.getElementById('google-signin-btn')?.addEventListener('click', () => {
     if (tokenFromRedirect) {
       // 1) Save token
       persistAccessToken(tokenFromRedirect);
-      // 2) Send the user to the workspace without leaking the token in the URL
-      window.location.replace('/workspace');
+      // 2) Send the user to the drafts page without leaking the token in the URL
+      window.location.replace('/drafts');
       return;
     }
 
@@ -197,7 +241,7 @@ document.getElementById('google-signin-btn')?.addEventListener('click', () => {
     const existingToken = localStorage.getItem('access_token');
     if (existingToken) {
       persistAccessToken(existingToken); // ensure cookie is present
-      window.location.replace('/workspace');
+      window.location.replace('/drafts');
     }
   })();
 </script>

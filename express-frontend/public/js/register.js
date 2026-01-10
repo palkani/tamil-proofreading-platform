@@ -141,8 +141,8 @@ document.getElementById('register-form')?.addEventListener('submit', async (e) =
       localStorage.setItem('access_token', data.access_token);
     }
     
-    // Redirect to dashboard
-    window.location.href = '/dashboard';
+    // Redirect to drafts page
+    window.location.href = '/drafts';
   } catch (error) {
     const errorMessage = error?.message || 'An unexpected error occurred';
     errorDiv.textContent = errorMessage;

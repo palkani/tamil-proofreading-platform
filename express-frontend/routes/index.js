@@ -36,11 +36,11 @@ router.get('/how-to-use', (req, res) => {
   });
 });
 
-// Login page - redirect authenticated users to workspace
+// Login page - redirect authenticated users to drafts
 router.get('/login', (req, res) => {
   if (req.user) {
-    console.log('[AUTH] user already authenticated, redirecting to /workspace');
-    return res.redirect('/workspace');
+    console.log('[AUTH] user already authenticated, redirecting to /drafts');
+    return res.redirect('/drafts');
   }
   const seo = getSeoData('login');
   res.render('pages/login', { 
@@ -55,11 +55,11 @@ router.get('/login', (req, res) => {
 // Resolve Google Client ID once (prefer NEXT_PUBLIC_* so Vercel runtime matches frontend expectation)
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
 
-// Register page - redirect authenticated users to workspace
+// Register page - redirect authenticated users to drafts
 router.get('/register', (req, res) => {
   if (req.user) {
-    console.log('[AUTH] user already authenticated, redirecting to /workspace');
-    return res.redirect('/workspace');
+    console.log('[AUTH] user already authenticated, redirecting to /drafts');
+    return res.redirect('/drafts');
   }
   const seo = getSeoData('register');
   res.render('pages/register', { 
