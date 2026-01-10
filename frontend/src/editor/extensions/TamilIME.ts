@@ -236,19 +236,14 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                 storage.index = 0;
               }
               
-              console.log('[TamilIME] 🎨 Creating dropdown widget at position', storage.end, 'with', storage.candidates.length, 'candidates');
+              // Use current cursor position (selection.from) instead of storage.end
+              // This ensures dropdown appears under the last typing letter
+              const currentCursorPos = state.selection.from;
+              console.log('[TamilIME] 🎨 Creating dropdown widget at cursor position', currentCursorPos, 'with', storage.candidates.length, 'candidates');
               
-              // Get the position coordinates for proper positioning
-              let pos: { left: number; top: number; bottom: number } | null = null;
-              try {
-                pos = editorView.coordsAtPos(storage.end);
-                console.log('[TamilIME] 🎨 Dropdown position:', pos);
-              } catch (e) {
-                console.warn('[TamilIME] ⚠️ Could not get coordinates:', e);
-              }
-              
-              // Suggestion dropdown widget - appears below the typed text
-              const dropdownWidget = Decoration.widget(storage.end, () => {
+              // Suggestion dropdown widget - appears below the cursor (last typing letter)
+              // Use the cursor position for the widget anchor
+              const dropdownWidget = Decoration.widget(currentCursorPos, () => {
                 console.log('[TamilIME] 🎨 Widget function called - creating dropdown DOM');
                 const container = document.createElement('div');
                 container.className = 'tamil-ime-dropdown';
@@ -256,30 +251,31 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                 container.setAttribute('data-token', storage.token || '');
                 container.setAttribute('data-candidates', storage.candidates.length.toString());
                 
-                // Get position coordinates (use cached pos or get fresh)
-                let rect: { left: number; top: number; bottom: number };
-                try {
-                  const coords = editorView.coordsAtPos(storage.end);
-                  // For fixed positioning, coordsAtPos already returns viewport coordinates
-                  rect = {
-                    left: coords.left,
-                    top: coords.top,
-                    bottom: coords.bottom
-                  };
-                } catch (e) {
-                  // Fallback: try to get position from cached pos
-                  if (pos) {
-                    rect = pos;
-                  } else {
+                // Get position coordinates using current cursor position (always fresh)
+                const getPosition = () => {
+                  try {
+                    // Always get fresh cursor position from current editor state
+                    const currentPos = editorView.state.selection.from;
+                    const coords = editorView.coordsAtPos(currentPos);
+                    // For fixed positioning, coordsAtPos already returns viewport coordinates
+                    return {
+                      left: coords.left,
+                      top: coords.top,
+                      bottom: coords.bottom
+                    };
+                  } catch (e) {
+                    console.warn('[TamilIME] ⚠️ Could not get coordinates:', e);
                     // Last resort: use editor viewport position
                     const editorRect = editorView.dom.getBoundingClientRect();
-                    rect = {
+                    return {
                       left: editorRect.left + 50,
                       top: editorRect.top + 100,
                       bottom: editorRect.top + 120
                     };
                   }
-                }
+                };
+                
+                const rect = getPosition();
                 
                 // Ensure dropdown is visible and properly positioned
                 container.style.cssText = `
@@ -329,11 +325,18 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                   item.appendChild(number);
                   item.appendChild(text);
                   
-                  // Click handler
+                  // Click handler - commit with current selection
                   item.onclick = (e) => {
                     e.stopPropagation();
+                    e.preventDefault();
+                    // Get fresh token positions from current editor state
+                    const currentState = editorView.state;
+                    const currentTokenInfo = getTokenAtCaret(currentState);
+                    // Update storage with fresh positions before committing
                     storage.index = i;
                     storage.ghost = candidate.text;
+                    storage.start = currentTokenInfo.start;
+                    storage.end = currentTokenInfo.end;
                     extension.commit();
                   };
                   
@@ -349,17 +352,13 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                 container.appendChild(list);
                 container.appendChild(instruction);
                 
-                // Update position when editor scrolls or resizes
+                // Update position when cursor moves, editor scrolls or resizes
                 const updatePosition = () => {
-                  if (container.parentElement && storage.end !== null) {
-                    try {
-                      const coords = editorView.coordsAtPos(storage.end);
-                      container.style.left = `${coords.left}px`;
-                      container.style.top = `${coords.bottom + 8}px`;
-                      console.log('[TamilIME] 🎨 Position updated to:', { left: coords.left, top: coords.bottom + 8 });
-                    } catch (e) {
-                      console.warn('[TamilIME] ⚠️ Position update failed:', e);
-                    }
+                  if (container.parentElement) {
+                    const newRect = getPosition();
+                    container.style.left = `${newRect.left}px`;
+                    container.style.top = `${newRect.bottom + 8}px`;
+                    console.log('[TamilIME] 🎨 Position updated to:', { left: newRect.left, top: newRect.bottom + 8 });
                   }
                 };
                 
@@ -436,7 +435,9 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
               // Recreate decorations with fresh storage reference
               const freshDecos: Decoration[] = [];
               if (currentStorage.candidates.length > 0 && currentStorage.start !== null && currentStorage.end !== null) {
-                const freshWidget = Decoration.widget(currentStorage.end, () => {
+                // Use current cursor position for widget placement
+                const currentCursorPos = currentState.selection.from;
+                const freshWidget = Decoration.widget(currentCursorPos, () => {
                   // Use fresh storage reference directly
                   const widgetStorage = extension.storage as TamilIMEStorage;
                   console.log('[TamilIME] 🎨 Creating fresh dropdown widget with', widgetStorage.candidates.length, 'candidates');
@@ -445,15 +446,19 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                   container.className = 'tamil-ime-dropdown';
                   container.setAttribute('data-tamil-ime', 'true');
                   
-                  // Get position
-                  let rect: { left: number; top: number; bottom: number };
-                  try {
-                    const coords = editorView.coordsAtPos(widgetStorage.end);
-                    rect = { left: coords.left, top: coords.top, bottom: coords.bottom };
-                  } catch (e) {
-                    const editorRect = editorView.dom.getBoundingClientRect();
-                    rect = { left: editorRect.left + 50, top: editorRect.top + 100, bottom: editorRect.top + 120 };
-                  }
+                  // Get position function - always uses current cursor position
+                  const getPosition = () => {
+                    try {
+                      const currentPos = editorView.state.selection.from;
+                      const coords = editorView.coordsAtPos(currentPos);
+                      return { left: coords.left, top: coords.top, bottom: coords.bottom };
+                    } catch (e) {
+                      const editorRect = editorView.dom.getBoundingClientRect();
+                      return { left: editorRect.left + 50, top: editorRect.top + 100, bottom: editorRect.top + 120 };
+                    }
+                  };
+                  
+                  const rect = getPosition();
                   
                   container.style.cssText = `
                     position: fixed !important;
@@ -498,8 +503,15 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                     
                     item.onclick = (e) => {
                       e.stopPropagation();
+                      e.preventDefault();
+                      // Get fresh token positions from current editor state
+                      const currentState = editorView.state;
+                      const currentTokenInfo = getTokenAtCaret(currentState);
+                      // Update storage with fresh positions before committing
                       widgetStorage.index = i;
                       widgetStorage.ghost = candidate.text;
+                      widgetStorage.start = currentTokenInfo.start;
+                      widgetStorage.end = currentTokenInfo.end;
                       extension.commit();
                     };
                     
@@ -1010,12 +1022,13 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
 
   commit() {
     const storage = this.storage as TamilIMEStorage;
-    if (!storage.ghost || storage.start === null || storage.end === null) {
-      console.log('[TamilIME] ⚠️ Cannot commit - missing ghost or positions');
+    if (!storage.ghost) {
+      console.log('[TamilIME] ⚠️ Cannot commit - missing ghost text');
       return false;
     }
 
-    // Verify the token at this position is still Latin (not Tamil)
+    // Always get fresh token positions from current editor state
+    // This ensures we replace the correct word even if cursor moved
     const currentToken = getTokenAtCaret(this.editor.state);
     if (!isLatinToken(currentToken.token)) {
       console.log('[TamilIME] ⚠️ Cannot commit - token is not Latin:', currentToken.token);
@@ -1023,24 +1036,40 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
       return false;
     }
 
-    // Double-check the token matches what we expect
+    // Use fresh positions from current state, not stale storage values
+    const freshStart = currentToken.start;
+    const freshEnd = currentToken.end;
+    
+    if (freshStart < 0 || freshEnd < 0 || freshEnd <= freshStart) {
+      console.log('[TamilIME] ⚠️ Cannot commit - invalid token positions:', { freshStart, freshEnd });
+      this.clear();
+      return false;
+    }
+
+    // Verify the token at the position is still Latin
     const docText = this.editor.state.doc.textBetween(0, this.editor.state.doc.content.size, '\n', '\n');
-    const tokenAtPosition = docText.slice(storage.start, storage.end);
+    const tokenAtPosition = docText.slice(freshStart, freshEnd);
     if (!isLatinToken(tokenAtPosition)) {
       console.log('[TamilIME] ⚠️ Cannot commit - token at position is not Latin:', tokenAtPosition);
       this.clear();
       return false;
     }
 
-    console.log('[TamilIME] ✅ Committing suggestion:', storage.ghost, 'replacing:', tokenAtPosition);
+    console.log('[TamilIME] ✅ Committing suggestion:', storage.ghost, 'replacing:', tokenAtPosition, 'at positions', freshStart, '-', freshEnd);
+    
+    // Replace the typed word with selected word
     this.editor
       .chain()
       .focus()
       .insertContentAt(
-        { from: storage.start, to: storage.end },
+        { from: freshStart, to: freshEnd },
         storage.ghost
       )
       .run();
+
+    // Move cursor to end of replaced text
+    const newCursorPos = freshStart + storage.ghost.length;
+    this.editor.commands.setTextSelection(newCursorPos);
 
     this.clear();
     return true;
