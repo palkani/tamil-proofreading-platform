@@ -65,7 +65,7 @@ export default function DraftsPage() {
   };
 
   const handleNewDraft = () => {
-    router.push('/submit');
+    router.push('/workspace');
   };
 
   const formatDate = (dateString: string) => {

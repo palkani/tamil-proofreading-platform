@@ -600,6 +600,26 @@ class WorkspaceController {
       editorElement.addEventListener('blur', () => this.clearTranslitSuggestions());
       window.addEventListener('resize', () => this.repositionTranslitDropdown());
       this.editorElement.addEventListener('keydown', (e) => this.handleKeyDown(e));
+      
+      // Add paste handler to trigger AI suggestions for pasted Tamil text
+      editorElement.addEventListener('paste', (e) => {
+        // Get pasted text after paste event completes
+        setTimeout(() => {
+          const text = this.getEditorText() || '';
+          if (text.trim().length > 0) {
+            console.log('[WorkspaceJS] 📋 Paste detected, triggering analysis for pasted text');
+            // Check if text contains Tamil characters (indicating Tamil text was pasted)
+            const hasTamil = /[\u0B80-\u0BFF]/.test(text);
+            if (hasTamil && text.trim().length >= 20) {
+              // Trigger auto-analysis for pasted Tamil text
+              this.scheduleSubmitThrottled(text);
+            }
+            // Also update word count and save
+            this.updateWordCount();
+            this.scheduleSave();
+          }
+        }, 100); // Small delay to ensure paste content is in DOM
+      }, { passive: true });
     }
 
     // Transliteration V2 (feature-flagged)
@@ -1363,21 +1383,22 @@ class WorkspaceController {
     // Force another reflow after positioning
     void dropdown.offsetHeight;
     
+    // CRITICAL: Save position values before any style modifications
+    const savedLeft = dropdown.style.left;
+    const savedTop = dropdown.style.top;
+    
     console.log('[IME] Dropdown positioned, computed style:', {
       display: window.getComputedStyle(dropdown).display,
       visibility: window.getComputedStyle(dropdown).visibility,
       opacity: window.getComputedStyle(dropdown).opacity,
       zIndex: window.getComputedStyle(dropdown).zIndex,
-      left: dropdown.style.left,
-      top: dropdown.style.top,
+      left: savedLeft,
+      top: savedTop,
       width: window.getComputedStyle(dropdown).width,
       height: window.getComputedStyle(dropdown).height
     });
 
-    // CRITICAL: Explicitly show the dropdown with all necessary styles
-    // Remove any existing inline styles first, then apply fresh
-    dropdown.removeAttribute('style');
-    
+    // CRITICAL: Apply additional styling while PRESERVING position from positionDropdown()
     // Use setProperty with !important to override any CSS
     dropdown.style.setProperty('display', 'block', 'important');
     dropdown.style.setProperty('visibility', 'visible', 'important');
@@ -1385,6 +1406,11 @@ class WorkspaceController {
     dropdown.style.setProperty('pointer-events', 'auto', 'important');
     dropdown.style.setProperty('position', 'fixed', 'important');
     dropdown.style.setProperty('z-index', '999999', 'important');
+    
+    // CRITICAL: Restore position values (these were set by positionDropdown)
+    if (savedLeft) dropdown.style.setProperty('left', savedLeft, 'important');
+    if (savedTop) dropdown.style.setProperty('top', savedTop, 'important');
+    
     dropdown.style.setProperty('background', '#ffffff', 'important');
     dropdown.style.setProperty('border', '1px solid rgba(79, 70, 229, 0.15)', 'important');
     dropdown.style.setProperty('border-radius', '16px', 'important');
@@ -1522,26 +1548,68 @@ class WorkspaceController {
           finalCheck.style.setProperty('position', 'fixed', 'important');
           finalCheck.style.setProperty('pointer-events', 'auto', 'important');
           
-          // Check if it's actually in viewport
+          // Check if dropdown is actually visible and in viewport - but don't move to center
+          // Instead, ensure it stays near cursor but adjust minimally if needed
           const rect = finalCheck.getBoundingClientRect();
-          const inViewport = rect.top >= 0 && rect.left >= 0 && 
-                           rect.bottom <= window.innerHeight && 
-                           rect.right <= window.innerWidth;
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
           
-          if (!inViewport || rect.left < 0) {
-            console.warn('[IME] ⚠️ Dropdown is outside viewport! Moving to center...', {
-              left: rect.left,
-              top: rect.top,
-              right: rect.right,
-              bottom: rect.bottom,
-              viewport: { width: window.innerWidth, height: window.innerHeight }
+          // Get current cursor position to maintain relationship
+          const selection = window.getSelection();
+          let cursorRect = null;
+          if (selection && selection.rangeCount > 0) {
+            try {
+              const range = selection.getRangeAt(0);
+              cursorRect = range.getBoundingClientRect();
+            } catch (e) {
+              console.warn('[IME] Could not get cursor position for final check');
+            }
+          }
+          
+          // Only adjust if dropdown is completely outside viewport AND we have cursor position
+          if (cursorRect && (rect.left < 0 || rect.right > viewportWidth || rect.top < 0 || rect.bottom > viewportHeight)) {
+            // Recalculate position based on cursor to keep it under the cursor
+            let adjustedLeft = cursorRect.left;
+            let adjustedTop = cursorRect.bottom + 8;
+            
+            // Adjust horizontally if needed (but keep near cursor)
+            if (adjustedLeft + rect.width > viewportWidth) {
+              adjustedLeft = Math.max(10, viewportWidth - rect.width - 10);
+            }
+            if (adjustedLeft < 10) {
+              adjustedLeft = 10;
+            }
+            
+            // Adjust vertically if needed (show above cursor if below viewport)
+            if (adjustedTop + rect.height > viewportHeight) {
+              adjustedTop = Math.max(10, cursorRect.top - rect.height - 8);
+            }
+            if (adjustedTop < 10) {
+              adjustedTop = 10;
+            }
+            
+            console.log('[IME] ⚠️ Dropdown adjusted to stay in viewport while maintaining cursor relationship:', {
+              cursorPos: { left: cursorRect.left, top: cursorRect.top, bottom: cursorRect.bottom },
+              originalPos: { left: rect.left, top: rect.top },
+              adjustedPos: { left: adjustedLeft, top: adjustedTop },
+              viewport: { width: viewportWidth, height: viewportHeight }
             });
-            // Position at center of viewport
-            const centerX = window.innerWidth / 2;
-            const centerY = window.innerHeight / 2;
-            finalCheck.style.setProperty('left', `${centerX - 150}px`, 'important');
-            finalCheck.style.setProperty('top', `${centerY - 100}px`, 'important');
-            finalCheck.style.setProperty('transform', 'none', 'important');
+            
+            finalCheck.style.setProperty('left', `${adjustedLeft}px`, 'important');
+            finalCheck.style.setProperty('top', `${adjustedTop}px`, 'important');
+          } else if (!cursorRect && (rect.left < 0 || rect.right > viewportWidth || rect.top < 0 || rect.bottom > viewportHeight)) {
+            // Only if we can't get cursor position, do minimal adjustment
+            console.warn('[IME] ⚠️ Dropdown outside viewport but no cursor position available. Adjusting minimally...');
+            let adjustedLeft = Math.max(10, rect.left);
+            let adjustedTop = Math.max(10, rect.top);
+            if (adjustedLeft + rect.width > viewportWidth) {
+              adjustedLeft = Math.max(10, viewportWidth - rect.width - 10);
+            }
+            if (adjustedTop + rect.height > viewportHeight) {
+              adjustedTop = Math.max(10, viewportHeight - rect.height - 10);
+            }
+            finalCheck.style.setProperty('left', `${adjustedLeft}px`, 'important');
+            finalCheck.style.setProperty('top', `${adjustedTop}px`, 'important');
           }
         }
       } else {
@@ -1622,65 +1690,127 @@ class WorkspaceController {
       
       const selection = window.getSelection();
       let left, top;
+      let cursorRect = null;
       
       if (selection && selection.rangeCount > 0) {
         try {
-          const range = selection.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
+          const range = selection.getRangeAt(0).cloneRange();
+          range.collapse(true); // Ensure range is collapsed at cursor
           
-          // Ensure it's within viewport bounds
+          // Use getCaretClientRect() helper which inserts a marker for accurate positioning
+          // This is more reliable than getBoundingClientRect() for collapsed ranges
+          cursorRect = getCaretClientRect();
+          
+          // Fallback to getBoundingClientRect if getCaretClientRect fails
+          if (!cursorRect || cursorRect.width === 0) {
+            cursorRect = range.getBoundingClientRect();
+            // If still no valid rect, create a marker node to get accurate position
+            if ((!cursorRect || cursorRect.width === 0) && range.startContainer) {
+              const marker = document.createElement('span');
+              marker.style.position = 'fixed';
+              marker.style.visibility = 'hidden';
+              marker.style.pointerEvents = 'none';
+              marker.textContent = '\u200b'; // Zero-width space
+              try {
+                range.insertNode(marker);
+                cursorRect = marker.getBoundingClientRect();
+                marker.parentNode?.removeChild(marker);
+              } catch (e) {
+                console.warn('[IME] Could not insert marker for cursor position');
+              }
+            }
+          }
+          
+          if (cursorRect && (cursorRect.width > 0 || cursorRect.height > 0 || cursorRect.left || cursorRect.top)) {
+            // Ensure it's within viewport bounds
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            // Position dropdown directly under the cursor (last typed letter)
+            left = cursorRect.left || cursorRect.x || 0;
+            top = (cursorRect.bottom || cursorRect.y + cursorRect.height || cursorRect.top + 20) + 8;
+            
+            // CRITICAL: Only adjust if dropdown would go off-screen, but keep it near cursor
+            // Adjust horizontally if needed (but stay as close to cursor as possible)
+            if (left + dropdownWidth > viewportWidth) {
+              // Move left to fit, but try to keep cursor visible
+              left = Math.max(10, viewportWidth - dropdownWidth - 10);
+            }
+            // Ensure left is never negative
+            if (left < 10) {
+              left = 10;
+            }
+            
+            // Adjust vertically if needed (show above cursor if below viewport)
+            if (top + dropdownHeight > viewportHeight) {
+              // Show above cursor instead
+              const cursorTop = cursorRect.top || cursorRect.y || top;
+              top = Math.max(10, cursorTop - dropdownHeight - 8);
+            }
+            if (top < 0) top = 10;
+            
+            console.log('[IME] Positioned dropdown at cursor:', { 
+              left, 
+              top, 
+              cursorRect: { 
+                left: cursorRect.left, 
+                top: cursorRect.top, 
+                bottom: cursorRect.bottom,
+                right: cursorRect.right,
+                width: cursorRect.width, 
+                height: cursorRect.height 
+              },
+              dropdownSize: { width: dropdownWidth, height: dropdownHeight },
+              viewport: { width: viewportWidth, height: viewportHeight },
+              finalPosition: { left, top }
+            });
+          } else {
+            throw new Error('Invalid cursor rect');
+          }
+          } else {
+            console.warn('[IME] Invalid cursor rect, trying alternative method');
+            // Try using range.getBoundingClientRect() as fallback
+            const range = selection.getRangeAt(0).cloneRange();
+            range.collapse(true);
+            const rect = range.getBoundingClientRect();
+            if (rect.width > 0 || rect.height > 0 || rect.left || rect.top) {
+              cursorRect = rect;
+              const viewportWidth = window.innerWidth;
+              const viewportHeight = window.innerHeight;
+              left = rect.left || 100;
+              top = (rect.bottom || rect.top + 20) + 8;
+              // Basic viewport adjustment
+              if (left + dropdownWidth > viewportWidth) left = Math.max(10, viewportWidth - dropdownWidth - 10);
+              if (left < 10) left = 10;
+              if (top + dropdownHeight > viewportHeight) top = Math.max(10, rect.top - dropdownHeight - 8);
+              if (top < 0) top = 10;
+            } else {
+              throw new Error('Cannot get valid cursor position');
+            }
+          }
+        } catch (rangeError) {
+          console.warn('[IME] Error getting cursor position, using fallback:', rangeError);
+          cursorRect = null;
+          // Don't set left/top here, let fallback logic handle it
+        }
+      }
+      
+      // If we couldn't get cursor position, use fallback methods
+      if (typeof left === 'undefined' || typeof top === 'undefined') {
+        if (this.editorElement) {
+          // Fallback: position relative to editor
+          const editorRect = this.editorElement.getBoundingClientRect();
+          left = Math.max(10, editorRect.left + 50);
+          top = Math.max(10, editorRect.top + 100);
+          console.log('[IME] Positioned dropdown relative to editor:', { left, top, editorRect });
+        } else {
+          // Last resort: position at center of viewport (but this should rarely happen)
           const viewportWidth = window.innerWidth;
           const viewportHeight = window.innerHeight;
-          
-          left = rect.left;
-          top = rect.bottom + 8;
-          
-          // CRITICAL FIX: Ensure dropdown is always within viewport
-          // Adjust if dropdown would go off-screen horizontally
-          if (left + dropdownWidth > viewportWidth) {
-            left = Math.max(10, viewportWidth - dropdownWidth - 10);
-          }
-          // Ensure left is never negative
-          if (left < 10) {
-            left = 10;
-          }
-          // Also check if cursor is too far left
-          if (rect.left < 0) {
-            // If cursor is off-screen, position dropdown at a safe location
-            left = 50;
-          }
-          
-          // Adjust if dropdown would go off-screen vertically
-          if (top + dropdownHeight > viewportHeight) {
-            top = Math.max(10, rect.top - dropdownHeight - 8); // Show above cursor instead
-          }
-          if (top < 0) top = 10;
-          
-          console.log('[IME] Positioned dropdown at cursor:', { 
-            left, 
-            top, 
-            cursorRect: { left: rect.left, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height },
-            dropdownSize: { width: dropdownWidth, height: dropdownHeight },
-            viewport: { width: viewportWidth, height: viewportHeight },
-            finalPosition: { left, top }
-          });
-        } catch (rangeError) {
-          console.warn('[IME] Error getting selection range, using fallback:', rangeError);
-          // Fall through to editorElement fallback
-          left = 100;
-          top = 100;
+          left = Math.max(10, (viewportWidth - dropdownWidth) / 2);
+          top = Math.max(10, (viewportHeight - dropdownHeight) / 2);
+          console.log('[IME] Positioned dropdown at center viewport (last resort):', { left, top });
         }
-      } else if (this.editorElement) {
-        // Fallback: position relative to editor
-        const editorRect = this.editorElement.getBoundingClientRect();
-        left = Math.max(10, editorRect.left + 50);
-        top = Math.max(10, editorRect.top + 100);
-        console.log('[IME] Positioned dropdown relative to editor:', { left, top, editorRect });
-      } else {
-        // Last resort: position at center of viewport
-        left = Math.max(10, (window.innerWidth - dropdownWidth) / 2);
-        top = Math.max(10, (window.innerHeight - dropdownHeight) / 2);
-        console.log('[IME] Positioned dropdown at center viewport:', { left, top });
       }
       
       // Apply positioning - use setProperty to ensure it works
@@ -3066,23 +3196,47 @@ class WorkspaceController {
     // Hide list view, show editor
     const listView = document.getElementById('drafts-list-view');
     const editorPanel = document.querySelector('.flex-1.flex.flex-col.bg-slate-50.border-r');
-    const aiPanel = document.getElementById('ai-assistant-panel');
-    
-    console.log('Showing editor - AI Panel found:', !!aiPanel);
     
     if (listView) listView.classList.add('hidden');
     if (editorPanel) {
       editorPanel.classList.remove('hidden');
       editorPanel.style.display = 'flex';
     }
-    if (aiPanel) {
-      aiPanel.classList.remove('hidden');
-      aiPanel.style.display = 'flex';
-      aiPanel.style.visibility = 'visible';
-      aiPanel.style.opacity = '1';
-      console.log('AI Assistant panel is now visible', aiPanel.offsetWidth, 'px wide');
-    } else {
-      console.error('AI Assistant panel not found!');
+    
+    // Find AI Assistant panel - try multiple times if not immediately available
+    const findAIPanel = () => {
+      const aiPanel = document.getElementById('ai-assistant-panel');
+      if (aiPanel) {
+        aiPanel.classList.remove('hidden');
+        aiPanel.style.display = 'flex';
+        aiPanel.style.visibility = 'visible';
+        aiPanel.style.opacity = '1';
+        console.log('[WorkspaceJS] ✅ AI Assistant panel is now visible', aiPanel.offsetWidth, 'px wide');
+        return true;
+      }
+      return false;
+    };
+    
+    // Try to find panel immediately
+    if (!findAIPanel()) {
+      // If not found, try again after DOM is ready (may be rendered later)
+      setTimeout(() => {
+        if (!findAIPanel()) {
+          // Last attempt after a longer delay
+          setTimeout(() => {
+            const aiPanel = document.getElementById('ai-assistant-panel');
+            if (aiPanel) {
+              aiPanel.classList.remove('hidden');
+              aiPanel.style.display = 'flex';
+              aiPanel.style.visibility = 'visible';
+              aiPanel.style.opacity = '1';
+              console.log('[WorkspaceJS] ✅ AI Assistant panel found and shown (delayed)');
+            } else {
+              console.warn('[WorkspaceJS] ⚠️ AI Assistant panel not found after retries - it may not exist on this page');
+            }
+          }, 500);
+        }
+      }, 100);
     }
   }
 
