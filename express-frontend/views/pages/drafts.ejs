@@ -165,66 +165,54 @@
     }
   }
 
-  // Helper function to refresh access token
+  // Helper function to refresh access token - use centralized authUtils
+  let refreshInProgress = false; // Prevent multiple simultaneous refresh attempts
   async function refreshAccessToken() {
+    // Prevent infinite loops - if refresh is already in progress, wait
+    if (refreshInProgress) {
+      console.log('[DRAFTS] Refresh already in progress, waiting...');
+      return null;
+    }
+    
+    refreshInProgress = true;
     try {
-      console.log('[DRAFTS] Attempting to refresh access token...');
-      // Use /auth/refresh (not /api/auth/refresh) - goes through routes/auth.js
-      const response = await fetch('/auth/refresh', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
+      // Use centralized auth utility if available
+      if (window.authUtils && window.authUtils.refreshAccessToken) {
+        const newToken = await window.authUtils.refreshAccessToken();
+        refreshInProgress = false;
+        return newToken;
+      } else {
+        // Fallback to direct fetch (shouldn't happen if auth-utils is loaded)
+        console.warn('[DRAFTS] authUtils not available, using fallback refresh');
+        const response = await fetch('/auth/refresh', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          console.error('[DRAFTS] Token refresh failed:', response.status);
+          refreshInProgress = false;
+          // Don't redirect here - let the caller handle it to prevent loops
+          return null;
         }
-      });
-      
-      if (!response.ok) {
-        console.error('[DRAFTS] Token refresh failed:', response.status);
-        // If refresh fails, tokens are invalid - clear and redirect
-        if (response.status === 401) {
-          clearTokensAndRedirect();
-        }
-        return null;
-      }
-      
-      const data = await response.json();
-      if (data.access_token) {
-        // Use centralized auth utility if available
-        if (window.authUtils && window.authUtils.storeAccessToken) {
-          window.authUtils.storeAccessToken(data.access_token);
-        } else {
-          // Fallback
-          localStorage.removeItem('access_token');
-          document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        
+        const data = await response.json();
+        if (data.access_token) {
           localStorage.setItem('access_token', data.access_token);
           document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
+          refreshInProgress = false;
+          return data.access_token;
         }
-        console.log('[DRAFTS] Token refreshed successfully, new token:', data.access_token.substring(0, 50) + '...');
-        // Verify the new token expiration
-        const parts = data.access_token.split('.');
-        if (parts.length === 3) {
-          try {
-            let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-            while (base64.length % 4) base64 += '=';
-            const payload = JSON.parse(atob(base64));
-            const now = Math.floor(Date.now() / 1000);
-            console.log('[DRAFTS] New token expiration check:', {
-              exp: payload.exp,
-              now: now,
-              expiresAt: new Date(payload.exp * 1000).toISOString(),
-              timeUntilExpiry: payload.exp - now,
-              valid: payload.exp > now
-            });
-          } catch (e) {
-            console.error('[DRAFTS] Error checking new token expiration:', e);
-          }
-        }
-        return data.access_token;
+        refreshInProgress = false;
+        return null;
       }
-      return null;
     } catch (error) {
       console.error('[DRAFTS] Error refreshing token:', error);
+      refreshInProgress = false;
       return null;
     }
   }
