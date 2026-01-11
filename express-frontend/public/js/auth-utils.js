@@ -121,6 +121,17 @@ function isAuthenticated() {
 async function refreshAccessToken() {
   try {
     console.log('[AUTH] Attempting to refresh access token...');
+    
+    // Check if refresh token cookie exists
+    const cookies = document.cookie.split(';').reduce((acc, cookie) => {
+      const [key, value] = cookie.trim().split('=');
+      acc[key] = value;
+      return acc;
+    }, {});
+    const hasRefreshToken = cookies.proof_refresh_token || cookies.refresh_token;
+    console.log('[AUTH] Refresh token cookie present:', hasRefreshToken ? 'Yes' : 'No');
+    console.log('[AUTH] All cookies:', Object.keys(cookies));
+    
     const response = await fetch('/auth/refresh', {
       method: 'POST',
       credentials: 'include', // Important: sends cookies including proof_refresh_token
@@ -129,6 +140,8 @@ async function refreshAccessToken() {
         'Content-Type': 'application/json'
       }
     });
+    
+    console.log('[AUTH] Refresh response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();

@@ -273,24 +273,64 @@
     // This prevents 401 errors when we have a valid refresh token
     if (accessToken) {
       const expired = isTokenExpired(accessToken);
+      console.log('[DRAFTS] Token expiration check result:', expired);
       if (expired) {
-        console.log('[DRAFTS] Token is expired, refreshing before request...');
+        console.log('[DRAFTS] ⚠️ Token is expired, refreshing before request...');
+        console.log('[DRAFTS] Current token exp:', accessToken ? (() => {
+          try {
+            const parts = accessToken.split('.');
+            if (parts.length === 3) {
+              let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+              while (base64.length % 4) base64 += '=';
+              const payload = JSON.parse(atob(base64));
+              return payload.exp;
+            }
+          } catch (e) {}
+          return 'unknown';
+        })() : 'no token');
+        
         const newToken = await refreshAccessToken();
         if (newToken) {
           accessToken = newToken;
-          console.log('[DRAFTS] Token refreshed successfully before request');
+          console.log('[DRAFTS] ✅ Token refreshed successfully before request');
+          console.log('[DRAFTS] New token exp:', (() => {
+            try {
+              const parts = newToken.split('.');
+              if (parts.length === 3) {
+                let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+                while (base64.length % 4) base64 += '=';
+                const payload = JSON.parse(atob(base64));
+                return payload.exp;
+              }
+            } catch (e) {}
+            return 'unknown';
+          })());
           // Update localStorage with new token
           localStorage.setItem('access_token', newToken);
         } else {
           // Refresh failed, no valid refresh token - redirect to login
-          console.warn('[DRAFTS] Token refresh failed before request, redirecting to login');
+          console.warn('[DRAFTS] ❌ Token refresh failed before request, redirecting to login');
           setTimeout(() => {
             clearTokensAndRedirect();
           }, 100);
           return null;
         }
       } else {
-        console.log('[DRAFTS] Token is valid, proceeding with request');
+        console.log('[DRAFTS] ✅ Token is valid, proceeding with request');
+      }
+    } else {
+      console.warn('[DRAFTS] ⚠️ No access token found, attempting refresh...');
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        accessToken = newToken;
+        localStorage.setItem('access_token', newToken);
+        console.log('[DRAFTS] ✅ Got new token from refresh');
+      } else {
+        console.warn('[DRAFTS] ❌ No token and refresh failed, redirecting to login');
+        setTimeout(() => {
+          clearTokensAndRedirect();
+        }, 100);
+        return null;
       }
     }
     

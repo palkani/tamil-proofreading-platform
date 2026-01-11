@@ -19,6 +19,17 @@ const BACKEND_URL = getBackendApiUrl();
 const forward = async (req, res, path, method = 'post') => {
   try {
     const url = `${BACKEND_URL}${path}`;
+    
+    // Log cookie presence for refresh endpoint
+    if (path === '/auth/refresh') {
+      const cookies = req.headers.cookie || '';
+      const hasRefreshToken = cookies.includes('proof_refresh_token') || cookies.includes('refresh_token');
+      console.log(`[AUTH-PROXY] Refresh request - cookies present: ${hasRefreshToken}, cookie header: ${cookies ? 'Yes' : 'No'}`);
+      if (cookies) {
+        console.log(`[AUTH-PROXY] Cookie header preview: ${cookies.substring(0, 200)}...`);
+      }
+    }
+    
     const backendRes = await axios({
       method,
       url,
@@ -27,12 +38,18 @@ const forward = async (req, res, path, method = 'post') => {
       headers: {
         ...req.headers,
         host: undefined,
-        cookie: req.headers.cookie,
+        cookie: req.headers.cookie, // Explicitly forward cookie header
         origin: undefined,
       },
       withCredentials: true,
       validateStatus: () => true, // forward backend status as-is
     });
+
+    // Log response for refresh endpoint
+    if (path === '/auth/refresh') {
+      console.log(`[AUTH-PROXY] Refresh response status: ${backendRes.status}`);
+      console.log(`[AUTH-PROXY] Refresh response has access_token: ${!!backendRes.data?.access_token}`);
+    }
 
     // Propagate Set-Cookie from backend so httpOnly cookies flow to the browser
     const setCookie = backendRes.headers['set-cookie'];
