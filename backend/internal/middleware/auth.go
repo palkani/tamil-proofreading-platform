@@ -66,11 +66,24 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 
 		// Parse token with MapClaims since auth service uses MapClaims
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// Verify signing method
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrSignatureInvalid
+			}
 			return []byte(jwtSecret), nil
 		})
 
-		if err != nil || !token.Valid {
-			auditlog.Warn(c, "auth.invalid_token", map[string]any{"error": err})
+		if err != nil {
+			log.Printf("[AUTH] JWT parse error: %v", err)
+			auditlog.Warn(c, "auth.invalid_token", map[string]any{"error": err.Error(), "token_preview": tokenString[:50] + "..."})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token", "details": err.Error()})
+			c.Abort()
+			return
+		}
+		
+		if !token.Valid {
+			log.Printf("[AUTH] JWT token is not valid")
+			auditlog.Warn(c, "auth.invalid_token", map[string]any{"error": "token.Valid is false", "token_preview": tokenString[:50] + "..."})
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 			c.Abort()
 			return
