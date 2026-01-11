@@ -587,7 +587,50 @@
     }
 
     console.log('[DRAFTS] Response received, status:', response.status);
-    const data = await response.json();
+    
+    // Check if response has content
+    if (response.status === 204 || response.status === 200) {
+      const contentType = response.headers.get('content-type');
+      console.log('[DRAFTS] Response content-type:', contentType);
+      
+      // If 204 or no content, return empty array
+      if (response.status === 204 || !contentType || !contentType.includes('application/json')) {
+        console.warn('[DRAFTS] Response has no content (204) or not JSON, showing empty state');
+        loadingEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+    }
+    
+    // Parse JSON response
+    let data;
+    try {
+      const text = await response.text();
+      console.log('[DRAFTS] Response text (first 200 chars):', text.substring(0, 200));
+      if (!text || text.trim().length === 0) {
+        console.warn('[DRAFTS] Response body is empty');
+        loadingEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error('[DRAFTS] Error parsing JSON response:', e);
+      loadingEl.classList.add('hidden');
+      emptyEl.classList.remove('hidden');
+      emptyEl.innerHTML = `
+        <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <p class="text-lg font-medium">Error loading drafts</p>
+        <p class="text-sm mt-2">Invalid response from server</p>
+        <a href="/workspace" class="mt-4 inline-block btn-primary">
+          Create New Draft
+        </a>
+      `;
+      return;
+    }
+    
     console.log('[DRAFTS] Response data:', data);
     const drafts = data.submissions || data.data || [];
     console.log('[DRAFTS] Found', drafts.length, 'drafts');
