@@ -705,6 +705,44 @@
     }
   }
 })();
+
+// Ensure Create New Draft button works - add click handler after DOM is ready
+(function() {
+  function setupCreateButton() {
+    const createBtn = document.getElementById('create-new-draft-btn');
+    if (createBtn) {
+      // Remove any existing handlers
+      createBtn.onclick = null;
+      createBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        console.log('[DRAFTS] Create New Draft button clicked, navigating to /workspace');
+        window.location.href = '/workspace';
+        return false;
+      }, false);
+      console.log('[DRAFTS] Create New Draft button handler attached');
+    }
+    
+    // Also handle any other workspace links on the page
+    const workspaceLinks = document.querySelectorAll('a[href="/workspace"]');
+    workspaceLinks.forEach(link => {
+      if (link.id !== 'create-new-draft-btn') {
+        link.addEventListener('click', function(e) {
+          e.preventDefault();
+          console.log('[DRAFTS] Workspace link clicked, navigating to /workspace');
+          window.location.href = '/workspace';
+          return false;
+        }, false);
+      }
+    });
+  }
+  
+  // Run immediately if DOM is ready, otherwise wait
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupCreateButton);
+  } else {
+    setupCreateButton();
+  }
+})();
 </script>
 
 <%- include('../partials/footer') %>
