@@ -65,14 +65,41 @@
   const tokenFromUrl = urlParams.get('access_token');
   if (tokenFromUrl) {
     console.log('[DRAFTS] Token found in URL, storing it');
+    console.log('[DRAFTS] Token length:', tokenFromUrl.length);
+    console.log('[DRAFTS] Token preview:', tokenFromUrl.substring(0, 50) + '...');
+    
+    // Decode and check token expiration
+    try {
+      const parts = tokenFromUrl.split('.');
+      if (parts.length === 3) {
+        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) base64 += '=';
+        const payload = JSON.parse(atob(base64));
+        const now = Math.floor(Date.now() / 1000);
+        console.log('[DRAFTS] Token from URL expiration check:', {
+          exp: payload.exp,
+          now: now,
+          expiresAt: new Date(payload.exp * 1000).toISOString(),
+          timeUntilExpiry: payload.exp - now,
+          valid: payload.exp > now
+        });
+      }
+    } catch (e) {
+      console.error('[DRAFTS] Error checking token from URL:', e);
+    }
+    
     // Clear old tokens first
     localStorage.removeItem('access_token');
     document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
     // Store new token
     localStorage.setItem('access_token', tokenFromUrl);
     document.cookie = `access_token=${tokenFromUrl}; path=/; SameSite=Lax; Max-Age=900`;
+    console.log('[DRAFTS] Token stored in localStorage and cookie');
     // Remove token from URL
     window.history.replaceState({}, document.title, window.location.pathname);
+    
+    // Small delay to ensure token is stored before making API calls
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
 
   const loadingEl = document.getElementById('loading');
