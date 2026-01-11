@@ -241,9 +241,46 @@ async function apiFetch(url, options = {}, requireAuth = true) {
   const headers = new Headers(options.headers || {});
   
   // Get access token and add to headers if auth is required
+  // CRITICAL: Always get token fresh from localStorage, don't cache it
   let accessToken = localStorage.getItem('access_token');
+  
+  // If token exists, verify it's not expired before using it
   if (accessToken && requireAuth) {
-    headers.set('Authorization', `Bearer ${accessToken}`);
+    // Check if token is expired BEFORE making the request
+    const isExpired = (() => {
+      try {
+        const parts = accessToken.split('.');
+        if (parts.length === 3) {
+          let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          while (base64.length % 4) base64 += '=';
+          const payload = JSON.parse(atob(base64));
+          const now = Math.floor(Date.now() / 1000);
+          const clockSkewBuffer = 60; // 1 minute buffer
+          // Token is expired if: exp < now OR exp < (now + buffer) - expires soon
+          return payload.exp && (payload.exp < now || payload.exp < (now + clockSkewBuffer));
+        }
+      } catch (e) {
+        // If we can't decode, assume not expired and let server decide
+        return false;
+      }
+      return false;
+    })();
+    
+    if (isExpired) {
+      console.log('[AUTH] Token is expired or expires soon, refreshing proactively...');
+      // Refresh token BEFORE making the request
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        accessToken = newToken;
+        console.log('[AUTH] Token refreshed proactively, using new token');
+      } else {
+        console.warn('[AUTH] Proactive refresh failed, will try request anyway');
+      }
+    }
+    
+    if (accessToken) {
+      headers.set('Authorization', `Bearer ${accessToken}`);
+    }
   }
   
   // Make initial request

@@ -437,48 +437,96 @@
     console.log('[DRAFTS] Token preview (last 20 chars):', accessToken.substring(accessToken.length - 20));
 
     console.log('[DRAFTS] Fetching submissions from /api/v1/submissions');
-    let response = await fetch('/api/v1/submissions?limit=1000&offset=0', {
-      credentials: 'include',
-      headers: headers
-    });
     
-    console.log('[DRAFTS] Response status:', response.status, response.statusText);
-    
-    // If 401, try to refresh token and retry once (only if we haven't already tried)
-    if (response.status === 401 && !refreshInProgress) {
-      console.log('[DRAFTS] Got 401, attempting token refresh...');
-      const newToken = await refreshAccessToken();
-      if (newToken) {
-        // Retry with new token - create fresh headers object
-        const retryHeaders = {
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${newToken}`
-        };
-        console.log('[DRAFTS] Retrying request with refreshed token');
-        console.log('[DRAFTS] Retry token preview:', newToken.substring(0, 50) + '...');
-        response = await fetch('/api/v1/submissions?limit=1000&offset=0', {
+    // Use centralized apiFetch if available (handles token refresh automatically)
+    let response;
+    if (window.authUtils && window.authUtils.apiFetch) {
+      console.log('[DRAFTS] Using centralized apiFetch for automatic token refresh');
+      try {
+        response = await window.authUtils.apiFetch('/api/v1/submissions?limit=1000&offset=0', {
+          method: 'GET',
           credentials: 'include',
-          headers: retryHeaders
+          headers: headers
         });
-        console.log('[DRAFTS] Retry response status:', response.status, response.statusText);
-        
-        // If retry also fails with 401, refresh token is invalid - redirect once
-        if (response.status === 401) {
-          console.warn('[DRAFTS] Still getting 401 after token refresh, refresh token is invalid');
+      } catch (error) {
+        console.error('[DRAFTS] apiFetch error:', error);
+        // If apiFetch redirects to login, return null
+        if (error.message === 'Unauthorized') {
+          return null;
+        }
+        throw error;
+      }
+    } else {
+      // Fallback to manual fetch
+      response = await fetch('/api/v1/submissions?limit=1000&offset=0', {
+        credentials: 'include',
+        headers: headers
+      });
+      
+      console.log('[DRAFTS] Response status:', response.status, response.statusText);
+      
+      // If 401, try to refresh token and retry once (only if we haven't already tried)
+      if (response.status === 401 && !refreshInProgress) {
+        console.log('[DRAFTS] Got 401, attempting token refresh...');
+        const newToken = await refreshAccessToken();
+        if (newToken) {
+          // CRITICAL: Get the token FRESH from localStorage after refresh
+          // Don't use the closure variable as it might be stale
+          const freshToken = localStorage.getItem('access_token') || newToken;
+          
+          // Retry with new token - create fresh headers object
+          const retryHeaders = new Headers();
+          retryHeaders.set('Accept', 'application/json');
+          retryHeaders.set('Authorization', `Bearer ${freshToken}`);
+          
+          console.log('[DRAFTS] Retrying request with refreshed token');
+          console.log('[DRAFTS] Retry token preview:', freshToken.substring(0, 50) + '...');
+          
+          // Verify token expiration before retry
+          const tokenExp = (() => {
+            try {
+              const parts = freshToken.split('.');
+              if (parts.length === 3) {
+                let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+                while (base64.length % 4) base64 += '=';
+                const payload = JSON.parse(atob(base64));
+                return payload.exp;
+              }
+            } catch (e) {}
+            return null;
+          })();
+          const now = Math.floor(Date.now() / 1000);
+          console.log('[DRAFTS] Retry token validation:', {
+            exp: tokenExp,
+            now: now,
+            isValid: tokenExp ? tokenExp > now : false,
+            timeUntilExpiry: tokenExp ? tokenExp - now : 'unknown'
+          });
+          
+          response = await fetch('/api/v1/submissions?limit=1000&offset=0', {
+            credentials: 'include',
+            headers: retryHeaders
+          });
+          console.log('[DRAFTS] Retry response status:', response.status, response.statusText);
+          
+          // If retry also fails with 401, refresh token is invalid - redirect once
+          if (response.status === 401) {
+            console.warn('[DRAFTS] Still getting 401 after token refresh, refresh token is invalid');
+            // Use setTimeout to prevent immediate redirect loops
+            setTimeout(() => {
+              clearTokensAndRedirect();
+            }, 100);
+            return null;
+          }
+        } else {
+          // Refresh failed, token is invalid - redirect once
+          console.warn('[DRAFTS] Token refresh failed, refresh token is invalid');
           // Use setTimeout to prevent immediate redirect loops
           setTimeout(() => {
             clearTokensAndRedirect();
           }, 100);
           return null;
         }
-      } else {
-        // Refresh failed, token is invalid - redirect once
-        console.warn('[DRAFTS] Token refresh failed, refresh token is invalid');
-        // Use setTimeout to prevent immediate redirect loops
-        setTimeout(() => {
-          clearTokensAndRedirect();
-        }, 100);
-        return null;
       }
     } else if (response.status === 401 && refreshInProgress) {
       // Already tried to refresh, don't try again
