@@ -10,7 +10,7 @@
         <h2 class="text-3xl font-bold text-gray-900 uppercase tracking-wide">
           My Drafts
         </h2>
-        <a href="/workspace" class="btn-primary flex items-center gap-2">
+        <a href="/workspace" class="btn-primary flex items-center gap-2" onclick="event.preventDefault(); window.location.href='/workspace';">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
           </svg>
@@ -557,16 +557,32 @@
   }
 
   try {
+    console.log('[DRAFTS] Starting to load drafts...');
     const response = await fetchSubmissionsWithRetry();
     
     if (!response) {
       // fetchSubmissionsWithRetry returned null (no token or redirect happened)
-      console.log('[DRAFTS] fetchSubmissionsWithRetry returned null, exiting');
+      console.warn('[DRAFTS] fetchSubmissionsWithRetry returned null');
+      loadingEl.classList.add('hidden');
+      emptyEl.classList.remove('hidden');
+      emptyEl.innerHTML = `
+        <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+        <p class="text-lg font-medium">Authentication Required</p>
+        <p class="text-sm mt-2">Please log in to view your drafts.</p>
+        <a href="/login" class="mt-4 inline-block btn-primary">
+          Log In
+        </a>
+      `;
       return;
     }
 
+    console.log('[DRAFTS] Response received, status:', response.status);
     const data = await response.json();
-    const drafts = data.submissions || [];
+    console.log('[DRAFTS] Response data:', data);
+    const drafts = data.submissions || data.data || [];
+    console.log('[DRAFTS] Found', drafts.length, 'drafts');
 
     loadingEl.classList.add('hidden');
 
