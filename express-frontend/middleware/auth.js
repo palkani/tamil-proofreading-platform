@@ -29,15 +29,37 @@ const attachUser = (req, res, next) => {
     if (payload.exp) {
       const now = Math.floor(Date.now() / 1000);
       const clockSkewTolerance = 300; // 5 minutes in seconds
-      if (payload.exp < (now - clockSkewTolerance)) {
-        // Token is expired (accounting for clock skew), don't set user
-        req.user = null;
-        // Clear expired token from cookies
-        if (req.cookies && req.cookies.access_token) {
-          res.clearCookie('access_token');
+      const isExpired = payload.exp < (now - clockSkewTolerance);
+      
+      if (isExpired) {
+        // Token is expired, but check if we have a refresh token
+        // If refresh token exists, allow the request through and let client-side handle refresh
+        // This prevents redirect loops when token expires during a session
+        const hasRefreshToken = req.cookies && req.cookies.refresh_token;
+        
+        if (hasRefreshToken) {
+          // We have a refresh token, so user is still authenticated
+          // Set user from token payload (even though expired, we can still read the user info)
+          // Client-side will handle refreshing the token
+          console.log('[AUTH] Token expired but refresh token exists, allowing request through:', { 
+            exp: payload.exp, 
+            now: now, 
+            diff: payload.exp - now 
+          });
+          // Continue to set req.user below - don't return early
+        } else {
+          // No refresh token, token is expired - clear everything
+          req.user = null;
+          if (req.cookies && req.cookies.access_token) {
+            res.clearCookie('access_token');
+          }
+          console.log('[AUTH] Token expired and no refresh token, clearing user:', { 
+            exp: payload.exp, 
+            now: now, 
+            diff: payload.exp - now 
+          });
+          return next();
         }
-        console.log('[AUTH] Token expired in attachUser:', { exp: payload.exp, now: now, diff: payload.exp - now });
-        return next();
       }
     }
     
