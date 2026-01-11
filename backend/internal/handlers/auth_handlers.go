@@ -109,16 +109,26 @@ func (h *Handlers) setRefreshCookie(c *gin.Context, token string, expiresAt time
                 maxAge = 0
         }
 
+        // Set domain for cross-site cookie support (same as access_token cookie)
+        host := c.Request.Host
+        var domain string
+        if strings.HasSuffix(host, "prooftamil.com") {
+                domain = ".prooftamil.com"
+        }
+
         http.SetCookie(c.Writer, &http.Cookie{
                 Name:     refreshTokenCookieName,
                 Value:    encrypted,
                 Path:     refreshTokenCookiePath,
+                Domain:   domain,
                 HttpOnly: true,
                 Secure:   h.refreshCookieSecure(),
-                SameSite: http.SameSiteStrictMode,
+                SameSite: http.SameSiteNoneMode, // Changed from StrictMode to NoneMode for cross-site support
                 MaxAge:   maxAge,
                 Expires:  expiresAt,
         })
+        
+        log.Printf("[AUTH] set refresh_token cookie domain=%s secure=%v samesite=None expires=%s", domain, h.refreshCookieSecure(), expiresAt.UTC().Format(time.RFC3339))
 }
 
 func (h *Handlers) setAccessTokenCookie(c *gin.Context, token string, expiresAt time.Time) {
