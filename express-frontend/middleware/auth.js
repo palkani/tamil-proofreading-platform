@@ -25,16 +25,18 @@ const attachUser = (req, res, next) => {
     // Decode without verifying signature — trust is enforced by backend
     const payload = jwt.decode(token) || {};
     
-    // Check if token is expired
+    // Check if token is expired (with 5 minute clock skew tolerance)
     if (payload.exp) {
       const now = Math.floor(Date.now() / 1000);
-      if (payload.exp < now) {
-        // Token is expired, don't set user
+      const clockSkewTolerance = 300; // 5 minutes in seconds
+      if (payload.exp < (now - clockSkewTolerance)) {
+        // Token is expired (accounting for clock skew), don't set user
         req.user = null;
         // Clear expired token from cookies
         if (req.cookies && req.cookies.access_token) {
           res.clearCookie('access_token');
         }
+        console.log('[AUTH] Token expired in attachUser:', { exp: payload.exp, now: now, diff: payload.exp - now });
         return next();
       }
     }
@@ -117,10 +119,12 @@ function authenticateJWT(req, res, next) {
       return res.status(401).json({ error: 'Invalid token' });
     }
     
-    // Check if token is expired
+    // Check if token is expired (with 5 minute clock skew tolerance)
     if (payload.exp) {
       const now = Math.floor(Date.now() / 1000);
-      if (payload.exp < now) {
+      const clockSkewTolerance = 300; // 5 minutes in seconds
+      if (payload.exp < (now - clockSkewTolerance)) {
+        console.log('[AUTH] Token expired in authenticateJWT:', { exp: payload.exp, now: now, diff: payload.exp - now });
         return res.status(401).json({ error: 'Token expired' });
       }
     }

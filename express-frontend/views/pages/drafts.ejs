@@ -135,15 +135,17 @@
       const exp = payload.exp;
       if (!exp) return true;
       
-      // Check if expired (with 1 minute buffer for clock skew)
+      // Check if expired (with 5 minute buffer for clock skew)
       const now = Math.floor(Date.now() / 1000);
-      const isExp = exp < (now + 60); // Expired if exp is less than now + 1 minute buffer
+      const clockSkewBuffer = 300; // 5 minutes in seconds
+      const isExp = exp < (now - clockSkewBuffer); // Expired if exp is less than now - buffer
       console.log('[DRAFTS] Token expiration check:', {
         exp: exp,
         now: now,
         expiresAt: new Date(exp * 1000).toISOString(),
         isExpired: isExp,
-        timeUntilExpiry: exp - now
+        timeUntilExpiry: exp - now,
+        buffer: clockSkewBuffer
       });
       return isExp;
     } catch (e) {
@@ -288,13 +290,23 @@
         });
         console.log('[DRAFTS] Retry response status:', response.status, response.statusText);
         
-        // If retry also fails, log the error details
+        // If retry also fails, check if it's still a 401 (token issue) or another error
         if (!response.ok) {
           try {
             const errorData = await response.clone().json();
             console.error('[DRAFTS] Retry failed with error:', errorData);
+            // If it's still 401 after refresh, the refresh token might be invalid
+            if (response.status === 401) {
+              console.warn('[DRAFTS] Still getting 401 after token refresh, refresh token may be invalid');
+              clearTokensAndRedirect();
+              return null;
+            }
           } catch (e) {
             console.error('[DRAFTS] Retry failed, could not parse error response');
+            if (response.status === 401) {
+              clearTokensAndRedirect();
+              return null;
+            }
           }
         }
       } else {
