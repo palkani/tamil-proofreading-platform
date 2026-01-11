@@ -85,7 +85,7 @@ export default function AppHeader({ showAdmin = false, userEmail, onLogout }: Ap
             <Link href="/" className="flex items-center gap-3 group hover:opacity-90 transition-opacity">
               <span className="inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-[20px] bg-gradient-to-br from-[#4F46E5] to-[#0EA5E9] shadow-lg group-hover:shadow-xl group-hover:scale-105 transition-all duration-300 p-2">
                 <Image
-                  src="/logo.jpg"
+                  src="/logo.svg"
                   alt="Proof Tamil logo"
                   width={40}
                   height={40}

@@ -49,7 +49,7 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-[var(--background)] text-[var(--surface)]">
       <div className="absolute top-6 left-6 flex items-center gap-3">
         <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo.jpg" alt="ProofTamil" width={40} height={40} className="rounded-full" />
+          <Image src="/logo.svg" alt="ProofTamil" width={40} height={40} className="rounded-full" />
           <span className="text-lg font-semibold">ProofTamil</span>
         </Link>
       </div>

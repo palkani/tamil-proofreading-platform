@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: `${siteUrl}/logo.jpg`,
+        url: `${siteUrl}/logo.svg`,
         width: 512,
         height: 512,
         alt: `${brandTitle} logo`,
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: `${brandTitle} | Tamil Proofreading & Typing Tools`,
     description: brandDescription,
-    images: [`${siteUrl}/logo.jpg`],
+    images: [`${siteUrl}/logo.svg`],
   },
   robots: {
     index: true,

@@ -50,7 +50,7 @@ export default function Home() {
               <div className="absolute inset-0 bg-gradient-to-r from-[#4F46E5] to-[#0EA5E9] rounded-[24px] blur-2xl opacity-20 animate-pulse"></div>
               <div className="relative bg-white rounded-[24px] p-4 shadow-xl">
                 <Image
-                  src="/logo.jpg"
+                  src="/logo.svg"
                   alt="Proof Tamil logo"
                   width={140}
                   height={140}
