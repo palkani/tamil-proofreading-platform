@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"tamil-proofreading-platform/backend/internal/models"
 	"tamil-proofreading-platform/backend/internal/util/auditlog"
@@ -75,6 +76,13 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 
 		if err != nil {
 			log.Printf("[AUTH] JWT parse error: %v", err)
+			// Log token expiration details if available
+			if claims, ok := token.Claims.(jwt.MapClaims); ok {
+				if exp, ok := claims["exp"].(float64); ok {
+					now := time.Now().Unix()
+					log.Printf("[AUTH] Token exp: %v, server now: %v, diff: %v seconds", int64(exp), now, int64(exp)-now)
+				}
+			}
 			auditlog.Warn(c, "auth.invalid_token", map[string]any{"error": err.Error(), "token_preview": tokenString[:50] + "..."})
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token", "details": err.Error()})
 			c.Abort()
@@ -83,6 +91,13 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 		
 		if !token.Valid {
 			log.Printf("[AUTH] JWT token is not valid")
+			// Log token expiration details
+			if claims, ok := token.Claims.(jwt.MapClaims); ok {
+				if exp, ok := claims["exp"].(float64); ok {
+					now := time.Now().Unix()
+					log.Printf("[AUTH] Token exp: %v, server now: %v, diff: %v seconds", int64(exp), now, int64(exp)-now)
+				}
+			}
 			auditlog.Warn(c, "auth.invalid_token", map[string]any{"error": "token.Valid is false", "token_preview": tokenString[:50] + "..."})
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 			c.Abort()
