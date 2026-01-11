@@ -24,11 +24,14 @@ const attachUser = (req, res, next) => {
 
     // Decode without verifying signature — trust is enforced by backend
     const payload = jwt.decode(token) || {};
-    req.user = payload.sub
+    // Handle both Supabase format (sub) and backend format (user_id)
+    const userId = payload.sub || payload.user_id;
+    req.user = userId
       ? {
-          id: payload.sub,
+          id: userId,
           email: payload.email,
           name: payload.name,
+          role: payload.role,
           profile_picture: payload.picture,
         }
       : null;
