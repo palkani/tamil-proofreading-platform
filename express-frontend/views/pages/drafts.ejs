@@ -101,9 +101,21 @@
     });
     
     console.log('[DRAFTS] Response status:', response.status, response.statusText);
-
+    
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      // Try to get error message from response
+      let errorMessage = `HTTP ${response.status}`;
+      try {
+        const errorData = await response.clone().json();
+        if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+        console.error('[DRAFTS] Error response data:', errorData);
+      } catch (e) {
+        // If JSON parsing fails, use status text
+        errorMessage = response.statusText || `HTTP ${response.status}`;
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
