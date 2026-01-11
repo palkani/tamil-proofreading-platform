@@ -145,14 +145,12 @@
       const exp = payload.exp;
       if (!exp) return true;
       
-      // Check if expired (with 5 minute buffer for clock skew)
+      // Check if expired
       const now = Math.floor(Date.now() / 1000);
-      const clockSkewBuffer = 300; // 5 minutes in seconds
-      // Token is expired if:
-      // 1. exp < now (definitely expired)
-      // 2. OR exp < (now - buffer) (expired accounting for clock skew)
-      // We use (now - buffer) to account for cases where server time is ahead
-      const isExp = exp < now || exp < (now - clockSkewBuffer);
+      // Token is expired if exp < now
+      // We add a small buffer (60 seconds) to refresh proactively before expiration
+      const refreshBuffer = 60; // Refresh 1 minute before expiration
+      const isExp = exp < (now + refreshBuffer);
       console.log('[DRAFTS] Token expiration check:', {
         exp: exp,
         now: now,
