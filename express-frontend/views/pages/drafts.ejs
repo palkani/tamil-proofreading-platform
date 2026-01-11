@@ -96,15 +96,33 @@
       // Decode JWT payload (base64url)
       const parts = token.split('.');
       if (parts.length !== 3) return true;
-      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      
+      // Base64URL decode: replace - with +, _ with /, add padding if needed
+      let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      // Add padding if needed
+      while (base64.length % 4) {
+        base64 += '=';
+      }
+      
+      const payload = JSON.parse(atob(base64));
       const exp = payload.exp;
       if (!exp) return true;
+      
       // Check if expired (with 1 minute buffer for clock skew)
       const now = Math.floor(Date.now() / 1000);
-      return exp < (now + 60); // Expired if exp is less than now + 1 minute buffer
+      const isExp = exp < (now + 60); // Expired if exp is less than now + 1 minute buffer
+      console.log('[DRAFTS] Token expiration check:', {
+        exp: exp,
+        now: now,
+        expiresAt: new Date(exp * 1000).toISOString(),
+        isExpired: isExp,
+        timeUntilExpiry: exp - now
+      });
+      return isExp;
     } catch (e) {
       console.error('[DRAFTS] Error checking token expiration:', e);
-      return true; // Treat as expired if we can't decode
+      // If we can't decode, don't assume expired - let the server decide
+      return false;
     }
   }
 
@@ -138,7 +156,26 @@
         // Store new token
         localStorage.setItem('access_token', data.access_token);
         document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
-        console.log('[DRAFTS] Token refreshed successfully');
+        console.log('[DRAFTS] Token refreshed successfully, new token:', data.access_token.substring(0, 50) + '...');
+        // Verify the new token expiration
+        const parts = data.access_token.split('.');
+        if (parts.length === 3) {
+          try {
+            let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) base64 += '=';
+            const payload = JSON.parse(atob(base64));
+            const now = Math.floor(Date.now() / 1000);
+            console.log('[DRAFTS] New token expiration check:', {
+              exp: payload.exp,
+              now: now,
+              expiresAt: new Date(payload.exp * 1000).toISOString(),
+              timeUntilExpiry: payload.exp - now,
+              valid: payload.exp > now
+            });
+          } catch (e) {
+            console.error('[DRAFTS] Error checking new token expiration:', e);
+          }
+        }
         return data.access_token;
       }
       return null;
@@ -166,18 +203,19 @@
     // Use localStorage token first, fallback to cookie
     let accessToken = token || cookieToken;
     
-    // Check if token is expired and refresh proactively
-    if (accessToken && isTokenExpired(accessToken)) {
-      console.log('[DRAFTS] Token is expired, refreshing before request...');
-      const newToken = await refreshAccessToken();
-      if (newToken) {
-        accessToken = newToken;
-      } else {
-        // Refresh failed, redirect to login
-        clearTokensAndRedirect();
-        return null;
-      }
-    }
+    // Check if token is expired and refresh proactively (skip for now - let server decide)
+    // The proactive check was causing issues, so we'll let the server validate and refresh on 401
+    // if (accessToken && isTokenExpired(accessToken)) {
+    //   console.log('[DRAFTS] Token is expired, refreshing before request...');
+    //   const newToken = await refreshAccessToken();
+    //   if (newToken) {
+    //     accessToken = newToken;
+    //   } else {
+    //     // Refresh failed, redirect to login
+    //     clearTokensAndRedirect();
+    //     return null;
+    //   }
+    // }
     
     // Build headers with Authorization if token exists
     const headers = {
