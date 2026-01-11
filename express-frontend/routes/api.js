@@ -462,6 +462,18 @@ router.post('/ocr/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
     
+    // Check if OCR service URL is configured
+    if (!OCR_SERVICE_URL || OCR_SERVICE_URL === 'http://localhost:5000') {
+      console.warn('[PROXY] OCR_SERVICE_URL not configured, using localhost fallback');
+      // In production, this will fail - return helpful error
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ 
+          error: 'OCR service is not currently available. Please contact support or try again later.',
+          details: 'OCR_SERVICE_URL environment variable is not configured'
+        });
+      }
+    }
+    
     // Forward the multipart form data to OCR service
     const formData = new FormData();
     formData.append('file', req.file.buffer, {
@@ -479,14 +491,63 @@ router.post('/ocr/upload', upload.single('file'), async (req, res) => {
         ...formData.getHeaders()
       },
       maxContentLength: 16 * 1024 * 1024, // 16MB
-      maxBodyLength: 16 * 1024 * 1024
+      maxBodyLength: 16 * 1024 * 1024,
+      timeout: 60000 // 60 second timeout for OCR processing
     });
     
-    res.json(response.data);
+    // Ensure response is JSON
+    if (typeof response.data === 'object') {
+      res.json(response.data);
+    } else {
+      // If response is not JSON, try to parse it
+      try {
+        const jsonData = JSON.parse(response.data);
+        res.json(jsonData);
+      } catch (e) {
+        console.error('[PROXY] OCR response is not valid JSON:', response.data?.substring(0, 200));
+        res.status(500).json({ 
+          error: 'OCR service returned invalid response',
+          details: 'The OCR service may not be properly configured'
+        });
+      }
+    }
   } catch (error) {
     console.error('[PROXY] OCR upload error:', error.message);
+    console.error('[PROXY] Error details:', {
+      code: error.code,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data?.substring?.(0, 200)
+    });
+    
+    // Handle specific error cases
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      return res.status(503).json({ 
+        error: 'OCR service is not available. The service may be down or not configured.',
+        details: `Cannot connect to OCR service at ${OCR_SERVICE_URL}`
+      });
+    }
+    
+    if (error.response) {
+      // If response is HTML (error page), return JSON error
+      const contentType = error.response.headers['content-type'] || '';
+      if (contentType.includes('text/html')) {
+        return res.status(503).json({ 
+          error: 'OCR service returned an error page. The service may not be properly configured.',
+          details: 'Please check OCR_SERVICE_URL environment variable'
+        });
+      }
+      
+      // Try to extract error from response
+      const errorData = error.response.data;
+      if (typeof errorData === 'object' && errorData.error) {
+        return res.status(error.response.status).json({ error: errorData.error });
+      }
+    }
+    
     res.status(error.response?.status || 500).json({
-      error: error.response?.data?.error || 'OCR processing failed'
+      error: error.response?.data?.error || 'OCR processing failed',
+      details: error.message
     });
   }
 });

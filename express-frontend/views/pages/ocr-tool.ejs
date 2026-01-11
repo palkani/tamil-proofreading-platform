@@ -227,9 +227,23 @@
       }
     } catch (err) {
       loading.classList.add('hidden');
-      errorText.textContent = err.message || 'Failed to process file. Please try again.';
+      
+      // Try to extract error message from response
+      let errorMessage = 'Failed to process file. Please try again.';
+      if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      // Check if it's a JSON parse error (service returned HTML)
+      if (err.message && err.message.includes('JSON')) {
+        errorMessage = 'OCR service is not available. Please contact support or try again later.';
+      }
+      
+      errorText.textContent = errorMessage;
       error.classList.remove('hidden');
       processBtn.disabled = false;
+      
+      console.error('[OCR] Upload error:', err);
     }
   });
   
