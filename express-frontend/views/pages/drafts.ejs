@@ -177,7 +177,9 @@
         expiresAt: new Date(exp * 1000).toISOString(),
         isExpired: isExp,
         timeUntilExpiry: exp - now,
-        buffer: clockSkewBuffer
+        refreshBuffer: refreshBuffer,
+        alreadyExpired: exp < now,
+        expiresSoon: exp < (now + refreshBuffer)
       });
       return isExp;
     } catch (e) {
