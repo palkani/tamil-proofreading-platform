@@ -63,9 +63,26 @@
 </nav>
 
 <script>
-  document.getElementById('logout-btn')?.addEventListener('click', () => {
-    if (confirm('Are you sure you want to log out?')) {
-      window.location.href = '/';
-    }
-  });
+  // Load auth utilities
+  (function() {
+    const script = document.createElement('script');
+    script.src = '/js/auth-utils.js';
+    script.onload = function() {
+      // Setup logout button after auth-utils is loaded
+      document.getElementById('logout-btn')?.addEventListener('click', () => {
+        if (confirm('Are you sure you want to log out?')) {
+          if (window.authUtils && window.authUtils.handleLogout) {
+            window.authUtils.handleLogout();
+          } else {
+            // Fallback if auth-utils not loaded
+            localStorage.removeItem('access_token');
+            document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+            document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+            window.location.href = '/';
+          }
+        }
+      });
+    };
+    document.head.appendChild(script);
+  })();
 </script>

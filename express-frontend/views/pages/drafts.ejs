@@ -88,12 +88,16 @@
       console.error('[DRAFTS] Error checking token from URL:', e);
     }
     
-    // Clear old tokens first
-    localStorage.removeItem('access_token');
-    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-    // Store new token
-    localStorage.setItem('access_token', tokenFromUrl);
-    document.cookie = `access_token=${tokenFromUrl}; path=/; SameSite=Lax; Max-Age=900`;
+    // Use centralized auth utility if available
+    if (window.authUtils && window.authUtils.storeAccessToken) {
+      window.authUtils.storeAccessToken(tokenFromUrl);
+    } else {
+      // Fallback
+      localStorage.removeItem('access_token');
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+      localStorage.setItem('access_token', tokenFromUrl);
+      document.cookie = `access_token=${tokenFromUrl}; path=/; SameSite=Lax; Max-Age=900`;
+    }
     console.log('[DRAFTS] Token stored in localStorage and cookie');
     // Remove token from URL
     window.history.replaceState({}, document.title, window.location.pathname);
@@ -110,9 +114,15 @@
   // Helper function to clear invalid tokens and redirect to login
   function clearTokensAndRedirect() {
     console.log('[DRAFTS] Clearing invalid tokens and redirecting to login');
-    localStorage.removeItem('access_token');
-    // Clear access_token cookie
-    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    // Use centralized auth utility if available
+    if (window.authUtils && window.authUtils.clearAuthTokens) {
+      window.authUtils.clearAuthTokens();
+    } else {
+      // Fallback
+      localStorage.removeItem('access_token');
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+      document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    }
     window.location.href = '/login';
   }
 
@@ -179,12 +189,16 @@
       
       const data = await response.json();
       if (data.access_token) {
-        // Clear old token first
-        localStorage.removeItem('access_token');
-        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-        // Store new token
-        localStorage.setItem('access_token', data.access_token);
-        document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
+        // Use centralized auth utility if available
+        if (window.authUtils && window.authUtils.storeAccessToken) {
+          window.authUtils.storeAccessToken(data.access_token);
+        } else {
+          // Fallback
+          localStorage.removeItem('access_token');
+          document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+          localStorage.setItem('access_token', data.access_token);
+          document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
+        }
         console.log('[DRAFTS] Token refreshed successfully, new token:', data.access_token.substring(0, 50) + '...');
         // Verify the new token expiration
         const parts = data.access_token.split('.');

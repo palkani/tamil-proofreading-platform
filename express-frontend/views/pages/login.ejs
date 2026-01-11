@@ -34,12 +34,16 @@
     const token = extractToken(rawRedirect);
 
     if (token) {
-      // Clear old tokens first
-      localStorage.removeItem('access_token');
-      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-      // Persist token for auth guard and API usage
-      localStorage.setItem('access_token', token);
-      document.cookie = `access_token=${token}; path=/; SameSite=Lax; Max-Age=900`;
+      // Use centralized auth utility if available
+      if (window.authUtils && window.authUtils.storeAccessToken) {
+        window.authUtils.storeAccessToken(token);
+      } else {
+        // Fallback
+        localStorage.removeItem('access_token');
+        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        localStorage.setItem('access_token', token);
+        document.cookie = `access_token=${token}; path=/; SameSite=Lax; Max-Age=900`;
+      }
       // Redirect immediately to drafts page after storing token
       window.location.replace('/drafts');
     }
@@ -179,21 +183,25 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
       throw new Error(String(errorMessage));
     }
     
-    // Login successful - clear old tokens first, then store new token
-    localStorage.removeItem('access_token');
-    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-    
-    if (data.access_token) {
-      localStorage.setItem('access_token', data.access_token);
-      document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
-      console.log('[LOGIN] Token stored in localStorage and cookie');
-      console.log('[LOGIN] Token preview:', data.access_token.substring(0, 20) + '...');
+    // Login successful - use centralized auth utility if available
+    if (window.authUtils && window.authUtils.handleAuthSuccess) {
+      window.authUtils.handleAuthSuccess(data.access_token, '/drafts');
     } else {
-      console.warn('[LOGIN] No access_token in response:', data);
+      // Fallback if auth-utils not loaded
+      localStorage.removeItem('access_token');
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+      
+      if (data.access_token) {
+        localStorage.setItem('access_token', data.access_token);
+        document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
+        console.log('[LOGIN] Token stored in localStorage and cookie');
+      } else {
+        console.warn('[LOGIN] No access_token in response:', data);
+      }
+      
+      // Redirect to drafts page
+      window.location.href = '/drafts';
     }
-    
-    // Redirect to drafts page
-    window.location.href = '/drafts';
   } catch (error) {
     const errorMessage = error?.message || 'An unexpected error occurred';
     errorDiv.textContent = errorMessage;
@@ -219,9 +227,14 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
      */
     function persistAccessToken(token) {
       if (!token) return;
-      localStorage.setItem('access_token', token);
-      // Non-HttpOnly cookie so the backend guard can read it on first hop
-      document.cookie = `access_token=${token}; path=/; SameSite=Lax`;
+      // Use centralized auth utility if available
+      if (window.authUtils && window.authUtils.storeAccessToken) {
+        window.authUtils.storeAccessToken(token);
+      } else {
+        // Fallback
+        localStorage.setItem('access_token', token);
+        document.cookie = `access_token=${token}; path=/; SameSite=Lax; Max-Age=900`;
+      }
     }
 
     // Try to extract access_token from the encoded redirect URL
@@ -265,14 +278,26 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
             return;
           } else {
             // Token is expired, clear it
-            localStorage.removeItem('access_token');
-            document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+            if (window.authUtils && window.authUtils.clearAuthTokens) {
+              window.authUtils.clearAuthTokens();
+            } else {
+              // Fallback
+              localStorage.removeItem('access_token');
+              document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+              document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+            }
           }
         }
       } catch (e) {
         // If we can't decode, clear the token
-        localStorage.removeItem('access_token');
-        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        if (window.authUtils && window.authUtils.clearAuthTokens) {
+          window.authUtils.clearAuthTokens();
+        } else {
+          // Fallback
+          localStorage.removeItem('access_token');
+          document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+          document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        }
       }
     }
   })();

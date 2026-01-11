@@ -3183,9 +3183,28 @@ class WorkspaceController {
     return {};
   }
 
-  logout() {
+  async logout() {
     if (confirm('Are you sure you want to log out?')) {
-      window.location.href = '/';
+      try {
+        // Call logout API to revoke refresh token on backend
+        await fetch('/auth/logout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }).catch(err => {
+          console.warn('[WORKSPACE] Logout API call failed (non-fatal):', err.message);
+        });
+      } catch (err) {
+        console.warn('[WORKSPACE] Logout error (non-fatal):', err.message);
+      } finally {
+        // Always clear tokens and redirect, even if API call fails
+        localStorage.removeItem('access_token');
+        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        window.location.href = '/';
+      }
     }
   }
 

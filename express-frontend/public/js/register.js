@@ -136,17 +136,22 @@ document.getElementById('register-form')?.addEventListener('submit', async (e) =
     }
     
     // Registration successful - user is immediately logged in
-    // Clear old tokens first, then store new token
-    localStorage.removeItem('access_token');
-    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-    
-    if (data.access_token) {
-      localStorage.setItem('access_token', data.access_token);
-      document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
+    // Use centralized auth utility if available
+    if (window.authUtils && window.authUtils.handleAuthSuccess) {
+      window.authUtils.handleAuthSuccess(data.access_token, '/drafts');
+    } else {
+      // Fallback if auth-utils not loaded
+      localStorage.removeItem('access_token');
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+      
+      if (data.access_token) {
+        localStorage.setItem('access_token', data.access_token);
+        document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
+      }
+      
+      // Redirect to drafts page
+      window.location.href = '/drafts';
     }
-    
-    // Redirect to drafts page
-    window.location.href = '/drafts';
   } catch (error) {
     const errorMessage = error?.message || 'An unexpected error occurred';
     errorDiv.textContent = errorMessage;
@@ -228,17 +233,23 @@ document.getElementById('verification-form')?.addEventListener('submit', async (
       throw new Error(data.error || 'Verification failed');
     }
     
-    // Store access token
+    // Store access token (use consistent key: access_token)
     if (data.access_token) {
-      localStorage.setItem('accessToken', data.access_token);
+      if (window.authUtils && window.authUtils.storeAccessToken) {
+        window.authUtils.storeAccessToken(data.access_token);
+      } else {
+        // Fallback
+        localStorage.setItem('access_token', data.access_token);
+        document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
+      }
     }
     
     successDiv.textContent = 'Email verified successfully! Redirecting...';
     successDiv.classList.remove('hidden');
     
-    // Redirect to dashboard after a brief delay
+    // Redirect to drafts after a brief delay
     setTimeout(() => {
-      window.location.href = '/dashboard';
+      window.location.href = '/drafts';
     }, 1500);
   } catch (error) {
     errorDiv.textContent = error.message;
