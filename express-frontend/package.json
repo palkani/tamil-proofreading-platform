@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "concurrently \"npm run watch:css\" \"nodemon server.js\"",
     "start": "node server.js",
-    "watch:css": "tailwindcss -i ./public/css/input.css -o ./public/css/output.css --watch",
+    "watch:css": "./node_modules/.bin/tailwindcss -i ./public/css/input.css -o ./public/css/output.css --watch",
     "prebuild:css": "node scripts/assert-runner.js",
-    "build:css": "tailwindcss -i ./public/css/input.css -o ./public/css/output.css --minify"
+    "build:css": "./node_modules/.bin/tailwindcss -i ./public/css/input.css -o ./public/css/output.css --minify"
   },
   "keywords": ["tamil", "proofreading", "ai", "express"],
   "author": "",
