@@ -334,7 +334,17 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     // If backend returned JSON handoff
     const contentType = response.headers['content-type'] || '';
     if (response.status === 200 && contentType.includes('application/json') && response.data?.access_token) {
-      // Store token in query param for client-side storage (since httpOnly cookie won't work for localStorage)
+      // Forward Set-Cookie headers from backend (includes refresh_token and access_token cookies)
+      const setCookie = response.headers['set-cookie'];
+      if (setCookie) {
+        // Handle both single cookie string and array of cookies
+        const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+        cookies.forEach(cookie => {
+          res.setHeader('Set-Cookie', cookie);
+        });
+        console.log('[OAUTH-HANDOFF] forwarded', cookies.length, 'cookie(s) from backend');
+      }
+      
       const token = response.data.access_token;
       console.log('[OAUTH-HANDOFF] received access_token, redirecting to drafts');
       // Redirect to drafts with token in URL - client will store it
@@ -343,7 +353,13 @@ router.get('/v1/auth/google/callback', async (req, res) => {
 
     // fallback: forward cookies and location
     const setCookie = response.headers['set-cookie'];
-    if (setCookie) res.setHeader('set-cookie', setCookie);
+    if (setCookie) {
+      // Handle both single cookie string and array of cookies
+      const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+      cookies.forEach(cookie => {
+        res.setHeader('Set-Cookie', cookie);
+      });
+    }
     if (response.headers.location) res.setHeader('location', response.headers.location);
 
     res.status(response.status);
