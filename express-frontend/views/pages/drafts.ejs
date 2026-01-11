@@ -151,8 +151,14 @@
     if (accessToken) {
       headers['Authorization'] = `Bearer ${accessToken}`;
       console.log('[DRAFTS] Adding Authorization header with token');
+      console.log('[DRAFTS] Token length:', accessToken.length);
+      console.log('[DRAFTS] Token preview (first 50 chars):', accessToken.substring(0, 50));
+      console.log('[DRAFTS] Token preview (last 20 chars):', accessToken.substring(accessToken.length - 20));
     } else {
       console.warn('[DRAFTS] No access token found in localStorage or cookies');
+      // No token - redirect to login
+      clearTokensAndRedirect();
+      return null;
     }
 
     console.log('[DRAFTS] Fetching submissions from /api/v1/submissions');
@@ -203,6 +209,12 @@
 
   try {
     const response = await fetchSubmissionsWithRetry();
+    
+    if (!response) {
+      // fetchSubmissionsWithRetry returned null (no token or redirect happened)
+      console.log('[DRAFTS] fetchSubmissionsWithRetry returned null, exiting');
+      return;
+    }
 
     const data = await response.json();
     const drafts = data.submissions || [];
