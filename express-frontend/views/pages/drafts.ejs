@@ -111,10 +111,20 @@
       }
       console.log('[DRAFTS] Token stored in localStorage and cookie');
     } else {
-      // Token is expired, clear any old tokens and let the refresh logic handle it
-      console.log('[DRAFTS] Token from URL is expired, clearing old tokens and will refresh');
+      // Token is expired, clear any old tokens and try to refresh immediately
+      console.log('[DRAFTS] Token from URL is expired, clearing old tokens and refreshing immediately');
       if (window.authUtils && window.authUtils.clearAuthTokens) {
         window.authUtils.clearAuthTokens();
+      }
+      // Try to refresh immediately if authUtils is available
+      if (window.authUtils && window.authUtils.refreshAccessToken) {
+        console.log('[DRAFTS] Attempting immediate token refresh...');
+        const newToken = await window.authUtils.refreshAccessToken();
+        if (newToken) {
+          console.log('[DRAFTS] Successfully refreshed token from expired URL token');
+        } else {
+          console.warn('[DRAFTS] Failed to refresh expired token from URL');
+        }
       }
     }
     console.log('[DRAFTS] Token stored in localStorage and cookie');
