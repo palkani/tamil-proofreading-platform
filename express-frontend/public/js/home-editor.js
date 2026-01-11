@@ -1,8 +1,29 @@
+// Helper function to check if token is expired
+function isTokenExpired(token) {
+  if (!token) return true;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4) base64 += '=';
+    const payload = JSON.parse(atob(base64));
+    const now = Math.floor(Date.now() / 1000);
+    return payload.exp ? payload.exp < now : true;
+  } catch (e) {
+    return true;
+  }
+}
+
 // Unified API helper for all /api calls
 async function apiFetch(path, options = {}, requireAuth = true) {
   const token = localStorage.getItem('access_token');
-  if (requireAuth && !token) {
-    console.warn('[API] Missing token for', path);
+  if (requireAuth && (!token || isTokenExpired(token))) {
+    if (token && isTokenExpired(token)) {
+      // Clear expired token
+      localStorage.removeItem('access_token');
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    }
+    console.warn('[API] Missing or expired token for', path);
     throw new Error('login_required');
   }
   const headers = new Headers(options.headers || {});

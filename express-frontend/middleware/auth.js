@@ -113,11 +113,26 @@ function authenticateJWT(req, res, next) {
 
   try {
     const payload = jwt.decode(token);
-    if (!payload || !payload.sub) {
+    if (!payload) {
       return res.status(401).json({ error: 'Invalid token' });
     }
+    
+    // Check if token is expired
+    if (payload.exp) {
+      const now = Math.floor(Date.now() / 1000);
+      if (payload.exp < now) {
+        return res.status(401).json({ error: 'Token expired' });
+      }
+    }
+    
+    // Handle both Supabase format (sub) and backend format (user_id)
+    const userId = payload.sub || payload.user_id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    
     req.authUser = {
-      id: payload.sub,
+      id: userId,
       email: payload.email,
       name: payload.name,
       profile_picture: payload.picture,

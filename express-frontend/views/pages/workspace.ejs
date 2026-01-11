@@ -273,11 +273,32 @@
   (function syncTokenAndShowCta() {
     const token = localStorage.getItem('access_token');
     if (token) {
-      // Ensure cookie is set so subsequent server requests carry the token
-      document.cookie = `access_token=${token}; path=/; SameSite=Lax`;
-      // Hide banner if visible
-      const banner = document.getElementById('workspace-auth-banner');
-      if (banner) banner.classList.add('hidden');
+      // Check if token is expired
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          while (base64.length % 4) base64 += '=';
+          const payload = JSON.parse(atob(base64));
+          const now = Math.floor(Date.now() / 1000);
+          if (payload.exp && payload.exp > now) {
+            // Token is valid, ensure cookie is set
+            document.cookie = `access_token=${token}; path=/; SameSite=Lax`;
+            // Hide banner if visible
+            const banner = document.getElementById('workspace-auth-banner');
+            if (banner) banner.classList.add('hidden');
+            return;
+          } else {
+            // Token is expired, clear it
+            localStorage.removeItem('access_token');
+            document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+          }
+        }
+      } catch (e) {
+        // If we can't decode, clear the token
+        localStorage.removeItem('access_token');
+        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+      }
       return;
     }
     // No token: show banner with login button (no automatic redirect or Google flow)
