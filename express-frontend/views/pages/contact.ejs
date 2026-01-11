@@ -1,8 +1,6 @@
 <%- include('../partials/header') %>
 
-<% if (user) { %>
-  <%- include('../partials/nav', { active: '', user: user }) %>
-<% } %>
+<%- include('../partials/nav', { active: 'contact', user: user || null }) %>
 
 <div class="min-h-screen bg-gray-50 py-12">
   <div class="max-w-2xl mx-auto px-6">

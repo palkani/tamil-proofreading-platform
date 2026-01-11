@@ -27,10 +27,8 @@
   }
 </style>
 
-<!-- Navigation (only for logged-in users) -->
-<% if (user) { %>
-  <%- include('../partials/nav', { active: 'home', user: user }) %>
-<% } %>
+<!-- Navigation (always visible) -->
+<%- include('../partials/nav', { active: 'home', user: user || null }) %>
 
 <div class="min-h-screen bg-white">
   <!-- Hero Section -->

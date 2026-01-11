@@ -1,8 +1,6 @@
 <%- include('../partials/header') %>
 
-<% if (user) { %>
-  <%- include('../partials/nav', { active: 'home', user: user }) %>
-<% } %>
+<%- include('../partials/nav', { active: 'how-to-use', user: user || null }) %>
 
 <div class="min-h-screen bg-white">
   <!-- Hero Section -->
