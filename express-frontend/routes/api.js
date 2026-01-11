@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const multer = require('multer');
+const FormData = require('form-data');
 
 // Construct backend API URL - handle both cases:
 // 1. BACKEND_URL = http://localhost:8080/api/v1 (dev)
@@ -428,6 +430,85 @@ router.all('/*', async (req, res) => {
     console.error('[PROXY-ERROR] Status:', error.response?.status);
     res.status(error.response?.status || 500).json({
       error: error.response?.data || 'Backend request failed'
+    });
+  }
+});
+
+// OCR Tool Proxy Routes
+const OCR_SERVICE_URL = process.env.OCR_SERVICE_URL || 'http://localhost:5000';
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 16 * 1024 * 1024 }, // 16MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/tiff', 'image/bmp', 'image/gif', 'application/pdf'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only images and PDFs are allowed.'));
+    }
+  }
+});
+
+// Proxy OCR upload endpoint
+router.post('/ocr/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (ENABLE_PROXY_LOGS) {
+      console.log('[PROXY] POST /ocr/upload ->', OCR_SERVICE_URL);
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    // Forward the multipart form data to OCR service
+    const formData = new FormData();
+    formData.append('file', req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype
+    });
+    
+    // Forward language preference if provided
+    if (req.body.lang) {
+      formData.append('lang', req.body.lang);
+    }
+    
+    const response = await axios.post(`${OCR_SERVICE_URL}/upload`, formData, {
+      headers: {
+        ...formData.getHeaders()
+      },
+      maxContentLength: 16 * 1024 * 1024, // 16MB
+      maxBodyLength: 16 * 1024 * 1024
+    });
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('[PROXY] OCR upload error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data?.error || 'OCR processing failed'
+    });
+  }
+});
+
+// Proxy OCR download endpoint
+router.get('/ocr/download/:filename', async (req, res) => {
+  try {
+    if (ENABLE_PROXY_LOGS) {
+      console.log('[PROXY] GET /ocr/download/:filename ->', OCR_SERVICE_URL);
+    }
+    
+    const response = await axios.get(`${OCR_SERVICE_URL}/download/${req.params.filename}`, {
+      responseType: 'stream'
+    });
+    
+    res.setHeader('Content-Disposition', response.headers['content-disposition']);
+    res.setHeader('Content-Type', response.headers['content-type']);
+    response.data.pipe(res);
+  } catch (error) {
+    console.error('[PROXY] OCR download error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data?.error || 'File download failed'
     });
   }
 });

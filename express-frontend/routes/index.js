@@ -36,6 +36,17 @@ router.get('/how-to-use', (req, res) => {
   });
 });
 
+// OCR Tool page - accessible to everyone
+router.get('/tools/ocr', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('home');
+  res.render('pages/ocr-tool', { 
+    title: 'Tamil OCR Tool - Extract Text from Images | ProofTamil',
+    seo: seo,
+    user: user
+  });
+});
+
 // Login page - redirect authenticated users to drafts
 router.get('/login', (req, res) => {
   if (req.user) {
