@@ -588,25 +588,30 @@
 
     console.log('[DRAFTS] Response received, status:', response.status);
     
-    // Check if response has content
-    if (response.status === 204 || response.status === 200) {
-      const contentType = response.headers.get('content-type');
-      console.log('[DRAFTS] Response content-type:', contentType);
-      
-      // If 204 or no content, return empty array
-      if (response.status === 204 || !contentType || !contentType.includes('application/json')) {
-        console.warn('[DRAFTS] Response has no content (204) or not JSON, showing empty state');
-        loadingEl.classList.add('hidden');
-        emptyEl.classList.remove('hidden');
-        return;
-      }
+    // Check if response is 204 (No Content)
+    if (response.status === 204) {
+      console.warn('[DRAFTS] Response is 204 (No Content), showing empty state');
+      loadingEl.classList.add('hidden');
+      emptyEl.classList.remove('hidden');
+      return;
+    }
+    
+    // Check content-type for non-204 responses
+    const contentType = response.headers.get('content-type');
+    console.log('[DRAFTS] Response content-type:', contentType);
+    
+    if (!contentType || !contentType.includes('application/json')) {
+      console.warn('[DRAFTS] Response is not JSON, showing empty state');
+      loadingEl.classList.add('hidden');
+      emptyEl.classList.remove('hidden');
+      return;
     }
     
     // Parse JSON response
     let data;
     try {
       const text = await response.text();
-      console.log('[DRAFTS] Response text (first 200 chars):', text.substring(0, 200));
+      console.log('[DRAFTS] Response text (first 200 chars):', text ? text.substring(0, 200) : 'null');
       if (!text || text.trim().length === 0) {
         console.warn('[DRAFTS] Response body is empty');
         loadingEl.classList.add('hidden');

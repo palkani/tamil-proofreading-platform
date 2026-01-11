@@ -80,7 +80,8 @@
   <link rel="dns-prefetch" href="https://www.googletagmanager.com">
   
   <!-- Preload critical assets -->
-  <link rel="preload" href="/css/output.css" as="style">
+  <link rel="preload" href="/css/output.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/css/output.css"></noscript>
   <link rel="preload" href="/images/tamil-logo.svg" as="image">
   
   <% if (pageType === 'home' || typeof seo === 'undefined') { %>
