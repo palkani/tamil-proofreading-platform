@@ -128,10 +128,23 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
+// Static files with cache control
 app.use(
   express.static(path.join(__dirname, 'public'), {
-    maxAge: '1d',
+    maxAge: process.env.NODE_ENV === 'production' ? '1h' : '0', // Shorter cache in production
     etag: true,
+    setHeaders: (res, path) => {
+      // No cache for JS files to ensure latest version
+      if (path.endsWith('.js')) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+      // Short cache for CSS
+      if (path.endsWith('.css')) {
+        res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      }
+    }
   })
 );
 
