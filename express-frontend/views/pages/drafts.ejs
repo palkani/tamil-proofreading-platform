@@ -169,7 +169,8 @@
   async function refreshAccessToken() {
     try {
       console.log('[DRAFTS] Attempting to refresh access token...');
-      const response = await fetch('/api/auth/refresh', {
+      // Use /auth/refresh (not /api/auth/refresh) - goes through routes/auth.js
+      const response = await fetch('/auth/refresh', {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -282,9 +283,12 @@
         headers['Authorization'] = `Bearer ${accessToken}`;
         console.log('[DRAFTS] Successfully refreshed token, proceeding with request');
       } else {
-        // Refresh failed, no valid tokens - redirect to login
+        // Refresh failed, no valid tokens - redirect to login (only once)
         console.warn('[DRAFTS] Token refresh failed, redirecting to login');
-        clearTokensAndRedirect();
+        // Use setTimeout to prevent immediate redirect loops
+        setTimeout(() => {
+          clearTokensAndRedirect();
+        }, 100);
         return null;
       }
     }
@@ -297,8 +301,8 @@
     
     console.log('[DRAFTS] Response status:', response.status, response.statusText);
     
-    // If 401, try to refresh token and retry once
-    if (response.status === 401) {
+    // If 401, try to refresh token and retry once (only if we haven't already tried)
+    if (response.status === 401 && !refreshInProgress) {
       console.log('[DRAFTS] Got 401, attempting token refresh...');
       const newToken = await refreshAccessToken();
       if (newToken) {
@@ -315,31 +319,31 @@
         });
         console.log('[DRAFTS] Retry response status:', response.status, response.statusText);
         
-        // If retry also fails, check if it's still a 401 (token issue) or another error
-        if (!response.ok) {
-          try {
-            const errorData = await response.clone().json();
-            console.error('[DRAFTS] Retry failed with error:', errorData);
-            // If it's still 401 after refresh, the refresh token might be invalid
-            if (response.status === 401) {
-              console.warn('[DRAFTS] Still getting 401 after token refresh, refresh token may be invalid');
-              clearTokensAndRedirect();
-              return null;
-            }
-          } catch (e) {
-            console.error('[DRAFTS] Retry failed, could not parse error response');
-            if (response.status === 401) {
-              clearTokensAndRedirect();
-              return null;
-            }
-          }
+        // If retry also fails with 401, refresh token is invalid - redirect once
+        if (response.status === 401) {
+          console.warn('[DRAFTS] Still getting 401 after token refresh, refresh token is invalid');
+          // Use setTimeout to prevent immediate redirect loops
+          setTimeout(() => {
+            clearTokensAndRedirect();
+          }, 100);
+          return null;
         }
       } else {
-        // Refresh failed, token is invalid - will be handled below
-        console.warn('[DRAFTS] Token refresh failed, token is invalid');
-        clearTokensAndRedirect();
+        // Refresh failed, token is invalid - redirect once
+        console.warn('[DRAFTS] Token refresh failed, refresh token is invalid');
+        // Use setTimeout to prevent immediate redirect loops
+        setTimeout(() => {
+          clearTokensAndRedirect();
+        }, 100);
         return null;
       }
+    } else if (response.status === 401 && refreshInProgress) {
+      // Already tried to refresh, don't try again
+      console.warn('[DRAFTS] Got 401 but refresh already attempted, redirecting to login');
+      setTimeout(() => {
+        clearTokensAndRedirect();
+      }, 100);
+      return null;
     }
     
     if (!response.ok) {

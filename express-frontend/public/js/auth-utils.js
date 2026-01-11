@@ -123,7 +123,7 @@ async function refreshAccessToken() {
     console.log('[AUTH] Attempting to refresh access token...');
     const response = await fetch('/auth/refresh', {
       method: 'POST',
-      credentials: 'include',
+      credentials: 'include', // Important: sends cookies including proof_refresh_token
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json'
@@ -131,7 +131,20 @@ async function refreshAccessToken() {
     });
 
     if (!response.ok) {
-      console.warn('[AUTH] Token refresh failed:', response.status);
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (e) {
+        errorData = { error: errorText || 'Unknown error' };
+      }
+      console.warn('[AUTH] Token refresh failed:', response.status, errorData);
+      
+      // If 401, the refresh token is invalid - clear all tokens to prevent loops
+      if (response.status === 401) {
+        console.warn('[AUTH] Refresh token is invalid, clearing all tokens');
+        clearAuthTokens();
+      }
       return null;
     }
 
@@ -141,9 +154,11 @@ async function refreshAccessToken() {
       console.log('[AUTH] Token refreshed successfully');
       return data.access_token;
     }
+    console.warn('[AUTH] No access_token in refresh response:', data);
     return null;
   } catch (error) {
     console.error('[AUTH] Error refreshing token:', error);
+    // On network error, don't clear tokens (might be temporary)
     return null;
   }
 }
