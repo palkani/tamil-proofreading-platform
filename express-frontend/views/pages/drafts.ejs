@@ -121,13 +121,14 @@
         console.log('[DRAFTS] Attempting immediate token refresh...');
         const newToken = await window.authUtils.refreshAccessToken();
         if (newToken) {
-          console.log('[DRAFTS] Successfully refreshed token from expired URL token');
+          console.log('[DRAFTS] ✅ Successfully refreshed token from expired URL token');
         } else {
-          console.warn('[DRAFTS] Failed to refresh expired token from URL');
+          console.warn('[DRAFTS] ❌ Failed to refresh expired token from URL - refresh token may be missing or invalid');
         }
+      } else {
+        console.warn('[DRAFTS] ⚠️ authUtils not available, cannot refresh expired token');
       }
     }
-    console.log('[DRAFTS] Token stored in localStorage and cookie');
     // Remove token from URL
     window.history.replaceState({}, document.title, window.location.pathname);
     
