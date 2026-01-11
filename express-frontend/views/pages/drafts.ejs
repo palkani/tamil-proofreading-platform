@@ -89,6 +89,25 @@
     window.location.href = '/login';
   }
 
+  // Helper function to check if token is expired (with 1 minute buffer)
+  function isTokenExpired(token) {
+    if (!token) return true;
+    try {
+      // Decode JWT payload (base64url)
+      const parts = token.split('.');
+      if (parts.length !== 3) return true;
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      const exp = payload.exp;
+      if (!exp) return true;
+      // Check if expired (with 1 minute buffer for clock skew)
+      const now = Math.floor(Date.now() / 1000);
+      return exp < (now + 60); // Expired if exp is less than now + 1 minute buffer
+    } catch (e) {
+      console.error('[DRAFTS] Error checking token expiration:', e);
+      return true; // Treat as expired if we can't decode
+    }
+  }
+
   // Helper function to refresh access token
   async function refreshAccessToken() {
     try {
@@ -113,6 +132,10 @@
       
       const data = await response.json();
       if (data.access_token) {
+        // Clear old token first
+        localStorage.removeItem('access_token');
+        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        // Store new token
         localStorage.setItem('access_token', data.access_token);
         document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
         console.log('[DRAFTS] Token refreshed successfully');
@@ -142,6 +165,19 @@
     
     // Use localStorage token first, fallback to cookie
     let accessToken = token || cookieToken;
+    
+    // Check if token is expired and refresh proactively
+    if (accessToken && isTokenExpired(accessToken)) {
+      console.log('[DRAFTS] Token is expired, refreshing before request...');
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        accessToken = newToken;
+      } else {
+        // Refresh failed, redirect to login
+        clearTokensAndRedirect();
+        return null;
+      }
+    }
     
     // Build headers with Authorization if token exists
     const headers = {
@@ -185,6 +221,8 @@
       } else {
         // Refresh failed, token is invalid - will be handled below
         console.warn('[DRAFTS] Token refresh failed, token is invalid');
+        clearTokensAndRedirect();
+        return null;
       }
     }
     
