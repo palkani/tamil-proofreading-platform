@@ -623,4 +623,54 @@ router.get('/ocr/download/:filename', async (req, res) => {
   }
 });
 
+// Proxy all /api/v1/* requests to backend (fallback if Vercel rewrite doesn't catch it)
+router.all('/v1/*', async (req, res) => {
+  try {
+    const path = req.path.replace('/v1', ''); // Remove /v1 prefix
+    const url = `${BACKEND_URL}${path}${req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''}`;
+    
+    if (ENABLE_PROXY_LOGS) {
+      console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
+    }
+    
+    const config = {
+      method: req.method,
+      url: url,
+      headers: {
+        ...req.headers,
+        host: undefined, // Remove host header
+      },
+      data: req.body,
+      params: req.query,
+      maxRedirects: 0,
+      validateStatus: () => true, // Don't throw on any status
+    };
+    
+    // Forward authorization header if present
+    if (req.headers.authorization) {
+      config.headers.authorization = req.headers.authorization;
+    }
+    
+    const response = await axios(config);
+    
+    // Forward status and headers
+    res.status(response.status);
+    Object.keys(response.headers).forEach(key => {
+      if (key !== 'content-encoding' && key !== 'transfer-encoding') {
+        res.setHeader(key, response.headers[key]);
+      }
+    });
+    
+    // Send response data
+    res.send(response.data);
+  } catch (error) {
+    console.error('[PROXY] Error proxying request:', error.message);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ error: 'Proxy error', details: error.message });
+    }
+  }
+});
+
 module.exports = router;
