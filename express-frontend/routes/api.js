@@ -332,6 +332,11 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       maxRedirects: 0, // Don't follow redirects automatically
     });
 
+    // Log all response headers for debugging
+    console.log('[OAUTH-HANDOFF] Response status:', response.status);
+    console.log('[OAUTH-HANDOFF] Response headers:', Object.keys(response.headers));
+    console.log('[OAUTH-HANDOFF] Set-Cookie header:', response.headers['set-cookie']);
+    
     // If backend returned JSON handoff
     const contentType = response.headers['content-type'] || '';
     if (response.status === 200 && contentType.includes('application/json') && response.data?.access_token) {
@@ -343,11 +348,15 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       if (setCookie) {
         // Handle both single cookie string and array of cookies
         const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+        console.log('[OAUTH-HANDOFF] Cookies to forward:', cookies);
         cookies.forEach(cookie => {
           // Use appendHeader to allow multiple Set-Cookie headers
           res.append('Set-Cookie', cookie);
+          console.log('[OAUTH-HANDOFF] Added cookie:', cookie.substring(0, 100) + '...');
         });
         console.log('[OAUTH-HANDOFF] forwarded', cookies.length, 'cookie(s) from backend');
+      } else {
+        console.warn('[OAUTH-HANDOFF] WARNING: No Set-Cookie headers received from backend!');
       }
       
       const token = response.data.access_token;
