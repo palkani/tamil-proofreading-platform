@@ -142,19 +142,19 @@ router.get('/archive', (req, res) => {
 // Drafts page - client-side auth only
 router.get('/drafts', (req, res) => {
   try {
-    const user = getCurrentUser(req);
+    const user = getCurrentUser(req) || null; // Ensure user is null if not set, not undefined
     const seo = getSeoData('drafts');
     res.render('pages/drafts', { 
       title: seo.title || 'My Drafts',
       seo: seo,
-      user: user
+      user: user // Pass null explicitly if user is not authenticated
     });
   } catch (error) {
     console.error('[DRAFTS] Error rendering drafts page:', error);
     res.status(500).render('pages/error', {
       title: 'Error - ProofTamil',
       seo: getSeoData('error'),
-      user: getCurrentUser(req),
+      user: getCurrentUser(req) || null,
       error: error.message || 'An unexpected error occurred'
     });
   }
