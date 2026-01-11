@@ -118,62 +118,115 @@ function isAuthenticated() {
  * Attempt to refresh the access token using the refresh token cookie
  * @returns {Promise<string|null>} New access token or null if refresh failed
  */
-async function refreshAccessToken() {
-  try {
-    console.log('[AUTH] Attempting to refresh access token...');
-    
-    // Check if refresh token cookie exists
-    const cookies = document.cookie.split(';').reduce((acc, cookie) => {
-      const [key, value] = cookie.trim().split('=');
-      acc[key] = value;
-      return acc;
-    }, {});
-    const hasRefreshToken = cookies.proof_refresh_token || cookies.refresh_token;
-    console.log('[AUTH] Refresh token cookie present:', hasRefreshToken ? 'Yes' : 'No');
-    console.log('[AUTH] All cookies:', Object.keys(cookies));
-    
-    const response = await fetch('/auth/refresh', {
-      method: 'POST',
-      credentials: 'include', // Important: sends cookies including proof_refresh_token
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
+async function refreshAccessToken(maxRetries = 2) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.log(`[AUTH] Retry attempt ${attempt} of ${maxRetries}...`);
+        // Wait a bit before retry (cookie might not be set yet)
+        await new Promise(resolve => setTimeout(resolve, 500 * attempt));
       }
-    });
-    
-    console.log('[AUTH] Refresh response status:', response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch (e) {
-        errorData = { error: errorText || 'Unknown error' };
-      }
-      console.warn('[AUTH] Token refresh failed:', response.status, errorData);
       
-      // If 401, the refresh token is invalid - clear all tokens to prevent loops
-      if (response.status === 401) {
-        console.warn('[AUTH] Refresh token is invalid, clearing all tokens');
-        clearAuthTokens();
+      console.log('[AUTH] Attempting to refresh access token...');
+      
+      // Check if refresh token cookie exists
+      const cookies = document.cookie.split(';').reduce((acc, cookie) => {
+        const [key, value] = cookie.trim().split('=');
+        acc[key] = value;
+        return acc;
+      }, {});
+      const hasRefreshToken = cookies.proof_refresh_token || cookies.refresh_token;
+      console.log('[AUTH] Refresh token cookie present:', hasRefreshToken ? 'Yes' : 'No');
+      console.log('[AUTH] All cookies:', Object.keys(cookies));
+      
+      const response = await fetch('/auth/refresh', {
+        method: 'POST',
+        credentials: 'include', // Important: sends cookies including proof_refresh_token
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('[AUTH] Refresh response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: errorText || 'Unknown error' };
+        }
+        console.warn('[AUTH] Token refresh failed:', response.status, errorData);
+        
+        // If 401, the refresh token is invalid - clear all tokens to prevent loops
+        if (response.status === 401) {
+          console.warn('[AUTH] Refresh token is invalid, clearing all tokens');
+          clearAuthTokens();
+          // Don't retry on 401 - token is definitely invalid
+          return null;
+        }
+        
+        // For other errors, retry if we have attempts left
+        if (attempt < maxRetries) {
+          console.log(`[AUTH] Retrying refresh (attempt ${attempt + 1}/${maxRetries})...`);
+          continue;
+        }
+        
+        return null;
+      }
+
+      const data = await response.json();
+      if (data.access_token) {
+        // Verify the token is not expired before storing
+        try {
+          const parts = data.access_token.split('.');
+          if (parts.length === 3) {
+            let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) base64 += '=';
+            const payload = JSON.parse(atob(base64));
+            const now = Math.floor(Date.now() / 1000);
+            if (payload.exp && payload.exp <= now) {
+              console.error('[AUTH] ❌ CRITICAL: Refreshed token is already expired!', {
+                exp: payload.exp,
+                now: now,
+                diff: payload.exp - now
+              });
+              // Don't store expired token
+              return null;
+            }
+          }
+        } catch (e) {
+          console.warn('[AUTH] Could not verify token expiration, storing anyway:', e);
+        }
+        
+        storeAccessToken(data.access_token);
+        console.log('[AUTH] Token refreshed successfully');
+        return data.access_token;
+      }
+      console.warn('[AUTH] No access_token in refresh response:', data);
+      
+      // Retry if we have attempts left
+      if (attempt < maxRetries) {
+        continue;
       }
       return null;
+    } catch (error) {
+      console.error('[AUTH] Error refreshing token:', error);
+      // On network error, retry if we have attempts left
+      if (attempt < maxRetries) {
+        console.log(`[AUTH] Network error, retrying (attempt ${attempt + 1}/${maxRetries})...`);
+        continue;
+      }
+      // On final attempt failure, return null
+      return null;
     }
-
-    const data = await response.json();
-    if (data.access_token) {
-      storeAccessToken(data.access_token);
-      console.log('[AUTH] Token refreshed successfully');
-      return data.access_token;
-    }
-    console.warn('[AUTH] No access_token in refresh response:', data);
-    return null;
-  } catch (error) {
-    console.error('[AUTH] Error refreshing token:', error);
-    // On network error, don't clear tokens (might be temporary)
-    return null;
   }
+  
+  // If we get here, all retries failed
+  console.error('[AUTH] All refresh attempts failed');
+  return null;
 }
 
 // Export functions to window for global access
