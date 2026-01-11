@@ -334,19 +334,11 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     // If backend returned JSON handoff
     const contentType = response.headers['content-type'] || '';
     if (response.status === 200 && contentType.includes('application/json') && response.data?.access_token) {
-      // Set cookie on frontend domain
-      const cookie = [
-        `access_token=${response.data.access_token}`,
-        'Path=/',
-        'Secure',
-        'SameSite=Lax',
-        'Domain=.prooftamil.com',
-        'HttpOnly'
-      ].join('; ');
-      res.setHeader('Set-Cookie', cookie);
-      console.log('[OAUTH-HANDOFF] set-cookie for prooftamil.com');
-      console.log('[OAUTH-HANDOFF] redirecting to /workspace');
-      return res.redirect(response.data.redirect || '/workspace');
+      // Store token in query param for client-side storage (since httpOnly cookie won't work for localStorage)
+      const token = response.data.access_token;
+      console.log('[OAUTH-HANDOFF] received access_token, redirecting to drafts');
+      // Redirect to drafts with token in URL - client will store it
+      return res.redirect(`/drafts?access_token=${encodeURIComponent(token)}`);
     }
 
     // fallback: forward cookies and location

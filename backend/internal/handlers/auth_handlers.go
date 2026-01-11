@@ -597,13 +597,13 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"user":         user,
 			"access_token": tokenPair.AccessToken,
-			"redirect":     "/workspace",
+			"redirect":     "/drafts",
 		})
 		return
 	}
 
-	// Redirect to workspace with access token (legacy path)
-	redirectURL := h.cfg.FrontendURL + "/workspace?access_token=" + tokenPair.AccessToken
+	// Redirect to drafts with access token
+	redirectURL := h.cfg.FrontendURL + "/drafts?access_token=" + tokenPair.AccessToken
 	log.Printf("[OAUTH-DEBUG] step=redirect request_id=%s user_id=%d target=%s", reqID, user.ID, redirectURL)
 	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }

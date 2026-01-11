@@ -60,6 +60,21 @@
 
 <script>
 (async function() {
+  // First, check if we have a token in URL (from OAuth redirect)
+  const urlParams = new URLSearchParams(window.location.search);
+  const tokenFromUrl = urlParams.get('access_token');
+  if (tokenFromUrl) {
+    console.log('[DRAFTS] Token found in URL, storing it');
+    // Clear old tokens first
+    localStorage.removeItem('access_token');
+    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    // Store new token
+    localStorage.setItem('access_token', tokenFromUrl);
+    document.cookie = `access_token=${tokenFromUrl}; path=/; SameSite=Lax; Max-Age=900`;
+    // Remove token from URL
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
   const loadingEl = document.getElementById('loading');
   const tableEl = document.getElementById('drafts-table');
   const bodyEl = document.getElementById('drafts-body');
