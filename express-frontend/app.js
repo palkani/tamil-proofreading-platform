@@ -7,6 +7,7 @@ const { trackPageView } = require('./middleware/analytics');
 const { getSeoData } = require('./config/seo');
 const authRoutes = require('./routes/auth');
 const { attachUser } = require('./middleware/auth');
+const injectSpeedInsights = require('./middleware/speed-insights');
 
 const indexRouter = require('./routes/index');
 const apiRouter = require('./routes/api');
@@ -99,6 +100,7 @@ app.use((req, res, next) => {
   attachUser(req, res, next);
 });
 app.use(trackPageView);
+app.use(injectSpeedInsights);
 
 // Special handling for workspace.js - no cache to ensure latest version
 app.get('/js/workspace.js', (req, res, next) => {
