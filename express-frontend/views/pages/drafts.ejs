@@ -275,14 +275,28 @@
       console.log('[DRAFTS] Got 401, attempting token refresh...');
       const newToken = await refreshAccessToken();
       if (newToken) {
-        // Retry with new token
-        headers['Authorization'] = `Bearer ${newToken}`;
+        // Retry with new token - create fresh headers object
+        const retryHeaders = {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${newToken}`
+        };
         console.log('[DRAFTS] Retrying request with refreshed token');
+        console.log('[DRAFTS] Retry token preview:', newToken.substring(0, 50) + '...');
         response = await fetch('/api/v1/submissions?limit=1000&offset=0', {
           credentials: 'include',
-          headers: headers
+          headers: retryHeaders
         });
         console.log('[DRAFTS] Retry response status:', response.status, response.statusText);
+        
+        // If retry also fails, log the error details
+        if (!response.ok) {
+          try {
+            const errorData = await response.clone().json();
+            console.error('[DRAFTS] Retry failed with error:', errorData);
+          } catch (e) {
+            console.error('[DRAFTS] Retry failed, could not parse error response');
+          }
+        }
       } else {
         // Refresh failed, token is invalid - will be handled below
         console.warn('[DRAFTS] Token refresh failed, token is invalid');
