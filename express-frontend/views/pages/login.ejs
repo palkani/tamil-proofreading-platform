@@ -179,7 +179,11 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
     // Login successful - store access token if provided
     if (data.access_token) {
       localStorage.setItem('access_token', data.access_token);
-      document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax`;
+      document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=86400`;
+      console.log('[LOGIN] Token stored in localStorage and cookie');
+      console.log('[LOGIN] Token preview:', data.access_token.substring(0, 20) + '...');
+    } else {
+      console.warn('[LOGIN] No access_token in response:', data);
     }
     
     // Redirect to drafts page
