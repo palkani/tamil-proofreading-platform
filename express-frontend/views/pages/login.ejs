@@ -247,11 +247,33 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
       return;
     }
 
-    // If we already have a token in storage, treat as authenticated and skip login UI
+    // If we already have a token in storage, check if it's expired
     const existingToken = localStorage.getItem('access_token');
     if (existingToken) {
-      persistAccessToken(existingToken); // ensure cookie is present
-      window.location.replace('/drafts');
+      // Check if token is expired
+      try {
+        const parts = existingToken.split('.');
+        if (parts.length === 3) {
+          let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          while (base64.length % 4) base64 += '=';
+          const payload = JSON.parse(atob(base64));
+          const now = Math.floor(Date.now() / 1000);
+          if (payload.exp && payload.exp > now) {
+            // Token is valid, redirect to drafts
+            persistAccessToken(existingToken); // ensure cookie is present
+            window.location.replace('/drafts');
+            return;
+          } else {
+            // Token is expired, clear it
+            localStorage.removeItem('access_token');
+            document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+          }
+        }
+      } catch (e) {
+        // If we can't decode, clear the token
+        localStorage.removeItem('access_token');
+        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+      }
     }
   })();
 </script>
