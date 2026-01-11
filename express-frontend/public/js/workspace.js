@@ -301,20 +301,73 @@ class WorkspaceController {
     this.init();
   }
 
-  // Unified API helper: cookie-based auth only
+  // Unified API helper: uses centralized auth utilities for token refresh
   async apiFetch(url, options = {}, requireAuth = true) {
+    // Use centralized auth utilities if available (preferred)
+    if (window.authUtils && window.authUtils.apiFetch) {
+      try {
+        return await window.authUtils.apiFetch(url, options, requireAuth);
+      } catch (error) {
+        // If authUtils.apiFetch redirects, let it handle it
+        throw error;
+      }
+    }
+    
+    // Fallback: manual implementation with token refresh
     const headers = new Headers(options.headers || {});
-
-    const response = await fetch(url, {
+    
+    // Get access token and add to headers
+    let accessToken = localStorage.getItem('access_token');
+    if (accessToken && requireAuth) {
+      headers.set('Authorization', `Bearer ${accessToken}`);
+    }
+    
+    let response = await fetch(url, {
       ...options,
       headers,
       credentials: 'include',
     });
 
+    // Handle 401 with token refresh
     if (requireAuth && response.status === 401) {
-      console.warn('[AUTH] Session expired, redirecting to /login');
-      window.location.href = '/login';
-      throw new Error('unauthorized');
+      console.warn('[WORKSPACE] Got 401, attempting token refresh...');
+      
+      // Try to refresh token using centralized utility
+      if (window.authUtils && window.authUtils.refreshAccessToken) {
+        const newToken = await window.authUtils.refreshAccessToken();
+        if (newToken) {
+          // Retry with new token
+          headers.set('Authorization', `Bearer ${newToken}`);
+          response = await fetch(url, {
+            ...options,
+            headers,
+            credentials: 'include',
+          });
+          
+          if (response.status === 401) {
+            console.error('[WORKSPACE] Still 401 after refresh, redirecting to login');
+            if (window.authUtils && window.authUtils.clearAuthTokens) {
+              window.authUtils.clearAuthTokens();
+            }
+            window.location.href = '/login';
+            throw new Error('Unauthorized');
+          }
+          return response;
+        } else {
+          // Refresh failed, clear tokens and redirect
+          console.warn('[WORKSPACE] Token refresh failed, redirecting to /login');
+          if (window.authUtils && window.authUtils.clearAuthTokens) {
+            window.authUtils.clearAuthTokens();
+          }
+          window.location.href = '/login';
+          throw new Error('Unauthorized');
+        }
+      } else {
+        // No auth utils available, just redirect
+        console.warn('[WORKSPACE] No auth utils, redirecting to /login');
+        window.location.href = '/login';
+        throw new Error('Unauthorized');
+      }
     }
 
     return response;

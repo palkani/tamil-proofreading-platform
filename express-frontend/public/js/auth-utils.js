@@ -229,6 +229,65 @@ async function refreshAccessToken(maxRetries = 2) {
   return null;
 }
 
+/**
+ * Centralized API fetch function with automatic token refresh
+ * @param {string} url - The URL to fetch
+ * @param {RequestInit} options - Fetch options
+ * @param {boolean} requireAuth - Whether authentication is required (default: true)
+ * @returns {Promise<Response>}
+ */
+async function apiFetch(url, options = {}, requireAuth = true) {
+  const headers = new Headers(options.headers || {});
+  
+  // Get access token and add to headers if auth is required
+  let accessToken = localStorage.getItem('access_token');
+  if (accessToken && requireAuth) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+  }
+  
+  // Make initial request
+  let response = await fetch(url, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
+  
+  // Handle 401 with automatic token refresh
+  if (requireAuth && response.status === 401) {
+    console.warn('[AUTH] Got 401, attempting token refresh...');
+    
+    // Try to refresh token
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      // Retry with new token
+      headers.set('Authorization', `Bearer ${newToken}`);
+      response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'include',
+      });
+      
+      // If still 401 after refresh, clear tokens and redirect
+      if (response.status === 401) {
+        console.error('[AUTH] Still 401 after refresh, clearing tokens and redirecting');
+        clearAuthTokens();
+        window.location.href = '/login';
+        throw new Error('Unauthorized');
+      }
+      
+      return response;
+    } else {
+      // Refresh failed, clear tokens and redirect
+      console.warn('[AUTH] Token refresh failed, redirecting to login');
+      clearAuthTokens();
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+  }
+  
+  return response;
+}
+
 // Export functions to window for global access
 window.authUtils = {
   clearAuthTokens,
@@ -236,6 +295,7 @@ window.authUtils = {
   handleAuthSuccess,
   handleLogout,
   isAuthenticated,
-  refreshAccessToken
+  refreshAccessToken,
+  apiFetch
 };
 
