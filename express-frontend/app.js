@@ -11,6 +11,7 @@ const { attachUser } = require('./middleware/auth');
 const indexRouter = require('./routes/index');
 const apiRouter = require('./routes/api');
 const processRouter = require('./routes/process');
+const workspaceRouter = require('./routes/workspace');
 
 const app = express();
 
@@ -177,6 +178,7 @@ app.get('/sitemap.xml', (req, res) => {
 });
 
 app.use('/auth', authRoutes);
+app.use('/workspace', workspaceRouter);
 app.use('/', indexRouter);
 app.use('/api', apiRouter);
 app.use('/api/process', processRouter);

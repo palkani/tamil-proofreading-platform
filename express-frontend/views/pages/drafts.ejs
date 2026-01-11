@@ -66,11 +66,21 @@
   const emptyEl = document.getElementById('empty-state');
 
   try {
+    // Get access token from localStorage
+    const token = localStorage.getItem('access_token');
+    
+    // Build headers with Authorization if token exists
+    const headers = {
+      'Accept': 'application/json'
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch('/api/v1/submissions?limit=1000&offset=0', {
       credentials: 'include',
-      headers: {
-        'Accept': 'application/json'
-      }
+      headers: headers
     });
 
     if (!response.ok) {
@@ -129,16 +139,33 @@
     console.error('Error loading drafts:', error);
     loadingEl.classList.add('hidden');
     emptyEl.classList.remove('hidden');
-    emptyEl.innerHTML = `
-      <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-      </svg>
-      <p class="text-lg font-medium">Error loading drafts</p>
-      <p class="text-sm mt-2">${error.message}</p>
-      <a href="/workspace" class="mt-4 inline-block btn-primary">
-        Create New Draft
-      </a>
-    `;
+    
+    // Check if it's an authentication error
+    const isAuthError = error.message.includes('401') || error.message.includes('unauthorized') || error.message.includes('Invalid or expired token');
+    
+    if (isAuthError) {
+      emptyEl.innerHTML = `
+        <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+        <p class="text-lg font-medium">Authentication Required</p>
+        <p class="text-sm mt-2">Please log in to view your drafts.</p>
+        <a href="/login" class="mt-4 inline-block btn-primary">
+          Log In
+        </a>
+      `;
+    } else {
+      emptyEl.innerHTML = `
+        <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <p class="text-lg font-medium">Error loading drafts</p>
+        <p class="text-sm mt-2">${error.message}</p>
+        <a href="/workspace" class="mt-4 inline-block btn-primary">
+          Create New Draft
+        </a>
+      `;
+    }
   }
 })();
 </script>
