@@ -434,8 +434,18 @@ router.all('/*', async (req, res) => {
   }
 });
 
-// OCR Tool Proxy Routes
-const OCR_SERVICE_URL = process.env.OCR_SERVICE_URL || 'http://localhost:5000';
+// OCR Tool - Direct implementation using Tesseract.js
+const OCR_SERVICE_URL = process.env.OCR_SERVICE_URL;
+let ocrService = null;
+
+// Try to load OCR service (direct implementation)
+try {
+  ocrService = require('../services/ocr-service');
+  console.log('[OCR] Direct OCR service loaded (Tesseract.js)');
+} catch (error) {
+  console.warn('[OCR] Direct OCR service not available:', error.message);
+  console.warn('[OCR] Will attempt to use external OCR service if OCR_SERVICE_URL is set');
+}
 
 // Configure multer for file uploads
 const upload = multer({
@@ -451,125 +461,163 @@ const upload = multer({
   }
 });
 
-// Proxy OCR upload endpoint
+// Store generated Word documents temporarily (in-memory for now, could use Redis/file storage)
+const ocrDocuments = new Map();
+
+// OCR upload endpoint - uses direct implementation or proxies to external service
 router.post('/ocr/upload', upload.single('file'), async (req, res) => {
   try {
     if (ENABLE_PROXY_LOGS) {
-      console.log('[PROXY] POST /ocr/upload ->', OCR_SERVICE_URL);
+      console.log('[OCR] POST /ocr/upload');
     }
     
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
     
-    // Check if OCR service URL is configured
-    if (!OCR_SERVICE_URL || OCR_SERVICE_URL === 'http://localhost:5000') {
-      console.warn('[PROXY] OCR_SERVICE_URL not configured, using localhost fallback');
-      // In production, this will fail - return helpful error
-      if (process.env.NODE_ENV === 'production') {
-        return res.status(503).json({ 
-          error: 'OCR service is not currently available. Please contact support or try again later.',
-          details: 'OCR_SERVICE_URL environment variable is not configured'
-        });
-      }
-    }
+    const lang = req.body.lang || 'eng+tam';
+    const fileBuffer = req.file.buffer;
+    const filename = req.file.originalname;
+    const mimeType = req.file.mimetype;
     
-    // Forward the multipart form data to OCR service
-    const formData = new FormData();
-    formData.append('file', req.file.buffer, {
-      filename: req.file.originalname,
-      contentType: req.file.mimetype
-    });
-    
-    // Forward language preference if provided
-    if (req.body.lang) {
-      formData.append('lang', req.body.lang);
-    }
-    
-    const response = await axios.post(`${OCR_SERVICE_URL}/upload`, formData, {
-      headers: {
-        ...formData.getHeaders()
-      },
-      maxContentLength: 16 * 1024 * 1024, // 16MB
-      maxBodyLength: 16 * 1024 * 1024,
-      timeout: 60000 // 60 second timeout for OCR processing
-    });
-    
-    // Ensure response is JSON
-    if (typeof response.data === 'object') {
-      res.json(response.data);
-    } else {
-      // If response is not JSON, try to parse it
+    // Try direct OCR implementation first (if available)
+    if (ocrService) {
+      console.log('[OCR] Using direct OCR implementation');
       try {
-        const jsonData = JSON.parse(response.data);
-        res.json(jsonData);
-      } catch (e) {
-        console.error('[PROXY] OCR response is not valid JSON:', response.data?.substring(0, 200));
-        res.status(500).json({ 
-          error: 'OCR service returned invalid response',
-          details: 'The OCR service may not be properly configured'
+        const result = await ocrService.processFile(fileBuffer, filename, mimeType, lang);
+        
+        // Store document path for download
+        ocrDocuments.set(result.download_filename, result.download_path);
+        
+        // Clean up old documents (keep last 10)
+        if (ocrDocuments.size > 10) {
+          const firstKey = ocrDocuments.keys().next().value;
+          try {
+            const fs = require('fs');
+            if (fs.existsSync(ocrDocuments.get(firstKey))) {
+              fs.unlinkSync(ocrDocuments.get(firstKey));
+            }
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+          ocrDocuments.delete(firstKey);
+        }
+        
+        return res.json({
+          success: true,
+          text: result.text.substring(0, 500) + (result.text.length > 500 ? '...' : ''),
+          full_text: result.full_text,
+          download_filename: result.download_filename,
+          char_count: result.char_count
         });
+      } catch (ocrError) {
+        console.error('[OCR] Direct OCR processing failed:', ocrError.message);
+        // Fall through to try external service if configured
       }
     }
-  } catch (error) {
-    console.error('[PROXY] OCR upload error:', error.message);
-    console.error('[PROXY] Error details:', {
-      code: error.code,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data?.substring?.(0, 200)
+    
+    // Fallback to external OCR service if configured
+    if (OCR_SERVICE_URL && OCR_SERVICE_URL !== 'http://localhost:5000') {
+      console.log('[OCR] Using external OCR service:', OCR_SERVICE_URL);
+      
+      const formData = new FormData();
+      formData.append('file', fileBuffer, {
+        filename: filename,
+        contentType: mimeType
+      });
+      formData.append('lang', lang);
+      
+      const response = await axios.post(`${OCR_SERVICE_URL}/upload`, formData, {
+        headers: {
+          ...formData.getHeaders()
+        },
+        maxContentLength: 16 * 1024 * 1024,
+        maxBodyLength: 16 * 1024 * 1024,
+        timeout: 60000
+      });
+      
+      if (typeof response.data === 'object') {
+        return res.json(response.data);
+      } else {
+        try {
+          const jsonData = JSON.parse(response.data);
+          return res.json(jsonData);
+        } catch (e) {
+          throw new Error('OCR service returned invalid response');
+        }
+      }
+    }
+    
+    // No OCR service available
+    return res.status(503).json({ 
+      error: 'OCR service is not currently available. Please contact support.',
+      details: 'OCR functionality requires Tesseract.js or an external OCR service'
     });
     
-    // Handle specific error cases
+  } catch (error) {
+    console.error('[OCR] Upload error:', error.message);
+    
     if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
       return res.status(503).json({ 
-        error: 'OCR service is not available. The service may be down or not configured.',
-        details: `Cannot connect to OCR service at ${OCR_SERVICE_URL}`
+        error: 'OCR service is not available. The service may be down.',
+        details: error.message
       });
     }
     
-    if (error.response) {
-      // If response is HTML (error page), return JSON error
-      const contentType = error.response.headers['content-type'] || '';
-      if (contentType.includes('text/html')) {
-        return res.status(503).json({ 
-          error: 'OCR service returned an error page. The service may not be properly configured.',
-          details: 'Please check OCR_SERVICE_URL environment variable'
-        });
-      }
-      
-      // Try to extract error from response
-      const errorData = error.response.data;
-      if (typeof errorData === 'object' && errorData.error) {
-        return res.status(error.response.status).json({ error: errorData.error });
-      }
+    if (error.response && error.response.headers['content-type']?.includes('text/html')) {
+      return res.status(503).json({ 
+        error: 'OCR service returned an error page.',
+        details: 'Please check OCR service configuration'
+      });
     }
     
     res.status(error.response?.status || 500).json({
-      error: error.response?.data?.error || 'OCR processing failed',
-      details: error.message
+      error: error.message || 'OCR processing failed',
+      details: error.response?.data?.error || error.message
     });
   }
 });
 
-// Proxy OCR download endpoint
+// OCR download endpoint
 router.get('/ocr/download/:filename', async (req, res) => {
   try {
     if (ENABLE_PROXY_LOGS) {
-      console.log('[PROXY] GET /ocr/download/:filename ->', OCR_SERVICE_URL);
+      console.log('[OCR] GET /ocr/download/:filename');
     }
     
-    const response = await axios.get(`${OCR_SERVICE_URL}/download/${req.params.filename}`, {
-      responseType: 'stream'
-    });
+    const filename = req.params.filename;
     
-    res.setHeader('Content-Disposition', response.headers['content-disposition']);
-    res.setHeader('Content-Type', response.headers['content-type']);
-    response.data.pipe(res);
+    // Check if file is in our temporary storage (direct OCR)
+    if (ocrDocuments.has(filename)) {
+      const filePath = ocrDocuments.get(filename);
+      const fs = require('fs');
+      
+      if (fs.existsSync(filePath)) {
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        return res.sendFile(filePath);
+      } else {
+        ocrDocuments.delete(filename);
+      }
+    }
+    
+    // Fallback to external service if configured
+    if (OCR_SERVICE_URL && OCR_SERVICE_URL !== 'http://localhost:5000') {
+      const response = await axios.get(`${OCR_SERVICE_URL}/download/${filename}`, {
+        responseType: 'stream'
+      });
+      
+      res.setHeader('Content-Disposition', response.headers['content-disposition'] || `attachment; filename="${filename}"`);
+      res.setHeader('Content-Type', response.headers['content-type'] || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      return response.data.pipe(res);
+    }
+    
+    return res.status(404).json({ error: 'File not found' });
   } catch (error) {
-    console.error('[PROXY] OCR download error:', error.message);
+    console.error('[OCR] Download error:', error.message);
     res.status(error.response?.status || 500).json({
-      error: error.response?.data?.error || 'File download failed'
+      error: error.response?.data?.error || 'File download failed',
+      details: error.message
     });
   }
 });
