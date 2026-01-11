@@ -329,18 +329,23 @@ router.get('/v1/auth/google/callback', async (req, res) => {
       headers: forwardHeaders,
       withCredentials: true,
       validateStatus: () => true,
+      maxRedirects: 0, // Don't follow redirects automatically
     });
 
     // If backend returned JSON handoff
     const contentType = response.headers['content-type'] || '';
     if (response.status === 200 && contentType.includes('application/json') && response.data?.access_token) {
       // Forward Set-Cookie headers from backend (includes refresh_token and access_token cookies)
+      // Note: axios lowercases header names, so it's 'set-cookie' not 'Set-Cookie'
       const setCookie = response.headers['set-cookie'];
+      console.log('[OAUTH-HANDOFF] Backend Set-Cookie headers:', setCookie ? (Array.isArray(setCookie) ? setCookie.length : 1) + ' cookie(s)' : 'none');
+      
       if (setCookie) {
         // Handle both single cookie string and array of cookies
         const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
         cookies.forEach(cookie => {
-          res.setHeader('Set-Cookie', cookie);
+          // Use appendHeader to allow multiple Set-Cookie headers
+          res.append('Set-Cookie', cookie);
         });
         console.log('[OAUTH-HANDOFF] forwarded', cookies.length, 'cookie(s) from backend');
       }
