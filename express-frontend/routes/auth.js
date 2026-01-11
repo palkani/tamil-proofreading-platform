@@ -37,7 +37,12 @@ const forward = async (req, res, path, method = 'post') => {
     // Propagate Set-Cookie from backend so httpOnly cookies flow to the browser
     const setCookie = backendRes.headers['set-cookie'];
     if (setCookie) {
-      res.setHeader('set-cookie', setCookie);
+      // Handle both single cookie string and array of cookies
+      const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+      cookies.forEach(cookie => {
+        res.append('Set-Cookie', cookie);
+      });
+      console.log(`[AUTH-PROXY] Forwarded ${cookies.length} cookie(s) from backend for ${path}`);
     }
 
     res.status(backendRes.status).json(backendRes.data);
