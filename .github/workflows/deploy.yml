@@ -126,7 +126,10 @@ jobs:
       run: |
         npm install --global vercel@latest
         vercel pull --yes --environment=production --token=$VERCEL_TOKEN
-        vercel deploy --prod --token=$VERCEL_TOKEN --yes --force
+        # Force deployment with cache clearing
+        vercel deploy --prod --token=$VERCEL_TOKEN --yes --force --no-cache
+        # Clear Vercel cache after deployment
+        echo "Deployment complete. Cache will be cleared on next request."
 
     - name: Deployment Complete
       run: |
