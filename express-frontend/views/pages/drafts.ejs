@@ -148,7 +148,9 @@
       // Check if expired (with 5 minute buffer for clock skew)
       const now = Math.floor(Date.now() / 1000);
       const clockSkewBuffer = 300; // 5 minutes in seconds
-      const isExp = exp < (now - clockSkewBuffer); // Expired if exp is less than now - buffer
+      // Token is expired if exp < (now - buffer) - this accounts for clock skew
+      // If server time is ahead, we still consider it expired if it's more than 5 min past
+      const isExp = exp < (now - clockSkewBuffer);
       console.log('[DRAFTS] Token expiration check:', {
         exp: exp,
         now: now,
@@ -235,19 +237,30 @@
     // Use localStorage token first, fallback to cookie
     let accessToken = token || cookieToken;
     
-    // Check if token is expired and refresh proactively (skip for now - let server decide)
-    // The proactive check was causing issues, so we'll let the server validate and refresh on 401
-    // if (accessToken && isTokenExpired(accessToken)) {
-    //   console.log('[DRAFTS] Token is expired, refreshing before request...');
-    //   const newToken = await refreshAccessToken();
-    //   if (newToken) {
-    //     accessToken = newToken;
-    //   } else {
-    //     // Refresh failed, redirect to login
-    //     clearTokensAndRedirect();
-    //     return null;
-    //   }
-    // }
+    // Check if token is expired and refresh proactively BEFORE making the request
+    // This prevents 401 errors when we have a valid refresh token
+    if (accessToken) {
+      const expired = isTokenExpired(accessToken);
+      if (expired) {
+        console.log('[DRAFTS] Token is expired, refreshing before request...');
+        const newToken = await refreshAccessToken();
+        if (newToken) {
+          accessToken = newToken;
+          console.log('[DRAFTS] Token refreshed successfully before request');
+          // Update localStorage with new token
+          localStorage.setItem('access_token', newToken);
+        } else {
+          // Refresh failed, no valid refresh token - redirect to login
+          console.warn('[DRAFTS] Token refresh failed before request, redirecting to login');
+          setTimeout(() => {
+            clearTokensAndRedirect();
+          }, 100);
+          return null;
+        }
+      } else {
+        console.log('[DRAFTS] Token is valid, proceeding with request');
+      }
+    }
     
     // Build headers with Authorization if token exists
     const headers = {
