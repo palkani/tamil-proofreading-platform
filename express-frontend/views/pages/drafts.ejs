@@ -273,9 +273,20 @@
       console.log('[DRAFTS] Token preview (last 20 chars):', accessToken.substring(accessToken.length - 20));
     } else {
       console.warn('[DRAFTS] No access token found in localStorage or cookies');
-      // No token - redirect to login
-      clearTokensAndRedirect();
-      return null;
+      // No access token - try to refresh first (refresh token might be in cookie)
+      console.log('[DRAFTS] Attempting to refresh token before redirecting...');
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        // Got new token from refresh, use it
+        accessToken = newToken;
+        headers['Authorization'] = `Bearer ${accessToken}`;
+        console.log('[DRAFTS] Successfully refreshed token, proceeding with request');
+      } else {
+        // Refresh failed, no valid tokens - redirect to login
+        console.warn('[DRAFTS] Token refresh failed, redirecting to login');
+        clearTokensAndRedirect();
+        return null;
+      }
     }
 
     console.log('[DRAFTS] Fetching submissions from /api/v1/submissions');

@@ -35,7 +35,8 @@ const attachUser = (req, res, next) => {
         // Token is expired, but check if we have a refresh token
         // If refresh token exists, allow the request through and let client-side handle refresh
         // This prevents redirect loops when token expires during a session
-        const hasRefreshToken = req.cookies && req.cookies.refresh_token;
+        // Backend uses 'proof_refresh_token' as the cookie name
+        const hasRefreshToken = req.cookies && (req.cookies.proof_refresh_token || req.cookies.refresh_token);
         
         if (hasRefreshToken) {
           // We have a refresh token, so user is still authenticated
