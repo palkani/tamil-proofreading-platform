@@ -122,11 +122,28 @@
         const newToken = await window.authUtils.refreshAccessToken();
         if (newToken) {
           console.log('[DRAFTS] ✅ Successfully refreshed token from expired URL token');
+          // Store the new token
+          if (window.authUtils && window.authUtils.storeAccessToken) {
+            window.authUtils.storeAccessToken(newToken);
+          }
         } else {
           console.warn('[DRAFTS] ❌ Failed to refresh expired token from URL - refresh token may be missing or invalid');
+          // CRITICAL: If refresh fails, we have no valid token - redirect to login
+          console.warn('[DRAFTS] No valid token available, redirecting to login');
+          window.history.replaceState({}, document.title, window.location.pathname);
+          setTimeout(() => {
+            window.location.href = '/login?error=token_expired';
+          }, 100);
+          return; // Exit early, don't proceed with API calls
         }
       } else {
         console.warn('[DRAFTS] ⚠️ authUtils not available, cannot refresh expired token');
+        // No way to refresh, redirect to login
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setTimeout(() => {
+          window.location.href = '/login?error=token_expired';
+        }, 100);
+        return; // Exit early
       }
     }
     // Remove token from URL
@@ -334,12 +351,28 @@
           timeUntilExpiry: newTokenExp ? newTokenExp - now : 'unknown',
           isValid: newTokenExp ? newTokenExp > now : false
         });
+        
+        // CRITICAL: Verify the new token is actually valid before using it
+        if (newTokenExp && newTokenExp <= now) {
+          console.error('[DRAFTS] ❌ CRITICAL: Refreshed token is STILL expired!', {
+            exp: newTokenExp,
+            now: now,
+            diff: newTokenExp - now
+          });
+          // This shouldn't happen, but if it does, redirect to login
+          setTimeout(() => {
+            clearTokensAndRedirect();
+          }, 100);
+          return null;
+        }
+        
         // Update localStorage with new token IMMEDIATELY
         localStorage.setItem('access_token', newToken);
-        console.log('[DRAFTS] ✅ New token stored in localStorage');
+        console.log('[DRAFTS] ✅ New token stored in localStorage and verified as valid');
       } else {
         // Refresh failed, no valid refresh token - redirect to login
         console.warn('[DRAFTS] ❌ Token refresh failed before request, redirecting to login');
+        console.warn('[DRAFTS] This usually means the refresh token cookie is missing or invalid');
         setTimeout(() => {
           clearTokensAndRedirect();
         }, 100);
@@ -366,14 +399,30 @@
     const stillExpired = isTokenExpired(accessToken);
     if (stillExpired) {
       console.error('[DRAFTS] ❌ CRITICAL: Token is still expired after refresh!');
-      // Try one more refresh
+      console.error('[DRAFTS] Token details:', {
+        token: accessToken ? accessToken.substring(0, 50) + '...' : 'null',
+        length: accessToken ? accessToken.length : 0
+      });
+      
+      // Try one more refresh (maybe refresh token cookie just became available)
+      console.log('[DRAFTS] Attempting second refresh...');
       const finalToken = await refreshAccessToken();
       if (finalToken) {
+        // Verify this token is actually valid
+        const finalExpired = isTokenExpired(finalToken);
+        if (finalExpired) {
+          console.error('[DRAFTS] ❌ Second refresh also returned expired token!');
+          setTimeout(() => {
+            clearTokensAndRedirect();
+          }, 100);
+          return null;
+        }
         accessToken = finalToken;
         localStorage.setItem('access_token', finalToken);
         console.log('[DRAFTS] ✅ Got valid token on second refresh attempt');
       } else {
         console.error('[DRAFTS] ❌ Second refresh also failed, redirecting to login');
+        console.error('[DRAFTS] This indicates the refresh token cookie is not available or invalid');
         setTimeout(() => {
           clearTokensAndRedirect();
         }, 100);
