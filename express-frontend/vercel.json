@@ -48,30 +48,30 @@
       ]
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "^/api/transliterate/suggest$",
-      "dest": "/api/transliterate/suggest.js"
+      "source": "/api/transliterate/suggest",
+      "destination": "/api/transliterate/suggest.js"
     },
     {
-      "src": "^/api/v1/auth/google/callback$",
-      "dest": "/api/index.js"
+      "source": "/api/v1/auth/google/callback",
+      "destination": "/api/index.js"
     },
     {
-      "src": "^/api/v1/ime/(.*)",
-      "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/ime/$1"
+      "source": "/api/v1/ime/:path*",
+      "destination": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/ime/:path*"
     },
     {
-      "src": "^/workspace$",
-      "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/workspace"
+      "source": "/workspace",
+      "destination": "https://prooftamil-backend-991187041222.asia-south1.run.app/workspace"
     },
     {
-      "src": "^/api/v1/(.*)",
-      "dest": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/$1"
+      "source": "/api/v1/:path*",
+      "destination": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/:path*"
     },
     {
-      "src": "^(?!/api/v1/).*",
-      "dest": "/api/index.js"
+      "source": "/((?!api/v1/).*)",
+      "destination": "/api/index.js"
     }
   ]
 }
