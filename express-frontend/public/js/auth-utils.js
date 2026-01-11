@@ -12,9 +12,12 @@ function clearAuthTokens() {
   // Clear localStorage
   localStorage.removeItem('access_token');
   
-  // Clear cookies
-  document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-  document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+  // Clear cookies - clear both refresh token cookie names for compatibility
+  // Backend uses 'proof_refresh_token', but we also clear 'refresh_token' for safety
+  const cookieOptions = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+  document.cookie = `access_token=; ${cookieOptions}`;
+  document.cookie = `refresh_token=; ${cookieOptions}`;
+  document.cookie = `proof_refresh_token=; ${cookieOptions}`;
   
   console.log('[AUTH] All tokens cleared from storage');
 }
@@ -111,12 +114,47 @@ function isAuthenticated() {
   }
 }
 
+/**
+ * Attempt to refresh the access token using the refresh token cookie
+ * @returns {Promise<string|null>} New access token or null if refresh failed
+ */
+async function refreshAccessToken() {
+  try {
+    console.log('[AUTH] Attempting to refresh access token...');
+    const response = await fetch('/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.warn('[AUTH] Token refresh failed:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    if (data.access_token) {
+      storeAccessToken(data.access_token);
+      console.log('[AUTH] Token refreshed successfully');
+      return data.access_token;
+    }
+    return null;
+  } catch (error) {
+    console.error('[AUTH] Error refreshing token:', error);
+    return null;
+  }
+}
+
 // Export functions to window for global access
 window.authUtils = {
   clearAuthTokens,
   storeAccessToken,
   handleAuthSuccess,
   handleLogout,
-  isAuthenticated
+  isAuthenticated,
+  refreshAccessToken
 };
 
