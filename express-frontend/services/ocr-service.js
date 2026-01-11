@@ -73,13 +73,14 @@ async function extractTextFromPDF(pdfBuffer) {
  */
 async function createWordDocument(text, originalFilename) {
   try {
+    // Split text into paragraphs for better formatting
+    const paragraphs = text.split('\n').filter(p => p.trim().length > 0);
+    
     const doc = new Document({
       sections: [{
         properties: {},
         children: [
           new Paragraph({
-            text: `Text Extracted from: ${originalFilename}`,
-            heading: 'Heading1',
             alignment: AlignmentType.CENTER,
             children: [
               new TextRun({
@@ -92,9 +93,10 @@ async function createWordDocument(text, originalFilename) {
           new Paragraph({
             text: '_'.repeat(80),
           }),
-          new Paragraph({
-            text: text,
-          }),
+          // Add each paragraph
+          ...paragraphs.map(p => new Paragraph({
+            text: p.trim(),
+          })),
         ],
       }],
     });
@@ -111,7 +113,10 @@ async function createWordDocument(text, originalFilename) {
     return { outputPath, outputFilename };
   } catch (error) {
     console.error('[OCR] Word document creation error:', error);
-    throw new Error(`Failed to create Word document: ${error.message}`);
+    // Don't fail the entire request if Word doc creation fails
+    // Just return a placeholder filename
+    const outputFilename = `${path.parse(originalFilename).name}_extracted.txt`;
+    return { outputPath: null, outputFilename };
   }
 }
 

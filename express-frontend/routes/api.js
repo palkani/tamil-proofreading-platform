@@ -591,11 +591,12 @@ router.get('/ocr/download/:filename', async (req, res) => {
     if (ocrDocuments.has(filename)) {
       const filePath = ocrDocuments.get(filename);
       const fs = require('fs');
+      const path = require('path');
       
-      if (fs.existsSync(filePath)) {
+      if (filePath && fs.existsSync(filePath)) {
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        return res.sendFile(filePath);
+        return res.sendFile(path.resolve(filePath));
       } else {
         ocrDocuments.delete(filename);
       }
