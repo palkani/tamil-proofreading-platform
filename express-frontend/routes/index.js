@@ -70,15 +70,8 @@ router.get('/register', (req, res) => {
   });
 });
 
-// Handle login form submission
-router.post('/login', (req, res) => {
-  res.redirect('/login?error=Email%20and%20password%20login%20are%20no%20longer%20supported.%20Use%20Google%20Sign-In.');
-});
-
-// Handle registration form submission
-router.post('/register', (req, res) => {
-  res.redirect('/register?error=Registration%20is%20handled%20via%20Google%20Sign-In.');
-});
+// Note: Login and registration form submissions are handled client-side via /api/auth/login and /api/auth/register
+// These routes are handled by routes/auth.js which proxies to the backend
 
 // Provide Google Client ID to frontend
 router.get('/api/config/google-client-id', (req, res) => {
