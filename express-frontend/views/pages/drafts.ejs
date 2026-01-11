@@ -148,9 +148,11 @@
       // Check if expired (with 5 minute buffer for clock skew)
       const now = Math.floor(Date.now() / 1000);
       const clockSkewBuffer = 300; // 5 minutes in seconds
-      // Token is expired if exp < (now - buffer) - this accounts for clock skew
-      // If server time is ahead, we still consider it expired if it's more than 5 min past
-      const isExp = exp < (now - clockSkewBuffer);
+      // Token is expired if:
+      // 1. exp < now (definitely expired)
+      // 2. OR exp < (now - buffer) (expired accounting for clock skew)
+      // We use (now - buffer) to account for cases where server time is ahead
+      const isExp = exp < now || exp < (now - clockSkewBuffer);
       console.log('[DRAFTS] Token expiration check:', {
         exp: exp,
         now: now,
