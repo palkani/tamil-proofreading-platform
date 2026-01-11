@@ -64,14 +64,14 @@
         <!-- CTA Buttons -->
         <div class="flex flex-col sm:flex-row gap-4 justify-center items-center pt-6">
           <% if (user) { %>
-            <a href="/workspace" class="px-8 py-4 bg-primary-600 text-white rounded-full font-semibold text-lg hover:bg-accent-500 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+            <a href="/workspace" class="px-8 py-4 text-white rounded-full font-semibold text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5" style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #1e40af 100%);">
               Open Workspace
             </a>
-            <a href="/dashboard" class="px-8 py-4 bg-white border-2 border-gray-300 text-gray-700 rounded-full font-semibold text-lg hover:border-primary-500 hover:text-primary-600 transition-all">
+            <a href="/dashboard" class="px-8 py-4 bg-white border-2 border-gray-300 text-primary-600 rounded-full font-semibold text-lg hover:border-primary-600 hover:bg-primary-50 transition-all">
               View Dashboard
             </a>
           <% } else { %>
-            <a href="/register" class="px-8 py-4 bg-primary-600 text-white rounded-full font-semibold text-lg hover:bg-accent-500 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+            <a href="/register" class="px-8 py-4 text-white rounded-full font-semibold text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5" style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #1e40af 100%);">
               Start Tamil Writing — Free Account
             </a>
           <% } %>
@@ -581,7 +581,7 @@
   </section>
 
   <!-- Final CTA Section -->
-  <section class="py-20 bg-gradient-to-br from-primary-600 to-accent-600 text-white">
+  <section class="py-20 text-white" style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #1e40af 100%);">
     <div class="max-w-4xl mx-auto px-6 text-center">
       <h2 class="text-4xl md:text-5xl font-extrabold mb-6">
         Ready to write perfect Tamil?
