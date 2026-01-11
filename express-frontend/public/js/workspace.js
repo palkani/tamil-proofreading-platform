@@ -303,7 +303,7 @@ class WorkspaceController {
 
   // Unified API helper: uses centralized auth utilities for token refresh
   async apiFetch(url, options = {}, requireAuth = true) {
-    // Use centralized auth utilities if available (preferred)
+    // ALWAYS use centralized auth utilities if available (preferred)
     if (window.authUtils && window.authUtils.apiFetch) {
       try {
         return await window.authUtils.apiFetch(url, options, requireAuth);
@@ -314,6 +314,7 @@ class WorkspaceController {
     }
     
     // Fallback: manual implementation with token refresh
+    // Create a fresh headers object
     const headers = new Headers(options.headers || {});
     
     // Get access token and add to headers
@@ -336,11 +337,14 @@ class WorkspaceController {
       if (window.authUtils && window.authUtils.refreshAccessToken) {
         const newToken = await window.authUtils.refreshAccessToken();
         if (newToken) {
-          // Retry with new token
-          headers.set('Authorization', `Bearer ${newToken}`);
+          // CRITICAL: Create a NEW headers object with the new token
+          const newHeaders = new Headers(options.headers || {});
+          newHeaders.set('Authorization', `Bearer ${newToken}`);
+          
+          // Retry with new token using NEW headers
           response = await fetch(url, {
             ...options,
-            headers,
+            headers: newHeaders, // Use NEW headers object
             credentials: 'include',
           });
           

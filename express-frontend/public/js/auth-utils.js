@@ -237,6 +237,7 @@ async function refreshAccessToken(maxRetries = 2) {
  * @returns {Promise<Response>}
  */
 async function apiFetch(url, options = {}, requireAuth = true) {
+  // Create a fresh headers object to avoid mutation issues
   const headers = new Headers(options.headers || {});
   
   // Get access token and add to headers if auth is required
@@ -255,15 +256,65 @@ async function apiFetch(url, options = {}, requireAuth = true) {
   // Handle 401 with automatic token refresh
   if (requireAuth && response.status === 401) {
     console.warn('[AUTH] Got 401, attempting token refresh...');
+    console.log('[AUTH] Current token exp:', accessToken ? (() => {
+      try {
+        const parts = accessToken.split('.');
+        if (parts.length === 3) {
+          let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          while (base64.length % 4) base64 += '=';
+          const payload = JSON.parse(atob(base64));
+          return payload.exp;
+        }
+      } catch (e) {}
+      return 'unknown';
+    })() : 'no token');
     
     // Try to refresh token
     const newToken = await refreshAccessToken();
     if (newToken) {
-      // Retry with new token
-      headers.set('Authorization', `Bearer ${newToken}`);
+      console.log('[AUTH] Token refreshed, retrying request with new token');
+      // CRITICAL: Create a NEW headers object with the new token
+      // Don't reuse the old headers object as it may have stale values
+      const newHeaders = new Headers(options.headers || {});
+      newHeaders.set('Authorization', `Bearer ${newToken}`);
+      
+      // Verify the new token is actually different
+      const oldTokenExp = accessToken ? (() => {
+        try {
+          const parts = accessToken.split('.');
+          if (parts.length === 3) {
+            let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) base64 += '=';
+            const payload = JSON.parse(atob(base64));
+            return payload.exp;
+          }
+        } catch (e) {}
+        return null;
+      })() : null;
+      
+      const newTokenExp = (() => {
+        try {
+          const parts = newToken.split('.');
+          if (parts.length === 3) {
+            let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) base64 += '=';
+            const payload = JSON.parse(atob(base64));
+            return payload.exp;
+          }
+        } catch (e) {}
+        return null;
+      })();
+      
+      console.log('[AUTH] Token comparison:', {
+        oldExp: oldTokenExp,
+        newExp: newTokenExp,
+        tokensMatch: accessToken === newToken
+      });
+      
+      // Retry with new token - use new headers object
       response = await fetch(url, {
         ...options,
-        headers,
+        headers: newHeaders, // Use the NEW headers object
         credentials: 'include',
       });
       
@@ -275,6 +326,7 @@ async function apiFetch(url, options = {}, requireAuth = true) {
         throw new Error('Unauthorized');
       }
       
+      console.log('[AUTH] Retry successful with new token, status:', response.status);
       return response;
     } else {
       // Refresh failed, clear tokens and redirect
