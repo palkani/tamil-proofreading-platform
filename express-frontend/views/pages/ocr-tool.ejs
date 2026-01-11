@@ -218,7 +218,8 @@
         error.classList.remove('hidden');
         processBtn.disabled = false;
       } else {
-        extractedText = data.text || data.full_text || '';
+        // Use full_text if available, otherwise use text
+        extractedText = data.full_text || data.text || '';
         resultText.textContent = extractedText;
         stats.textContent = `${data.char_count || extractedText.length} characters extracted`;
         downloadFilename = data.download_filename;

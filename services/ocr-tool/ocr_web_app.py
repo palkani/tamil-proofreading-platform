@@ -128,6 +128,7 @@ def upload_file():
         return jsonify({
             'success': True,
             'text': extracted_text[:500] + ('...' if len(extracted_text) > 500 else ''),
+            'full_text': extracted_text,  # Include full text for frontend
             'download_filename': output_filename,
             'char_count': len(extracted_text)
         })
