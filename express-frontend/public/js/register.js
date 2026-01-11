@@ -136,9 +136,13 @@ document.getElementById('register-form')?.addEventListener('submit', async (e) =
     }
     
     // Registration successful - user is immediately logged in
-    // Store access token if provided
+    // Clear old tokens first, then store new token
+    localStorage.removeItem('access_token');
+    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    
     if (data.access_token) {
       localStorage.setItem('access_token', data.access_token);
+      document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
     }
     
     // Redirect to drafts page

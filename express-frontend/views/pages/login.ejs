@@ -34,9 +34,12 @@
     const token = extractToken(rawRedirect);
 
     if (token) {
+      // Clear old tokens first
+      localStorage.removeItem('access_token');
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
       // Persist token for auth guard and API usage
       localStorage.setItem('access_token', token);
-      document.cookie = `access_token=${token}; path=/; SameSite=Lax`;
+      document.cookie = `access_token=${token}; path=/; SameSite=Lax; Max-Age=900`;
       // Redirect immediately to drafts page after storing token
       window.location.replace('/drafts');
     }
@@ -176,10 +179,13 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
       throw new Error(String(errorMessage));
     }
     
-    // Login successful - store access token if provided
+    // Login successful - clear old tokens first, then store new token
+    localStorage.removeItem('access_token');
+    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    
     if (data.access_token) {
       localStorage.setItem('access_token', data.access_token);
-      document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=86400`;
+      document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
       console.log('[LOGIN] Token stored in localStorage and cookie');
       console.log('[LOGIN] Token preview:', data.access_token.substring(0, 20) + '...');
     } else {
