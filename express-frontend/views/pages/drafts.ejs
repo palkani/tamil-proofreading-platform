@@ -474,7 +474,16 @@
       console.log('[DRAFTS] Response status:', response.status, response.statusText);
       
       // If 401, try to refresh token and retry once (only if we haven't already tried)
-      if (response.status === 401 && !refreshInProgress) {
+      if (response.status === 401) {
+        if (refreshInProgress) {
+          // Already tried to refresh, don't try again
+          console.warn('[DRAFTS] Got 401 but refresh already attempted, redirecting to login');
+          setTimeout(() => {
+            clearTokensAndRedirect();
+          }, 100);
+          return null;
+        }
+        
         console.log('[DRAFTS] Got 401, attempting token refresh...');
         const newToken = await refreshAccessToken();
         if (newToken) {
@@ -536,13 +545,6 @@
           return null;
         }
       }
-    } else if (response.status === 401 && refreshInProgress) {
-      // Already tried to refresh, don't try again
-      console.warn('[DRAFTS] Got 401 but refresh already attempted, redirecting to login');
-      setTimeout(() => {
-        clearTokensAndRedirect();
-      }, 100);
-      return null;
     }
     
     if (!response.ok) {
