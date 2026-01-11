@@ -107,10 +107,13 @@ jobs:
           echo "npm ci failed (attempt $i), retrying in 10s..."
           sleep 10
         done
+        # Verify tailwindcss is installed
+        npm list tailwindcss || npm install tailwindcss
 
     - name: Build frontend assets
-      run: npm run build:css
       working-directory: express-frontend
+      run: |
+        npm run build:css
 
     - name: Check Vercel credentials
       run: |
