@@ -141,12 +141,23 @@ router.get('/archive', (req, res) => {
 
 // Drafts page - client-side auth only
 router.get('/drafts', (req, res) => {
-  const seo = getSeoData('drafts');
-  res.render('pages/drafts', { 
-    title: seo.title || 'My Drafts',
-    seo: seo,
-    user: req.user
-  });
+  try {
+    const user = getCurrentUser(req);
+    const seo = getSeoData('drafts');
+    res.render('pages/drafts', { 
+      title: seo.title || 'My Drafts',
+      seo: seo,
+      user: user
+    });
+  } catch (error) {
+    console.error('[DRAFTS] Error rendering drafts page:', error);
+    res.status(500).render('pages/error', {
+      title: 'Error - ProofTamil',
+      seo: getSeoData('error'),
+      user: getCurrentUser(req),
+      error: error.message || 'An unexpected error occurred'
+    });
+  }
 });
 
 // Contact page - accessible to everyone

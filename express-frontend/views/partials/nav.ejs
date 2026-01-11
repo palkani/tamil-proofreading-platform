@@ -19,7 +19,7 @@
           <a href="/archive" class="<%= active === 'archive' ? 'border-primary-600 text-gray-900' : 'border-transparent text-gray-600 hover:border-primary-300 hover:text-gray-900' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
             Archive
           </a>
-          <% if (user.role === 'admin' || user.email === 'prooftamil@gmail.com') { %>
+          <% if (user && (user.role === 'admin' || user.email === 'prooftamil@gmail.com')) { %>
           <a href="/analytics" class="<%= active === 'analytics' ? 'border-primary-600 text-gray-900' : 'border-transparent text-gray-600 hover:border-primary-300 hover:text-gray-900' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
             📊 Analytics
           </a>
@@ -29,7 +29,9 @@
 
       <!-- User Menu -->
       <div class="flex items-center gap-4">
+        <% if (user && user.email) { %>
         <span class="text-sm text-gray-600"><%= user.email %></span>
+        <% } %>
         <a href="/account" class="<%= active === 'account' ? 'text-primary-600' : 'text-gray-600 hover:text-gray-900' %>">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
