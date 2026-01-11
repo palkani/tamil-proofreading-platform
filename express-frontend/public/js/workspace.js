@@ -3197,7 +3197,7 @@ class WorkspaceController {
     const bgColors = {
       success: 'bg-emerald-600',
       error: 'bg-rose-600',
-      warning: 'bg-pink-500',
+      warning: 'bg-yellow-500',
       info: 'bg-primary-600'
     };
     

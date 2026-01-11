@@ -246,7 +246,7 @@ class TamilEditor {
       const items = autocompleteBox.querySelectorAll('div.px-4');
       items.forEach((item, idx) => {
         if (idx === selectedIndex) {
-          item.style.backgroundColor = '#ea580c'; // Blue-500
+          item.style.backgroundColor = '#1e3a8a'; // Primary Blue
           item.style.color = '#ffffff';
           item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         } else {

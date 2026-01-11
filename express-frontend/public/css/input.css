@@ -10,7 +10,7 @@
 
   --accent-primary: #7c5cff;
   --accent-secondary: #5b8cff;
-  --accent-pink: #c084fc;
+  --accent-blue: #3b82f6;
 
   --text-primary: #ffffff;
   --text-secondary: #cbd5e1;
@@ -20,20 +20,20 @@
 
   --gradient-primary: linear-gradient(
     135deg,
-    #7c5cff 0%,
-    #5b8cff 50%,
-    #c084fc 100%
+    #1e3a8a 0%,
+    #3b82f6 50%,
+    #1e40af 100%
   );
-  --color-bg: #fdf2f8;            /* light pink background */
+  --color-bg: #eff6ff;            /* light blue background */
   --color-card: #ffffff;
   --color-text: #111827;          /* Dark text */
   --color-muted: #374151;         /* Body text */
   --color-border: #e5e7eb;        /* Muted border */
-  --color-primary: #6d28d9;       /* Primary Purple */
-  --color-primary-hover: #7c3aed; /* Accent Purple */
-  --color-primary-ghost: #f3e8ff; /* Soft purple surface */
-  --color-accent: #ec4899;        /* Soft Pink */
-  --color-accent-light: #fdf2f8;  /* Light Pink Background */
+  --color-primary: #1e3a8a;       /* Primary Blue */
+  --color-primary-hover: #3b82f6; /* Accent Blue */
+  --color-primary-ghost: #dbeafe; /* Soft blue surface */
+  --color-accent: #3b82f6;        /* Blue */
+  --color-accent-light: #eff6ff;  /* Light Blue Background */
 }
 
 @layer base {
@@ -97,7 +97,7 @@
   
   .input-field:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.25); /* Soft pink glow */
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.25); /* Soft blue glow */
     background-color: #fff;
   }
   

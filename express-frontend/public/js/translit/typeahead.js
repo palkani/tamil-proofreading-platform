@@ -194,7 +194,7 @@
           </div>
           <div class="text-xs text-gray-500 flex gap-2">
             <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">${s.label || 'Suggested'}</span>
-            <span class="px-2 py-0.5 rounded-full bg-pink-100 text-pink-700">${s.usage || 'Both'}</span>
+            <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">${s.usage || 'Both'}</span>
           </div>
           ${s.reason ? `<div class="text-xs text-gray-500">${s.reason}</div>` : ''}
         `;
