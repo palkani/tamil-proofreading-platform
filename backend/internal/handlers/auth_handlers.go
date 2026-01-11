@@ -157,13 +157,21 @@ func (h *Handlers) setAccessTokenCookie(c *gin.Context, token string, expiresAt 
 }
 
 func (h *Handlers) clearRefreshCookie(c *gin.Context) {
+        // Set domain for cross-site cookie support
+        host := c.Request.Host
+        var domain string
+        if strings.HasSuffix(host, "prooftamil.com") {
+                domain = ".prooftamil.com"
+        }
+        
         http.SetCookie(c.Writer, &http.Cookie{
                 Name:     refreshTokenCookieName,
                 Value:    "",
                 Path:     refreshTokenCookiePath,
+                Domain:   domain,
                 HttpOnly: true,
                 Secure:   h.refreshCookieSecure(),
-                SameSite: http.SameSiteLaxMode,
+                SameSite: http.SameSiteNoneMode, // Changed from LaxMode to NoneMode for cross-site support
                 MaxAge:   -1,
                 Expires:  time.Unix(0, 0),
         })
