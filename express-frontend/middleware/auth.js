@@ -24,6 +24,21 @@ const attachUser = (req, res, next) => {
 
     // Decode without verifying signature — trust is enforced by backend
     const payload = jwt.decode(token) || {};
+    
+    // Check if token is expired
+    if (payload.exp) {
+      const now = Math.floor(Date.now() / 1000);
+      if (payload.exp < now) {
+        // Token is expired, don't set user
+        req.user = null;
+        // Clear expired token from cookies
+        if (req.cookies && req.cookies.access_token) {
+          res.clearCookie('access_token');
+        }
+        return next();
+      }
+    }
+    
     // Handle both Supabase format (sub) and backend format (user_id)
     const userId = payload.sub || payload.user_id;
     req.user = userId
