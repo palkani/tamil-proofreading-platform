@@ -443,11 +443,19 @@
     if (window.authUtils && window.authUtils.apiFetch) {
       console.log('[DRAFTS] Using centralized apiFetch for automatic token refresh');
       try {
+        // Convert headers object to plain object for apiFetch
+        const headersObj = {
+          'Accept': 'application/json',
+          'Authorization': headers['Authorization']
+        };
+        console.log('[DRAFTS] Headers being sent:', headersObj);
+        
         response = await window.authUtils.apiFetch('/api/v1/submissions?limit=1000&offset=0', {
           method: 'GET',
           credentials: 'include',
-          headers: headers
+          headers: headersObj
         });
+        console.log('[DRAFTS] apiFetch response status:', response.status);
       } catch (error) {
         console.error('[DRAFTS] apiFetch error:', error);
         // If apiFetch redirects to login, return null
