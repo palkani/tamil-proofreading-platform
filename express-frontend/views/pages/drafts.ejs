@@ -270,14 +270,20 @@
     // Use localStorage token first, fallback to cookie
     let accessToken = token || cookieToken;
     
-    // Check if token is expired and refresh proactively BEFORE making the request
+    // ALWAYS check if token is expired and refresh proactively BEFORE making the request
     // This prevents 401 errors when we have a valid refresh token
-    if (accessToken) {
+    // Force refresh if token is missing, expired, or about to expire
+    let needsRefresh = false;
+    
+    if (!accessToken) {
+      console.warn('[DRAFTS] ⚠️ No access token found, will refresh...');
+      needsRefresh = true;
+    } else {
       const expired = isTokenExpired(accessToken);
       console.log('[DRAFTS] Token expiration check result:', expired);
       if (expired) {
-        console.log('[DRAFTS] ⚠️ Token is expired, refreshing before request...');
-        console.log('[DRAFTS] Current token exp:', accessToken ? (() => {
+        console.log('[DRAFTS] ⚠️ Token is expired or expires soon, will refresh...');
+        const tokenExp = (() => {
           try {
             const parts = accessToken.split('.');
             if (parts.length === 3) {
@@ -287,47 +293,53 @@
               return payload.exp;
             }
           } catch (e) {}
-          return 'unknown';
-        })() : 'no token');
-        
-        const newToken = await refreshAccessToken();
-        if (newToken) {
-          accessToken = newToken;
-          console.log('[DRAFTS] ✅ Token refreshed successfully before request');
-          console.log('[DRAFTS] New token exp:', (() => {
-            try {
-              const parts = newToken.split('.');
-              if (parts.length === 3) {
-                let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-                while (base64.length % 4) base64 += '=';
-                const payload = JSON.parse(atob(base64));
-                return payload.exp;
-              }
-            } catch (e) {}
-            return 'unknown';
-          })());
-          // Update localStorage with new token
-          localStorage.setItem('access_token', newToken);
-        } else {
-          // Refresh failed, no valid refresh token - redirect to login
-          console.warn('[DRAFTS] ❌ Token refresh failed before request, redirecting to login');
-          setTimeout(() => {
-            clearTokensAndRedirect();
-          }, 100);
           return null;
-        }
+        })();
+        const now = Math.floor(Date.now() / 1000);
+        console.log('[DRAFTS] Token details:', {
+          exp: tokenExp,
+          now: now,
+          expired: tokenExp ? tokenExp < now : 'unknown',
+          timeUntilExpiry: tokenExp ? tokenExp - now : 'unknown'
+        });
+        needsRefresh = true;
       } else {
         console.log('[DRAFTS] ✅ Token is valid, proceeding with request');
       }
-    } else {
-      console.warn('[DRAFTS] ⚠️ No access token found, attempting refresh...');
+    }
+    
+    // If refresh is needed, do it NOW and wait for it to complete
+    if (needsRefresh) {
+      console.log('[DRAFTS] 🔄 Refreshing token before request...');
       const newToken = await refreshAccessToken();
       if (newToken) {
         accessToken = newToken;
+        console.log('[DRAFTS] ✅ Token refreshed successfully before request');
+        const newTokenExp = (() => {
+          try {
+            const parts = newToken.split('.');
+            if (parts.length === 3) {
+              let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+              while (base64.length % 4) base64 += '=';
+              const payload = JSON.parse(atob(base64));
+              return payload.exp;
+            }
+          } catch (e) {}
+          return null;
+        })();
+        const now = Math.floor(Date.now() / 1000);
+        console.log('[DRAFTS] New token details:', {
+          exp: newTokenExp,
+          now: now,
+          timeUntilExpiry: newTokenExp ? newTokenExp - now : 'unknown',
+          isValid: newTokenExp ? newTokenExp > now : false
+        });
+        // Update localStorage with new token IMMEDIATELY
         localStorage.setItem('access_token', newToken);
-        console.log('[DRAFTS] ✅ Got new token from refresh');
+        console.log('[DRAFTS] ✅ New token stored in localStorage');
       } else {
-        console.warn('[DRAFTS] ❌ No token and refresh failed, redirecting to login');
+        // Refresh failed, no valid refresh token - redirect to login
+        console.warn('[DRAFTS] ❌ Token refresh failed before request, redirecting to login');
         setTimeout(() => {
           clearTokensAndRedirect();
         }, 100);
@@ -335,37 +347,45 @@
       }
     }
     
-    // Build headers with Authorization if token exists
+    // Build headers with Authorization - accessToken should be valid at this point
+    // (either from localStorage/cookie or from refresh above)
     const headers = {
       'Accept': 'application/json'
     };
     
-    if (accessToken) {
-      headers['Authorization'] = `Bearer ${accessToken}`;
-      console.log('[DRAFTS] Adding Authorization header with token');
-      console.log('[DRAFTS] Token length:', accessToken.length);
-      console.log('[DRAFTS] Token preview (first 50 chars):', accessToken.substring(0, 50));
-      console.log('[DRAFTS] Token preview (last 20 chars):', accessToken.substring(accessToken.length - 20));
-    } else {
-      console.warn('[DRAFTS] No access token found in localStorage or cookies');
-      // No access token - try to refresh first (refresh token might be in cookie)
-      console.log('[DRAFTS] Attempting to refresh token before redirecting...');
-      const newToken = await refreshAccessToken();
-      if (newToken) {
-        // Got new token from refresh, use it
-        accessToken = newToken;
-        headers['Authorization'] = `Bearer ${accessToken}`;
-        console.log('[DRAFTS] Successfully refreshed token, proceeding with request');
+    if (!accessToken) {
+      // This should never happen if refresh logic above worked correctly
+      console.error('[DRAFTS] ❌ CRITICAL: No access token after refresh attempt!');
+      setTimeout(() => {
+        clearTokensAndRedirect();
+      }, 100);
+      return null;
+    }
+    
+    // Double-check token is still valid before using it
+    const stillExpired = isTokenExpired(accessToken);
+    if (stillExpired) {
+      console.error('[DRAFTS] ❌ CRITICAL: Token is still expired after refresh!');
+      // Try one more refresh
+      const finalToken = await refreshAccessToken();
+      if (finalToken) {
+        accessToken = finalToken;
+        localStorage.setItem('access_token', finalToken);
+        console.log('[DRAFTS] ✅ Got valid token on second refresh attempt');
       } else {
-        // Refresh failed, no valid tokens - redirect to login (only once)
-        console.warn('[DRAFTS] Token refresh failed, redirecting to login');
-        // Use setTimeout to prevent immediate redirect loops
+        console.error('[DRAFTS] ❌ Second refresh also failed, redirecting to login');
         setTimeout(() => {
           clearTokensAndRedirect();
         }, 100);
         return null;
       }
     }
+    
+    headers['Authorization'] = `Bearer ${accessToken}`;
+    console.log('[DRAFTS] ✅ Adding Authorization header with valid token');
+    console.log('[DRAFTS] Token length:', accessToken.length);
+    console.log('[DRAFTS] Token preview (first 50 chars):', accessToken.substring(0, 50));
+    console.log('[DRAFTS] Token preview (last 20 chars):', accessToken.substring(accessToken.length - 20));
 
     console.log('[DRAFTS] Fetching submissions from /api/v1/submissions');
     let response = await fetch('/api/v1/submissions?limit=1000&offset=0', {
