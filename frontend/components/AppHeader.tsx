@@ -44,18 +44,24 @@ export default function AppHeader({ showAdmin = false, userEmail, onLogout }: Ap
   const navLinks: NavLink[] = useMemo(() => {
     const base: NavLink[] = [
       { name: 'Home', href: '/' },
-      { name: 'Dashboard', href: '/dashboard' },
-      { name: 'Workspace', href: '/submit' },
-      { name: 'Archive', href: '/archive' },
       { name: 'Contact', href: '/contact' },
     ];
+
+    // Only show Dashboard, Workspace, and Archive when user is logged in
+    if (userEmail) {
+      base.push(
+        { name: 'Dashboard', href: '/dashboard' },
+        { name: 'Workspace', href: '/submit' },
+        { name: 'Archive', href: '/archive' }
+      );
+    }
 
     if (showAdmin) {
       base.push({ name: 'Admin Panel', href: '/admin' });
     }
 
     return base;
-  }, [showAdmin]);
+  }, [showAdmin, userEmail]);
 
   const renderLinks = (className?: string) => (
     navLinks.map((link) => {
