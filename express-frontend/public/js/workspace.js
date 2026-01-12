@@ -678,27 +678,47 @@ class WorkspaceController {
         console.log('[WorkspaceJS] 📋 Paste event detected');
         // Get pasted text from clipboard
         const pastedText = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-        console.log('[WorkspaceJS] 📋 Pasted text:', pastedText.substring(0, 50));
+        console.log('[WorkspaceJS] 📋 Pasted text from clipboard:', pastedText.substring(0, 100));
+        
+        // Check if pasted text contains Tamil characters
+        const hasTamilInClipboard = /[\u0B80-\u0BFF]/.test(pastedText);
+        console.log('[WorkspaceJS] 📋 Has Tamil in clipboard:', hasTamilInClipboard, 'Length:', pastedText.length);
         
         // Get pasted text after paste event completes
         setTimeout(() => {
           const text = this.getEditorText() || '';
+          console.log('[WorkspaceJS] 📋 Editor text after paste:', text.substring(0, 100));
+          console.log('[WorkspaceJS] 📋 Editor text length:', text.trim().length);
+          
           if (text.trim().length > 0) {
-            console.log('[WorkspaceJS] 📋 Paste detected, triggering analysis for pasted text');
             // Check if text contains Tamil characters (indicating Tamil text was pasted)
             const hasTamil = /[\u0B80-\u0BFF]/.test(text);
-            console.log('[WorkspaceJS] 📋 Has Tamil:', hasTamil, 'Text length:', text.trim().length);
+            console.log('[WorkspaceJS] 📋 Has Tamil in editor:', hasTamil, 'Text length:', text.trim().length);
+            
+            // Count Tamil words
+            const tamilWords = text.match(/[\u0B80-\u0BFF]+/g) || [];
+            const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+            console.log('[WorkspaceJS] 📋 Word count:', wordCount, 'Tamil words:', tamilWords.length);
             
             if (hasTamil && text.trim().length >= 20) {
-              console.log('[WorkspaceJS] 📋 Triggering AI analysis for pasted Tamil text');
-              // Trigger auto-analysis for pasted Tamil text
-              this.scheduleSubmitThrottled(text);
+              console.log('[WorkspaceJS] 📋 ✅ Conditions met - triggering AI analysis for pasted Tamil text');
+              // Trigger auto-analysis directly (not scheduleSubmitThrottled which is for auto-save)
+              // Use autoAnalyze() which is the proper function for AI suggestions
+              this.autoAnalyze();
+            } else {
+              console.log('[WorkspaceJS] 📋 ⚠️ Conditions not met:', {
+                hasTamil,
+                textLength: text.trim().length,
+                meetsLength: text.trim().length >= 20
+              });
             }
             // Also update word count and save
             this.updateWordCount();
             this.scheduleSave();
+          } else {
+            console.warn('[WorkspaceJS] 📋 ⚠️ Editor text is empty after paste');
           }
-        }, 100); // Small delay to ensure paste content is in DOM
+        }, 200); // Increased delay to ensure paste content is fully in DOM
       }, { passive: true });
     }
 
