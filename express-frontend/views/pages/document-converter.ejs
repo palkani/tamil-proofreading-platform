@@ -1,0 +1,318 @@
+<%- include('../partials/header') %>
+
+<!-- Navigation -->
+<%- include('../partials/nav', { active: 'tools', user: user || null }) %>
+
+<div class="min-h-screen bg-gradient-to-b from-blue-50 via-white to-white py-12">
+  <div class="max-w-4xl mx-auto px-6">
+    <!-- Header -->
+    <div class="text-center mb-12">
+      <div class="inline-block px-4 py-2 bg-primary-100 text-primary-700 rounded-full text-sm font-semibold mb-4">
+        Document Converter
+      </div>
+      <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
+        Convert Documents Between Formats
+      </h1>
+      <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+        Convert PDF, DOCX, TXT, HTML, RTF, and ODT files. Preserve Tamil text and formatting perfectly.
+      </p>
+    </div>
+
+    <!-- Upload Area -->
+    <div class="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 mb-6">
+      <div 
+        id="uploadArea" 
+        class="border-3 border-dashed border-primary-300 rounded-xl p-12 text-center bg-blue-50 cursor-pointer transition-all hover:bg-blue-100 hover:border-primary-400"
+      >
+        <div class="text-6xl mb-4">📄</div>
+        <div class="text-xl font-semibold text-primary-700 mb-2">Click to upload or drag and drop</div>
+        <div class="text-sm text-gray-600">Supports: PDF, DOCX, TXT, HTML, RTF, ODT (Max 50MB)</div>
+        <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.html,.rtf,.odt" class="hidden">
+      </div>
+
+      <!-- File Info -->
+      <div id="fileInfo" class="hidden mt-4 p-4 bg-blue-50 rounded-lg border border-primary-200">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2 text-primary-700">
+            <span class="text-xl">📎</span>
+            <span id="fileName" class="font-semibold"></span>
+            <span id="fileSize" class="text-sm text-gray-600"></span>
+          </div>
+          <span id="fileFormat" class="px-3 py-1 bg-primary-600 text-white rounded-full text-xs font-semibold"></span>
+        </div>
+      </div>
+
+      <!-- Format Selection -->
+      <div id="formatSelection" class="hidden mt-6">
+        <div class="flex items-center justify-center gap-4 mb-4">
+          <div class="text-center">
+            <label class="block text-sm font-semibold text-gray-700 mb-2">From:</label>
+            <div id="fromFormat" class="px-6 py-3 bg-primary-600 text-white rounded-lg font-bold text-lg"></div>
+          </div>
+          <div class="text-3xl text-primary-600 font-bold">→</div>
+          <div class="text-center">
+            <label class="block text-sm font-semibold text-gray-700 mb-2">To:</label>
+            <select id="toFormat" class="px-6 py-3 border-2 border-primary-600 rounded-lg font-semibold text-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+              <option value="">Select format...</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Convert Button -->
+      <div class="mt-6 text-center">
+        <button 
+          id="convertBtn" 
+          disabled
+          class="px-8 py-4 bg-primary-600 text-white rounded-full font-semibold text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+          style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #1e40af 100%);"
+        >
+          🔄 Convert Document
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="hidden bg-white rounded-2xl shadow-xl border border-gray-200 p-12 text-center mb-6">
+      <div class="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-primary-600 mb-4"></div>
+      <div class="text-xl font-semibold text-primary-700">Converting document... Please wait</div>
+      <div class="text-sm text-gray-600 mt-2">This may take a few moments depending on file size</div>
+    </div>
+
+    <!-- Error -->
+    <div id="error" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+      <div class="flex items-center gap-2 text-red-700">
+        <span class="text-xl">❌</span>
+        <span id="errorText" class="font-semibold"></span>
+      </div>
+    </div>
+
+    <!-- Success -->
+    <div id="successArea" class="hidden bg-white rounded-2xl shadow-xl border border-gray-200 p-8 mb-6">
+      <div class="text-center mb-6">
+        <div class="text-6xl mb-4">✅</div>
+        <h2 class="text-2xl font-bold text-gray-900 mb-2">Conversion Successful!</h2>
+        <div id="conversionDetails" class="text-sm text-gray-600"></div>
+      </div>
+      
+      <div class="flex gap-4 justify-center">
+        <button 
+          id="downloadBtn" 
+          class="px-6 py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors shadow-lg"
+        >
+          📥 Download Converted File
+        </button>
+        <button 
+          id="resetBtn" 
+          class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+        >
+          🔄 Convert Another
+        </button>
+      </div>
+    </div>
+
+    <!-- Supported Formats -->
+    <div class="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
+      <h3 class="text-2xl font-bold text-gray-900 mb-6 text-center">Supported Conversions</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-4 bg-blue-50 rounded-lg border border-primary-200">
+          <strong class="text-primary-700">PDF →</strong> DOCX, TXT, HTML, RTF
+        </div>
+        <div class="p-4 bg-blue-50 rounded-lg border border-primary-200">
+          <strong class="text-primary-700">DOCX →</strong> PDF, TXT, HTML, RTF, ODT
+        </div>
+        <div class="p-4 bg-blue-50 rounded-lg border border-primary-200">
+          <strong class="text-primary-700">TXT →</strong> PDF, DOCX, HTML, RTF
+        </div>
+        <div class="p-4 bg-blue-50 rounded-lg border border-primary-200">
+          <strong class="text-primary-700">HTML →</strong> PDF, DOCX, TXT, RTF
+        </div>
+        <div class="p-4 bg-blue-50 rounded-lg border border-primary-200">
+          <strong class="text-primary-700">RTF →</strong> PDF, DOCX, TXT, HTML
+        </div>
+        <div class="p-4 bg-blue-50 rounded-lg border border-primary-200">
+          <strong class="text-primary-700">ODT →</strong> PDF, DOCX, TXT, HTML
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const uploadArea = document.getElementById('uploadArea');
+  const fileInput = document.getElementById('fileInput');
+  const fileInfo = document.getElementById('fileInfo');
+  const fileName = document.getElementById('fileName');
+  const fileSize = document.getElementById('fileSize');
+  const fileFormat = document.getElementById('fileFormat');
+  const formatSelection = document.getElementById('formatSelection');
+  const fromFormat = document.getElementById('fromFormat');
+  const toFormat = document.getElementById('toFormat');
+  const convertBtn = document.getElementById('convertBtn');
+  const loading = document.getElementById('loading');
+  const error = document.getElementById('error');
+  const errorText = document.getElementById('errorText');
+  const successArea = document.getElementById('successArea');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const conversionDetails = document.getElementById('conversionDetails');
+
+  let selectedFile = null;
+  let conversionResult = null;
+
+  // Supported conversions
+  const conversions = {
+    pdf: ['docx', 'txt', 'html', 'rtf'],
+    docx: ['pdf', 'txt', 'html', 'rtf', 'odt'],
+    txt: ['pdf', 'docx', 'html', 'rtf'],
+    html: ['pdf', 'docx', 'txt', 'rtf'],
+    rtf: ['pdf', 'docx', 'txt', 'html'],
+    odt: ['pdf', 'docx', 'txt', 'html']
+  };
+
+  // Upload area click
+  uploadArea.addEventListener('click', () => fileInput.click());
+
+  // Drag and drop
+  uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('border-primary-500', 'bg-blue-100');
+  });
+
+  uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('border-primary-500', 'bg-blue-100');
+  });
+
+  uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('border-primary-500', 'bg-blue-100');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFileSelect(files[0]);
+    }
+  });
+
+  // File input change
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      handleFileSelect(e.target.files[0]);
+    }
+  });
+
+  function handleFileSelect(file) {
+    selectedFile = file;
+    const ext = file.name.split('.').pop().toLowerCase();
+    const format = ext === 'doc' ? 'docx' : ext;
+
+    // Show file info
+    fileName.textContent = file.name;
+    fileSize.textContent = `(${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+    fileFormat.textContent = format.toUpperCase();
+    fileInfo.classList.remove('hidden');
+
+    // Show format selection
+    fromFormat.textContent = format.toUpperCase();
+    toFormat.innerHTML = '<option value="">Select format...</option>';
+    
+    if (conversions[format]) {
+      conversions[format].forEach(fmt => {
+        const option = document.createElement('option');
+        option.value = fmt;
+        option.textContent = fmt.toUpperCase();
+        toFormat.appendChild(option);
+      });
+    }
+
+    formatSelection.classList.remove('hidden');
+    convertBtn.disabled = false;
+    error.classList.add('hidden');
+    successArea.classList.add('hidden');
+  }
+
+  // Convert button
+  convertBtn.addEventListener('click', async () => {
+    if (!selectedFile || !toFormat.value) {
+      showError('Please select a file and target format');
+      return;
+    }
+
+    loading.classList.remove('hidden');
+    error.classList.add('hidden');
+    successArea.classList.add('hidden');
+    convertBtn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('to_format', toFormat.value);
+
+    try {
+      const response = await fetch('/api/converter/convert', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        conversionResult = data;
+        conversionDetails.innerHTML = `
+          <div class="text-left bg-gray-50 rounded-lg p-4 mt-4">
+            <div class="flex justify-between mb-2">
+              <span class="text-gray-600">From:</span>
+              <strong>${data.from_format}</strong>
+            </div>
+            <div class="flex justify-between mb-2">
+              <span class="text-gray-600">To:</span>
+              <strong>${data.to_format}</strong>
+            </div>
+            <div class="flex justify-between mb-2">
+              <span class="text-gray-600">Original Size:</span>
+              <strong>${data.input_size_mb} MB</strong>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">Converted Size:</span>
+              <strong>${data.output_size_mb} MB</strong>
+            </div>
+          </div>
+        `;
+        successArea.classList.remove('hidden');
+      } else {
+        showError(data.error || 'Conversion failed');
+      }
+    } catch (err) {
+      showError('Network error: ' + err.message);
+    } finally {
+      loading.classList.add('hidden');
+      convertBtn.disabled = false;
+    }
+  });
+
+  // Download button
+  downloadBtn.addEventListener('click', () => {
+    if (conversionResult && conversionResult.download_filename) {
+      window.location.href = `/api/converter/download/${conversionResult.download_filename}`;
+    }
+  });
+
+  // Reset button
+  resetBtn.addEventListener('click', () => {
+    selectedFile = null;
+    conversionResult = null;
+    fileInput.value = '';
+    fileInfo.classList.add('hidden');
+    formatSelection.classList.add('hidden');
+    successArea.classList.add('hidden');
+    error.classList.add('hidden');
+    convertBtn.disabled = true;
+  });
+
+  function showError(message) {
+    errorText.textContent = message;
+    error.classList.remove('hidden');
+  }
+})();
+</script>
+
+<%- include('../partials/footer') %>
+

@@ -8,7 +8,8 @@
     "start": "node server.js",
     "watch:css": "./node_modules/.bin/tailwindcss -i ./public/css/input.css -o ./public/css/output.css --watch",
     "prebuild:css": "node scripts/assert-runner.js",
-    "build:css": "./node_modules/.bin/tailwindcss -i ./public/css/input.css -o ./public/css/output.css --minify"
+    "build:css": "./node_modules/.bin/tailwindcss -i ./public/css/input.css -o ./public/css/output.css --minify",
+    "test:tools": "node tests/tools-test.js"
   },
   "keywords": ["tamil", "proofreading", "ai", "express"],
   "author": "",

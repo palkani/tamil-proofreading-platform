@@ -578,6 +578,106 @@ router.post('/ocr/upload', upload.single('file'), async (req, res) => {
   }
 });
 
+// Document Converter Service
+const converterService = require('../services/document-converter/converter-service');
+
+// Document Converter - Health check
+router.get('/converter/health', async (req, res) => {
+  try {
+    const health = await converterService.healthCheck();
+    if (health) {
+      return res.json(health);
+    }
+    return res.status(503).json({ 
+      status: 'unhealthy',
+      error: 'Document converter service is not available'
+    });
+  } catch (error) {
+    console.error('[Converter] Health check error:', error.message);
+    return res.status(503).json({ 
+      status: 'unhealthy',
+      error: error.message
+    });
+  }
+});
+
+// Document Converter - Get supported conversions
+router.get('/converter/supported-conversions', async (req, res) => {
+  try {
+    const data = await converterService.getSupportedConversions();
+    return res.json(data);
+  } catch (error) {
+    console.error('[Converter] Get supported conversions error:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Document Converter - Convert document
+router.post('/converter/convert', upload.single('file'), async (req, res) => {
+  try {
+    if (ENABLE_PROXY_LOGS) {
+      console.log('[Converter] POST /converter/convert');
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    const toFormat = req.body.to_format || req.body.toFormat;
+    if (!toFormat) {
+      return res.status(400).json({ error: 'Target format (to_format) is required' });
+    }
+    
+    const fileBuffer = req.file.buffer;
+    const filename = req.file.originalname;
+    
+    console.log('[Converter] Converting file:', filename, 'to format:', toFormat);
+    
+    const result = await converterService.convertDocument(fileBuffer, filename, toFormat);
+    
+    return res.json(result);
+  } catch (error) {
+    console.error('[Converter] Conversion error:', error.message);
+    return res.status(error.response?.status || 500).json({
+      error: error.message || 'Conversion failed',
+      details: error.response?.data?.error || error.message
+    });
+  }
+});
+
+// Document Converter - Download converted file
+router.get('/converter/download/:filename', async (req, res) => {
+  try {
+    if (ENABLE_PROXY_LOGS) {
+      console.log('[Converter] GET /converter/download/:filename');
+    }
+    
+    const filename = req.params.filename;
+    const fileStream = await converterService.downloadFile(filename);
+    
+    // Set appropriate headers
+    const ext = filename.split('.').pop().toLowerCase();
+    const contentTypes = {
+      'pdf': 'application/pdf',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'txt': 'text/plain',
+      'html': 'text/html',
+      'rtf': 'application/rtf',
+      'odt': 'application/vnd.oasis.opendocument.text'
+    };
+    
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', contentTypes[ext] || 'application/octet-stream');
+    
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('[Converter] Download error:', error.message);
+    return res.status(error.response?.status || 500).json({
+      error: error.message || 'Download failed'
+    });
+  }
+});
+
 // OCR download endpoint
 router.get('/ocr/download/:filename', async (req, res) => {
   try {

@@ -47,6 +47,17 @@ router.get('/tools/ocr', (req, res) => {
   });
 });
 
+// Document Converter Tool page - accessible to everyone
+router.get('/tools/converter', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('home');
+  res.render('pages/document-converter', { 
+    title: 'Document Converter - Convert PDF, DOCX, TXT, HTML | ProofTamil',
+    seo: seo,
+    user: user
+  });
+});
+
 // Login page - redirect authenticated users to drafts
 router.get('/login', (req, res) => {
   if (req.user) {
