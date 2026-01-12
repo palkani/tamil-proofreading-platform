@@ -86,7 +86,14 @@ async function getPage(name = 'default') {
  */
 async function closePage(name) {
   if (pages[name]) {
-    await pages[name].close();
+    try {
+      if (!pages[name].isClosed()) {
+        await pages[name].close();
+      }
+    } catch (error) {
+      // Ignore close errors (page might already be closed)
+      console.warn(`[Test] Warning: Could not close page ${name}:`, error.message);
+    }
     delete pages[name];
   }
 }
@@ -96,16 +103,27 @@ async function closePage(name) {
  */
 async function closeBrowser() {
   // Close all pages
-  for (const name in pages) {
+  const pageNames = Object.keys(pages);
+  for (const name of pageNames) {
     await closePage(name);
   }
   pages = {};
 
   // Close browser
   if (browser) {
-    await browser.close();
+    try {
+      const pages = await browser.pages();
+      for (const page of pages) {
+        if (!page.isClosed()) {
+          await page.close().catch(() => {}); // Ignore errors
+        }
+      }
+      await browser.close();
+      console.log('✅ Browser closed');
+    } catch (error) {
+      console.warn('[Test] Warning: Error closing browser:', error.message);
+    }
     browser = null;
-    console.log('✅ Browser closed');
   }
 }
 

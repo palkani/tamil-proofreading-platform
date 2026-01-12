@@ -118,14 +118,23 @@ async function runDraftsTests() {
 
     if (url.includes('drafts') && !url.includes('login')) {
       // Find the button
-      const button = await page.$('#new-draft-btn, .new-draft-btn, #create-draft-btn, button:has-text("New"), a:has-text("New")');
+      // Use evaluate to find button by text content
+      const button = await page.evaluateHandle(() => {
+        const buttons = Array.from(document.querySelectorAll('button, a'));
+        return buttons.find(el => {
+          const text = el.textContent.toLowerCase();
+          return text.includes('new draft') || text.includes('create');
+        }) || null;
+      });
       
-      if (button) {
+      const btn = await button.jsonValue();
+      
+      if (btn) {
         // Get current URL before click
         const beforeUrl = page.url();
 
         // Click button
-        await button.click();
+        await page.evaluate(el => el.click(), button);
         await waitForNavigation();
 
         // Check if navigated to workspace
@@ -135,29 +144,7 @@ async function runDraftsTests() {
           throw new Error('Create New Draft button did not navigate to workspace');
         }
       } else {
-        // Try clicking via evaluate
-        const clicked = await page.evaluate(() => {
-          const buttons = Array.from(document.querySelectorAll('button, a'));
-          const btn = buttons.find(el => {
-            const text = el.textContent.toLowerCase();
-            return text.includes('new draft') || text.includes('create');
-          });
-          if (btn) {
-            btn.click();
-            return true;
-          }
-          return false;
-        });
-
-        if (clicked) {
-          await waitForNavigation();
-          const afterUrl = page.url();
-          if (!afterUrl.includes('workspace')) {
-            throw new Error('Create New Draft did not navigate to workspace');
-          }
-        } else {
-          throw new Error('Create New Draft button not found to click');
-        }
+        throw new Error('Create New Draft button not found to click');
       }
     } else {
       log('  ⚠️ Skipping - not logged in (this is OK)', 'yellow');

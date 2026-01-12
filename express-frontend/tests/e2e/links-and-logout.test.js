@@ -151,14 +151,21 @@ async function runLinksAndLogoutTests() {
     const page = await navigateTo('/');
     await sleep(1000);
     
-    const dashboardLink = await page.$('nav a[href*="dashboard"], a:has-text("Dashboard")');
-    
-    // Dashboard should only be visible when logged in
-    const isVisible = dashboardLink !== null;
-    
     // Check if user is logged in by checking for logout button
     const logoutBtn = await page.$('#logout-btn');
     const isLoggedIn = logoutBtn !== null;
+    
+    // Use evaluate to find dashboard link by text content
+    const dashboardLink = await page.evaluateHandle(() => {
+      const links = Array.from(document.querySelectorAll('nav a'));
+      return links.find(el => 
+        el.textContent.includes('Dashboard') || 
+        el.href.includes('dashboard')
+      ) || null;
+    });
+    
+    const link = await dashboardLink.jsonValue();
+    const isVisible = link !== null;
     
     if (isLoggedIn && !isVisible) {
       throw new Error('Dashboard link should be visible when logged in');
@@ -173,16 +180,26 @@ async function runLinksAndLogoutTests() {
     const page = await navigateTo('/');
     await sleep(1000);
     
-    const draftsLink = await page.$('nav a[href*="drafts"], a:has-text("Draft")');
-    
     const logoutBtn = await page.$('#logout-btn');
     const isLoggedIn = logoutBtn !== null;
     
-    if (isLoggedIn && !draftsLink) {
+    // Use evaluate to find drafts link
+    const draftsLink = await page.evaluateHandle(() => {
+      const links = Array.from(document.querySelectorAll('nav a'));
+      return links.find(el => 
+        el.textContent.includes('Draft') || 
+        el.href.includes('drafts')
+      ) || null;
+    });
+    
+    const link = await draftsLink.jsonValue();
+    const hasLink = link !== null;
+    
+    if (isLoggedIn && !hasLink) {
       throw new Error('My Drafts link should be visible when logged in');
     }
     
-    if (!isLoggedIn && draftsLink) {
+    if (!isLoggedIn && hasLink) {
       throw new Error('My Drafts link should not be visible when not logged in');
     }
   });
@@ -191,16 +208,26 @@ async function runLinksAndLogoutTests() {
     const page = await navigateTo('/');
     await sleep(1000);
     
-    const workspaceLink = await page.$('nav a[href*="workspace"], a:has-text("Workspace")');
-    
     const logoutBtn = await page.$('#logout-btn');
     const isLoggedIn = logoutBtn !== null;
     
-    if (isLoggedIn && !workspaceLink) {
+    // Use evaluate to find workspace link
+    const workspaceLink = await page.evaluateHandle(() => {
+      const links = Array.from(document.querySelectorAll('nav a'));
+      return links.find(el => 
+        el.textContent.includes('Workspace') || 
+        el.href.includes('workspace')
+      ) || null;
+    });
+    
+    const link = await workspaceLink.jsonValue();
+    const hasLink = link !== null;
+    
+    if (isLoggedIn && !hasLink) {
       throw new Error('Workspace link should be visible when logged in');
     }
     
-    if (!isLoggedIn && workspaceLink) {
+    if (!isLoggedIn && hasLink) {
       throw new Error('Workspace link should not be visible when not logged in');
     }
   });
@@ -209,16 +236,26 @@ async function runLinksAndLogoutTests() {
     const page = await navigateTo('/');
     await sleep(1000);
     
-    const archiveLink = await page.$('nav a[href*="archive"], a:has-text("Archive")');
-    
     const logoutBtn = await page.$('#logout-btn');
     const isLoggedIn = logoutBtn !== null;
     
-    if (isLoggedIn && !archiveLink) {
+    // Use evaluate to find archive link
+    const archiveLink = await page.evaluateHandle(() => {
+      const links = Array.from(document.querySelectorAll('nav a'));
+      return links.find(el => 
+        el.textContent.includes('Archive') || 
+        el.href.includes('archive')
+      ) || null;
+    });
+    
+    const link = await archiveLink.jsonValue();
+    const hasLink = link !== null;
+    
+    if (isLoggedIn && !hasLink) {
       throw new Error('Archive link should be visible when logged in');
     }
     
-    if (!isLoggedIn && archiveLink) {
+    if (!isLoggedIn && hasLink) {
       throw new Error('Archive link should not be visible when not logged in');
     }
   });
@@ -259,20 +296,17 @@ async function runLinksAndLogoutTests() {
     const isLoggedIn = logoutBtn !== null;
     
     if (!isLoggedIn) {
-      const signUpLink = await page.$('a[href*="register"], a:has-text("Sign Up"), a:has-text("Sign up")');
-      if (!signUpLink) {
-        // Check with evaluate
-        const hasSignUp = await page.evaluate(() => {
-          const links = Array.from(document.querySelectorAll('a'));
-          return links.some(el => 
-            el.textContent.toLowerCase().includes('sign up') ||
-            el.href.includes('register')
-          );
-        });
-        
-        if (!hasSignUp) {
-          log('  ⚠️ Sign Up link not found (this might be OK)', 'yellow');
-        }
+      // Check with evaluate
+      const hasSignUp = await page.evaluate(() => {
+        const links = Array.from(document.querySelectorAll('a'));
+        return links.some(el => 
+          el.textContent.toLowerCase().includes('sign up') ||
+          el.href.includes('register')
+        );
+      });
+      
+      if (!hasSignUp) {
+        log('  ⚠️ Sign Up link not found (this might be OK)', 'yellow');
       }
     } else {
       log('  ⚠️ User is logged in, skipping Sign Up link test', 'yellow');
@@ -394,10 +428,17 @@ async function runLinksAndLogoutTests() {
     const page = await navigateTo('/');
     await sleep(1000);
     
-    const dashboardLink = await page.$('nav a[href*="dashboard"]');
+    // Use evaluate to find dashboard link
+    const dashboardLink = await page.evaluateHandle(() => {
+      const links = Array.from(document.querySelectorAll('nav a'));
+      return links.find(el => el.href.includes('dashboard') || el.textContent.includes('Dashboard')) || null;
+    });
     
-    if (dashboardLink) {
-      await dashboardLink.click();
+    const link = await dashboardLink.jsonValue();
+    
+    if (link) {
+      const href = await page.evaluate(el => el.href, dashboardLink);
+      await page.goto(href);
       await waitForNavigation();
       await sleep(1000);
       
@@ -414,10 +455,17 @@ async function runLinksAndLogoutTests() {
     const page = await navigateTo('/');
     await sleep(1000);
     
-    const draftsLink = await page.$('nav a[href*="drafts"]');
+    // Use evaluate to find drafts link
+    const draftsLink = await page.evaluateHandle(() => {
+      const links = Array.from(document.querySelectorAll('nav a'));
+      return links.find(el => el.href.includes('drafts') || el.textContent.includes('Draft')) || null;
+    });
     
-    if (draftsLink) {
-      await draftsLink.click();
+    const link = await draftsLink.jsonValue();
+    
+    if (link) {
+      const href = await page.evaluate(el => el.href, draftsLink);
+      await page.goto(href);
       await waitForNavigation();
       await sleep(1000);
       
@@ -434,10 +482,17 @@ async function runLinksAndLogoutTests() {
     const page = await navigateTo('/');
     await sleep(1000);
     
-    const workspaceLink = await page.$('nav a[href*="workspace"]');
+    // Use evaluate to find workspace link
+    const workspaceLink = await page.evaluateHandle(() => {
+      const links = Array.from(document.querySelectorAll('nav a'));
+      return links.find(el => el.href.includes('workspace') || el.textContent.includes('Workspace')) || null;
+    });
     
-    if (workspaceLink) {
-      await workspaceLink.click();
+    const link = await workspaceLink.jsonValue();
+    
+    if (link) {
+      const href = await page.evaluate(el => el.href, workspaceLink);
+      await page.goto(href);
       await waitForNavigation();
       await sleep(1000);
       
