@@ -124,9 +124,21 @@ async function runLinksAndLogoutTests() {
     const page = await navigateTo('/');
     await sleep(1000);
     
-    const contactLink = await page.$('nav a[href*="contact"], a:has-text("Contact")');
-    if (contactLink) {
-      await contactLink.click();
+    // Use evaluate to find link by text content
+    const contactLinkHandle = await page.evaluateHandle(() => {
+      const links = Array.from(document.querySelectorAll('nav a, a'));
+      return links.find(el => 
+        el.textContent.includes('Contact') || 
+        el.href.includes('contact') ||
+        el.getAttribute('href')?.includes('contact')
+      ) || null;
+    });
+    
+    const link = await contactLinkHandle.jsonValue();
+    
+    if (link) {
+      const href = await page.evaluate(el => el.href, contactLinkHandle);
+      await page.goto(href);
       await waitForNavigation();
       await sleep(1000);
       
@@ -135,15 +147,7 @@ async function runLinksAndLogoutTests() {
         throw new Error(`Contact link did not navigate correctly: ${url}`);
       }
     } else {
-      // Check if contact link exists with evaluate
-      const hasContact = await page.evaluate(() => {
-        const links = Array.from(document.querySelectorAll('nav a'));
-        return links.some(el => el.textContent.includes('Contact') || el.href.includes('contact'));
-      });
-      
-      if (!hasContact) {
-        throw new Error('Contact link not found');
-      }
+      throw new Error('Contact link not found');
     }
   });
 
