@@ -451,6 +451,14 @@ const upload = uploadOCR;
 // Store generated Word documents temporarily (in-memory for now, could use Redis/file storage)
 const ocrDocuments = new Map();
 
+// AI Content Writer service
+let contentWriterService = null;
+try {
+  contentWriterService = require('../services/ai-content-writer/content-writer-service');
+} catch (error) {
+  console.warn('[AI-CONTENT-WRITER] Service not available:', error.message);
+}
+
 // OCR health check endpoint
 router.get('/ocr/health', (req, res) => {
   try {
@@ -792,6 +800,117 @@ router.post('/submit', async (req, res) => {
     });
   }
 });
+
+// ============= AI CONTENT WRITER API ROUTES =============
+// These routes proxy requests to the Python Flask API running on port 5002
+
+// AI Content Writer health check
+router.get('/ai-content-writer/health', async (req, res) => {
+  try {
+    if (!contentWriterService) {
+      return res.status(503).json({
+        status: 'unhealthy',
+        service: 'AI Content Writer',
+        error: 'Service not available'
+      });
+    }
+    
+    const health = await contentWriterService.healthCheck();
+    if (health) {
+      return res.json(health);
+    } else {
+      return res.status(503).json({
+        status: 'unhealthy',
+        service: 'AI Content Writer',
+        error: 'Service health check failed'
+      });
+    }
+  } catch (error) {
+    console.error('[AI-CONTENT-WRITER] Health check error:', error.message);
+    return res.status(503).json({
+      status: 'unhealthy',
+      service: 'AI Content Writer',
+      error: error.message
+    });
+  }
+});
+
+// Generate content endpoint
+router.post('/ai-content-writer/generate-content', async (req, res) => {
+  try {
+    if (ENABLE_PROXY_LOGS) {
+      console.log('[AI-CONTENT-WRITER] POST /generate-content');
+    }
+    
+    if (!contentWriterService) {
+      return res.status(503).json({
+        error: 'AI Content Writer service is not available',
+        details: 'The Python Flask API may not be running. Please check the service.'
+      });
+    }
+    
+    const result = await contentWriterService.generateContent(req.body);
+    return res.json(result);
+  } catch (error) {
+    console.error('[AI-CONTENT-WRITER] Generate content error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.message || 'Content generation failed',
+      details: error.response?.data?.error || error.message
+    });
+  }
+});
+
+// Improve content endpoint
+router.post('/ai-content-writer/improve-content', async (req, res) => {
+  try {
+    if (ENABLE_PROXY_LOGS) {
+      console.log('[AI-CONTENT-WRITER] POST /improve-content');
+    }
+    
+    if (!contentWriterService) {
+      return res.status(503).json({
+        error: 'AI Content Writer service is not available',
+        details: 'The Python Flask API may not be running. Please check the service.'
+      });
+    }
+    
+    const result = await contentWriterService.improveContent(req.body);
+    return res.json(result);
+  } catch (error) {
+    console.error('[AI-CONTENT-WRITER] Improve content error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.message || 'Content improvement failed',
+      details: error.response?.data?.error || error.message
+    });
+  }
+});
+
+// Translate content endpoint
+router.post('/ai-content-writer/translate', async (req, res) => {
+  try {
+    if (ENABLE_PROXY_LOGS) {
+      console.log('[AI-CONTENT-WRITER] POST /translate');
+    }
+    
+    if (!contentWriterService) {
+      return res.status(503).json({
+        error: 'AI Content Writer service is not available',
+        details: 'The Python Flask API may not be running. Please check the service.'
+      });
+    }
+    
+    const result = await contentWriterService.translateContent(req.body);
+    return res.json(result);
+  } catch (error) {
+    console.error('[AI-CONTENT-WRITER] Translate content error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.message || 'Translation failed',
+      details: error.response?.data?.error || error.message
+    });
+  }
+});
+
+// ============= END AI CONTENT WRITER API ROUTES =============
 
 // Proxy other API calls to Go backend
 router.all('/*', async (req, res) => {

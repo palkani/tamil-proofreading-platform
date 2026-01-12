@@ -58,6 +58,17 @@ router.get('/tools/converter', (req, res) => {
   });
 });
 
+// AI Content Writer Tool page - accessible to everyone
+router.get('/tools/ai-content-writer', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('home');
+  res.render('pages/ai-content-writer', { 
+    title: 'AI Content Writer - Generate Blogs & Articles in Tamil & English | ProofTamil',
+    seo: seo,
+    user: user
+  });
+});
+
 // Login page - redirect authenticated users to drafts
 router.get('/login', (req, res) => {
   if (req.user) {

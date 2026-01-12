@@ -637,7 +637,34 @@ class WorkspaceController {
       // This ensures handleEditorChange is called even if editor.onChange doesn't fire
       let inputDebounce = null;
       editorElement.addEventListener('input', (e) => {
-        console.log("[IME] 🔔 Input event detected on editor element, key:", e.inputType, 'data:', e.data);
+        console.log("[IME] 🔔 Input event detected on editor element, inputType:", e.inputType, 'data:', e.data);
+        
+        // Check if this is a paste event
+        const isPaste = e.inputType === 'insertFromPaste' || e.inputType === 'insertFromPasteAsQuotation';
+        if (isPaste) {
+          console.log("[IME] 📋 Input event triggered by paste");
+          
+          // Get editor text after paste
+          const text = this.getEditorText() || '';
+          const hasTamil = /[\u0B80-\u0BFF]/.test(text);
+          
+          console.log("[IME] 📋 Paste input event - text length:", text.length, 'hasTamil:', hasTamil);
+          
+          // If Tamil text is pasted, trigger AI analysis
+          if (hasTamil && text.trim().length >= 20) {
+            console.log("[IME] 📋 ✅ Tamil text pasted - will trigger AI analysis");
+            // Clear any existing timeout
+            if (this.analysisTimeout) {
+              clearTimeout(this.analysisTimeout);
+            }
+            // Delay to ensure paste is complete
+            this.analysisTimeout = setTimeout(() => {
+              console.log("[IME] 📋 🚀 Triggering autoAnalyze() from input event after paste");
+              this.autoAnalyze();
+            }, 1000);
+          }
+        }
+        
         if (inputDebounce) {
           clearTimeout(inputDebounce);
         }
@@ -674,52 +701,85 @@ class WorkspaceController {
       this.editorElement.addEventListener('keydown', (e) => this.handleKeyDown(e));
       
       // Add paste handler to trigger AI suggestions for pasted Tamil text
-      editorElement.addEventListener('paste', (e) => {
-        console.log('[WorkspaceJS] 📋 Paste event detected');
-        // Get pasted text from clipboard
-        const pastedText = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+      // Store reference to controller for use in paste handler
+      const controller = this;
+      
+      const pasteHandler = function(e) {
+        console.log('[WorkspaceJS] 📋 Paste event detected on editor');
+        
+        // Get pasted text from clipboard BEFORE preventing default
+        const pastedText = (e.clipboardData || window.clipboardData || e.originalEvent?.clipboardData)?.getData('text/plain') || 
+                          (e.clipboardData || window.clipboardData)?.getData('text') || '';
+        
         console.log('[WorkspaceJS] 📋 Pasted text from clipboard:', pastedText.substring(0, 100));
+        console.log('[WorkspaceJS] 📋 Pasted text length:', pastedText.length);
+        
+        if (!pastedText || pastedText.trim().length === 0) {
+          console.warn('[WorkspaceJS] 📋 ⚠️ No text in clipboard - allowing default paste');
+          // Allow default paste behavior
+          return;
+        }
         
         // Check if pasted text contains Tamil characters
-        const hasTamilInClipboard = /[\u0B80-\u0BFF]/.test(pastedText);
-        console.log('[WorkspaceJS] 📋 Has Tamil in clipboard:', hasTamilInClipboard, 'Length:', pastedText.length);
+        const hasTamil = /[\u0B80-\u0BFF]/.test(pastedText);
+        const wordCount = pastedText.trim().split(/\s+/).filter(w => w.length > 0).length;
         
-        // Get pasted text after paste event completes
+        console.log('[WorkspaceJS] 📋 Paste analysis:', {
+          hasTamil,
+          wordCount,
+          textLength: pastedText.trim().length,
+          pastedTextPreview: pastedText.substring(0, 50)
+        });
+        
+        // Don't prevent default - let the browser handle paste normally
+        // This ensures proper insertion into contenteditable elements
+        
+        // Wait for paste to complete, then check and trigger AI analysis
         setTimeout(() => {
-          const text = this.getEditorText() || '';
-          console.log('[WorkspaceJS] 📋 Editor text after paste:', text.substring(0, 100));
-          console.log('[WorkspaceJS] 📋 Editor text length:', text.trim().length);
+          const text = controller.getEditorText() || '';
+          const finalHasTamil = /[\u0B80-\u0BFF]/.test(text);
+          const finalWordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
           
-          if (text.trim().length > 0) {
-            // Check if text contains Tamil characters (indicating Tamil text was pasted)
-            const hasTamil = /[\u0B80-\u0BFF]/.test(text);
-            console.log('[WorkspaceJS] 📋 Has Tamil in editor:', hasTamil, 'Text length:', text.trim().length);
-            
-            // Count Tamil words
-            const tamilWords = text.match(/[\u0B80-\u0BFF]+/g) || [];
-            const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
-            console.log('[WorkspaceJS] 📋 Word count:', wordCount, 'Tamil words:', tamilWords.length);
-            
-            if (hasTamil && text.trim().length >= 20) {
-              console.log('[WorkspaceJS] 📋 ✅ Conditions met - triggering AI analysis for pasted Tamil text');
-              // Trigger auto-analysis directly (not scheduleSubmitThrottled which is for auto-save)
-              // Use autoAnalyze() which is the proper function for AI suggestions
-              this.autoAnalyze();
-            } else {
-              console.log('[WorkspaceJS] 📋 ⚠️ Conditions not met:', {
-                hasTamil,
-                textLength: text.trim().length,
-                meetsLength: text.trim().length >= 20
-              });
+          console.log('[WorkspaceJS] 📋 After paste - Editor state:', {
+            textLength: text.trim().length,
+            hasTamil: finalHasTamil,
+            wordCount: finalWordCount,
+            textPreview: text.substring(0, 100),
+            pastedTextInEditor: text.includes(pastedText.substring(0, 20))
+          });
+          
+          // Update word count and save
+          controller.updateWordCount();
+          controller.scheduleSave();
+          
+          // Trigger AI analysis if Tamil text is present and meets minimum requirements
+          if (finalHasTamil && text.trim().length >= 20) {
+            console.log('[WorkspaceJS] 📋 ✅ Triggering AI analysis for pasted Tamil text');
+            // Clear any existing analysis timeout
+            if (controller.analysisTimeout) {
+              clearTimeout(controller.analysisTimeout);
             }
-            // Also update word count and save
-            this.updateWordCount();
-            this.scheduleSave();
+            // Small delay to ensure editor state is fully updated
+            controller.analysisTimeout = setTimeout(() => {
+              console.log('[WorkspaceJS] 📋 🚀 Calling autoAnalyze() for pasted text');
+              controller.autoAnalyze();
+            }, 1000); // Increased delay to ensure paste is complete
           } else {
-            console.warn('[WorkspaceJS] 📋 ⚠️ Editor text is empty after paste');
+            console.log('[WorkspaceJS] 📋 ⚠️ Not triggering AI analysis:', {
+              hasTamil: finalHasTamil,
+              textLength: text.trim().length,
+              meetsMinimum: text.trim().length >= 20,
+              minimumWords: finalWordCount >= 5,
+              minimumChars: text.trim().length >= 20
+            });
           }
-        }, 200); // Increased delay to ensure paste content is fully in DOM
-      }, { passive: true });
+        }, 500); // Wait for paste to complete
+      };
+      
+      // Add paste event listener (don't use preventDefault - let browser handle it)
+      editorElement.addEventListener('paste', pasteHandler, false);
+      
+      console.log('[WorkspaceJS] ✅ Paste event listener attached to editor element');
     }
 
     // Transliteration V2 (feature-flagged)
@@ -821,13 +881,27 @@ class WorkspaceController {
       const draftId = parseInt(draftIdFromQuery);
       if (draftId && !isNaN(draftId)) {
         console.log('[WorkspaceJS] Opening draft from URL query parameter:', draftId);
-        // Open the draft after a brief delay to ensure everything is initialized
-        setTimeout(() => {
-          this.openDraft(draftId);
-        }, 100);
-        // Clean up URL to remove query parameter
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, '', newUrl);
+        
+        // Wait for editor to be fully initialized before loading draft
+        const checkEditorReady = () => {
+          const editorReady = this.editorElement || 
+                            (this.editor && this.editor.editor) || 
+                            (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor);
+          
+          if (editorReady) {
+            console.log('[WorkspaceJS] Editor is ready, loading draft');
+            this.openDraft(draftId);
+            // Clean up URL to remove query parameter after loading
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+          } else {
+            console.log('[WorkspaceJS] Editor not ready yet, waiting...');
+            setTimeout(checkEditorReady, 200);
+          }
+        };
+        
+        // Start checking after a short delay
+        setTimeout(checkEditorReady, 500);
         return;
       }
     }
@@ -2802,18 +2876,39 @@ class WorkspaceController {
   async autoAnalyze() {
     const text = this.getEditorText().trim();
     
-    // Skip if text is too short (minimum 5 words or 20 characters)
+    console.log('[AI] 🚀 autoAnalyze() called with text length:', text.length);
+    console.log('[AI] 📋 Full text:', text.substring(0, 200));
+    
+    // Skip if text is empty
+    if (!text || text.length === 0) {
+      console.log('[AI] ⚠️ Text is empty - skipping');
+      return;
+    }
+    
+    // Skip if text is too short (minimum 5 words OR 20 characters)
+    // Proceed if wordCount >= 5 OR text.length >= 20
     const wordCount = countWords(text);
-    if (wordCount < 5 || text.length < 20) {
+    console.log('[AI] 📊 Text analysis:', { wordCount, textLength: text.length, preview: text.substring(0, 100) });
+    
+    // Check if text meets minimum requirements (5 words OR 20 characters)
+    // Skip only if BOTH conditions are false (wordCount < 5 AND text.length < 20)
+    if (wordCount < 5 && text.length < 20) {
+      console.log('[AI] ⚠️ Text too short - skipping analysis:', { wordCount, textLength: text.length });
       this.updateAnalysisStatus('');
-      this.showNotification('Grammar suggestions require a full sentence.', 'info');
+      // Don't show notification for very short text (it's normal)
+      if (text.length > 0) {
+        this.showNotification('Type or paste more text to get AI suggestions (minimum 5 words or 20 characters).', 'info');
+      }
       return;
     }
     
     // Skip if text hasn't changed since last analysis
     if (text === this.lastAnalyzedText) {
+      console.log('[AI] ⏭️ Text unchanged since last analysis - skipping');
       return;
     }
+    
+    console.log('[AI] ✅ Text meets requirements - proceeding with analysis');
     
     // Cancel any in-flight request
     if (this.abortController) {
@@ -3651,7 +3746,29 @@ class WorkspaceController {
       this.currentDraft = draft;
       const draftText = draft.original_text || draft.text || '';
       console.log('[WorkspaceJS] Loading draft text into editor, length:', draftText.length);
-      this.editor.setText(draftText);
+      
+      // Set editor content - handle both TipTap and legacy editor
+      if (window.USE_TIPTAP_EDITOR && tiptapWorkspaceEditor) {
+        console.log('[WorkspaceJS] Setting content in TipTap editor');
+        tiptapWorkspaceEditor.commands.setContent(draftText);
+      } else if (this.editorElement) {
+        console.log('[WorkspaceJS] Setting content in legacy editor element');
+        this.editorElement.textContent = draftText;
+        // Trigger input event to ensure editor state is updated
+        const inputEvent = new Event('input', { bubbles: true });
+        this.editorElement.dispatchEvent(inputEvent);
+      } else if (this.editor && this.editor.editor) {
+        console.log('[WorkspaceJS] Setting content in TamilEditor');
+        this.editor.editor.textContent = draftText;
+        // Trigger input event
+        const inputEvent = new Event('input', { bubbles: true });
+        this.editor.editor.dispatchEvent(inputEvent);
+      } else {
+        console.error('[WorkspaceJS] No editor found to set content');
+      }
+      
+      // Update word count after setting content
+      this.updateWordCount();
       
       // Update title
       const titleInput = document.getElementById('draft-title');

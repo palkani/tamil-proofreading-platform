@@ -1,0 +1,243 @@
+<%- include('../partials/header') %>
+
+<link rel="stylesheet" href="/css/AIContentWriter.css">
+
+<!-- Navigation -->
+<%- include('../partials/nav', { active: 'tools', user: user || null }) %>
+
+<div class="ai-content-writer">
+  <div class="writer-container">
+    <!-- Header -->
+    <div class="writer-header">
+      <div class="header-icon">✍️</div>
+      <h1 class="header-title">AI Content Writer</h1>
+      <p class="header-subtitle">
+        Create blogs, essays & articles in Tamil & English
+      </p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="generate">
+        <span class="tab-icon">🎨</span>
+        Generate
+      </button>
+      <button class="tab" data-tab="improve">
+        <span class="tab-icon">✨</span>
+        Improve
+      </button>
+      <button class="tab" data-tab="translate">
+        <span class="tab-icon">🌐</span>
+        Translate
+      </button>
+    </div>
+
+    <!-- Generate Tab -->
+    <div id="generate-tab" class="form-section tab-content active">
+      <!-- Prompt Input -->
+      <div class="form-group">
+        <label class="form-label">
+          <span class="label-icon">💭</span>
+          What do you want to write about?
+        </label>
+        <textarea
+          id="prompt-input"
+          class="form-textarea"
+          placeholder="Example: Write about the benefits of AI in education..."
+          rows="4"
+        ></textarea>
+      </div>
+
+      <!-- Settings Grid -->
+      <div class="settings-grid">
+        <!-- Language -->
+        <div class="form-group">
+          <label class="form-label">
+            <span class="label-icon">🌍</span>
+            Language
+          </label>
+          <select id="language-select" class="form-select">
+            <option value="tamil">Tamil (தமிழ்)</option>
+            <option value="english">English</option>
+            <option value="bilingual">Bilingual (Tamil + English)</option>
+          </select>
+        </div>
+
+        <!-- Content Type -->
+        <div class="form-group">
+          <label class="form-label">
+            <span class="label-icon">📝</span>
+            Content Type
+          </label>
+          <select id="content-type-select" class="form-select">
+            <option value="blog">Blog Post</option>
+            <option value="essay">Essay</option>
+            <option value="article">Article</option>
+            <option value="story">Story</option>
+          </select>
+        </div>
+
+        <!-- Tone -->
+        <div class="form-group">
+          <label class="form-label">
+            <span class="label-icon">🎭</span>
+            Tone
+          </label>
+          <select id="tone-select" class="form-select">
+            <option value="professional">Professional</option>
+            <option value="casual">Casual</option>
+            <option value="academic">Academic</option>
+            <option value="creative">Creative</option>
+            <option value="persuasive">Persuasive</option>
+          </select>
+        </div>
+
+        <!-- Word Count -->
+        <div class="form-group">
+          <label class="form-label">
+            <span class="label-icon">📊</span>
+            Word Count
+          </label>
+          <select id="word-count-select" class="form-select">
+            <option value="300">300 words</option>
+            <option value="500" selected>500 words</option>
+            <option value="800">800 words</option>
+            <option value="1000">1000 words</option>
+            <option value="1500">1500 words</option>
+            <option value="2000">2000 words</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Checkboxes -->
+      <div class="checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="include-title-checkbox" checked />
+          <span>Include catchy title</span>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="include-meta-checkbox" />
+          <span>Include SEO meta description & keywords</span>
+        </label>
+      </div>
+
+      <!-- Generate Button -->
+      <button id="generate-btn" class="btn btn-generate">
+        <span class="btn-icon">✨</span>
+        Generate Content
+      </button>
+    </div>
+
+    <!-- Improve Tab -->
+    <div id="improve-tab" class="form-section tab-content" style="display: none;">
+      <div class="form-group">
+        <label class="form-label">
+          <span class="label-icon">📝</span>
+          Content to Improve
+        </label>
+        <textarea
+          id="improve-content-input"
+          class="form-textarea"
+          placeholder="Paste your content here..."
+          rows="10"
+        ></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <span class="label-icon">🎭</span>
+          Improvement Type
+        </label>
+        <select id="improvement-type-select" class="form-select">
+          <option value="grammar">Grammar & Spelling</option>
+          <option value="enhance">Enhance Writing</option>
+          <option value="simplify">Simplify</option>
+        </select>
+      </div>
+      <button id="improve-btn" class="btn btn-generate">
+        <span class="btn-icon">✨</span>
+        Improve Content
+      </button>
+    </div>
+
+    <!-- Translate Tab -->
+    <div id="translate-tab" class="form-section tab-content" style="display: none;">
+      <div class="form-group">
+        <label class="form-label">
+          <span class="label-icon">📝</span>
+          Content to Translate
+        </label>
+        <textarea
+          id="translate-content-input"
+          class="form-textarea"
+          placeholder="Enter text to translate..."
+          rows="10"
+        ></textarea>
+      </div>
+      <div class="settings-grid">
+        <div class="form-group">
+          <label class="form-label">
+            <span class="label-icon">🌍</span>
+            From Language
+          </label>
+          <select id="from-language-select" class="form-select">
+            <option value="english">English</option>
+            <option value="tamil">Tamil (தமிழ்)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">
+            <span class="label-icon">🌍</span>
+            To Language
+          </label>
+          <select id="to-language-select" class="form-select">
+            <option value="tamil">Tamil (தமிழ்)</option>
+            <option value="english">English</option>
+          </select>
+        </div>
+      </div>
+      <button id="translate-btn" class="btn btn-generate">
+        <span class="btn-icon">🌐</span>
+        Translate
+      </button>
+    </div>
+
+    <!-- Error Display -->
+    <div id="error-alert" class="alert alert-error" style="display: none;">
+      <span class="alert-icon">❌</span>
+      <span id="error-message"></span>
+    </div>
+
+    <!-- Result Display -->
+    <div id="result-section" class="result-section" style="display: none;">
+      <div class="result-header">
+        <h2 class="result-title" id="result-title">✨ Generated Content</h2>
+        <div class="result-actions">
+          <button id="copy-btn" class="btn-icon-small" title="Copy to clipboard">
+            📋
+          </button>
+          <button id="download-btn" class="btn-icon-small" title="Download as file">
+            💾
+          </button>
+        </div>
+      </div>
+
+      <div id="result-content"></div>
+
+      <div id="result-metadata" class="metadata"></div>
+    </div>
+
+    <!-- Info Footer -->
+    <div class="info-footer">
+      <p>
+        <strong>✨ Powered by AI</strong> - High-quality content generation for ProofTamil.com
+      </p>
+      <p class="info-note">
+        Generated content may require proofreading and fact-checking
+      </p>
+    </div>
+  </div>
+</div>
+
+<script src="/js/ai-content-writer.js"></script>
+<%- include('../partials/footer') %>
+
