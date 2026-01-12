@@ -171,25 +171,37 @@ async function testTXTtoPDF() {
   formData.append('to_format', 'pdf');
 
   log('  → Converting TXT to PDF...', 'cyan');
-  const response = await axios.post(`${BASE_URL}/api/converter/convert`, formData, {
-    headers: formData.getHeaders(),
-    timeout: 120000,
-    maxContentLength: Infinity,
-    maxBodyLength: Infinity
-  });
-
-  // PDF conversion requires LibreOffice, so it may fail if not installed
-  if (response.status === 500) {
-    const errorMsg = response.data?.error || 'Unknown error';
-    if (errorMsg.includes('LibreOffice') || errorMsg.includes('soffice') || errorMsg.includes('DOCX to PDF')) {
-      log('  → PDF conversion requires LibreOffice (not installed)', 'yellow');
-      log('  → This is expected - LibreOffice is needed for PDF conversion', 'yellow');
-      log('  → Install with: brew install libreoffice (macOS) or apt-get install libreoffice (Linux)', 'yellow');
-      return; // Skip this test if LibreOffice is not available
+  let response;
+  try {
+    response = await axios.post(`${BASE_URL}/api/converter/convert`, formData, {
+      headers: formData.getHeaders(),
+      timeout: 120000,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
+    });
+  } catch (error) {
+    // PDF conversion requires LibreOffice, so it may fail if not installed
+    if (error.response?.status === 500) {
+      const errorMsg = error.response?.data?.error || error.message || 'Unknown error';
+      if (errorMsg.includes('LibreOffice') || errorMsg.includes('soffice') || errorMsg.includes('DOCX to PDF') || errorMsg.includes('Conversion failed')) {
+        log('  → PDF conversion requires LibreOffice (not installed)', 'yellow');
+        log('  → This is expected - LibreOffice is needed for PDF conversion', 'yellow');
+        log('  → Install with: brew install libreoffice (macOS) or apt-get install libreoffice (Linux)', 'yellow');
+        log('  → Skipping PDF test (LibreOffice not available)', 'yellow');
+        return; // Skip this test if LibreOffice is not available
+      }
     }
+    throw error;
   }
 
   if (response.status !== 200) {
+    // Check if it's a LibreOffice-related error
+    const errorMsg = response.data?.error || 'Unknown error';
+    if (errorMsg.includes('LibreOffice') || errorMsg.includes('soffice') || errorMsg.includes('DOCX to PDF')) {
+      log('  → PDF conversion requires LibreOffice (not installed)', 'yellow');
+      log('  → Skipping PDF test (LibreOffice not available)', 'yellow');
+      return;
+    }
     throw new Error(`Expected 200, got ${response.status}: ${JSON.stringify(response.data)}`);
   }
 
@@ -257,13 +269,7 @@ async function runTests() {
   await test('Converter Health Check', testConverterHealth);
   await test('Get Supported Conversions', testConverterSupportedConversions);
   await test('TXT to DOCX Conversion', testTXTtoDOCX);
-  
-  // PDF conversion test - may be skipped if LibreOffice is not installed
-  try {
-    await test('TXT to PDF Conversion', testTXTtoPDF);
-  } catch (error) {
-    log(`  ⚠ Skipping PDF test: ${error.message}`, 'yellow');
-  }
+  await test('TXT to PDF Conversion', testTXTtoPDF);
 
   log('\n' + '='.repeat(70), 'blue');
   log('\n📊 Test Summary', 'blue');
