@@ -3538,10 +3538,16 @@ class WorkspaceController {
   async openDraft(draftId) {
     console.log('Opening draft:', draftId);
     try {
-      const apiUrl = `/api/submissions/${draftId}`;
-      console.log('Fetching from:', apiUrl);
+      // Use the correct API endpoint - proxy will forward to backend
+      const apiUrl = `/api/v1/submissions/${draftId}`;
+      console.log('[WorkspaceJS] Fetching draft from:', apiUrl);
       
-      const response = await this.apiFetch(apiUrl);
+      const response = await this.apiFetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
       console.log('Response status:', response.status);
       
       if (!response.ok) {
