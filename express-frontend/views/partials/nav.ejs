@@ -81,58 +81,54 @@
       newBtn.addEventListener('click', async function(e) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        console.log('[NAV] Logout button clicked');
         
         if (!confirm('Are you sure you want to log out?')) {
           return;
         }
         
-        console.log('[NAV] Logout button clicked');
+        console.log('[NAV] User confirmed logout');
         
-        try {
-          // Try to use auth-utils if available
-          if (window.authUtils && typeof window.authUtils.handleLogout === 'function') {
-            console.log('[NAV] Using auth-utils.handleLogout');
-            await window.authUtils.handleLogout();
-            return;
+        // Always clear tokens first (client-side)
+        console.log('[NAV] Clearing client-side tokens...');
+        localStorage.removeItem('access_token');
+        
+        // Clear all cookies
+        const cookieOptions = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        document.cookie = `access_token=; ${cookieOptions}`;
+        document.cookie = `refresh_token=; ${cookieOptions}`;
+        document.cookie = `proof_refresh_token=; ${cookieOptions}`;
+        
+        // Try to call logout API (non-blocking)
+        console.log('[NAV] Calling logout API...');
+        fetch('/auth/logout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
           }
-          
-          // Fallback: manual logout
-          console.log('[NAV] Using fallback logout');
-          
-          // Call logout API
-          try {
-            await fetch('/auth/logout', {
-              method: 'POST',
-              credentials: 'include',
-              headers: {
-                'Content-Type': 'application/json'
-              }
-            }).catch(err => {
-              console.warn('[NAV] Logout API call failed (non-fatal):', err.message);
-            });
-          } catch (err) {
-            console.warn('[NAV] Logout API error (non-fatal):', err.message);
-          }
-          
-          // Clear all tokens
-          localStorage.removeItem('access_token');
-          
-          // Clear cookies
-          const cookieOptions = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-          document.cookie = `access_token=; ${cookieOptions}`;
-          document.cookie = `refresh_token=; ${cookieOptions}`;
-          document.cookie = `proof_refresh_token=; ${cookieOptions}`;
-          
-          console.log('[NAV] Tokens cleared, redirecting to home');
-          
-          // Redirect to home
-          window.location.href = '/';
-        } catch (error) {
-          console.error('[NAV] Logout error:', error);
-          // Still redirect even on error
-          window.location.href = '/';
+        }).then(response => {
+          console.log('[NAV] Logout API response:', response.status);
+        }).catch(err => {
+          console.warn('[NAV] Logout API call failed (non-fatal):', err.message);
+        });
+        
+        // Also try auth-utils if available (but don't wait for it)
+        if (window.authUtils && typeof window.authUtils.handleLogout === 'function') {
+          console.log('[NAV] Also calling auth-utils.handleLogout');
+          window.authUtils.handleLogout().catch(err => {
+            console.warn('[NAV] auth-utils.handleLogout failed (non-fatal):', err.message);
+          });
         }
-      });
+        
+        // Force redirect immediately (don't wait for API calls)
+        console.log('[NAV] Redirecting to home page immediately');
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 100);
+      }, { capture: true }); // Use capture phase to ensure we catch the event
       
       console.log('[NAV] Logout button handler attached');
     }
@@ -144,7 +140,19 @@
       setupLogout();
     }
     
-    // Also try after a short delay in case auth-utils.js loads later
+    // Also try after delays to ensure it's set up even if DOM changes
     setTimeout(setupLogout, 100);
+    setTimeout(setupLogout, 500);
+    setTimeout(setupLogout, 1000);
+    
+    // Also listen for any clicks on logout button (in case setupLogout didn't catch it)
+    document.addEventListener('click', function(e) {
+      const target = e.target.closest('#logout-btn');
+      if (target) {
+        console.log('[NAV] Logout button clicked via document listener');
+        // Let the button's own handler take care of it, but ensure it's set up
+        setupLogout();
+      }
+    }, true); // Use capture phase
   })();
 </script>
