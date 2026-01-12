@@ -748,6 +748,51 @@ router.get('/converter/download/:filename', async (req, res) => {
   }
 });
 
+// Submit endpoint - proxy to backend submissions
+router.post('/submit', async (req, res) => {
+  try {
+    const url = `${BACKEND_URL}/submissions`;
+    
+    if (ENABLE_PROXY_LOGS) {
+      console.log(`[SUBMIT] POST ${url}`);
+      console.log(`[SUBMIT] Request body:`, JSON.stringify({ 
+        text: req.body?.text?.substring(0, 100) + '...',
+        save_draft: req.body?.save_draft 
+      }));
+    }
+    
+    // Forward authorization header if present
+    const headers = {
+      'Content-Type': 'application/json',
+      ...req.headers
+    };
+    delete headers.host;
+    delete headers.connection;
+    
+    if (req.headers.authorization) {
+      headers.Authorization = req.headers.authorization;
+    }
+    
+    const response = await axios.post(url, req.body, {
+      headers,
+      validateStatus: () => true, // Don't throw on any status
+    });
+    
+    if (ENABLE_PROXY_LOGS) {
+      console.log(`[SUBMIT] Response status: ${response.status}`);
+    }
+    
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('[SUBMIT-ERROR]', error.message);
+    console.error('[SUBMIT-ERROR] Response:', error.response?.data);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data?.error || 'Submission failed',
+      details: error.response?.data?.details || error.message
+    });
+  }
+});
+
 // Proxy other API calls to Go backend
 router.all('/*', async (req, res) => {
   try {
