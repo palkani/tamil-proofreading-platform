@@ -3551,8 +3551,9 @@ class WorkspaceController {
       }
       
       const data = await response.json();
-      console.log('Draft data loaded:', data);
-      const draft = data.submission;
+      console.log('[WorkspaceJS] Draft data loaded:', data);
+      // Handle both response formats: { submission: {...} } or direct submission object
+      const draft = data.submission || data;
       
       // Load draft into editor
       this.currentDraft = draft;
