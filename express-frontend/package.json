@@ -12,29 +12,42 @@
     "test:tools": "node tests/tools-test.js",
     "test:tools:comprehensive": "node tests/comprehensive-tools-test.js",
     "test:tools:setup": "node tests/create-real-test-files.js",
-    "test:converter": "node tests/converter-test.js"
+    "test:converter": "node tests/converter-test.js",
+    "test:e2e": "node tests/e2e/run-all-tests.js",
+    "test:e2e:comprehensive": "node tests/e2e/comprehensive.test.js",
+    "test:e2e:drafts": "node tests/e2e/drafts.test.js",
+    "test:e2e:editor": "node tests/e2e/editor.test.js",
+    "test:e2e:headed": "HEADLESS=false node tests/e2e/run-all-tests.js",
+    "test:e2e:debug": "HEADLESS=false SLOW_MO=100 node tests/e2e/run-all-tests.js",
+    "test:all": "npm run test:converter && npm run test:e2e"
   },
-  "keywords": ["tamil", "proofreading", "ai", "express"],
+  "keywords": [
+    "tamil",
+    "proofreading",
+    "ai",
+    "express"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.18.2",
-    "ejs": "^3.1.9",
     "axios": "^1.6.2",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
+    "docx": "^8.2.2",
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "form-data": "^4.0.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.0",
-    "form-data": "^4.0.0",
-    "tesseract.js": "^5.0.4",
     "pdf-parse": "^1.1.1",
-    "docx": "^8.2.2"
+    "tesseract.js": "^5.0.4"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2",
-    "concurrently": "^8.2.2",
-    "tailwindcss": "^3.4.0",
     "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32"
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.2",
+    "postcss": "^8.4.32",
+    "puppeteer": "^24.34.0",
+    "tailwindcss": "^3.4.0"
   }
 }
