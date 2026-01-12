@@ -114,20 +114,40 @@ function isAuthenticated() {
   }
 }
 
+// Global flag to prevent multiple simultaneous refresh attempts
+let globalRefreshInProgress = false;
+let globalRefreshPromise = null;
+
 /**
  * Attempt to refresh the access token using the refresh token cookie
  * @returns {Promise<string|null>} New access token or null if refresh failed
  */
 async function refreshAccessToken(maxRetries = 2) {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+  // If a refresh is already in progress, wait for it instead of starting a new one
+  if (globalRefreshInProgress && globalRefreshPromise) {
+    console.log('[AUTH] Refresh already in progress, waiting for existing refresh...');
     try {
-      if (attempt > 0) {
-        console.log(`[AUTH] Retry attempt ${attempt} of ${maxRetries}...`);
-        // Wait a bit before retry (cookie might not be set yet)
-        await new Promise(resolve => setTimeout(resolve, 500 * attempt));
-      }
-      
-      console.log('[AUTH] Attempting to refresh access token...');
+      return await globalRefreshPromise;
+    } catch (e) {
+      console.warn('[AUTH] Existing refresh failed, will attempt new refresh');
+      // Continue with new refresh attempt
+    }
+  }
+  
+  // Set global flag and create promise
+  globalRefreshInProgress = true;
+  globalRefreshPromise = (async () => {
+    try {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            console.log(`[AUTH] Retry attempt ${attempt} of ${maxRetries}...`);
+            // Exponential backoff for retries, with longer delay for 429
+            const delay = attempt === 1 ? 1000 : 2000 * attempt;
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+          
+          console.log('[AUTH] Attempting to refresh access token...');
       
       // Check if refresh token cookie exists
       const cookies = document.cookie.split(';').reduce((acc, cookie) => {
@@ -165,6 +185,26 @@ async function refreshAccessToken(maxRetries = 2) {
           console.warn('[AUTH] Refresh token is invalid, clearing all tokens');
           clearAuthTokens();
           // Don't retry on 401 - token is definitely invalid
+          return null;
+        }
+        
+        // If 429 (Too Many Requests), wait longer before retrying
+        if (response.status === 429) {
+          console.warn('[AUTH] Rate limited (429), waiting before retry...');
+          // Wait longer for 429 - exponential backoff
+          const waitTime = Math.min(5000 * Math.pow(2, attempt), 30000); // Max 30 seconds
+          console.log(`[AUTH] Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          
+          // If we have attempts left, retry
+          if (attempt < maxRetries) {
+            console.log(`[AUTH] Retrying refresh after rate limit (attempt ${attempt + 1}/${maxRetries})...`);
+            continue;
+          }
+          
+          // If all retries exhausted, return null but don't clear tokens
+          // The rate limit might be temporary
+          console.warn('[AUTH] Rate limit retries exhausted, returning null');
           return null;
         }
         
@@ -227,6 +267,19 @@ async function refreshAccessToken(maxRetries = 2) {
   // If we get here, all retries failed
   console.error('[AUTH] All refresh attempts failed');
   return null;
+    } finally {
+      // Always clear the global flag when done
+      globalRefreshInProgress = false;
+      globalRefreshPromise = null;
+    }
+  })();
+  
+  try {
+    return await globalRefreshPromise;
+  } catch (e) {
+    console.error('[AUTH] Refresh promise rejected:', e);
+    return null;
+  }
 }
 
 /**
