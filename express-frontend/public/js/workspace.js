@@ -2832,12 +2832,38 @@ class WorkspaceController {
         data.suggestions ||
         [];
       console.log('[AI Debug] Extracted corrections:', corrections.length, 'items');
+      console.log('[AI Debug] Raw corrections data:', JSON.stringify(corrections, null, 2));
+      
+      // Check if suggestionsPanel is initialized
+      if (!this.suggestionsPanel) {
+        console.error('[AI Debug] ❌ suggestionsPanel is not initialized!');
+        // Try to initialize it
+        const container = document.getElementById('suggestions-container');
+        const summary = document.getElementById('suggestions-summary');
+        const acceptAllBtn = document.getElementById('accept-all-btn');
+        if (container && summary && acceptAllBtn) {
+          this.suggestionsPanel = new SuggestionsPanel(container, summary, acceptAllBtn);
+          this.suggestionsPanel.onAcceptSuggestion = () => this.handleSuggestionAccepted();
+          console.log('[AI Debug] ✅ suggestionsPanel initialized on-the-fly');
+        } else {
+          console.error('[AI Debug] ❌ Cannot initialize suggestionsPanel - missing elements:', {
+            container: !!container,
+            summary: !!summary,
+            acceptAllBtn: !!acceptAllBtn
+          });
+        }
+      }
+      
       const geminiSuggestions = corrections
         // FILTER: Only include suggestions where original ≠ corrected (safety filter)
         .filter(result => {
-          const original = result.original || result.originalText || '';
-          const corrected = result.corrected || result.correction || '';
-          return original && corrected && original !== corrected;
+          const original = result.original || result.originalText || result.sourceText || '';
+          const corrected = result.corrected || result.correction || result.suggestedText || '';
+          const hasValidSuggestion = original && corrected && original !== corrected;
+          if (!hasValidSuggestion) {
+            console.log('[AI Debug] Filtered out suggestion:', { original, corrected, result });
+          }
+          return hasValidSuggestion;
         })
         .map((result, index) => {
           // Map backend fields to frontend expected format
@@ -2868,15 +2894,32 @@ class WorkspaceController {
           };
         });
       
-      console.log('[AI Debug] Mapped suggestions:', geminiSuggestions);
+      console.log('[AI Debug] Mapped suggestions:', geminiSuggestions.length, 'items');
+      console.log('[AI Debug] Mapped suggestions data:', JSON.stringify(geminiSuggestions, null, 2));
+      
+      if (!this.suggestionsPanel) {
+        console.error('[AI Debug] ❌ Cannot add suggestions - suggestionsPanel is null!');
+        this.updateAnalysisStatus('error');
+        return;
+      }
       
       this.suggestionsPanel.clearSuggestions();
-      this.suggestionsPanel.addSuggestions(geminiSuggestions);
+      console.log('[AI Debug] Cleared suggestions panel');
+      
+      if (geminiSuggestions.length > 0) {
+        this.suggestionsPanel.addSuggestions(geminiSuggestions);
+        console.log('[AI Debug] Added', geminiSuggestions.length, 'suggestions to panel');
+        console.log('[AI Debug] Panel suggestions count after add:', this.suggestionsPanel.suggestions.length);
+      } else {
+        console.warn('[AI Debug] ⚠️ No suggestions to add (all filtered out or empty response)');
+      }
       
       // Highlight spelling mistakes in editor
-      this.editor.highlightSpellingMistakes(geminiSuggestions);
+      if (this.editor && typeof this.editor.highlightSpellingMistakes === 'function') {
+        this.editor.highlightSpellingMistakes(geminiSuggestions);
+      }
       
-      console.log('[AI Debug] Panel suggestions count:', this.suggestionsPanel.suggestions.length);
+      console.log('[AI Debug] Final panel suggestions count:', this.suggestionsPanel.suggestions.length);
       
       if (geminiSuggestions.length === 0) {
         this.updateAnalysisStatus('no-issues');
