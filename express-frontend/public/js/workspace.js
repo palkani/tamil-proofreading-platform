@@ -642,26 +642,33 @@ class WorkspaceController {
         // Check if this is a paste event
         const isPaste = e.inputType === 'insertFromPaste' || e.inputType === 'insertFromPasteAsQuotation';
         if (isPaste) {
-          console.log("[IME] 📋 Input event triggered by paste");
+          console.log("[IME] 📋 Input event triggered by paste, inputType:", e.inputType);
           
           // Get editor text after paste
           const text = this.getEditorText() || '';
           const hasTamil = /[\u0B80-\u0BFF]/.test(text);
+          const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
           
-          console.log("[IME] 📋 Paste input event - text length:", text.length, 'hasTamil:', hasTamil);
+          console.log("[IME] 📋 Paste input event - text length:", text.length, 'hasTamil:', hasTamil, 'wordCount:', wordCount);
           
-          // If Tamil text is pasted, trigger AI analysis
-          if (hasTamil && text.trim().length >= 20) {
-            console.log("[IME] 📋 ✅ Tamil text pasted - will trigger AI analysis");
+          // If Tamil text is pasted, trigger AI analysis immediately
+          if (hasTamil && (wordCount >= 5 || text.trim().length >= 20)) {
+            console.log("[IME] 📋 ✅ Tamil text pasted - triggering AI analysis immediately");
             // Clear any existing timeout
             if (this.analysisTimeout) {
               clearTimeout(this.analysisTimeout);
             }
-            // Delay to ensure paste is complete
-            this.analysisTimeout = setTimeout(() => {
-              console.log("[IME] 📋 🚀 Triggering autoAnalyze() from input event after paste");
-              this.autoAnalyze();
-            }, 1000);
+            // Trigger immediately - input event fires after paste is complete
+            console.log("[IME] 📋 🚀 Calling autoAnalyze() immediately from input event after paste");
+            this.autoAnalyze();
+          } else {
+            console.log("[IME] 📋 ⚠️ Paste detected but conditions not met:", {
+              hasTamil,
+              wordCount,
+              textLength: text.trim().length,
+              meetsWordMin: wordCount >= 5,
+              meetsCharMin: text.trim().length >= 20
+            });
           }
         }
         
@@ -706,8 +713,13 @@ class WorkspaceController {
       
       const pasteHandler = function(e) {
         console.log('[WorkspaceJS] 📋 Paste event detected on editor');
+        console.log('[WorkspaceJS] 📋 Paste event details:', {
+          type: e.type,
+          target: e.target?.id || e.target?.tagName,
+          clipboardData: !!e.clipboardData
+        });
         
-        // Get pasted text from clipboard BEFORE preventing default
+        // Get pasted text from clipboard
         const pastedText = (e.clipboardData || window.clipboardData || e.originalEvent?.clipboardData)?.getData('text/plain') || 
                           (e.clipboardData || window.clipboardData)?.getData('text') || '';
         
@@ -716,7 +728,6 @@ class WorkspaceController {
         
         if (!pastedText || pastedText.trim().length === 0) {
           console.warn('[WorkspaceJS] 📋 ⚠️ No text in clipboard - allowing default paste');
-          // Allow default paste behavior
           return;
         }
         
@@ -732,10 +743,10 @@ class WorkspaceController {
         });
         
         // Don't prevent default - let the browser handle paste normally
-        // This ensures proper insertion into contenteditable elements
         
-        // Wait for paste to complete, then check and trigger AI analysis
-        setTimeout(() => {
+        // Schedule AI analysis after paste completes
+        // Use multiple timeouts to ensure we catch the paste
+        const triggerAnalysis = () => {
           const text = controller.getEditorText() || '';
           const finalHasTamil = /[\u0B80-\u0BFF]/.test(text);
           const finalWordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
@@ -744,8 +755,7 @@ class WorkspaceController {
             textLength: text.trim().length,
             hasTamil: finalHasTamil,
             wordCount: finalWordCount,
-            textPreview: text.substring(0, 100),
-            pastedTextInEditor: text.includes(pastedText.substring(0, 20))
+            textPreview: text.substring(0, 100)
           });
           
           // Update word count and save
@@ -753,33 +763,49 @@ class WorkspaceController {
           controller.scheduleSave();
           
           // Trigger AI analysis if Tamil text is present and meets minimum requirements
-          if (finalHasTamil && text.trim().length >= 20) {
+          if (finalHasTamil && (finalWordCount >= 5 || text.trim().length >= 20)) {
             console.log('[WorkspaceJS] 📋 ✅ Triggering AI analysis for pasted Tamil text');
             // Clear any existing analysis timeout
             if (controller.analysisTimeout) {
               clearTimeout(controller.analysisTimeout);
             }
-            // Small delay to ensure editor state is fully updated
-            controller.analysisTimeout = setTimeout(() => {
-              console.log('[WorkspaceJS] 📋 🚀 Calling autoAnalyze() for pasted text');
-              controller.autoAnalyze();
-            }, 1000); // Increased delay to ensure paste is complete
+            // Trigger immediately - paste is already complete
+            console.log('[WorkspaceJS] 📋 🚀 Calling autoAnalyze() immediately for pasted text');
+            controller.autoAnalyze();
           } else {
             console.log('[WorkspaceJS] 📋 ⚠️ Not triggering AI analysis:', {
               hasTamil: finalHasTamil,
               textLength: text.trim().length,
-              meetsMinimum: text.trim().length >= 20,
-              minimumWords: finalWordCount >= 5,
-              minimumChars: text.trim().length >= 20
+              wordCount: finalWordCount,
+              meetsWordMin: finalWordCount >= 5,
+              meetsCharMin: text.trim().length >= 20
             });
           }
-        }, 500); // Wait for paste to complete
+        };
+        
+        // Try multiple times to catch the paste (some browsers are slow)
+        setTimeout(triggerAnalysis, 100);
+        setTimeout(triggerAnalysis, 500);
+        setTimeout(triggerAnalysis, 1000);
       };
       
       // Add paste event listener (don't use preventDefault - let browser handle it)
       editorElement.addEventListener('paste', pasteHandler, false);
       
-      console.log('[WorkspaceJS] ✅ Paste event listener attached to editor element');
+      // Also add paste listener in capture phase for better detection
+      editorElement.addEventListener('paste', pasteHandler, true);
+      
+      // Also add to document for better capture (some browsers don't bubble paste events properly)
+      document.addEventListener('paste', function(e) {
+        // Only handle if the paste is in our editor
+        const target = e.target;
+        if (target && (target === editorElement || (target.closest && target.closest('#editor')))) {
+          console.log('[WorkspaceJS] 📋 Paste event captured at document level');
+          pasteHandler(e);
+        }
+      }, true);
+      
+      console.log('[WorkspaceJS] ✅ Paste event listeners attached (bubble, capture, and document levels)');
     }
 
     // Transliteration V2 (feature-flagged)
