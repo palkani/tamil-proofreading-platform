@@ -11,7 +11,8 @@
     "build:css": "./node_modules/.bin/tailwindcss -i ./public/css/input.css -o ./public/css/output.css --minify",
     "test:tools": "node tests/tools-test.js",
     "test:tools:comprehensive": "node tests/comprehensive-tools-test.js",
-    "test:tools:setup": "node tests/create-real-test-files.js"
+    "test:tools:setup": "node tests/create-real-test-files.js",
+    "test:converter": "node tests/converter-test.js"
   },
   "keywords": ["tamil", "proofreading", "ai", "express"],
   "author": "",

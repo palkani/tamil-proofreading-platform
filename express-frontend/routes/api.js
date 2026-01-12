@@ -402,8 +402,8 @@ try {
   console.warn('[OCR] Will attempt to use external OCR service if OCR_SERVICE_URL is set');
 }
 
-// Configure multer for file uploads
-const upload = multer({
+// Configure multer for OCR file uploads (images and PDFs only)
+const uploadOCR = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 16 * 1024 * 1024 }, // 16MB
   fileFilter: (req, file, cb) => {
@@ -415,6 +415,38 @@ const upload = multer({
     }
   }
 });
+
+// Configure multer for document converter uploads (all document types)
+const uploadConverter = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+      'application/msword', // .doc
+      'text/plain', // .txt
+      'text/html', // .html
+      'application/rtf', // .rtf
+      'application/vnd.oasis.opendocument.text' // .odt
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      // Also check by extension as fallback
+      const ext = file.originalname.split('.').pop().toLowerCase();
+      const allowedExts = ['pdf', 'docx', 'doc', 'txt', 'html', 'rtf', 'odt'];
+      if (allowedExts.includes(ext)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Only PDF, DOCX, TXT, HTML, RTF, and ODT are allowed.'));
+      }
+    }
+  }
+});
+
+// Keep 'upload' for backward compatibility (used by OCR)
+const upload = uploadOCR;
 
 // Store generated Word documents temporarily (in-memory for now, could use Redis/file storage)
 const ocrDocuments = new Map();
@@ -458,7 +490,7 @@ router.get('/ocr/health', (req, res) => {
 });
 
 // OCR upload endpoint - uses direct implementation or proxies to external service
-router.post('/ocr/upload', upload.single('file'), async (req, res) => {
+router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
   try {
     if (ENABLE_PROXY_LOGS) {
       console.log('[OCR] POST /ocr/upload');
@@ -651,7 +683,7 @@ router.get('/converter/supported-conversions', async (req, res) => {
 });
 
 // Document Converter - Convert document
-router.post('/converter/convert', upload.single('file'), async (req, res) => {
+router.post('/converter/convert', uploadConverter.single('file'), async (req, res) => {
   try {
     if (ENABLE_PROXY_LOGS) {
       console.log('[Converter] POST /converter/convert');
