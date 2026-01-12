@@ -976,7 +976,22 @@ class WorkspaceController {
         isNotLatin: !/^[a-z]+$/i.test(token),
         tokenValue: token
       });
-      // Clear suggestions if token is invalid
+      
+      // If token is Tamil or other non-Latin, trigger AI analysis instead of transliteration
+      const hasTamil = /[\u0B80-\u0BFF]/.test(text);
+      if (hasTamil) {
+        console.log('[IME] 🔍 Tamil text detected in editor, triggering AI analysis...');
+        // Debounce AI analysis to avoid too many calls
+        if (this.analysisTimeout) {
+          clearTimeout(this.analysisTimeout);
+        }
+        this.analysisTimeout = setTimeout(() => {
+          console.log('[IME] 🚀 Triggering autoAnalyze for Tamil text...');
+          this.autoAnalyze();
+        }, 2000); // 2 second debounce for AI analysis
+      }
+      
+      // Clear transliteration suggestions if token is invalid
       if (this.lastFetchToken) {
         this.lastFetchToken = null;
         this.currentTokenInfo = null;
@@ -2809,7 +2824,11 @@ class WorkspaceController {
     this.abortController = new AbortController();
     this.updateAnalysisStatus('analyzing');
     
+    console.log('[AI] 🚀 Making API call to /api/submit with text length:', text.length);
+    console.log('[AI] 🚀 Request body:', JSON.stringify({ text: text.substring(0, 100) + '...', save_draft: false }));
+    
     try {
+      console.log('[AI] 🚀 Calling /api/submit endpoint...');
       const response = await this.apiFetch('/api/submit', {
         method: 'POST',
         headers: {
@@ -2819,7 +2838,11 @@ class WorkspaceController {
         signal: this.abortController.signal
       });
       
+      console.log('[AI] ✅ API response status:', response.status);
+      console.log('[AI] ✅ API response headers:', Object.fromEntries(response.headers.entries()));
+      
       let data = await response.json();
+      console.log('[AI] ✅ API response data keys:', Object.keys(data));
       if (response.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
         const submissionId = data.submission?.id;
         console.log('[GEMINI] submit pending, starting poll', submissionId);
