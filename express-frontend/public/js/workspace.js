@@ -794,11 +794,30 @@ class WorkspaceController {
   }
   
   checkUrlHash() {
+    // Check for draftId in query parameter first (from drafts page)
+    const urlParams = new URLSearchParams(window.location.search);
+    const draftIdFromQuery = urlParams.get('draftId');
+    if (draftIdFromQuery) {
+      const draftId = parseInt(draftIdFromQuery);
+      if (draftId && !isNaN(draftId)) {
+        console.log('[WorkspaceJS] Opening draft from URL query parameter:', draftId);
+        // Open the draft after a brief delay to ensure everything is initialized
+        setTimeout(() => {
+          this.openDraft(draftId);
+        }, 100);
+        // Clean up URL to remove query parameter
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+        return;
+      }
+    }
+    
+    // Also check for draft in hash (legacy support)
     const hash = window.location.hash;
     if (hash && hash.startsWith('#draft-')) {
       const draftId = parseInt(hash.replace('#draft-', ''));
       if (draftId && !isNaN(draftId)) {
-        console.log('Opening draft from URL hash:', draftId);
+        console.log('[WorkspaceJS] Opening draft from URL hash:', draftId);
         // Open the draft after a brief delay to ensure everything is initialized
         setTimeout(() => {
           this.openDraft(draftId);
@@ -3537,12 +3556,14 @@ class WorkspaceController {
       
       // Load draft into editor
       this.currentDraft = draft;
-      this.editor.setText(draft.original_text || '');
+      const draftText = draft.original_text || draft.text || '';
+      console.log('[WorkspaceJS] Loading draft text into editor, length:', draftText.length);
+      this.editor.setText(draftText);
       
       // Update title
       const titleInput = document.getElementById('draft-title');
       if (titleInput) {
-        titleInput.value = `Draft #${draft.id}`;
+        titleInput.value = draft.title || `Draft #${draft.id}`;
       }
       
       // Switch to editor view
