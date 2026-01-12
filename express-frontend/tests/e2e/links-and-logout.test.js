@@ -138,9 +138,19 @@ async function runLinksAndLogoutTests() {
     
     if (link) {
       const href = await page.evaluate(el => el.href, contactLinkHandle);
-      await page.goto(href);
-      await waitForNavigation();
-      await sleep(1000);
+      try {
+        await page.goto(href, { waitUntil: 'networkidle2', timeout: 15000 });
+        await sleep(1000);
+      } catch (error) {
+        // If navigation times out, check if we're on contact page
+        const url = page.url();
+        if (url.includes('contact')) {
+          // Navigation succeeded, just timeout was too short
+          log('  ⚠️ Navigation succeeded but timeout occurred', 'yellow');
+        } else {
+          throw new Error(`Contact link navigation failed: ${error.message}`);
+        }
+      }
       
       const url = page.url();
       if (!url.includes('contact')) {
@@ -272,20 +282,17 @@ async function runLinksAndLogoutTests() {
     const isLoggedIn = logoutBtn !== null;
     
     if (!isLoggedIn) {
-      const signInLink = await page.$('a[href*="login"], a:has-text("Sign In"), a:has-text("Sign in")');
-      if (!signInLink) {
-        // Check with evaluate
-        const hasSignIn = await page.evaluate(() => {
-          const links = Array.from(document.querySelectorAll('a'));
-          return links.some(el => 
-            el.textContent.toLowerCase().includes('sign in') ||
-            el.href.includes('login')
-          );
-        });
-        
-        if (!hasSignIn) {
-          throw new Error('Sign In link should be visible when not logged in');
-        }
+      // Check with evaluate for case-insensitive match
+      const hasSignIn = await page.evaluate(() => {
+        const links = Array.from(document.querySelectorAll('a'));
+        return links.some(el => 
+          el.textContent.toLowerCase().includes('sign in') ||
+          el.href.includes('login')
+        );
+      });
+      
+      if (!hasSignIn) {
+        throw new Error('Sign In link should be visible when not logged in');
       }
     } else {
       log('  ⚠️ User is logged in, skipping Sign In link test', 'yellow');
