@@ -17,6 +17,7 @@
     "test:e2e:comprehensive": "node tests/e2e/comprehensive.test.js",
     "test:e2e:drafts": "node tests/e2e/drafts.test.js",
     "test:e2e:editor": "node tests/e2e/editor.test.js",
+    "test:e2e:verify": "node tests/e2e/verify-setup.js",
     "test:e2e:headed": "HEADLESS=false node tests/e2e/run-all-tests.js",
     "test:e2e:debug": "HEADLESS=false SLOW_MO=100 node tests/e2e/run-all-tests.js",
     "test:all": "npm run test:converter && npm run test:e2e"
