@@ -464,6 +464,44 @@ const upload = multer({
 // Store generated Word documents temporarily (in-memory for now, could use Redis/file storage)
 const ocrDocuments = new Map();
 
+// OCR health check endpoint
+router.get('/ocr/health', (req, res) => {
+  try {
+    // Check if OCR service is available
+    if (ocrService) {
+      return res.json({
+        status: 'healthy',
+        service: 'OCR Service',
+        implementation: 'Direct (Tesseract.js)',
+        version: '1.0.0'
+      });
+    }
+    
+    // Check external service if configured
+    if (OCR_SERVICE_URL && OCR_SERVICE_URL !== 'http://localhost:5000') {
+      return res.json({
+        status: 'healthy',
+        service: 'OCR Service',
+        implementation: 'External',
+        url: OCR_SERVICE_URL,
+        version: '1.0.0'
+      });
+    }
+    
+    return res.status(503).json({
+      status: 'unhealthy',
+      service: 'OCR Service',
+      error: 'OCR service is not available'
+    });
+  } catch (error) {
+    return res.status(503).json({
+      status: 'unhealthy',
+      service: 'OCR Service',
+      error: error.message
+    });
+  }
+});
+
 // OCR upload endpoint - uses direct implementation or proxies to external service
 router.post('/ocr/upload', upload.single('file'), async (req, res) => {
   try {
