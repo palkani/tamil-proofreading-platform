@@ -624,6 +624,41 @@ router.get('/ocr/download/:filename', async (req, res) => {
 });
 
 // Proxy all /api/v1/* requests to backend (fallback if Vercel rewrite doesn't catch it)
+// IME suggestions endpoint - proxy to backend
+router.get('/ime/suggest', async (req, res) => {
+  try {
+    const { q, mode = 'smart', limit = 8 } = req.query;
+    
+    if (!q || typeof q !== 'string' || q.trim().length === 0) {
+      return res.status(400).json({ error: 'Query parameter "q" is required' });
+    }
+    
+    const url = `${BACKEND_URL}/ime/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
+    
+    if (ENABLE_PROXY_LOGS) {
+      console.log(`[IME] GET ${url}`);
+    }
+    
+    // Forward authorization header if present
+    const headers = {};
+    if (req.headers.authorization) {
+      headers.Authorization = req.headers.authorization;
+    }
+    
+    const response = await axios.get(url, {
+      headers,
+      validateStatus: () => true,
+    });
+    
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error(`[IME-ERROR] ${error.message}`);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || 'IME suggestion failed'
+    });
+  }
+});
+
 router.all('/v1/*', async (req, res) => {
   try {
     const path = req.path.replace('/v1', ''); // Remove /v1 prefix

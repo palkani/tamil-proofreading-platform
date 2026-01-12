@@ -675,6 +675,11 @@ class WorkspaceController {
       
       // Add paste handler to trigger AI suggestions for pasted Tamil text
       editorElement.addEventListener('paste', (e) => {
+        console.log('[WorkspaceJS] 📋 Paste event detected');
+        // Get pasted text from clipboard
+        const pastedText = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+        console.log('[WorkspaceJS] 📋 Pasted text:', pastedText.substring(0, 50));
+        
         // Get pasted text after paste event completes
         setTimeout(() => {
           const text = this.getEditorText() || '';
@@ -682,7 +687,10 @@ class WorkspaceController {
             console.log('[WorkspaceJS] 📋 Paste detected, triggering analysis for pasted text');
             // Check if text contains Tamil characters (indicating Tamil text was pasted)
             const hasTamil = /[\u0B80-\u0BFF]/.test(text);
+            console.log('[WorkspaceJS] 📋 Has Tamil:', hasTamil, 'Text length:', text.trim().length);
+            
             if (hasTamil && text.trim().length >= 20) {
+              console.log('[WorkspaceJS] 📋 Triggering AI analysis for pasted Tamil text');
               // Trigger auto-analysis for pasted Tamil text
               this.scheduleSubmitThrottled(text);
             }
@@ -878,13 +886,20 @@ class WorkspaceController {
       return;
     }
     
+    this.updateWordCount();
+    this.scheduleSave();
+    
+    // Extract token FIRST before using it
+    const text = this.getEditorText() || '';
+    const caretPos = (this.editor && typeof this.editor.getCursorPosition === 'function' && this.editor.getCursorPosition()) || text.length;
+    const tokenInfo = getTokenAtCaret(text, caretPos);
+    const token = tokenInfo.token ? tokenInfo.token.trim().toLowerCase() : '';
+    
     // CRITICAL: Skip fetching suggestions ONLY if we just replaced a token AND it's the same token
     // This prevents the dropdown from showing again immediately after selection for the SAME word
     // But allows fetching for the NEXT word
     if (this.justReplacedToken && this.lastFetchToken && token === this.lastFetchToken) {
       console.log('[IME] ⏭️ Skipping suggestion fetch - just replaced this same token:', token);
-      this.updateWordCount();
-      this.scheduleSave();
       return;
     }
     
@@ -893,15 +908,6 @@ class WorkspaceController {
       console.log('[IME] ✅ Token changed after replacement, clearing flag and allowing fetch');
       this.justReplacedToken = false;
     }
-    
-    this.updateWordCount();
-    this.scheduleSave();
-    
-    // Extract token
-    const text = this.getEditorText() || '';
-    const caretPos = (this.editor && typeof this.editor.getCursorPosition === 'function' && this.editor.getCursorPosition()) || text.length;
-    const tokenInfo = getTokenAtCaret(text, caretPos);
-    const token = tokenInfo.token ? tokenInfo.token.trim().toLowerCase() : '';
     
     console.log('[IME] Extracted token:', token, 'from text:', text.substring(0, 50));
     console.log('[IME] Token info:', {
