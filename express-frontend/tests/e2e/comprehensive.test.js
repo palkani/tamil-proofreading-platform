@@ -352,7 +352,15 @@ async function runTests() {
     const url = page.url();
     
     if (url.includes('drafts') && !url.includes('login')) {
-      const button = await page.$('button:has-text("New Draft"), button:has-text("Create"), a:has-text("New Draft"), a:has-text("Create")');
+      // Use evaluate to find button by text content
+      const buttonHandle = await page.evaluateHandle(() => {
+        const buttons = Array.from(document.querySelectorAll('button, a'));
+        return buttons.find(el => {
+          const text = el.textContent.toLowerCase();
+          return text.includes('new draft') || text.includes('create');
+        }) || null;
+      });
+      const button = await buttonHandle.jsonValue();
       
       if (!button) {
         // Check with evaluate for case-insensitive match
