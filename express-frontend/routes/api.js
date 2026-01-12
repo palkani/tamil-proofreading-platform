@@ -389,51 +389,6 @@ router.get('/v1/auth/google/callback', async (req, res) => {
   }
 });
 
-// Proxy other API calls to Go backend
-router.all('/*', async (req, res) => {
-  try {
-    // Normalize path to avoid double /v1 when BACKEND_URL already has /api/v1
-    // Example: BACKEND_URL=/api/v1 and req.path=/v1/auth/register -> strip leading /v1
-    let normalizedPath = req.path;
-    if (BACKEND_URL.endsWith('/api/v1') && normalizedPath.startsWith('/v1/')) {
-      normalizedPath = normalizedPath.replace(/^\/v1/, '');
-    }
-
-    const url = `${BACKEND_URL}${normalizedPath}`;
-    
-    // Debug logging for auth passthrough
-    console.log('[PROXY] incoming authorization:', req.headers.authorization);
-    if (ENABLE_PROXY_LOGS) {
-      console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
-    }
-
-    // Forward all incoming headers as-is (incl. Authorization/cookies), but strip host to avoid upstream conflicts
-    const forwardHeaders = { ...req.headers };
-    delete forwardHeaders.host;
-    delete forwardHeaders.connection; // not needed upstream
-    delete forwardHeaders['content-length']; // let axios set correct length
-
-    const config = {
-      method: req.method,
-      url,
-      headers: forwardHeaders,
-      params: req.query,
-      data: req.body,
-      validateStatus: () => true,
-    };
-
-    const response = await axios(config);
-    res.status(response.status).send(response.data);
-  } catch (error) {
-    console.error(`[PROXY-ERROR] ${error.message}`);
-    console.error('[PROXY-ERROR] Response data:', error.response?.data);
-    console.error('[PROXY-ERROR] Status:', error.response?.status);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data || 'Backend request failed'
-    });
-  }
-});
-
 // OCR Tool - Direct implementation using Tesseract.js
 const OCR_SERVICE_URL = process.env.OCR_SERVICE_URL;
 let ocrService = null;
@@ -616,6 +571,51 @@ router.post('/ocr/upload', upload.single('file'), async (req, res) => {
   }
 });
 
+// OCR download endpoint
+router.get('/ocr/download/:filename', async (req, res) => {
+  try {
+    if (ENABLE_PROXY_LOGS) {
+      console.log('[OCR] GET /ocr/download/:filename');
+    }
+    
+    const filename = req.params.filename;
+    
+    // Check if file is in our temporary storage (direct OCR)
+    if (ocrDocuments.has(filename)) {
+      const filePath = ocrDocuments.get(filename);
+      const fs = require('fs');
+      const path = require('path');
+      
+      if (filePath && fs.existsSync(filePath)) {
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        return res.sendFile(path.resolve(filePath));
+      } else {
+        ocrDocuments.delete(filename);
+      }
+    }
+    
+    // Fallback to external service if configured
+    if (OCR_SERVICE_URL && OCR_SERVICE_URL !== 'http://localhost:5000') {
+      const response = await axios.get(`${OCR_SERVICE_URL}/download/${filename}`, {
+        responseType: 'stream'
+      });
+      
+      res.setHeader('Content-Disposition', response.headers['content-disposition'] || `attachment; filename="${filename}"`);
+      res.setHeader('Content-Type', response.headers['content-type'] || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      return response.data.pipe(res);
+    }
+    
+    return res.status(404).json({ error: 'File not found' });
+  } catch (error) {
+    console.error('[OCR] Download error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data?.error || 'File download failed',
+      details: error.message
+    });
+  }
+});
+
 // Document Converter Service
 const converterService = require('../services/document-converter/converter-service');
 
@@ -716,50 +716,51 @@ router.get('/converter/download/:filename', async (req, res) => {
   }
 });
 
-// OCR download endpoint
-router.get('/ocr/download/:filename', async (req, res) => {
+// Proxy other API calls to Go backend
+router.all('/*', async (req, res) => {
   try {
+    // Normalize path to avoid double /v1 when BACKEND_URL already has /api/v1
+    // Example: BACKEND_URL=/api/v1 and req.path=/v1/auth/register -> strip leading /v1
+    let normalizedPath = req.path;
+    if (BACKEND_URL.endsWith('/api/v1') && normalizedPath.startsWith('/v1/')) {
+      normalizedPath = normalizedPath.replace(/^\/v1/, '');
+    }
+
+    const url = `${BACKEND_URL}${normalizedPath}`;
+    
+    // Debug logging for auth passthrough
+    console.log('[PROXY] incoming authorization:', req.headers.authorization);
     if (ENABLE_PROXY_LOGS) {
-      console.log('[OCR] GET /ocr/download/:filename');
+      console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);
     }
-    
-    const filename = req.params.filename;
-    
-    // Check if file is in our temporary storage (direct OCR)
-    if (ocrDocuments.has(filename)) {
-      const filePath = ocrDocuments.get(filename);
-      const fs = require('fs');
-      const path = require('path');
-      
-      if (filePath && fs.existsSync(filePath)) {
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        return res.sendFile(path.resolve(filePath));
-      } else {
-        ocrDocuments.delete(filename);
-      }
-    }
-    
-    // Fallback to external service if configured
-    if (OCR_SERVICE_URL && OCR_SERVICE_URL !== 'http://localhost:5000') {
-      const response = await axios.get(`${OCR_SERVICE_URL}/download/${filename}`, {
-        responseType: 'stream'
-      });
-      
-      res.setHeader('Content-Disposition', response.headers['content-disposition'] || `attachment; filename="${filename}"`);
-      res.setHeader('Content-Type', response.headers['content-type'] || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      return response.data.pipe(res);
-    }
-    
-    return res.status(404).json({ error: 'File not found' });
+
+    // Forward all incoming headers as-is (incl. Authorization/cookies), but strip host to avoid upstream conflicts
+    const forwardHeaders = { ...req.headers };
+    delete forwardHeaders.host;
+    delete forwardHeaders.connection; // not needed upstream
+    delete forwardHeaders['content-length']; // let axios set correct length
+
+    const config = {
+      method: req.method,
+      url,
+      headers: forwardHeaders,
+      params: req.query,
+      data: req.body,
+      validateStatus: () => true,
+    };
+
+    const response = await axios(config);
+    res.status(response.status).send(response.data);
   } catch (error) {
-    console.error('[OCR] Download error:', error.message);
+    console.error(`[PROXY-ERROR] ${error.message}`);
+    console.error('[PROXY-ERROR] Response data:', error.response?.data);
+    console.error('[PROXY-ERROR] Status:', error.response?.status);
     res.status(error.response?.status || 500).json({
-      error: error.response?.data?.error || 'File download failed',
-      details: error.message
+      error: error.response?.data || 'Backend request failed'
     });
   }
 });
+
 
 // Proxy all /api/v1/* requests to backend (fallback if Vercel rewrite doesn't catch it)
 // IME suggestions endpoint - proxy to backend
