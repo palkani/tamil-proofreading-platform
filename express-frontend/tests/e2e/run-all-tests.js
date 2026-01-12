@@ -6,6 +6,7 @@
 const { runTests } = require('./comprehensive.test');
 const { runDraftsTests } = require('./drafts.test');
 const { runEditorTests } = require('./editor.test');
+const { runLinksAndLogoutTests } = require('./links-and-logout.test');
 
 const colors = {
   reset: '\x1b[0m',
@@ -64,6 +65,19 @@ async function runAllTests() {
     log(`\n❌ Editor tests failed: ${error.message}`, 'red');
     allResults.failed++;
     allResults.errors.push({ suite: 'Editor', error: error.message });
+  }
+
+  // Run links and logout tests
+  try {
+    log('\n🔗 Running Links and Logout Tests...', 'cyan');
+    const linksResults = await runLinksAndLogoutTests();
+    allResults.passed += linksResults.passed;
+    allResults.failed += linksResults.failed;
+    allResults.errors.push(...linksResults.errors.map(e => ({ suite: 'Links', ...e })));
+  } catch (error) {
+    log(`\n❌ Links and logout tests failed: ${error.message}`, 'red');
+    allResults.failed++;
+    allResults.errors.push({ suite: 'Links', error: error.message });
   }
 
   // Final summary

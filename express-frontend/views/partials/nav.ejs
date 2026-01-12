@@ -68,19 +68,83 @@
 </nav>
 
 <script>
-  // Setup logout button (auth-utils.js is loaded in header, so it should be available)
-  document.getElementById('logout-btn')?.addEventListener('click', () => {
-    if (confirm('Are you sure you want to log out?')) {
-      if (window.authUtils && window.authUtils.handleLogout) {
-        window.authUtils.handleLogout();
-      } else {
-        // Fallback if auth-utils not loaded
-        console.warn('[NAV] auth-utils not loaded, using fallback logout');
-        localStorage.removeItem('access_token');
-        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-        document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-        window.location.href = '/';
-      }
+  // Setup logout button - ensure it works even if auth-utils.js hasn't loaded yet
+  (function() {
+    function setupLogout() {
+      const logoutBtn = document.getElementById('logout-btn');
+      if (!logoutBtn) return;
+      
+      // Remove any existing listeners to prevent duplicates
+      const newBtn = logoutBtn.cloneNode(true);
+      logoutBtn.parentNode.replaceChild(newBtn, logoutBtn);
+      
+      newBtn.addEventListener('click', async function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (!confirm('Are you sure you want to log out?')) {
+          return;
+        }
+        
+        console.log('[NAV] Logout button clicked');
+        
+        try {
+          // Try to use auth-utils if available
+          if (window.authUtils && typeof window.authUtils.handleLogout === 'function') {
+            console.log('[NAV] Using auth-utils.handleLogout');
+            await window.authUtils.handleLogout();
+            return;
+          }
+          
+          // Fallback: manual logout
+          console.log('[NAV] Using fallback logout');
+          
+          // Call logout API
+          try {
+            await fetch('/auth/logout', {
+              method: 'POST',
+              credentials: 'include',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            }).catch(err => {
+              console.warn('[NAV] Logout API call failed (non-fatal):', err.message);
+            });
+          } catch (err) {
+            console.warn('[NAV] Logout API error (non-fatal):', err.message);
+          }
+          
+          // Clear all tokens
+          localStorage.removeItem('access_token');
+          
+          // Clear cookies
+          const cookieOptions = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+          document.cookie = `access_token=; ${cookieOptions}`;
+          document.cookie = `refresh_token=; ${cookieOptions}`;
+          document.cookie = `proof_refresh_token=; ${cookieOptions}`;
+          
+          console.log('[NAV] Tokens cleared, redirecting to home');
+          
+          // Redirect to home
+          window.location.href = '/';
+        } catch (error) {
+          console.error('[NAV] Logout error:', error);
+          // Still redirect even on error
+          window.location.href = '/';
+        }
+      });
+      
+      console.log('[NAV] Logout button handler attached');
     }
-  });
+    
+    // Setup immediately if DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setupLogout);
+    } else {
+      setupLogout();
+    }
+    
+    // Also try after a short delay in case auth-utils.js loads later
+    setTimeout(setupLogout, 100);
+  })();
 </script>

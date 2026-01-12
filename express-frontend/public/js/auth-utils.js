@@ -65,9 +65,12 @@ function handleAuthSuccess(accessToken, redirectTo = '/drafts') {
  * Handle logout - clears tokens and redirects to home
  */
 async function handleLogout() {
+  console.log('[AUTH] handleLogout called');
+  
   try {
     // Call logout API to revoke refresh token on backend
-    await fetch('/auth/logout', {
+    console.log('[AUTH] Calling /auth/logout API...');
+    const response = await fetch('/auth/logout', {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -77,13 +80,23 @@ async function handleLogout() {
       // Ignore network errors - still proceed with client-side cleanup
       console.warn('[AUTH] Logout API call failed (non-fatal):', err.message);
     });
+    
+    if (response) {
+      console.log('[AUTH] Logout API response status:', response.status);
+    }
   } catch (err) {
     // Ignore errors - still proceed with client-side cleanup
     console.warn('[AUTH] Logout error (non-fatal):', err.message);
   } finally {
     // Always clear tokens and redirect, even if API call fails
+    console.log('[AUTH] Clearing tokens and redirecting...');
     clearAuthTokens();
-    window.location.href = '/';
+    
+    // Small delay to ensure tokens are cleared
+    setTimeout(() => {
+      console.log('[AUTH] Redirecting to home page');
+      window.location.href = '/';
+    }, 100);
   }
 }
 
