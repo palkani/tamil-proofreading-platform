@@ -58,7 +58,11 @@ function handleAuthSuccess(accessToken, redirectTo = '/drafts') {
   
   // Redirect to specified page (default: drafts)
   console.log('[AUTH] Redirecting to:', redirectTo);
-  window.location.href = redirectTo;
+  console.log('[AUTH] Current location:', window.location.href);
+  console.log('[AUTH] Target redirect:', redirectTo);
+  
+  // Use replace instead of href to prevent back button issues
+  window.location.replace(redirectTo);
 }
 
 /**

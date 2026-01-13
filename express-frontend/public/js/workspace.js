@@ -464,6 +464,8 @@ class WorkspaceController {
       this.translitAbort = new AbortController();
 
       // Fetch from API
+      // IMPORTANT: Don't use apiFetch here - this endpoint doesn't require auth
+      // Using regular fetch prevents auth redirects that might interfere with suggestions
       const response = await fetch(url, {
         method: 'GET',
         cache: 'no-store',
@@ -471,11 +473,19 @@ class WorkspaceController {
         headers: {
           'Accept': 'application/json',
         },
+        credentials: 'same-origin', // Include cookies but don't require auth headers
       });
 
       // Handle response
       if (!response.ok) {
         console.error('[IME] API error:', response.status, response.statusText);
+        // Try to get error details
+        try {
+          const errorData = await response.json();
+          console.error('[IME] API error details:', errorData);
+        } catch (e) {
+          console.error('[IME] Could not parse error response');
+        }
         this.displaySuggestions([]);
         return [];
       }
