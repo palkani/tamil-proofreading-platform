@@ -78,7 +78,8 @@
   }
   
   // Now run the async function - properly structured
-  (async function() {
+  try {
+    (async function() {
     // First, check if we have a token in URL (from OAuth redirect)
     const urlParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = urlParams.get('access_token');
@@ -850,8 +851,7 @@
     } else {
       console.log('[DRAFTS] Error occurred but we\'ve been redirected to', window.location.pathname, '- not showing error UI');
     }
-  });
-  
+    })();
   } catch (globalError) {
     // Catch any synchronous errors that occur before the async function
     console.error('[DRAFTS] Global error in drafts page script:', globalError);
