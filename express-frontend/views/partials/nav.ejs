@@ -119,6 +119,11 @@
       
       // Attach handler directly to button
       newBtn.addEventListener('click', function(e) {
+        // Double-check this is actually the logout button
+        if (this.id !== 'logout-btn') {
+          console.warn('[NAV] Click handler attached to wrong element:', this.id);
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -174,19 +179,8 @@
       setTimeout(setupDraftsLink, 100);
     })();
     
-    // Global document-level listener as ultimate fallback (capture phase)
-    document.addEventListener('click', function(e) {
-      const target = e.target.closest('#logout-btn');
-      if (target) {
-        console.log('[NAV] Logout button clicked via document listener (fallback)');
-        e.preventDefault();
-        e.stopPropagation();
-        if (window.performLogout) {
-          window.performLogout();
-        } else {
-          performLogout();
-        }
-      }
-    }, true); // Use capture phase to catch before other handlers
+    // REMOVED: Document-level listener was causing false positives
+    // The direct button handler should be sufficient. If needed, we can add a more targeted listener later.
+    // For now, rely on the direct button handler which is set up multiple times to ensure it works.
   })();
 </script>
