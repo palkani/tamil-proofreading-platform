@@ -60,6 +60,13 @@
 
 <script>
 (async function() {
+  // CRITICAL: Only run drafts page code if we're actually on the drafts page
+  // This prevents the code from running on homepage and causing redirect loops
+  if (window.location.pathname !== '/drafts') {
+    console.log('[DRAFTS] Not on drafts page (' + window.location.pathname + '), skipping drafts page initialization');
+    return;
+  }
+  
   // First, check if we have a token in URL (from OAuth redirect)
   const urlParams = new URLSearchParams(window.location.search);
   const tokenFromUrl = urlParams.get('access_token');
@@ -128,21 +135,35 @@
           }
         } else {
           console.warn('[DRAFTS] ❌ Failed to refresh expired token from URL - refresh token may be missing or invalid');
-          // CRITICAL: If refresh fails, we have no valid token - redirect to login
-          console.warn('[DRAFTS] No valid token available, redirecting to login');
+          // CRITICAL: If refresh fails, we have no valid token
+          console.warn('[DRAFTS] No valid token available');
           window.history.replaceState({}, document.title, window.location.pathname);
-          setTimeout(() => {
-            window.location.href = '/login?error=token_expired';
-          }, 100);
+          
+          // Only redirect if not on homepage
+          const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+          if (!isHomepage) {
+            setTimeout(() => {
+              window.location.href = '/login?error=token_expired';
+            }, 100);
+          } else {
+            console.log('[DRAFTS] On homepage, not redirecting to prevent loops');
+          }
           return; // Exit early, don't proceed with API calls
         }
       } else {
         console.warn('[DRAFTS] ⚠️ authUtils not available, cannot refresh expired token');
-        // No way to refresh, redirect to login
+        // No way to refresh
         window.history.replaceState({}, document.title, window.location.pathname);
-        setTimeout(() => {
-          window.location.href = '/login?error=token_expired';
-        }, 100);
+        
+        // Only redirect if not on homepage
+        const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+        if (!isHomepage) {
+          setTimeout(() => {
+            window.location.href = '/login?error=token_expired';
+          }, 100);
+        } else {
+          console.log('[DRAFTS] On homepage, not redirecting to prevent loops');
+        }
         return; // Exit early
       }
     }
@@ -159,8 +180,9 @@
   const emptyEl = document.getElementById('empty-state');
 
   // Helper function to clear invalid tokens and redirect to login
+  // IMPORTANT: Only redirect if we're actually on the drafts page, not homepage
   function clearTokensAndRedirect() {
-    console.log('[DRAFTS] Clearing invalid tokens and redirecting to login');
+    console.log('[DRAFTS] Clearing invalid tokens');
     // Use centralized auth utility if available
     if (window.authUtils && window.authUtils.clearAuthTokens) {
       window.authUtils.clearAuthTokens();
@@ -170,7 +192,15 @@
       document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
       document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
     }
-    window.location.href = '/login';
+    
+    // Only redirect if we're on the drafts page, not homepage
+    const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+    if (!isHomepage) {
+      console.log('[DRAFTS] Redirecting to login (not on homepage)');
+      window.location.href = '/login';
+    } else {
+      console.log('[DRAFTS] On homepage, not redirecting to prevent loops');
+    }
   }
 
   // Helper function to check if token is expired (with 1 minute buffer)
@@ -458,10 +488,21 @@
         console.log('[DRAFTS] apiFetch response status:', response.status);
       } catch (error) {
         console.error('[DRAFTS] apiFetch error:', error);
-        // If apiFetch redirects to login, return null
-        if (error.message === 'Unauthorized') {
+        // If apiFetch redirects to login, return null (but only if we're on drafts page)
+        // Also check if we've been redirected away from drafts page
+        const currentPath = window.location.pathname;
+        if (currentPath !== '/drafts') {
+          // We've been redirected (possibly by apiFetch), don't throw error
+          console.log('[DRAFTS] Already redirected to', currentPath, ', not throwing error');
           return null;
         }
+        if (error.message === 'Unauthorized' || error.message === 'Unauthorized' || error.message === 'login_required') {
+          // Still on drafts page, return null to indicate auth failure
+          console.log('[DRAFTS] Unauthorized, returning null');
+          return null;
+        }
+        // Re-throw other errors
+        console.error('[DRAFTS] Re-throwing error:', error);
         throw error;
       }
     } else {
@@ -688,6 +729,13 @@
       bodyEl.appendChild(row);
     });
   } catch (error) {
+    // CRITICAL: Check if we've been redirected away from drafts page
+    // If so, don't try to show error UI (we're on a different page now)
+    if (window.location.pathname !== '/drafts') {
+      console.log('[DRAFTS] Error occurred but we\'ve been redirected to', window.location.pathname, '- not showing error UI');
+      return;
+    }
+    
     console.error('[DRAFTS] Error loading drafts:', error);
     loadingEl.classList.add('hidden');
     emptyEl.classList.remove('hidden');
