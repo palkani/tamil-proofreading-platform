@@ -757,6 +757,7 @@ router.get('/converter/download/:filename', async (req, res) => {
 });
 
 // Submit endpoint - proxy to backend submissions
+// IMPORTANT: This route must be defined BEFORE the catch-all router.all('/*') to ensure it's matched
 router.post('/submit', async (req, res) => {
   try {
     const url = `${BACKEND_URL}/submissions`;
@@ -765,35 +766,54 @@ router.post('/submit', async (req, res) => {
       console.log(`[SUBMIT] POST ${url}`);
       console.log(`[SUBMIT] Request body:`, JSON.stringify({ 
         text: req.body?.text?.substring(0, 100) + '...',
-        save_draft: req.body?.save_draft 
+        save_draft: req.body?.save_draft,
+        html: req.body?.html ? 'present' : 'missing',
+        model: req.body?.model || 'not specified'
       }));
     }
     
     // Forward authorization header if present
     const headers = {
       'Content-Type': 'application/json',
-      ...req.headers
     };
-    delete headers.host;
-    delete headers.connection;
     
+    // Copy relevant headers from request
     if (req.headers.authorization) {
       headers.Authorization = req.headers.authorization;
     }
     
-    const response = await axios.post(url, req.body, {
+    // Prepare request body
+    const requestBody = {
+      text: req.body?.text || '',
+      html: req.body?.html || '',
+      model: req.body?.model || 'gemini-flash'
+    };
+    
+    // Add save_draft flag if present
+    if (req.body?.save_draft !== undefined) {
+      requestBody.save_draft = req.body.save_draft;
+    }
+    
+    const response = await axios.post(url, requestBody, {
       headers,
       validateStatus: () => true, // Don't throw on any status
     });
     
     if (ENABLE_PROXY_LOGS) {
       console.log(`[SUBMIT] Response status: ${response.status}`);
+      if (response.status !== 200 && response.status !== 201) {
+        console.log(`[SUBMIT] Error response:`, response.data);
+      }
     }
     
     res.status(response.status).json(response.data);
   } catch (error) {
     console.error('[SUBMIT-ERROR]', error.message);
-    console.error('[SUBMIT-ERROR] Response:', error.response?.data);
+    console.error('[SUBMIT-ERROR] Stack:', error.stack);
+    if (error.response) {
+      console.error('[SUBMIT-ERROR] Response status:', error.response.status);
+      console.error('[SUBMIT-ERROR] Response data:', error.response.data);
+    }
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'Submission failed',
       details: error.response?.data?.details || error.message
@@ -913,7 +933,14 @@ router.post('/ai-content-writer/translate', async (req, res) => {
 // ============= END AI CONTENT WRITER API ROUTES =============
 
 // Proxy other API calls to Go backend
+// IMPORTANT: This catch-all must be LAST to avoid intercepting specific routes like /submit
 router.all('/*', async (req, res) => {
+  // Skip if this is a route we've already handled
+  if (req.path === '/submit' && req.method === 'POST') {
+    // This should never happen if routes are in correct order, but log if it does
+    console.warn('[API-ROUTER] /submit route was intercepted by catch-all - this should not happen!');
+    return res.status(404).json({ error: 'Route not found - check route order' });
+  }
   try {
     // Normalize path to avoid double /v1 when BACKEND_URL already has /api/v1
     // Example: BACKEND_URL=/api/v1 and req.path=/v1/auth/register -> strip leading /v1

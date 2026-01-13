@@ -3276,12 +3276,19 @@ class WorkspaceController {
         body: JSON.stringify({
           text: text,
           html: html,
-          model: 'gemini-flash' // Default model
+          model: 'gemini-flash', // Default model
+          save_draft: true // Explicitly mark this as a draft save
         })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save draft');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[AUTOSAVE] Failed to save draft:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        throw new Error(`Failed to save draft: ${errorData.error || response.statusText}`);
       }
 
       const data = await response.json();
@@ -3599,7 +3606,11 @@ class WorkspaceController {
               aiPanel.style.opacity = '1';
               console.log('[WorkspaceJS] ✅ AI Assistant panel found and shown (delayed)');
             } else {
-              console.warn('[WorkspaceJS] ⚠️ AI Assistant panel not found after retries - it may not exist on this page');
+              // Panel not found - this is OK if we're in a different view mode
+              // Only log as debug, not warning, to reduce console noise
+              if (this.currentMode === 'editor') {
+                console.debug('[WorkspaceJS] AI Assistant panel not found - may not be rendered yet or page is in different mode');
+              }
             }
           }, 500);
         }

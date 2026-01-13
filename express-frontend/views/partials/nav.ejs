@@ -68,14 +68,43 @@
 </nav>
 
 <script>
+  // Flag to prevent multiple logout confirmations
+  let logoutInProgress = false;
+  
+  // Flag to prevent logout during initial page load (first 2 seconds)
+  let pageLoadTime = Date.now();
+  const PAGE_LOAD_GRACE_PERIOD = 2000; // 2 seconds
+  
   // Centralized logout function - make it globally accessible
-  window.performLogout = function performLogout() {
-    console.log('[NAV] performLogout called');
-    
-    if (!confirm('Are you sure you want to log out?')) {
+  // BUT: Only call this from actual user clicks, not programmatically
+  window.performLogout = function performLogout(skipConfirm) {
+    // Prevent logout during initial page load (grace period)
+    const timeSinceLoad = Date.now() - pageLoadTime;
+    if (timeSinceLoad < PAGE_LOAD_GRACE_PERIOD) {
+      console.warn('[NAV] Logout attempted during page load grace period, ignoring', {
+        timeSinceLoad: timeSinceLoad,
+        gracePeriod: PAGE_LOAD_GRACE_PERIOD
+      });
       return;
     }
     
+    // Prevent multiple simultaneous logout attempts
+    if (logoutInProgress) {
+      console.log('[NAV] Logout already in progress, ignoring duplicate call');
+      return;
+    }
+    
+    console.log('[NAV] performLogout called', { skipConfirm: skipConfirm, timeSinceLoad: timeSinceLoad });
+    
+    // Only show confirm dialog if not explicitly skipped (skipConfirm is only for programmatic calls from auth-utils)
+    // For user-initiated logouts, always show confirm
+    if (!skipConfirm) {
+      if (!confirm('Are you sure you want to log out?')) {
+        return;
+      }
+    }
+    
+    logoutInProgress = true;
     console.log('[NAV] User confirmed logout');
     
     // Always clear tokens first (client-side)
@@ -106,36 +135,52 @@
   
   // Setup logout button - ensure it works even if auth-utils.js hasn't loaded yet
   (function() {
+    let logoutHandlerAttached = false;
+    
     function setupLogout() {
-      const logoutBtn = document.getElementById('logout-btn');
-      if (!logoutBtn) {
-        console.log('[NAV] Logout button not found');
+      // Only attach handler once to prevent duplicates
+      if (logoutHandlerAttached) {
         return;
       }
       
-      // Remove any existing listeners to prevent duplicates
-      const newBtn = logoutBtn.cloneNode(true);
-      logoutBtn.parentNode.replaceChild(newBtn, logoutBtn);
+      const logoutBtn = document.getElementById('logout-btn');
+      if (!logoutBtn) {
+        // Button not found yet, will retry
+        return;
+      }
       
-      // Attach handler directly to button
-      newBtn.addEventListener('click', function(e) {
+      // Mark as attached
+      logoutHandlerAttached = true;
+      
+      // Attach handler directly to button - ONLY on actual user clicks
+      logoutBtn.addEventListener('click', function(e) {
+        // CRITICAL: Only proceed if this is a real user click event
+        // Check that it's not a programmatic click
+        if (!e.isTrusted) {
+          console.warn('[NAV] Ignoring non-user click event on logout button');
+          return;
+        }
+        
         // Double-check this is actually the logout button
         if (this.id !== 'logout-btn') {
           console.warn('[NAV] Click handler attached to wrong element:', this.id);
           return;
         }
+        
+        // Prevent event bubbling
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        console.log('[NAV] Logout button clicked (direct handler)');
+        
+        console.log('[NAV] Logout button clicked by user (trusted event)');
+        
+        // Call logout function
         if (window.performLogout) {
           window.performLogout();
-        } else {
-          performLogout();
         }
-      }, true); // Use capture phase to catch early
+      }, false); // Use bubble phase (not capture) to ensure it's a real click
       
-      console.log('[NAV] Logout button handler attached');
+      console.log('[NAV] Logout button handler attached (one-time)');
     }
     
     // Setup immediately if DOM is ready
@@ -145,25 +190,27 @@
       setupLogout();
     }
     
-    // Also try after delays to ensure it's set up even if DOM changes
+    // Retry a few times if button not found initially (but only once)
     setTimeout(setupLogout, 100);
     setTimeout(setupLogout, 500);
-    setTimeout(setupLogout, 1000);
-    setTimeout(setupLogout, 2000);
     
     // Ensure My Drafts link works
     (function() {
+      let draftsHandlerAttached = false;
+      
       function setupDraftsLink() {
+        if (draftsHandlerAttached) {
+          return;
+        }
+        
         const draftsLink = document.getElementById('my-drafts-link');
         if (draftsLink) {
-          // Remove any existing handlers
-          const newLink = draftsLink.cloneNode(true);
-          draftsLink.parentNode.replaceChild(newLink, draftsLink);
+          draftsHandlerAttached = true;
           
-          newLink.addEventListener('click', function(e) {
+          // Just log - don't prevent default navigation
+          draftsLink.addEventListener('click', function(e) {
             console.log('[NAV] My Drafts link clicked, navigating to /drafts');
             // Allow default navigation - don't prevent it
-            // The href="/drafts" will handle navigation naturally
           }, false);
           
           console.log('[NAV] My Drafts link handler attached');
@@ -178,9 +225,5 @@
       
       setTimeout(setupDraftsLink, 100);
     })();
-    
-    // REMOVED: Document-level listener was causing false positives
-    // The direct button handler should be sufficient. If needed, we can add a more targeted listener later.
-    // For now, rely on the direct button handler which is set up multiple times to ensure it works.
   })();
 </script>
