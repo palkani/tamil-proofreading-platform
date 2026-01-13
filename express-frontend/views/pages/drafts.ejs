@@ -59,27 +59,20 @@
 </div>
 
 <script>
-// CRITICAL: Wrap entire script in try-catch to prevent uncaught errors
+// CRITICAL: Only run drafts page code if we're actually on the drafts page
+// This prevents the code from running on homepage and causing redirect loops
 (function() {
   'use strict';
   
-  // CRITICAL: Only run drafts page code if we're actually on the drafts page
-  // This prevents the code from running on homepage and causing redirect loops
-  try {
-    const currentPath = window.location.pathname;
-    if (currentPath !== '/drafts') {
-      console.log('[DRAFTS] Not on drafts page (' + currentPath + '), skipping drafts page initialization');
-      return;
-    }
-  } catch (e) {
-    // If we can't check pathname, don't run drafts code
-    console.error('[DRAFTS] Error checking pathname, skipping:', e);
+  // Early exit if not on drafts page - check BEFORE any code execution
+  const currentPath = window.location.pathname;
+  if (currentPath !== '/drafts') {
+    console.log('[DRAFTS] Not on drafts page (' + currentPath + '), skipping drafts page initialization');
     return;
   }
   
   // Now run the async function - properly structured
-  try {
-    (async function() {
+  (async function() {
     // First, check if we have a token in URL (from OAuth redirect)
     const urlParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = urlParams.get('access_token');
@@ -851,13 +844,8 @@
     } else {
       console.log('[DRAFTS] Error occurred but we\'ve been redirected to', window.location.pathname, '- not showing error UI');
     }
-    })();
-  } catch (globalError) {
-    // Catch any synchronous errors that occur before the async function
-    console.error('[DRAFTS] Global error in drafts page script:', globalError);
-    console.error('[DRAFTS] Error stack:', globalError.stack);
-  }
-})();
+  });
+})(); // End of drafts page script
 
 // Ensure Create New Draft button works - add click handler after DOM is ready
 (function() {
