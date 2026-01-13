@@ -1,6 +1,13 @@
 // Rich Text Editor with Tamil Support
 
+// Use centralized auth-utils.apiFetch instead of custom implementation
 async function apiFetch(path, options = {}, requireAuth = true) {
+  // Use centralized auth-utils if available
+  if (window.authUtils && window.authUtils.apiFetch) {
+    return await window.authUtils.apiFetch(path, options, requireAuth);
+  }
+  
+  // Fallback for when auth-utils is not loaded
   let token = localStorage.getItem('access_token');
   if (requireAuth && !token) {
     throw new Error('login_required');
@@ -16,26 +23,6 @@ async function apiFetch(path, options = {}, requireAuth = true) {
     headers,
     credentials: 'include'
   });
-
-  // If 401 and we have authUtils, try to refresh token
-  if (requireAuth && response.status === 401 && window.authUtils && window.authUtils.refreshAccessToken) {
-    const newToken = await window.authUtils.refreshAccessToken();
-    if (newToken) {
-      // Retry with new token
-      headers.set('Authorization', `Bearer ${newToken}`);
-      response = await fetch(path, { 
-        ...options, 
-        headers,
-        credentials: 'include'
-      });
-    } else {
-      // Refresh failed, clear tokens and throw error
-      if (window.authUtils && window.authUtils.clearAuthTokens) {
-        window.authUtils.clearAuthTokens();
-      }
-      throw new Error('unauthorized');
-    }
-  }
 
   if (requireAuth && response.status === 401) {
     throw new Error('unauthorized');

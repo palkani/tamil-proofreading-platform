@@ -15,7 +15,14 @@ function isTokenExpired(token) {
 }
 
 // Unified API helper for all /api calls
+// Use centralized auth-utils.apiFetch if available, with fallback
 async function apiFetch(path, options = {}, requireAuth = true) {
+  // Use centralized auth-utils if available (handles token refresh and homepage checks)
+  if (window.authUtils && window.authUtils.apiFetch) {
+    return await window.authUtils.apiFetch(path, options, requireAuth);
+  }
+  
+  // Fallback for when auth-utils is not loaded
   const token = localStorage.getItem('access_token');
   if (requireAuth && (!token || isTokenExpired(token))) {
     if (token && isTokenExpired(token)) {
@@ -39,6 +46,14 @@ async function apiFetch(path, options = {}, requireAuth = true) {
 
   if (requireAuth && response.status === 401) {
     console.warn('[API] Unauthorized for', path);
+    // IMPORTANT: Don't redirect from homepage
+    const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+    if (!isHomepage) {
+      console.log('[API] Redirecting to login (not on homepage)');
+      window.location.href = '/login';
+    } else {
+      console.log('[API] On homepage, not redirecting to prevent loops');
+    }
     throw new Error('unauthorized');
   }
 

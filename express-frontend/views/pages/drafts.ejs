@@ -62,8 +62,14 @@
 (async function() {
   // CRITICAL: Only run drafts page code if we're actually on the drafts page
   // This prevents the code from running on homepage and causing redirect loops
-  if (window.location.pathname !== '/drafts') {
-    console.log('[DRAFTS] Not on drafts page (' + window.location.pathname + '), skipping drafts page initialization');
+  try {
+    if (window.location.pathname !== '/drafts') {
+      console.log('[DRAFTS] Not on drafts page (' + window.location.pathname + '), skipping drafts page initialization');
+      return;
+    }
+  } catch (e) {
+    // If we can't check pathname, don't run drafts code
+    console.error('[DRAFTS] Error checking pathname, skipping:', e);
     return;
   }
   
@@ -390,8 +396,13 @@
             diff: newTokenExp - now
           });
           // This shouldn't happen, but if it does, redirect to login
+          // Only redirect if still on drafts page
           setTimeout(() => {
-            clearTokensAndRedirect();
+            if (window.location.pathname === '/drafts') {
+              clearTokensAndRedirect();
+            } else {
+              console.log('[DRAFTS] Already redirected, not calling clearTokensAndRedirect');
+            }
           }, 100);
           return null;
         }
@@ -401,10 +412,15 @@
         console.log('[DRAFTS] ✅ New token stored in localStorage and verified as valid');
       } else {
         // Refresh failed, no valid refresh token - redirect to login
-        console.warn('[DRAFTS] ❌ Token refresh failed before request, redirecting to login');
+        console.warn('[DRAFTS] ❌ Token refresh failed before request');
         console.warn('[DRAFTS] This usually means the refresh token cookie is missing or invalid');
+        // Only redirect if still on drafts page
         setTimeout(() => {
-          clearTokensAndRedirect();
+          if (window.location.pathname === '/drafts') {
+            clearTokensAndRedirect();
+          } else {
+            console.log('[DRAFTS] Already redirected, not calling clearTokensAndRedirect');
+          }
         }, 100);
         return null;
       }
@@ -419,8 +435,13 @@
     if (!accessToken) {
       // This should never happen if refresh logic above worked correctly
       console.error('[DRAFTS] ❌ CRITICAL: No access token after refresh attempt!');
+      // Only redirect if still on drafts page
       setTimeout(() => {
-        clearTokensAndRedirect();
+        if (window.location.pathname === '/drafts') {
+          clearTokensAndRedirect();
+        } else {
+          console.log('[DRAFTS] Already redirected, not calling clearTokensAndRedirect');
+        }
       }, 100);
       return null;
     }
@@ -429,10 +450,21 @@
     const stillExpired = isTokenExpired(accessToken);
     if (stillExpired) {
       console.error('[DRAFTS] ❌ CRITICAL: Token is still expired after refresh!');
-      console.error('[DRAFTS] Token details:', {
-        token: accessToken ? accessToken.substring(0, 50) + '...' : 'null',
-        length: accessToken ? accessToken.length : 0
-      });
+      try {
+        const tokenPreview = accessToken && typeof accessToken === 'string' 
+          ? accessToken.substring(0, 50) + '...' 
+          : 'null or invalid';
+        const tokenLength = accessToken && typeof accessToken === 'string' 
+          ? accessToken.length 
+          : 0;
+        console.error('[DRAFTS] Token details:', {
+          token: tokenPreview,
+          length: tokenLength,
+          type: typeof accessToken
+        });
+      } catch (e) {
+        console.error('[DRAFTS] Error logging token details:', e);
+      }
       
       // Try one more refresh (maybe refresh token cookie just became available)
       console.log('[DRAFTS] Attempting second refresh...');
@@ -442,8 +474,13 @@
         const finalExpired = isTokenExpired(finalToken);
         if (finalExpired) {
           console.error('[DRAFTS] ❌ Second refresh also returned expired token!');
+          // Only redirect if still on drafts page
           setTimeout(() => {
-            clearTokensAndRedirect();
+            if (window.location.pathname === '/drafts') {
+              clearTokensAndRedirect();
+            } else {
+              console.log('[DRAFTS] Already redirected, not calling clearTokensAndRedirect');
+            }
           }, 100);
           return null;
         }
@@ -451,10 +488,15 @@
         localStorage.setItem('access_token', finalToken);
         console.log('[DRAFTS] ✅ Got valid token on second refresh attempt');
       } else {
-        console.error('[DRAFTS] ❌ Second refresh also failed, redirecting to login');
+        console.error('[DRAFTS] ❌ Second refresh also failed');
         console.error('[DRAFTS] This indicates the refresh token cookie is not available or invalid');
+        // Only redirect if still on drafts page
         setTimeout(() => {
-          clearTokensAndRedirect();
+          if (window.location.pathname === '/drafts') {
+            clearTokensAndRedirect();
+          } else {
+            console.log('[DRAFTS] Already redirected, not calling clearTokensAndRedirect');
+          }
         }, 100);
         return null;
       }
@@ -462,9 +504,17 @@
     
     headers['Authorization'] = `Bearer ${accessToken}`;
     console.log('[DRAFTS] ✅ Adding Authorization header with valid token');
-    console.log('[DRAFTS] Token length:', accessToken.length);
-    console.log('[DRAFTS] Token preview (first 50 chars):', accessToken.substring(0, 50));
-    console.log('[DRAFTS] Token preview (last 20 chars):', accessToken.substring(accessToken.length - 20));
+    try {
+      if (accessToken && typeof accessToken === 'string') {
+        console.log('[DRAFTS] Token length:', accessToken.length);
+        console.log('[DRAFTS] Token preview (first 50 chars):', accessToken.substring(0, 50));
+        console.log('[DRAFTS] Token preview (last 20 chars):', accessToken.substring(accessToken.length - 20));
+      } else {
+        console.warn('[DRAFTS] ⚠️ Access token is not a string:', typeof accessToken);
+      }
+    } catch (e) {
+      console.error('[DRAFTS] Error logging token details:', e);
+    }
 
     console.log('[DRAFTS] Fetching submissions from /api/v1/submissions');
     
@@ -518,9 +568,14 @@
       if (response.status === 401) {
         if (refreshInProgress) {
           // Already tried to refresh, don't try again
-          console.warn('[DRAFTS] Got 401 but refresh already attempted, redirecting to login');
+          console.warn('[DRAFTS] Got 401 but refresh already attempted');
+          // Only redirect if still on drafts page
           setTimeout(() => {
-            clearTokensAndRedirect();
+            if (window.location.pathname === '/drafts') {
+              clearTokensAndRedirect();
+            } else {
+              console.log('[DRAFTS] Already redirected, not calling clearTokensAndRedirect');
+            }
           }, 100);
           return null;
         }
@@ -571,8 +626,13 @@
           if (response.status === 401) {
             console.warn('[DRAFTS] Still getting 401 after token refresh, refresh token is invalid');
             // Use setTimeout to prevent immediate redirect loops
+            // Only redirect if still on drafts page
             setTimeout(() => {
-              clearTokensAndRedirect();
+              if (window.location.pathname === '/drafts') {
+                clearTokensAndRedirect();
+              } else {
+                console.log('[DRAFTS] Already redirected, not calling clearTokensAndRedirect');
+              }
             }, 100);
             return null;
           }
@@ -580,8 +640,13 @@
           // Refresh failed, token is invalid - redirect once
           console.warn('[DRAFTS] Token refresh failed, refresh token is invalid');
           // Use setTimeout to prevent immediate redirect loops
+          // Only redirect if still on drafts page
           setTimeout(() => {
-            clearTokensAndRedirect();
+            if (window.location.pathname === '/drafts') {
+              clearTokensAndRedirect();
+            } else {
+              console.log('[DRAFTS] Already redirected, not calling clearTokensAndRedirect');
+            }
           }, 100);
           return null;
         }
@@ -754,7 +819,29 @@
       emptyEl.innerHTML = '<svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><p class="text-lg font-medium">Error loading drafts</p><p class="text-sm mt-2">' + safeErrorMessage + '</p><a href="/workspace" class="mt-4 inline-block btn-primary">Create New Draft</a>';
     }
   }
-})();
+})().catch(error => {
+  // CRITICAL: Catch any uncaught errors in the async function
+  // This prevents uncaught promise rejections from causing redirect loops
+  console.error('[DRAFTS] Uncaught error in drafts page initialization:', error);
+  console.error('[DRAFTS] Error stack:', error.stack);
+  
+  // Only show error if we're still on drafts page
+  if (window.location.pathname === '/drafts') {
+    try {
+      const emptyEl = document.getElementById('empty-state');
+      const loadingEl = document.getElementById('loading');
+      if (loadingEl) loadingEl.classList.add('hidden');
+      if (emptyEl) {
+        emptyEl.classList.remove('hidden');
+        emptyEl.innerHTML = '<svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><p class="text-lg font-medium">Error loading drafts</p><p class="text-sm mt-2">An unexpected error occurred. Please refresh the page.</p><a href="/workspace" class="mt-4 inline-block btn-primary">Create New Draft</a>';
+      }
+    } catch (uiError) {
+      console.error('[DRAFTS] Error showing error UI:', uiError);
+    }
+  } else {
+    console.log('[DRAFTS] Error occurred but we\'ve been redirected to', window.location.pathname, '- not showing error UI');
+  }
+});
 
 // Ensure Create New Draft button works - add click handler after DOM is ready
 (function() {
