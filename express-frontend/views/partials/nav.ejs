@@ -70,16 +70,31 @@
 <script>
   // Flag to prevent multiple logout confirmations
   let logoutInProgress = false;
+  let logoutButtonClickTime = 0;
   
   // Centralized logout function - make it globally accessible
-  window.performLogout = function performLogout(skipConfirm) {
+  // CRITICAL: Only allow logout from actual user clicks, not automatic calls
+  window.performLogout = function performLogout(skipConfirm, event) {
+    // CRITICAL: Prevent automatic calls - only allow if:
+    // 1. skipConfirm is explicitly true (programmatic logout)
+    // 2. OR event is a trusted user event (actual click)
+    // 3. OR logout was clicked within last 5 seconds (user-initiated)
+    const isUserInitiated = event && event.isTrusted === true;
+    const recentClick = Date.now() - logoutButtonClickTime < 5000;
+    
+    if (!skipConfirm && !isUserInitiated && !recentClick) {
+      console.warn('[NAV] performLogout called without user interaction - blocking');
+      console.warn('[NAV] Call stack:', new Error().stack);
+      return;
+    }
+    
     // Prevent multiple simultaneous logout attempts
     if (logoutInProgress) {
       console.log('[NAV] Logout already in progress, ignoring duplicate call');
       return;
     }
     
-    console.log('[NAV] performLogout called', { skipConfirm: skipConfirm });
+    console.log('[NAV] performLogout called', { skipConfirm: skipConfirm, isUserInitiated: isUserInitiated, recentClick: recentClick });
     
     // Only show confirm dialog if not explicitly skipped
     // For user-initiated logouts, always show confirm
@@ -103,6 +118,14 @@
     document.cookie = `proof_refresh_token=; ${cookieOptions}`;
     
     // Try to call logout API (non-blocking, fire and forget)
+    // CRITICAL: Add a flag to localStorage to prevent logout loop
+    try {
+      localStorage.setItem('logout_in_progress', 'true');
+      localStorage.setItem('logout_timestamp', Date.now().toString());
+    } catch (e) {
+      console.warn('[NAV] Could not set logout flag in localStorage:', e);
+    }
+    
     fetch('/auth/logout', {
       method: 'POST',
       credentials: 'include',
@@ -117,6 +140,31 @@
     console.log('[NAV] Redirecting to home page immediately');
     window.location.href = '/';
   }
+  
+  // CRITICAL: Check on page load if we're in a logout loop
+  (function() {
+    try {
+      const logoutFlag = localStorage.getItem('logout_in_progress');
+      const logoutTimestamp = localStorage.getItem('logout_timestamp');
+      
+      if (logoutFlag === 'true' && logoutTimestamp) {
+        const timeSinceLogout = Date.now() - parseInt(logoutTimestamp, 10);
+        // If logout was initiated more than 10 seconds ago, clear the flag
+        // This prevents infinite loops if redirect failed
+        if (timeSinceLogout > 10000) {
+          console.warn('[NAV] Logout flag found but too old, clearing to prevent loop');
+          localStorage.removeItem('logout_in_progress');
+          localStorage.removeItem('logout_timestamp');
+        } else {
+          // Logout was recent, don't allow another logout
+          console.log('[NAV] Logout was recently initiated, preventing automatic logout');
+          logoutInProgress = true; // Set the module-level flag to prevent logout
+        }
+      }
+    } catch (e) {
+      console.warn('[NAV] Error checking logout flag:', e);
+    }
+  })();
   
   // Setup logout button - simplified and more reliable
   (function() {
@@ -140,15 +188,18 @@
         e.preventDefault();
         e.stopPropagation();
         
-        console.log('[NAV] Logout button clicked');
+        // CRITICAL: Record the click time to allow performLogout to verify it's user-initiated
+        logoutButtonClickTime = Date.now();
         
-        // Call logout function
+        console.log('[NAV] Logout button clicked', { isTrusted: e.isTrusted, timestamp: logoutButtonClickTime });
+        
+        // Call logout function with the event to verify it's user-initiated
         if (window.performLogout) {
-          window.performLogout();
+          window.performLogout(false, e);
         } else {
           console.error('[NAV] performLogout function not found!');
         }
-      });
+      }, { capture: true, once: false });
       
       console.log('[NAV] ✅ Logout button handler attached successfully');
       return true;

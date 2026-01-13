@@ -3506,7 +3506,8 @@ class WorkspaceController {
     // Use centralized logout function if available (from nav.ejs)
     if (window.performLogout && typeof window.performLogout === 'function') {
       console.log('[WORKSPACE] Using centralized performLogout function');
-      window.performLogout();
+      // Pass skipConfirm=true for programmatic logout from workspace
+      window.performLogout(true);
       return;
     }
     
