@@ -159,7 +159,11 @@ class TamilEditor {
       });
       
       // Close dropdown when clicking outside
-      document.addEventListener('click', () => {
+      document.addEventListener('click', (e) => {
+        // Don't close if clicking on a navigation link
+        if (e.target.closest('a[href]')) {
+          return;
+        }
         alignDropdown.classList.add('hidden');
       });
       

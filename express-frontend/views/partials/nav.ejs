@@ -316,27 +316,7 @@
       setTimeout(() => attachLogoutHandler(), 1000);
     }
     
-    // Ensure My Drafts link works
-    (function() {
-      function setupDraftsLink() {
-        const draftsLink = document.getElementById('my-drafts-link');
-        if (draftsLink && !draftsLink.dataset.handlerAttached) {
-          draftsLink.dataset.handlerAttached = 'true';
-          draftsLink.addEventListener('click', function(e) {
-            console.log('[NAV] My Drafts link clicked, navigating to /drafts');
-            // Allow default navigation
-          }, false);
-          console.log('[NAV] My Drafts link handler attached');
-        }
-      }
-      
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setupDraftsLink);
-      } else {
-        setupDraftsLink();
-      }
-      
-      setTimeout(setupDraftsLink, 100);
-    })();
+    // CRITICAL: Navigation links should work normally - no JavaScript handlers needed
+    // Standard href navigation will work without any event listeners
   })();
 </script>

@@ -31,7 +31,13 @@
       if (!this.editorEl) return;
       this.editorEl.addEventListener('input', this.boundInput);
       this.editorEl.addEventListener('keydown', this.boundKeydown);
-      document.addEventListener('click', this.boundClick);
+      document.addEventListener('click', (e) => {
+        // Don't interfere with navigation links
+        if (e.target.closest('a[href]')) {
+          return;
+        }
+        this.boundClick(e);
+      });
     }
 
     destroy() {

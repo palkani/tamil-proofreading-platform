@@ -34,6 +34,10 @@
       this.adapter.onKeyDown(this.handleKeydown);
       this.adapter.onBlur(this.handleBlur);
       document.addEventListener('click', (e) => {
+        // Don't interfere with navigation links
+        if (e.target.closest('a[href]')) {
+          return;
+        }
         if (this.dropdown && !this.dropdown.contains(e.target)) {
           this.closeDropdown();
         }
