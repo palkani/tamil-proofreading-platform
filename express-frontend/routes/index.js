@@ -232,6 +232,16 @@ router.get('/terms', (req, res) => {
 // Logout
 router.post('/logout', async (req, res) => {
   try {
+    // CRITICAL: Check if this is a loop - if logout was called recently, just return 200 without redirect
+    const logoutTimestamp = req.headers['x-logout-timestamp'];
+    if (logoutTimestamp) {
+      const timeSinceLogout = Date.now() - parseInt(logoutTimestamp, 10);
+      if (timeSinceLogout < 5000) {
+        console.warn('[AUTH-LOGOUT] Logout called too soon after previous logout - possible loop, returning 200 without redirect');
+        return res.status(200).json({ message: 'Logout successful' });
+      }
+    }
+    
     const backendRes = await axios({
       method: 'post',
       url: `${BACKEND_URL}/auth/logout`,
@@ -250,9 +260,22 @@ router.post('/logout', async (req, res) => {
       res.setHeader('set-cookie', setCookie);
     }
 
+    // CRITICAL: Don't redirect if we're already on homepage - just return 200
+    // This prevents redirect loops
+    const referer = req.headers.referer || '';
+    if (referer.includes('/') && !referer.includes('/login') && !referer.includes('/register')) {
+      console.log('[AUTH-LOGOUT] Already on homepage, returning 200 without redirect to prevent loop');
+      return res.status(200).json({ message: 'Logout successful' });
+    }
+
     res.redirect('/');
   } catch (err) {
     console.error('[AUTH-LOGOUT] Failed to revoke session:', err.message);
+    // Don't redirect on error if we're already on homepage
+    const referer = req.headers.referer || '';
+    if (referer.includes('/') && !referer.includes('/login') && !referer.includes('/register')) {
+      return res.status(200).json({ message: 'Logout completed' });
+    }
     res.redirect('/');
   }
 });

@@ -71,10 +71,56 @@
   // Flag to prevent multiple logout confirmations
   let logoutInProgress = false;
   let logoutButtonClickTime = 0;
+  let logoutCallCount = 0;
+  const MAX_LOGOUT_CALLS_PER_MINUTE = 2; // Maximum 2 logout calls per minute
+  
+  // CRITICAL: Track logout calls to prevent loops
+  const logoutCallHistory = [];
   
   // Centralized logout function - make it globally accessible
   // CRITICAL: Only allow logout from actual user clicks, not automatic calls
   window.performLogout = function performLogout(skipConfirm, event) {
+    // CRITICAL: Block ALL automatic calls on homepage to prevent loops
+    const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+    
+    // On homepage, ONLY allow logout if:
+    // 1. It's from a trusted user event (actual click)
+    // 2. OR it's a programmatic call with skipConfirm=true AND it's not within 30 seconds of a previous logout
+    if (isHomepage) {
+      const isUserInitiated = event && event.isTrusted === true;
+      const justLoggedOut = sessionStorage.getItem('just_logged_out') === 'true';
+      
+      if (!isUserInitiated && (justLoggedOut || !skipConfirm)) {
+        console.error('[NAV] BLOCKED: performLogout called on homepage - preventing loop!', {
+          skipConfirm: skipConfirm,
+          isUserInitiated: isUserInitiated,
+          justLoggedOut: justLoggedOut
+        });
+        console.error('[NAV] Call stack:', new Error().stack);
+        return;
+      }
+    }
+    
+    // CRITICAL: Rate limit logout calls - prevent more than 2 per minute
+    const now = Date.now();
+    const oneMinuteAgo = now - 60000;
+    const recentCalls = logoutCallHistory.filter(timestamp => timestamp > oneMinuteAgo);
+    
+    if (recentCalls.length >= MAX_LOGOUT_CALLS_PER_MINUTE) {
+      console.error('[NAV] BLOCKED: Too many logout calls in short time - possible loop!', {
+        recentCalls: recentCalls.length,
+        maxAllowed: MAX_LOGOUT_CALLS_PER_MINUTE
+      });
+      return;
+    }
+    
+    // Record this logout call
+    logoutCallHistory.push(now);
+    // Keep only last 10 calls in history
+    if (logoutCallHistory.length > 10) {
+      logoutCallHistory.shift();
+    }
+    
     // CRITICAL: Prevent automatic calls - only allow if:
     // 1. skipConfirm is explicitly true (programmatic logout)
     // 2. OR event is a trusted user event (actual click)
@@ -94,7 +140,7 @@
       return;
     }
     
-    console.log('[NAV] performLogout called', { skipConfirm: skipConfirm, isUserInitiated: isUserInitiated, recentClick: recentClick });
+    console.log('[NAV] performLogout called', { skipConfirm: skipConfirm, isUserInitiated: isUserInitiated, recentClick: recentClick, isHomepage: isHomepage });
     
     // Only show confirm dialog if not explicitly skipped
     // For user-initiated logouts, always show confirm
@@ -138,8 +184,56 @@
     
     // Force redirect immediately (don't wait for anything)
     console.log('[NAV] Redirecting to home page immediately');
+    
+    // CRITICAL: Clear the logout flag after a delay to prevent loops
+    // But set a flag to prevent immediate re-logout
+    try {
+      sessionStorage.setItem('just_logged_out', 'true');
+      sessionStorage.setItem('logout_time', Date.now().toString());
+    } catch (e) {
+      console.warn('[NAV] Could not set sessionStorage flag:', e);
+    }
+    
     window.location.href = '/';
   }
+  
+  // CRITICAL: On homepage load, check if we just logged out and prevent re-logout
+  (function() {
+    const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+    if (isHomepage) {
+      try {
+        const justLoggedOut = sessionStorage.getItem('just_logged_out');
+        const logoutTime = sessionStorage.getItem('logout_time');
+        
+        if (justLoggedOut === 'true' && logoutTime) {
+          const timeSinceLogout = Date.now() - parseInt(logoutTime, 10);
+          // If logout was within last 30 seconds, block any logout attempts
+          if (timeSinceLogout < 30000) {
+            console.log('[NAV] Just logged out, blocking any automatic logout for 30 seconds');
+            logoutInProgress = true;
+            
+            // Clear the flag after 30 seconds
+            setTimeout(() => {
+              try {
+                sessionStorage.removeItem('just_logged_out');
+                sessionStorage.removeItem('logout_time');
+                logoutInProgress = false;
+                console.log('[NAV] Logout protection expired');
+              } catch (e) {
+                console.warn('[NAV] Error clearing sessionStorage:', e);
+              }
+            }, 30000);
+          } else {
+            // Logout was more than 30 seconds ago, clear the flag
+            sessionStorage.removeItem('just_logged_out');
+            sessionStorage.removeItem('logout_time');
+          }
+        }
+      } catch (e) {
+        console.warn('[NAV] Error checking logout protection:', e);
+      }
+    }
+  })();
   
   // CRITICAL: Check on page load if we're in a logout loop
   (function() {
