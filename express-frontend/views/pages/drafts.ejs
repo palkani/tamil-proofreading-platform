@@ -65,9 +65,19 @@
   'use strict';
   
   // Early exit if not on drafts page - check BEFORE any code execution
-  const currentPath = window.location.pathname;
-  if (currentPath !== '/drafts') {
-    console.log('[DRAFTS] Not on drafts page (' + currentPath + '), skipping drafts page initialization');
+  // This must be the FIRST thing that runs to prevent any syntax errors from affecting other pages
+  if (typeof window === 'undefined' || !window.location) {
+    return;
+  }
+  
+  try {
+    const currentPath = window.location.pathname;
+    if (currentPath !== '/drafts') {
+      console.log('[DRAFTS] Not on drafts page (' + currentPath + '), skipping drafts page initialization');
+      return;
+    }
+  } catch (e) {
+    console.error('[DRAFTS] Error checking pathname, skipping:', e);
     return;
   }
   
@@ -256,13 +266,13 @@
     // Helper function to refresh access token - use centralized authUtils
     let refreshInProgress = false; // Prevent multiple simultaneous refresh attempts
     async function refreshAccessToken() {
-    // Prevent infinite loops - if refresh is already in progress, wait
-    if (refreshInProgress) {
-      console.log('[DRAFTS] Refresh already in progress, waiting...');
-      return null;
-    }
-    
-    refreshInProgress = true;
+      // Prevent infinite loops - if refresh is already in progress, wait
+      if (refreshInProgress) {
+        console.log('[DRAFTS] Refresh already in progress, waiting...');
+        return null;
+      }
+      
+      refreshInProgress = true;
     try {
       // Use centralized auth utility if available
       if (window.authUtils && window.authUtils.refreshAccessToken) {
@@ -303,12 +313,12 @@
       refreshInProgress = false;
       return null;
     }
-  }
+    }
 
     // Helper function to fetch submissions with retry on 401
     async function fetchSubmissionsWithRetry() {
-    // Get access token from localStorage
-    let token = localStorage.getItem('access_token');
+      // Get access token from localStorage
+      let token = localStorage.getItem('access_token');
     console.log('[DRAFTS] Token in localStorage:', token ? 'Present' : 'Missing', token ? token.substring(0, 20) + '...' : '');
     
     // Also check cookies as fallback
@@ -678,8 +688,8 @@
     try {
       console.log('[DRAFTS] Starting to load drafts...');
       const response = await fetchSubmissionsWithRetry();
-    
-    if (!response) {
+      
+      if (!response) {
       // fetchSubmissionsWithRetry returned null (no token or redirect happened)
       console.warn('[DRAFTS] fetchSubmissionsWithRetry returned null');
       loadingEl.classList.add('hidden');
@@ -795,8 +805,8 @@
         </td>
       `;
       bodyEl.appendChild(row);
-    });
-  } catch (error) {
+      });
+    } catch (error) {
     // CRITICAL: Check if we've been redirected away from drafts page
     // If so, don't try to show error UI (we're on a different page now)
     if (window.location.pathname !== '/drafts') {
@@ -845,7 +855,7 @@
       console.log('[DRAFTS] Error occurred but we\'ve been redirected to', window.location.pathname, '- not showing error UI');
     }
   });
-})(); // End of drafts page script
+})(); // End of drafts page script - semicolon prevents ASI issues
 
 // Ensure Create New Draft button works - add click handler after DOM is ready
 (function() {
