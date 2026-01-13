@@ -59,12 +59,16 @@
 </div>
 
 <script>
-(async function() {
+// CRITICAL: Wrap entire script in try-catch to prevent uncaught errors
+(function() {
+  'use strict';
+  
   // CRITICAL: Only run drafts page code if we're actually on the drafts page
   // This prevents the code from running on homepage and causing redirect loops
   try {
-    if (window.location.pathname !== '/drafts') {
-      console.log('[DRAFTS] Not on drafts page (' + window.location.pathname + '), skipping drafts page initialization');
+    const currentPath = window.location.pathname;
+    if (currentPath !== '/drafts') {
+      console.log('[DRAFTS] Not on drafts page (' + currentPath + '), skipping drafts page initialization');
       return;
     }
   } catch (e) {
@@ -72,6 +76,9 @@
     console.error('[DRAFTS] Error checking pathname, skipping:', e);
     return;
   }
+  
+  // Now run the async function
+  (async function() {
   
   // First, check if we have a token in URL (from OAuth redirect)
   const urlParams = new URLSearchParams(window.location.search);
@@ -502,18 +509,21 @@
       }
     }
     
+    // CRITICAL: Validate accessToken before using it
+    if (!accessToken || typeof accessToken !== 'string') {
+      console.error('[DRAFTS] ❌ CRITICAL: accessToken is invalid:', typeof accessToken, accessToken);
+      throw new Error('Invalid access token - token is not a string');
+    }
+    
     headers['Authorization'] = `Bearer ${accessToken}`;
     console.log('[DRAFTS] ✅ Adding Authorization header with valid token');
     try {
-      if (accessToken && typeof accessToken === 'string') {
-        console.log('[DRAFTS] Token length:', accessToken.length);
-        console.log('[DRAFTS] Token preview (first 50 chars):', accessToken.substring(0, 50));
-        console.log('[DRAFTS] Token preview (last 20 chars):', accessToken.substring(accessToken.length - 20));
-      } else {
-        console.warn('[DRAFTS] ⚠️ Access token is not a string:', typeof accessToken);
-      }
+      console.log('[DRAFTS] Token length:', accessToken.length);
+      console.log('[DRAFTS] Token preview (first 50 chars):', accessToken.substring(0, 50));
+      console.log('[DRAFTS] Token preview (last 20 chars):', accessToken.substring(accessToken.length - 20));
     } catch (e) {
       console.error('[DRAFTS] Error logging token details:', e);
+      // Don't throw - just log the error
     }
 
     console.log('[DRAFTS] Fetching submissions from /api/v1/submissions');
@@ -841,7 +851,18 @@
   } else {
     console.log('[DRAFTS] Error occurred but we\'ve been redirected to', window.location.pathname, '- not showing error UI');
   }
-});
+  })().catch(error => {
+    // Final catch for any uncaught errors in the async function
+    console.error('[DRAFTS] Uncaught error in async function:', error);
+    console.error('[DRAFTS] Error stack:', error.stack);
+  });
+  
+  } catch (globalError) {
+    // Catch any synchronous errors that occur before the async function
+    console.error('[DRAFTS] Global error in drafts page script:', globalError);
+    console.error('[DRAFTS] Error stack:', globalError.stack);
+  }
+})();
 
 // Ensure Create New Draft button works - add click handler after DOM is ready
 (function() {
