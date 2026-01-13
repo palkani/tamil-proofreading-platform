@@ -16,10 +16,21 @@ function isTokenExpired(token) {
 
 // Unified API helper for all /api calls
 // Use centralized auth-utils.apiFetch if available, with fallback
-async function apiFetch(path, options = {}, requireAuth = true) {
+// CRITICAL: Default to requireAuth = false for homepage to allow unauthenticated usage
+async function apiFetch(path, options = {}, requireAuth = false) {
   // Use centralized auth-utils if available (handles token refresh and homepage checks)
   if (window.authUtils && window.authUtils.apiFetch) {
-    return await window.authUtils.apiFetch(path, options, requireAuth);
+    try {
+      return await window.authUtils.apiFetch(path, options, requireAuth);
+    } catch (error) {
+      // If auth-utils throws, and we're on homepage with requireAuth=false, 
+      // don't block - just rethrow (caller should handle)
+      const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+      if (isHomepage && !requireAuth) {
+        console.warn('[API] Error on homepage (non-blocking):', error.message);
+      }
+      throw error;
+    }
   }
   
   // Fallback for when auth-utils is not loaded
@@ -31,13 +42,27 @@ async function apiFetch(path, options = {}, requireAuth = true) {
       document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
     }
     console.warn('[API] Missing or expired token for', path);
+    // On homepage, don't throw - just log
+    const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+    if (isHomepage) {
+      console.log('[API] On homepage, not throwing error to prevent blocking');
+      // Return a mock 401 response that won't break the page
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
     throw new Error('login_required');
   }
   const headers = new Headers(options.headers || {});
   if (requireAuth && token) {
     headers.set('Authorization', `Bearer ${token}`);
+  } else if (token && !requireAuth) {
+    // Even if not required, include token if available (for better UX)
+    headers.set('Authorization', `Bearer ${token}`);
   }
-  console.log('[API] tokenPresent=', !!token, 'path=', path);
+  console.log('[API] tokenPresent=', !!token, 'path=', path, 'requireAuth=', requireAuth);
   const response = await fetch(path, { 
     ...options, 
     headers,
@@ -773,14 +798,22 @@ class HomeEditor {
       
       this.abortController = new AbortController();
       
+      // On homepage, don't require auth for analysis (allow unauthenticated users to try the tool)
+      // On homepage, don't require auth for analysis (allow unauthenticated users to try the tool)
       const response = await apiFetch('/api/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, save_draft: false }),
         signal: this.abortController.signal
-      });
+      }, false); // requireAuth = false for homepage
       
       if (!response.ok) {
+        // On homepage, handle 401 gracefully (user not logged in)
+        if (response.status === 401) {
+          console.log('[HomeEditor] User not authenticated, showing message to sign in');
+          this.showError('Please sign in to get AI suggestions. You can still use the editor without signing in.');
+          return;
+        }
         throw new Error('Analysis failed');
       }
       
