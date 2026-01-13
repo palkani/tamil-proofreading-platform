@@ -77,79 +77,94 @@
     return;
   }
   
-  // Now run the async function
+  // Now run the async function - properly structured
   (async function() {
-  
-  // First, check if we have a token in URL (from OAuth redirect)
-  const urlParams = new URLSearchParams(window.location.search);
-  const tokenFromUrl = urlParams.get('access_token');
-  if (tokenFromUrl) {
-    console.log('[DRAFTS] Token found in URL, storing it');
-    console.log('[DRAFTS] Token length:', tokenFromUrl.length);
-    console.log('[DRAFTS] Token preview:', tokenFromUrl.substring(0, 50) + '...');
-    
-    // Decode and check token expiration BEFORE storing
-    let shouldStoreToken = true;
-    try {
-      const parts = tokenFromUrl.split('.');
-      if (parts.length === 3) {
-        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-        while (base64.length % 4) base64 += '=';
-        const payload = JSON.parse(atob(base64));
-        const now = Math.floor(Date.now() / 1000);
-        const isExpired = payload.exp < now;
-        console.log('[DRAFTS] Token from URL expiration check:', {
-          exp: payload.exp,
-          now: now,
-          expiresAt: new Date(payload.exp * 1000).toISOString(),
-          timeUntilExpiry: payload.exp - now,
-          valid: payload.exp > now,
-          isExpired: isExpired
-        });
-        
-        // If token is already expired, don't store it - refresh instead
-        if (isExpired) {
-          console.warn('[DRAFTS] Token from URL is already expired, will refresh instead');
-          shouldStoreToken = false;
+    // First, check if we have a token in URL (from OAuth redirect)
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('access_token');
+    if (tokenFromUrl) {
+      console.log('[DRAFTS] Token found in URL, storing it');
+      console.log('[DRAFTS] Token length:', tokenFromUrl.length);
+      console.log('[DRAFTS] Token preview:', tokenFromUrl.substring(0, 50) + '...');
+      
+      // Decode and check token expiration BEFORE storing
+      let shouldStoreToken = true;
+      try {
+        const parts = tokenFromUrl.split('.');
+        if (parts.length === 3) {
+          let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          while (base64.length % 4) base64 += '=';
+          const payload = JSON.parse(atob(base64));
+          const now = Math.floor(Date.now() / 1000);
+          const isExpired = payload.exp < now;
+          console.log('[DRAFTS] Token from URL expiration check:', {
+            exp: payload.exp,
+            now: now,
+            expiresAt: new Date(payload.exp * 1000).toISOString(),
+            timeUntilExpiry: payload.exp - now,
+            valid: payload.exp > now,
+            isExpired: isExpired
+          });
+          
+          // If token is already expired, don't store it - refresh instead
+          if (isExpired) {
+            console.warn('[DRAFTS] Token from URL is already expired, will refresh instead');
+            shouldStoreToken = false;
+          }
         }
+      } catch (e) {
+        console.error('[DRAFTS] Error checking token from URL:', e);
       }
-    } catch (e) {
-      console.error('[DRAFTS] Error checking token from URL:', e);
-    }
-    
-    // Only store token if it's not expired
-    if (shouldStoreToken) {
-      // Use centralized auth utility if available
-      if (window.authUtils && window.authUtils.storeAccessToken) {
-        window.authUtils.storeAccessToken(tokenFromUrl);
+      
+      // Only store token if it's not expired
+      if (shouldStoreToken) {
+        // Use centralized auth utility if available
+        if (window.authUtils && window.authUtils.storeAccessToken) {
+          window.authUtils.storeAccessToken(tokenFromUrl);
+        } else {
+          // Fallback
+          localStorage.removeItem('access_token');
+          document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+          localStorage.setItem('access_token', tokenFromUrl);
+          document.cookie = `access_token=${tokenFromUrl}; path=/; SameSite=Lax; Max-Age=900`;
+        }
+        console.log('[DRAFTS] Token stored in localStorage and cookie');
       } else {
-        // Fallback
-        localStorage.removeItem('access_token');
-        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-        localStorage.setItem('access_token', tokenFromUrl);
-        document.cookie = `access_token=${tokenFromUrl}; path=/; SameSite=Lax; Max-Age=900`;
-      }
-      console.log('[DRAFTS] Token stored in localStorage and cookie');
-    } else {
-      // Token is expired, clear any old tokens and try to refresh immediately
-      console.log('[DRAFTS] Token from URL is expired, clearing old tokens and refreshing immediately');
-      if (window.authUtils && window.authUtils.clearAuthTokens) {
-        window.authUtils.clearAuthTokens();
-      }
-      // Try to refresh immediately if authUtils is available
-      if (window.authUtils && window.authUtils.refreshAccessToken) {
-        console.log('[DRAFTS] Attempting immediate token refresh...');
-        const newToken = await window.authUtils.refreshAccessToken();
-        if (newToken) {
-          console.log('[DRAFTS] ✅ Successfully refreshed token from expired URL token');
-          // Store the new token
-          if (window.authUtils && window.authUtils.storeAccessToken) {
-            window.authUtils.storeAccessToken(newToken);
+        // Token is expired, clear any old tokens and try to refresh immediately
+        console.log('[DRAFTS] Token from URL is expired, clearing old tokens and refreshing immediately');
+        if (window.authUtils && window.authUtils.clearAuthTokens) {
+          window.authUtils.clearAuthTokens();
+        }
+        // Try to refresh immediately if authUtils is available
+        if (window.authUtils && window.authUtils.refreshAccessToken) {
+          console.log('[DRAFTS] Attempting immediate token refresh...');
+          const newToken = await window.authUtils.refreshAccessToken();
+          if (newToken) {
+            console.log('[DRAFTS] ✅ Successfully refreshed token from expired URL token');
+            // Store the new token
+            if (window.authUtils && window.authUtils.storeAccessToken) {
+              window.authUtils.storeAccessToken(newToken);
+            }
+          } else {
+            console.warn('[DRAFTS] ❌ Failed to refresh expired token from URL - refresh token may be missing or invalid');
+            // CRITICAL: If refresh fails, we have no valid token
+            console.warn('[DRAFTS] No valid token available');
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            // Only redirect if not on homepage
+            const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+            if (!isHomepage) {
+              setTimeout(() => {
+                window.location.href = '/login?error=token_expired';
+              }, 100);
+            } else {
+              console.log('[DRAFTS] On homepage, not redirecting to prevent loops');
+            }
+            return; // Exit early, don't proceed with API calls
           }
         } else {
-          console.warn('[DRAFTS] ❌ Failed to refresh expired token from URL - refresh token may be missing or invalid');
-          // CRITICAL: If refresh fails, we have no valid token
-          console.warn('[DRAFTS] No valid token available');
+          console.warn('[DRAFTS] ⚠️ authUtils not available, cannot refresh expired token');
+          // No way to refresh
           window.history.replaceState({}, document.title, window.location.pathname);
           
           // Only redirect if not on homepage
@@ -161,108 +176,92 @@
           } else {
             console.log('[DRAFTS] On homepage, not redirecting to prevent loops');
           }
-          return; // Exit early, don't proceed with API calls
+          return; // Exit early
         }
+      }
+      // Remove token from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Small delay to ensure token is stored before making API calls
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    const loadingEl = document.getElementById('loading');
+    const tableEl = document.getElementById('drafts-table');
+    const bodyEl = document.getElementById('drafts-body');
+    const emptyEl = document.getElementById('empty-state');
+
+    // Helper function to clear invalid tokens and redirect to login
+    // IMPORTANT: Only redirect if we're actually on the drafts page, not homepage
+    function clearTokensAndRedirect() {
+      console.log('[DRAFTS] Clearing invalid tokens');
+      // Use centralized auth utility if available
+      if (window.authUtils && window.authUtils.clearAuthTokens) {
+        window.authUtils.clearAuthTokens();
       } else {
-        console.warn('[DRAFTS] ⚠️ authUtils not available, cannot refresh expired token');
-        // No way to refresh
-        window.history.replaceState({}, document.title, window.location.pathname);
+        // Fallback
+        localStorage.removeItem('access_token');
+        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+      }
+      
+      // Only redirect if we're on the drafts page, not homepage
+      const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+      if (!isHomepage) {
+        console.log('[DRAFTS] Redirecting to login (not on homepage)');
+        window.location.href = '/login';
+      } else {
+        console.log('[DRAFTS] On homepage, not redirecting to prevent loops');
+      }
+    }
+
+    // Helper function to check if token is expired (with 1 minute buffer)
+    function isTokenExpired(token) {
+      if (!token) return true;
+      try {
+        // Decode JWT payload (base64url)
+        const parts = token.split('.');
+        if (parts.length !== 3) return true;
         
-        // Only redirect if not on homepage
-        const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
-        if (!isHomepage) {
-          setTimeout(() => {
-            window.location.href = '/login?error=token_expired';
-          }, 100);
-        } else {
-          console.log('[DRAFTS] On homepage, not redirecting to prevent loops');
+        // Base64URL decode: replace - with +, _ with /, add padding if needed
+        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        // Add padding if needed
+        while (base64.length % 4) {
+          base64 += '=';
         }
-        return; // Exit early
+        
+        const payload = JSON.parse(atob(base64));
+        const exp = payload.exp;
+        if (!exp) return true;
+        
+        // Check if expired
+        const now = Math.floor(Date.now() / 1000);
+        // Token is expired if exp < now
+        // We add a small buffer (60 seconds) to refresh proactively before expiration
+        const refreshBuffer = 60; // Refresh 1 minute before expiration
+        // Token is expired if: exp < now (already expired) OR exp < (now + buffer) (expires soon)
+        const isExp = exp < now || exp < (now + refreshBuffer);
+        console.log('[DRAFTS] Token expiration check:', {
+          exp: exp,
+          now: now,
+          expiresAt: new Date(exp * 1000).toISOString(),
+          isExpired: isExp,
+          timeUntilExpiry: exp - now,
+          refreshBuffer: refreshBuffer,
+          alreadyExpired: exp < now,
+          expiresSoon: exp < (now + refreshBuffer)
+        });
+        return isExp;
+      } catch (e) {
+        console.error('[DRAFTS] Error checking token expiration:', e);
+        // If we can't decode, don't assume expired - let the server decide
+        return false;
       }
     }
-    // Remove token from URL
-    window.history.replaceState({}, document.title, window.location.pathname);
-    
-    // Small delay to ensure token is stored before making API calls
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
 
-  const loadingEl = document.getElementById('loading');
-  const tableEl = document.getElementById('drafts-table');
-  const bodyEl = document.getElementById('drafts-body');
-  const emptyEl = document.getElementById('empty-state');
-
-  // Helper function to clear invalid tokens and redirect to login
-  // IMPORTANT: Only redirect if we're actually on the drafts page, not homepage
-  function clearTokensAndRedirect() {
-    console.log('[DRAFTS] Clearing invalid tokens');
-    // Use centralized auth utility if available
-    if (window.authUtils && window.authUtils.clearAuthTokens) {
-      window.authUtils.clearAuthTokens();
-    } else {
-      // Fallback
-      localStorage.removeItem('access_token');
-      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-      document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-    }
-    
-    // Only redirect if we're on the drafts page, not homepage
-    const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
-    if (!isHomepage) {
-      console.log('[DRAFTS] Redirecting to login (not on homepage)');
-      window.location.href = '/login';
-    } else {
-      console.log('[DRAFTS] On homepage, not redirecting to prevent loops');
-    }
-  }
-
-  // Helper function to check if token is expired (with 1 minute buffer)
-  function isTokenExpired(token) {
-    if (!token) return true;
-    try {
-      // Decode JWT payload (base64url)
-      const parts = token.split('.');
-      if (parts.length !== 3) return true;
-      
-      // Base64URL decode: replace - with +, _ with /, add padding if needed
-      let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      // Add padding if needed
-      while (base64.length % 4) {
-        base64 += '=';
-      }
-      
-      const payload = JSON.parse(atob(base64));
-      const exp = payload.exp;
-      if (!exp) return true;
-      
-      // Check if expired
-      const now = Math.floor(Date.now() / 1000);
-      // Token is expired if exp < now
-      // We add a small buffer (60 seconds) to refresh proactively before expiration
-      const refreshBuffer = 60; // Refresh 1 minute before expiration
-      // Token is expired if: exp < now (already expired) OR exp < (now + buffer) (expires soon)
-      const isExp = exp < now || exp < (now + refreshBuffer);
-      console.log('[DRAFTS] Token expiration check:', {
-        exp: exp,
-        now: now,
-        expiresAt: new Date(exp * 1000).toISOString(),
-        isExpired: isExp,
-        timeUntilExpiry: exp - now,
-        refreshBuffer: refreshBuffer,
-        alreadyExpired: exp < now,
-        expiresSoon: exp < (now + refreshBuffer)
-      });
-      return isExp;
-    } catch (e) {
-      console.error('[DRAFTS] Error checking token expiration:', e);
-      // If we can't decode, don't assume expired - let the server decide
-      return false;
-    }
-  }
-
-  // Helper function to refresh access token - use centralized authUtils
-  let refreshInProgress = false; // Prevent multiple simultaneous refresh attempts
-  async function refreshAccessToken() {
+    // Helper function to refresh access token - use centralized authUtils
+    let refreshInProgress = false; // Prevent multiple simultaneous refresh attempts
+    async function refreshAccessToken() {
     // Prevent infinite loops - if refresh is already in progress, wait
     if (refreshInProgress) {
       console.log('[DRAFTS] Refresh already in progress, waiting...');
@@ -312,8 +311,8 @@
     }
   }
 
-  // Helper function to fetch submissions with retry on 401
-  async function fetchSubmissionsWithRetry() {
+    // Helper function to fetch submissions with retry on 401
+    async function fetchSubmissionsWithRetry() {
     // Get access token from localStorage
     let token = localStorage.getItem('access_token');
     console.log('[DRAFTS] Token in localStorage:', token ? 'Present' : 'Missing', token ? token.substring(0, 20) + '...' : '');
@@ -682,9 +681,9 @@
     return response;
   }
 
-  try {
-    console.log('[DRAFTS] Starting to load drafts...');
-    const response = await fetchSubmissionsWithRetry();
+    try {
+      console.log('[DRAFTS] Starting to load drafts...');
+      const response = await fetchSubmissionsWithRetry();
     
     if (!response) {
       // fetchSubmissionsWithRetry returned null (no token or redirect happened)
@@ -830,31 +829,27 @@
     }
   }
 })().catch(error => {
-  // CRITICAL: Catch any uncaught errors in the async function
-  // This prevents uncaught promise rejections from causing redirect loops
-  console.error('[DRAFTS] Uncaught error in drafts page initialization:', error);
-  console.error('[DRAFTS] Error stack:', error.stack);
-  
-  // Only show error if we're still on drafts page
-  if (window.location.pathname === '/drafts') {
-    try {
-      const emptyEl = document.getElementById('empty-state');
-      const loadingEl = document.getElementById('loading');
-      if (loadingEl) loadingEl.classList.add('hidden');
-      if (emptyEl) {
-        emptyEl.classList.remove('hidden');
-        emptyEl.innerHTML = '<svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><p class="text-lg font-medium">Error loading drafts</p><p class="text-sm mt-2">An unexpected error occurred. Please refresh the page.</p><a href="/workspace" class="mt-4 inline-block btn-primary">Create New Draft</a>';
-      }
-    } catch (uiError) {
-      console.error('[DRAFTS] Error showing error UI:', uiError);
-    }
-  } else {
-    console.log('[DRAFTS] Error occurred but we\'ve been redirected to', window.location.pathname, '- not showing error UI');
-  }
-  })().catch(error => {
-    // Final catch for any uncaught errors in the async function
-    console.error('[DRAFTS] Uncaught error in async function:', error);
+    // CRITICAL: Catch any uncaught errors in the async function
+    // This prevents uncaught promise rejections from causing redirect loops
+    console.error('[DRAFTS] Uncaught error in drafts page initialization:', error);
     console.error('[DRAFTS] Error stack:', error.stack);
+    
+    // Only show error if we're still on drafts page
+    if (window.location.pathname === '/drafts') {
+      try {
+        const emptyEl = document.getElementById('empty-state');
+        const loadingEl = document.getElementById('loading');
+        if (loadingEl) loadingEl.classList.add('hidden');
+        if (emptyEl) {
+          emptyEl.classList.remove('hidden');
+          emptyEl.innerHTML = '<svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><p class="text-lg font-medium">Error loading drafts</p><p class="text-sm mt-2">An unexpected error occurred. Please refresh the page.</p><a href="/workspace" class="mt-4 inline-block btn-primary">Create New Draft</a>';
+        }
+      } catch (uiError) {
+        console.error('[DRAFTS] Error showing error UI:', uiError);
+      }
+    } else {
+      console.log('[DRAFTS] Error occurred but we\'ve been redirected to', window.location.pathname, '- not showing error UI');
+    }
   });
   
   } catch (globalError) {
