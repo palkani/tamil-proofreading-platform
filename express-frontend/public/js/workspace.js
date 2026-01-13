@@ -959,10 +959,12 @@ class WorkspaceController {
       titleInput.addEventListener('input', () => this.scheduleSave());
     }
 
-    // Logout button
+    // Logout button - use centralized logout function if available, otherwise use this.logout()
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
-      logoutBtn.addEventListener('click', () => this.logout());
+      // Don't add another handler if nav.ejs already has one - let nav.ejs handle it
+      // But if nav.ejs handler didn't work, this will be a fallback
+      console.log('[WORKSPACE] Logout button found, but letting nav.ejs handler manage it');
     }
 
     // New Draft button
@@ -3471,28 +3473,48 @@ class WorkspaceController {
   }
 
   async logout() {
-    if (confirm('Are you sure you want to log out?')) {
-      try {
-        // Call logout API to revoke refresh token on backend
-        await fetch('/auth/logout', {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }).catch(err => {
-          console.warn('[WORKSPACE] Logout API call failed (non-fatal):', err.message);
-        });
-      } catch (err) {
-        console.warn('[WORKSPACE] Logout error (non-fatal):', err.message);
-      } finally {
-        // Always clear tokens and redirect, even if API call fails
-        localStorage.removeItem('access_token');
-        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-        document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-        window.location.href = '/';
-      }
+    console.log('[WORKSPACE] logout() method called');
+    
+    // Use centralized logout function if available (from nav.ejs)
+    if (window.performLogout && typeof window.performLogout === 'function') {
+      console.log('[WORKSPACE] Using centralized performLogout function');
+      window.performLogout();
+      return;
     }
+    
+    // Fallback: manual logout
+    if (!confirm('Are you sure you want to log out?')) {
+      return;
+    }
+    
+    console.log('[WORKSPACE] User confirmed logout');
+    
+    // Always clear tokens first (client-side)
+    console.log('[WORKSPACE] Clearing client-side tokens...');
+    if (window.authUtils && typeof window.authUtils.clearAuthTokens === 'function') {
+      window.authUtils.clearAuthTokens();
+    } else {
+      localStorage.removeItem('access_token');
+      const cookieOptions = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+      document.cookie = `access_token=; ${cookieOptions}`;
+      document.cookie = `refresh_token=; ${cookieOptions}`;
+      document.cookie = `proof_refresh_token=; ${cookieOptions}`;
+    }
+    
+    // Try to call logout API (non-blocking)
+    fetch('/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }).catch(() => {
+      // Ignore errors
+    });
+    
+    // Force redirect immediately (don't wait for API call)
+    console.log('[WORKSPACE] Redirecting to home page immediately');
+    window.location.href = '/';
   }
 
   showNotification(message, type = 'info') {

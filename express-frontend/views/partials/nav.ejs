@@ -68,53 +68,67 @@
 </nav>
 
 <script>
+  // Centralized logout function - make it globally accessible
+  window.performLogout = function performLogout() {
+    console.log('[NAV] performLogout called');
+    
+    if (!confirm('Are you sure you want to log out?')) {
+      return;
+    }
+    
+    console.log('[NAV] User confirmed logout');
+    
+    // Always clear tokens first (client-side)
+    console.log('[NAV] Clearing client-side tokens...');
+    localStorage.removeItem('access_token');
+    
+    // Clear all cookies
+    const cookieOptions = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    document.cookie = `access_token=; ${cookieOptions}`;
+    document.cookie = `refresh_token=; ${cookieOptions}`;
+    document.cookie = `proof_refresh_token=; ${cookieOptions}`;
+    
+    // Try to call logout API (non-blocking, fire and forget)
+    fetch('/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }).catch(() => {
+      // Ignore errors
+    });
+    
+    // Force redirect immediately (don't wait for anything)
+    console.log('[NAV] Redirecting to home page immediately');
+    window.location.href = '/';
+  }
+  
   // Setup logout button - ensure it works even if auth-utils.js hasn't loaded yet
   (function() {
     function setupLogout() {
       const logoutBtn = document.getElementById('logout-btn');
-      if (!logoutBtn) return;
+      if (!logoutBtn) {
+        console.log('[NAV] Logout button not found');
+        return;
+      }
       
       // Remove any existing listeners to prevent duplicates
       const newBtn = logoutBtn.cloneNode(true);
       logoutBtn.parentNode.replaceChild(newBtn, logoutBtn);
       
+      // Attach handler directly to button
       newBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        
-        console.log('[NAV] Logout button clicked');
-        
-        if (!confirm('Are you sure you want to log out?')) {
-          return;
+        e.stopImmediatePropagation();
+        console.log('[NAV] Logout button clicked (direct handler)');
+        if (window.performLogout) {
+          window.performLogout();
+        } else {
+          performLogout();
         }
-        
-        console.log('[NAV] User confirmed logout');
-        
-        // Always clear tokens first (client-side)
-        console.log('[NAV] Clearing client-side tokens...');
-        localStorage.removeItem('access_token');
-        
-        // Clear all cookies
-        const cookieOptions = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-        document.cookie = `access_token=; ${cookieOptions}`;
-        document.cookie = `refresh_token=; ${cookieOptions}`;
-        document.cookie = `proof_refresh_token=; ${cookieOptions}`;
-        
-        // Try to call logout API (non-blocking, fire and forget)
-        fetch('/auth/logout', {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }).catch(() => {
-          // Ignore errors
-        });
-        
-        // Force redirect immediately (don't wait for anything)
-        console.log('[NAV] Redirecting to home page immediately');
-        window.location.href = '/';
-      }, false); // Use bubble phase (not capture) to avoid conflicts
+      }, true); // Use capture phase to catch early
       
       console.log('[NAV] Logout button handler attached');
     }
@@ -130,6 +144,7 @@
     setTimeout(setupLogout, 100);
     setTimeout(setupLogout, 500);
     setTimeout(setupLogout, 1000);
+    setTimeout(setupLogout, 2000);
     
     // Ensure My Drafts link works
     (function() {
@@ -159,25 +174,19 @@
       setTimeout(setupDraftsLink, 100);
     })();
     
-    // Also listen for any clicks on logout button (in case setupLogout didn't catch it)
+    // Global document-level listener as ultimate fallback (capture phase)
     document.addEventListener('click', function(e) {
       const target = e.target.closest('#logout-btn');
       if (target) {
-        console.log('[NAV] Logout button clicked via document listener');
+        console.log('[NAV] Logout button clicked via document listener (fallback)');
         e.preventDefault();
         e.stopPropagation();
-        // Trigger logout directly
-        if (!confirm('Are you sure you want to log out?')) {
-          return;
+        if (window.performLogout) {
+          window.performLogout();
+        } else {
+          performLogout();
         }
-        // Clear tokens and redirect
-        localStorage.removeItem('access_token');
-        const cookieOptions = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-        document.cookie = `access_token=; ${cookieOptions}`;
-        document.cookie = `refresh_token=; ${cookieOptions}`;
-        document.cookie = `proof_refresh_token=; ${cookieOptions}`;
-        window.location.href = '/';
       }
-    }, true); // Use capture phase
+    }, true); // Use capture phase to catch before other handlers
   })();
 </script>
