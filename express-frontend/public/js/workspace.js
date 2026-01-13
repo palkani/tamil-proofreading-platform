@@ -349,27 +349,48 @@ class WorkspaceController {
           });
           
           if (response.status === 401) {
-            console.error('[WORKSPACE] Still 401 after refresh, redirecting to login');
+            console.error('[WORKSPACE] Still 401 after refresh, clearing tokens');
             if (window.authUtils && window.authUtils.clearAuthTokens) {
               window.authUtils.clearAuthTokens();
             }
-            window.location.href = '/login';
+            // Only redirect if not on homepage (workspace should redirect, but check to be safe)
+            const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+            if (!isHomepage) {
+              console.log('[WORKSPACE] Redirecting to login (not on homepage)');
+              window.location.href = '/login';
+            } else {
+              console.log('[WORKSPACE] On homepage, not redirecting to prevent loops');
+            }
             throw new Error('Unauthorized');
           }
           return response;
         } else {
-          // Refresh failed, clear tokens and redirect
-          console.warn('[WORKSPACE] Token refresh failed, redirecting to /login');
+          // Refresh failed, clear tokens
+          console.warn('[WORKSPACE] Token refresh failed');
           if (window.authUtils && window.authUtils.clearAuthTokens) {
             window.authUtils.clearAuthTokens();
           }
-          window.location.href = '/login';
+          // Only redirect if not on homepage
+          const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+          if (!isHomepage) {
+            console.log('[WORKSPACE] Redirecting to login (not on homepage)');
+            window.location.href = '/login';
+          } else {
+            console.log('[WORKSPACE] On homepage, not redirecting to prevent loops');
+          }
           throw new Error('Unauthorized');
         }
       } else {
-        // No auth utils available, just redirect
-        console.warn('[WORKSPACE] No auth utils, redirecting to /login');
-        window.location.href = '/login';
+        // No auth utils available
+        console.warn('[WORKSPACE] No auth utils');
+        // Only redirect if not on homepage
+        const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+        if (!isHomepage) {
+          console.log('[WORKSPACE] Redirecting to login (not on homepage)');
+          window.location.href = '/login';
+        } else {
+          console.log('[WORKSPACE] On homepage, not redirecting to prevent loops');
+        }
         throw new Error('Unauthorized');
       }
     }

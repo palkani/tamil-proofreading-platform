@@ -414,21 +414,39 @@ async function apiFetch(url, options = {}, requireAuth = true) {
         credentials: 'include',
       });
       
-      // If still 401 after refresh, clear tokens and redirect
+      // If still 401 after refresh, clear tokens
+      // IMPORTANT: Only redirect if we're NOT on the homepage to prevent redirect loops
       if (response.status === 401) {
-        console.error('[AUTH] Still 401 after refresh, clearing tokens and redirecting');
+        console.error('[AUTH] Still 401 after refresh, clearing tokens');
         clearAuthTokens();
-        window.location.href = '/login';
+        
+        // Only redirect if not on homepage (homepage should never redirect)
+        const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+        if (!isHomepage) {
+          console.log('[AUTH] Redirecting to login (not on homepage)');
+          window.location.href = '/login';
+        } else {
+          console.log('[AUTH] On homepage, not redirecting to prevent loops');
+        }
         throw new Error('Unauthorized');
       }
       
       console.log('[AUTH] Retry successful with new token, status:', response.status);
       return response;
     } else {
-      // Refresh failed, clear tokens and redirect
-      console.warn('[AUTH] Token refresh failed, redirecting to login');
+      // Refresh failed, clear tokens
+      // IMPORTANT: Only redirect if we're NOT on the homepage to prevent redirect loops
+      console.warn('[AUTH] Token refresh failed');
       clearAuthTokens();
-      window.location.href = '/login';
+      
+      // Only redirect if not on homepage (homepage should never redirect)
+      const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
+      if (!isHomepage) {
+        console.log('[AUTH] Redirecting to login (not on homepage)');
+        window.location.href = '/login';
+      } else {
+        console.log('[AUTH] On homepage, not redirecting to prevent loops');
+      }
       throw new Error('Unauthorized');
     }
   }
