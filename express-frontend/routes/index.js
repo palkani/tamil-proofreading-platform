@@ -15,7 +15,17 @@ function getBackendApiUrl() {
 const BACKEND_URL = getBackendApiUrl();
 
 // Homepage - accessible to everyone
+// IMPORTANT: This route should NEVER redirect - it's the landing page
 router.get('/', (req, res) => {
+  // Log for debugging redirect issues
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[HOME] Rendering homepage', {
+      path: req.path,
+      query: req.query,
+      user: req.user ? req.user.email : 'none'
+    });
+  }
+  
   const user = getCurrentUser(req);
   const seo = getSeoData('home');
   res.render('pages/home', { 
