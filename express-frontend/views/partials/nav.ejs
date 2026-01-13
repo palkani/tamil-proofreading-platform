@@ -14,7 +14,7 @@
             <a href="/dashboard" class="<%= active === 'dashboard' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
               Dashboard
             </a>
-            <a href="/drafts" class="<%= active === 'drafts' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
+            <a href="/drafts" id="my-drafts-link" class="<%= active === 'drafts' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
               My Drafts
             </a>
             <a href="/workspace" class="<%= active === 'workspace' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
@@ -78,10 +78,9 @@
       const newBtn = logoutBtn.cloneNode(true);
       logoutBtn.parentNode.replaceChild(newBtn, logoutBtn);
       
-      newBtn.addEventListener('click', async function(e) {
+      newBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        e.stopImmediatePropagation();
         
         console.log('[NAV] Logout button clicked');
         
@@ -101,34 +100,21 @@
         document.cookie = `refresh_token=; ${cookieOptions}`;
         document.cookie = `proof_refresh_token=; ${cookieOptions}`;
         
-        // Try to call logout API (non-blocking)
-        console.log('[NAV] Calling logout API...');
+        // Try to call logout API (non-blocking, fire and forget)
         fetch('/auth/logout', {
           method: 'POST',
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json'
           }
-        }).then(response => {
-          console.log('[NAV] Logout API response:', response.status);
-        }).catch(err => {
-          console.warn('[NAV] Logout API call failed (non-fatal):', err.message);
+        }).catch(() => {
+          // Ignore errors
         });
         
-        // Also try auth-utils if available (but don't wait for it)
-        if (window.authUtils && typeof window.authUtils.handleLogout === 'function') {
-          console.log('[NAV] Also calling auth-utils.handleLogout');
-          window.authUtils.handleLogout().catch(err => {
-            console.warn('[NAV] auth-utils.handleLogout failed (non-fatal):', err.message);
-          });
-        }
-        
-        // Force redirect immediately (don't wait for API calls)
+        // Force redirect immediately (don't wait for anything)
         console.log('[NAV] Redirecting to home page immediately');
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 100);
-      }, { capture: true }); // Use capture phase to ensure we catch the event
+        window.location.href = '/';
+      }, false); // Use bubble phase (not capture) to avoid conflicts
       
       console.log('[NAV] Logout button handler attached');
     }
@@ -145,13 +131,52 @@
     setTimeout(setupLogout, 500);
     setTimeout(setupLogout, 1000);
     
+    // Ensure My Drafts link works
+    (function() {
+      function setupDraftsLink() {
+        const draftsLink = document.getElementById('my-drafts-link');
+        if (draftsLink) {
+          // Remove any existing handlers
+          const newLink = draftsLink.cloneNode(true);
+          draftsLink.parentNode.replaceChild(newLink, draftsLink);
+          
+          newLink.addEventListener('click', function(e) {
+            console.log('[NAV] My Drafts link clicked, navigating to /drafts');
+            // Allow default navigation - don't prevent it
+            // The href="/drafts" will handle navigation naturally
+          }, false);
+          
+          console.log('[NAV] My Drafts link handler attached');
+        }
+      }
+      
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupDraftsLink);
+      } else {
+        setupDraftsLink();
+      }
+      
+      setTimeout(setupDraftsLink, 100);
+    })();
+    
     // Also listen for any clicks on logout button (in case setupLogout didn't catch it)
     document.addEventListener('click', function(e) {
       const target = e.target.closest('#logout-btn');
       if (target) {
         console.log('[NAV] Logout button clicked via document listener');
-        // Let the button's own handler take care of it, but ensure it's set up
-        setupLogout();
+        e.preventDefault();
+        e.stopPropagation();
+        // Trigger logout directly
+        if (!confirm('Are you sure you want to log out?')) {
+          return;
+        }
+        // Clear tokens and redirect
+        localStorage.removeItem('access_token');
+        const cookieOptions = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        document.cookie = `access_token=; ${cookieOptions}`;
+        document.cookie = `refresh_token=; ${cookieOptions}`;
+        document.cookie = `proof_refresh_token=; ${cookieOptions}`;
+        window.location.href = '/';
       }
     }, true); // Use capture phase
   })();

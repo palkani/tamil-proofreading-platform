@@ -2023,9 +2023,7 @@ class WorkspaceController {
               finalPosition: { left, top }
             });
           } else {
-            throw new Error('Invalid cursor rect');
-          }
-          } else {
+            // Invalid cursor rect, try alternative method
             console.warn('[IME] Invalid cursor rect, trying alternative method');
             // Try using range.getBoundingClientRect() as fallback
             const range = selection.getRangeAt(0).cloneRange();
