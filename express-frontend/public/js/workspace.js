@@ -423,8 +423,17 @@ class WorkspaceController {
       return [];
     }
 
-    // Validate query
+    // Validate query - MUST be non-empty Latin string
     if (!query || query.length === 0) {
+      console.warn('[IME] fetchRunnerSuggestions: Empty query provided, skipping API call');
+      this.displaySuggestions([]);
+      return [];
+    }
+    
+    // CRITICAL: Only allow Latin characters for transliteration
+    // If query contains non-Latin characters, don't call the API
+    if (!/^[a-zA-Z]+$/.test(query)) {
+      console.warn('[IME] fetchRunnerSuggestions: Non-Latin characters in query:', query, '- skipping API call');
       this.displaySuggestions([]);
       return [];
     }
@@ -480,12 +489,27 @@ class WorkspaceController {
       if (!response.ok) {
         console.error('[IME] API error:', response.status, response.statusText);
         // Try to get error details
+        let errorDetails = null;
         try {
-          const errorData = await response.json();
-          console.error('[IME] API error details:', errorData);
+          const errorText = await response.text();
+          console.error('[IME] API error raw response:', errorText);
+          try {
+            errorDetails = JSON.parse(errorText);
+            console.error('[IME] API error details (parsed):', errorDetails);
+          } catch (parseError) {
+            console.error('[IME] Error response is not JSON:', errorText);
+            errorDetails = { error: errorText, raw: true };
+          }
         } catch (e) {
-          console.error('[IME] Could not parse error response');
+          console.error('[IME] Could not read error response:', e);
         }
+        
+        // Log the full URL that was requested
+        console.error('[IME] Failed request URL:', url);
+        console.error('[IME] Query parameter "q":', query);
+        console.error('[IME] Query parameter "mode":', mode);
+        console.error('[IME] Query parameter "limit":', limit);
+        
         this.displaySuggestions([]);
         return [];
       }
@@ -1093,13 +1117,14 @@ class WorkspaceController {
     // MINIMAL GUARDS: Only check if token exists and is Latin
     // Allow single character tokens to trigger API calls
     if (!token || token.length === 0) {
-      console.log('[IME] ⚠️ Token is empty');
+      console.log('[IME] ⚠️ Token is empty - no Latin characters found at cursor');
       // Clear suggestions if token is invalid
       if (this.lastFetchToken) {
         this.lastFetchToken = null;
         this.currentTokenInfo = null;
         this.clearSuggestions();
       }
+      // Don't call API if token is empty - this prevents 400 errors
       return;
     }
     
@@ -3313,12 +3338,32 @@ class WorkspaceController {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        let errorData = { error: 'Unknown error' };
+        try {
+          const errorText = await response.text();
+          try {
+            errorData = JSON.parse(errorText);
+          } catch (e) {
+            errorData = { error: errorText || response.statusText || 'Unknown error' };
+          }
+        } catch (e) {
+          console.error('[AUTOSAVE] Could not parse error response:', e);
+          errorData = { error: response.statusText || 'Unknown error' };
+        }
+        
         console.error('[AUTOSAVE] Failed to save draft:', {
           status: response.status,
           statusText: response.statusText,
-          error: errorData
+          error: errorData,
+          url: '/api/submit'
         });
+        
+        // Don't throw error for 401 - just log it (auth will handle redirect)
+        if (response.status === 401) {
+          console.warn('[AUTOSAVE] Unauthorized - token may be expired. Auth utils should handle refresh.');
+          return; // Exit gracefully, don't throw
+        }
+        
         throw new Error(`Failed to save draft: ${errorData.error || response.statusText}`);
       }
 
@@ -4100,14 +4145,34 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     workspaceControllerInstance = new WorkspaceController();
     window.workspaceController = workspaceControllerInstance; // Expose globally for debugging
-    console.log('[WorkspaceJS] ✅ WorkspaceController initialized and exposed as window.workspaceController');
+    console.log('[WorkspaceJS] ✅ WorkspaceController created');
+    
+    // CRITICAL: Call init() to set up event handlers and initialize the editor
+    if (workspaceControllerInstance && typeof workspaceControllerInstance.init === 'function') {
+      console.log('[WorkspaceJS] ✅ Calling init() method...');
+      workspaceControllerInstance.init();
+      console.log('[WorkspaceJS] ✅ WorkspaceController initialized and exposed as window.workspaceController');
+    } else {
+      console.error('[WorkspaceJS] ❌ init() method not found on WorkspaceController!');
+    }
+    
     // Phase 4: Switch to TipTap if flag is enabled
     setTimeout(() => switchWorkspaceEditor(), 500); // Wait a bit for TipTap to load
   });
 } else {
   workspaceControllerInstance = new WorkspaceController();
   window.workspaceController = workspaceControllerInstance; // Expose globally for debugging
-  console.log('[WorkspaceJS] ✅ WorkspaceController initialized and exposed as window.workspaceController');
+  console.log('[WorkspaceJS] ✅ WorkspaceController created');
+  
+  // CRITICAL: Call init() to set up event handlers and initialize the editor
+  if (workspaceControllerInstance && typeof workspaceControllerInstance.init === 'function') {
+    console.log('[WorkspaceJS] ✅ Calling init() method...');
+    workspaceControllerInstance.init();
+    console.log('[WorkspaceJS] ✅ WorkspaceController initialized and exposed as window.workspaceController');
+  } else {
+    console.error('[WorkspaceJS] ❌ init() method not found on WorkspaceController!');
+  }
+  
   // Phase 4: Switch to TipTap if flag is enabled
   setTimeout(() => switchWorkspaceEditor(), 500); // Wait a bit for TipTap to load
 }

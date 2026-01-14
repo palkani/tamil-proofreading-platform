@@ -52,17 +52,23 @@ function storeAccessToken(token) {
 function handleAuthSuccess(accessToken, redirectTo = '/drafts') {
   if (accessToken) {
     storeAccessToken(accessToken);
+    console.log('[AUTH] ✅ Access token stored successfully');
   } else {
-    console.warn('[AUTH] No access token in response');
+    console.warn('[AUTH] ⚠️ No access token in response');
   }
   
   // Redirect to specified page (default: drafts)
-  console.log('[AUTH] Redirecting to:', redirectTo);
+  console.log('[AUTH] 🚀 Redirecting to:', redirectTo);
   console.log('[AUTH] Current location:', window.location.href);
   console.log('[AUTH] Target redirect:', redirectTo);
   
-  // Use replace instead of href to prevent back button issues
-  window.location.replace(redirectTo);
+  // CRITICAL: Add a small delay to ensure token is stored before redirect
+  // This prevents race conditions where the redirect happens before localStorage is updated
+  setTimeout(() => {
+    console.log('[AUTH] ⏱️ Delay complete, executing redirect to:', redirectTo);
+    // Use replace instead of href to prevent back button issues
+    window.location.replace(redirectTo);
+  }, 100);
 }
 
 /**
@@ -300,6 +306,17 @@ async function refreshAccessToken(maxRetries = 2) {
  * @returns {Promise<Response>}
  */
 async function apiFetch(url, options = {}, requireAuth = true) {
+  // CRITICAL: Check if we're navigating - if so, don't make API calls that might redirect
+  // This prevents interrupting link clicks and page navigation
+  const isNavigating = document.readyState === 'loading' || 
+                       document.visibilityState === 'hidden' ||
+                       (window.performance?.navigation?.type === 1); // TYPE_NAVIGATE
+  
+  if (isNavigating && requireAuth) {
+    console.warn('[AUTH] Page is navigating, skipping apiFetch to prevent redirect interruption');
+    throw new Error('Navigation in progress');
+  }
+  
   // Create a fresh headers object to avoid mutation issues
   const headers = new Headers(options.headers || {});
   
@@ -420,17 +437,29 @@ async function apiFetch(url, options = {}, requireAuth = true) {
       
       // If still 401 after refresh, clear tokens
       // IMPORTANT: Only redirect if we're NOT on the homepage to prevent redirect loops
+      // CRITICAL: Don't redirect during navigation - let the browser handle page loads
       if (response.status === 401) {
         console.error('[AUTH] Still 401 after refresh, clearing tokens');
         clearAuthTokens();
         
-        // Only redirect if not on homepage (homepage should never redirect)
+        // Check if we're navigating away (document is unloading)
+        const isNavigating = document.readyState === 'loading' || 
+                             document.visibilityState === 'hidden' ||
+                             window.performance?.navigation?.type === 1; // TYPE_NAVIGATE
+        
+        // Only redirect if not on homepage AND not navigating (to prevent interrupting link clicks)
         const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
-        if (!isHomepage) {
-          console.log('[AUTH] Redirecting to login (not on homepage)');
-          window.location.href = '/login';
+        if (!isHomepage && !isNavigating) {
+          console.log('[AUTH] Redirecting to login (not on homepage, not navigating)');
+          // Use setTimeout to ensure this doesn't block navigation
+          setTimeout(() => {
+            // Double-check we're still on the same page (user might have navigated)
+            if (window.location.pathname !== '/' && window.location.pathname !== '/home') {
+              window.location.href = '/login';
+            }
+          }, 100);
         } else {
-          console.log('[AUTH] On homepage, not redirecting to prevent loops');
+          console.log('[AUTH] On homepage or navigating, not redirecting to prevent loops');
         }
         throw new Error('Unauthorized');
       }
@@ -440,16 +469,28 @@ async function apiFetch(url, options = {}, requireAuth = true) {
     } else {
       // Refresh failed, clear tokens
       // IMPORTANT: Only redirect if we're NOT on the homepage to prevent redirect loops
+      // CRITICAL: Don't redirect during navigation - let the browser handle page loads
       console.warn('[AUTH] Token refresh failed');
       clearAuthTokens();
       
-      // Only redirect if not on homepage (homepage should never redirect)
+      // Check if we're navigating away (document is unloading)
+      const isNavigating = document.readyState === 'loading' || 
+                           document.visibilityState === 'hidden' ||
+                           window.performance?.navigation?.type === 1; // TYPE_NAVIGATE
+      
+      // Only redirect if not on homepage AND not navigating (to prevent interrupting link clicks)
       const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
-      if (!isHomepage) {
-        console.log('[AUTH] Redirecting to login (not on homepage)');
-        window.location.href = '/login';
+      if (!isHomepage && !isNavigating) {
+        console.log('[AUTH] Redirecting to login (not on homepage, not navigating)');
+        // Use setTimeout to ensure this doesn't block navigation
+        setTimeout(() => {
+          // Double-check we're still on the same page (user might have navigated)
+          if (window.location.pathname !== '/' && window.location.pathname !== '/home') {
+            window.location.href = '/login';
+          }
+        }, 100);
       } else {
-        console.log('[AUTH] On homepage, not redirecting to prevent loops');
+        console.log('[AUTH] On homepage or navigating, not redirecting to prevent loops');
       }
       throw new Error('Unauthorized');
     }

@@ -760,6 +760,11 @@ router.get('/converter/download/:filename', async (req, res) => {
 // IMPORTANT: This route must be defined BEFORE the catch-all router.all('/*') to ensure it's matched
 router.post('/submit', async (req, res) => {
   try {
+    // Log that we're handling /submit route
+    console.log('[SUBMIT] Route handler called for POST /submit');
+    console.log('[SUBMIT] Request path:', req.path);
+    console.log('[SUBMIT] Request method:', req.method);
+    
     const url = `${BACKEND_URL}/submissions`;
     
     if (ENABLE_PROXY_LOGS) {
@@ -932,9 +937,58 @@ router.post('/ai-content-writer/translate', async (req, res) => {
 
 // ============= END AI CONTENT WRITER API ROUTES =============
 
+// CRITICAL: IME suggestions endpoint MUST be before router.all('/*') catch-all
+// IME suggestions endpoint - proxy to backend
+router.get('/ime/suggest', async (req, res) => {
+  try {
+    console.log('[IME] Route handler called for GET /ime/suggest');
+    console.log('[IME] Query params:', req.query);
+    
+    const { q, mode = 'smart', limit = 8 } = req.query;
+    
+    // Better validation with detailed error message
+    if (!q || typeof q !== 'string' || q.trim().length === 0) {
+      console.warn('[IME] Invalid query parameter - q is missing or empty');
+      return res.status(400).json({ 
+        error: 'Query parameter "q" is required and must be a non-empty string',
+        received: { q: q, type: typeof q, length: q ? String(q).length : 0 }
+      });
+    }
+    
+    const url = `${BACKEND_URL}/ime/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
+    
+    if (ENABLE_PROXY_LOGS) {
+      console.log(`[IME] GET ${url}`);
+    }
+    
+    // Forward authorization header if present
+    const headers = {};
+    if (req.headers.authorization) {
+      headers.Authorization = req.headers.authorization;
+    }
+    
+    const response = await axios.get(url, {
+      headers,
+      validateStatus: () => true,
+    });
+    
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error(`[IME-ERROR] ${error.message}`);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || 'IME suggestion failed'
+    });
+  }
+});
+
 // Proxy other API calls to Go backend
 // IMPORTANT: This catch-all must be LAST to avoid intercepting specific routes like /submit
 router.all('/*', async (req, res) => {
+  // CRITICAL: Also skip /ime/suggest to prevent double handling
+  if (req.path === '/ime/suggest' && req.method === 'GET') {
+    console.warn('[API-ROUTER] /ime/suggest route was intercepted by catch-all - this should not happen!');
+    return res.status(404).json({ error: 'Route not found - check route order' });
+  }
   // Skip if this is a route we've already handled
   if (req.path === '/submit' && req.method === 'POST') {
     // This should never happen if routes are in correct order, but log if it does
@@ -980,43 +1034,6 @@ router.all('/*', async (req, res) => {
     console.error('[PROXY-ERROR] Status:', error.response?.status);
     res.status(error.response?.status || 500).json({
       error: error.response?.data || 'Backend request failed'
-    });
-  }
-});
-
-
-// Proxy all /api/v1/* requests to backend (fallback if Vercel rewrite doesn't catch it)
-// IME suggestions endpoint - proxy to backend
-router.get('/ime/suggest', async (req, res) => {
-  try {
-    const { q, mode = 'smart', limit = 8 } = req.query;
-    
-    if (!q || typeof q !== 'string' || q.trim().length === 0) {
-      return res.status(400).json({ error: 'Query parameter "q" is required' });
-    }
-    
-    const url = `${BACKEND_URL}/ime/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
-    
-    if (ENABLE_PROXY_LOGS) {
-      console.log(`[IME] GET ${url}`);
-    }
-    
-    // Forward authorization header if present
-    const headers = {};
-    if (req.headers.authorization) {
-      headers.Authorization = req.headers.authorization;
-    }
-    
-    const response = await axios.get(url, {
-      headers,
-      validateStatus: () => true,
-    });
-    
-    res.status(response.status).json(response.data);
-  } catch (error) {
-    console.error(`[IME-ERROR] ${error.message}`);
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data || 'IME suggestion failed'
     });
   }
 });
