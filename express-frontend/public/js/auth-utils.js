@@ -5,6 +5,53 @@
  * All login, signup, and logout flows should use these functions.
  */
 
+// ============================================================================
+// CRITICAL: Link click tracking - MUST be at the top to run immediately
+// ============================================================================
+// Track link clicks to prevent redirects during navigation
+let lastLinkClickTime = 0;
+let pageLoadTime = Date.now();
+const NAVIGATION_GRACE_PERIOD = 3000; // 3 seconds after link click
+const PAGE_LOAD_GRACE_PERIOD = 2000; // 2 seconds after page load
+
+// Track page load time
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      pageLoadTime = Date.now();
+      console.log('[AUTH] Page loaded, setting page load grace period');
+    });
+  } else {
+    pageLoadTime = Date.now();
+  }
+
+  // Track all link clicks globally - MUST run immediately
+  (function() {
+    // Use capture phase and run immediately
+    function trackLinkClick(e) {
+      const link = e.target.closest('a[href]');
+      if (link && link.href && !link.href.startsWith('javascript:') && !link.href.startsWith('#')) {
+        lastLinkClickTime = Date.now();
+        console.log('[AUTH] Link clicked, setting navigation grace period:', link.href, 'at', lastLinkClickTime);
+      }
+    }
+    
+    // Attach immediately if possible
+    if (document.addEventListener) {
+      document.addEventListener('click', trackLinkClick, true); // Capture phase
+    } else if (document.attachEvent) {
+      document.attachEvent('onclick', trackLinkClick); // IE fallback
+    }
+    
+    // Also try to attach on DOM ready as backup
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('click', trackLinkClick, true);
+      });
+    }
+  })();
+}
+
 /**
  * Clear all authentication tokens from storage
  */
@@ -308,17 +355,22 @@ async function refreshAccessToken(maxRetries = 2) {
 async function apiFetch(url, options = {}, requireAuth = true) {
   // CRITICAL: Check if we're navigating - if so, don't make API calls that might redirect
   // This prevents interrupting link clicks and page navigation
-  const timeSinceLinkClick = Date.now() - lastLinkClickTime;
+  const now = Date.now();
+  const timeSinceLinkClick = now - lastLinkClickTime;
+  const timeSincePageLoad = now - pageLoadTime;
+  
   const isNavigating = document.readyState === 'loading' || 
                        document.visibilityState === 'hidden' ||
                        (window.performance?.navigation?.type === 1) || // TYPE_NAVIGATE
-                       timeSinceLinkClick < NAVIGATION_GRACE_PERIOD; // Recently clicked a link
+                       timeSinceLinkClick < NAVIGATION_GRACE_PERIOD || // Recently clicked a link
+                       timeSincePageLoad < PAGE_LOAD_GRACE_PERIOD; // Recently loaded page
   
   if (isNavigating && requireAuth) {
-    console.warn('[AUTH] Page is navigating or link recently clicked, skipping apiFetch to prevent redirect interruption', {
+    console.warn('[AUTH] Page is navigating or recently loaded, skipping apiFetch to prevent redirect interruption', {
       readyState: document.readyState,
       visibilityState: document.visibilityState,
       timeSinceLinkClick: timeSinceLinkClick,
+      timeSincePageLoad: timeSincePageLoad,
       navigationType: window.performance?.navigation?.type
     });
     throw new Error('Navigation in progress');
@@ -450,11 +502,14 @@ async function apiFetch(url, options = {}, requireAuth = true) {
         clearAuthTokens();
         
         // Check if we're navigating away (document is unloading or link recently clicked)
-        const timeSinceLinkClick = Date.now() - lastLinkClickTime;
+        const now = Date.now();
+        const timeSinceLinkClick = now - lastLinkClickTime;
+        const timeSincePageLoad = now - pageLoadTime;
         const isNavigating = document.readyState === 'loading' || 
                              document.visibilityState === 'hidden' ||
                              window.performance?.navigation?.type === 1 || // TYPE_NAVIGATE
-                             timeSinceLinkClick < NAVIGATION_GRACE_PERIOD; // Recently clicked a link
+                             timeSinceLinkClick < NAVIGATION_GRACE_PERIOD || // Recently clicked a link
+                             timeSincePageLoad < PAGE_LOAD_GRACE_PERIOD; // Recently loaded page
         
         // Only redirect if not on homepage AND not navigating (to prevent interrupting link clicks)
         const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
@@ -462,14 +517,27 @@ async function apiFetch(url, options = {}, requireAuth = true) {
           console.log('[AUTH] Redirecting to login (not on homepage, not navigating)');
           // Use setTimeout to ensure this doesn't block navigation
           setTimeout(() => {
-            // Double-check we're still on the same page and no link was clicked recently
-            const stillOnSamePage = window.location.pathname !== '/' && window.location.pathname !== '/home';
-            const noRecentClick = (Date.now() - lastLinkClickTime) >= NAVIGATION_GRACE_PERIOD;
-            if (stillOnSamePage && noRecentClick) {
-              window.location.href = '/login';
-            } else {
-              console.log('[AUTH] Skipping redirect - page changed or link clicked recently');
-            }
+          // Double-check we're still on the same page and no link was clicked recently
+          const now = Date.now();
+          const stillOnSamePage = window.location.pathname !== '/' && window.location.pathname !== '/home';
+          const noRecentClick = (now - lastLinkClickTime) >= NAVIGATION_GRACE_PERIOD;
+          const noRecentPageLoad = (now - pageLoadTime) >= PAGE_LOAD_GRACE_PERIOD;
+          
+          console.log('[AUTH] Redirect check (refresh failed):', {
+            stillOnSamePage,
+            noRecentClick,
+            noRecentPageLoad,
+            timeSinceClick: now - lastLinkClickTime,
+            timeSinceLoad: now - pageLoadTime,
+            currentPath: window.location.pathname
+          });
+          
+          if (stillOnSamePage && noRecentClick && noRecentPageLoad) {
+            console.log('[AUTH] All checks passed, redirecting to login');
+            window.location.href = '/login';
+          } else {
+            console.log('[AUTH] Skipping redirect - page changed, link clicked recently, or page just loaded');
+          }
           }, 100);
         } else {
           console.log('[AUTH] On homepage or navigating, not redirecting to prevent loops', {
@@ -491,11 +559,14 @@ async function apiFetch(url, options = {}, requireAuth = true) {
       clearAuthTokens();
       
       // Check if we're navigating away (document is unloading or link recently clicked)
-      const timeSinceLinkClick = Date.now() - lastLinkClickTime;
+      const now = Date.now();
+      const timeSinceLinkClick = now - lastLinkClickTime;
+      const timeSincePageLoad = now - pageLoadTime;
       const isNavigating = document.readyState === 'loading' || 
                            document.visibilityState === 'hidden' ||
                            window.performance?.navigation?.type === 1 || // TYPE_NAVIGATE
-                           timeSinceLinkClick < NAVIGATION_GRACE_PERIOD; // Recently clicked a link
+                           timeSinceLinkClick < NAVIGATION_GRACE_PERIOD || // Recently clicked a link
+                           timeSincePageLoad < PAGE_LOAD_GRACE_PERIOD; // Recently loaded page
       
       // Only redirect if not on homepage AND not navigating (to prevent interrupting link clicks)
       const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
@@ -504,12 +575,25 @@ async function apiFetch(url, options = {}, requireAuth = true) {
         // Use setTimeout to ensure this doesn't block navigation
         setTimeout(() => {
           // Double-check we're still on the same page and no link was clicked recently
+          const now = Date.now();
           const stillOnSamePage = window.location.pathname !== '/' && window.location.pathname !== '/home';
-          const noRecentClick = (Date.now() - lastLinkClickTime) >= NAVIGATION_GRACE_PERIOD;
-          if (stillOnSamePage && noRecentClick) {
+          const noRecentClick = (now - lastLinkClickTime) >= NAVIGATION_GRACE_PERIOD;
+          const noRecentPageLoad = (now - pageLoadTime) >= PAGE_LOAD_GRACE_PERIOD;
+          
+          console.log('[AUTH] Redirect check:', {
+            stillOnSamePage,
+            noRecentClick,
+            noRecentPageLoad,
+            timeSinceClick: now - lastLinkClickTime,
+            timeSinceLoad: now - pageLoadTime,
+            currentPath: window.location.pathname
+          });
+          
+          if (stillOnSamePage && noRecentClick && noRecentPageLoad) {
+            console.log('[AUTH] All checks passed, redirecting to login');
             window.location.href = '/login';
           } else {
-            console.log('[AUTH] Skipping redirect - page changed or link clicked recently');
+            console.log('[AUTH] Skipping redirect - page changed, link clicked recently, or page just loaded');
           }
         }, 100);
       } else {
@@ -528,17 +612,44 @@ async function apiFetch(url, options = {}, requireAuth = true) {
 
 // CRITICAL: Track link clicks to prevent redirects during navigation
 let lastLinkClickTime = 0;
-const NAVIGATION_GRACE_PERIOD = 2000; // 2 seconds after link click
+let pageLoadTime = Date.now();
+const NAVIGATION_GRACE_PERIOD = 3000; // 3 seconds after link click
+const PAGE_LOAD_GRACE_PERIOD = 2000; // 2 seconds after page load
 
-// Track all link clicks globally
+// Track page load time
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    pageLoadTime = Date.now();
+    console.log('[AUTH] Page loaded, setting page load grace period');
+  });
+} else {
+  pageLoadTime = Date.now();
+}
+
+// Track all link clicks globally - MUST run immediately
 (function() {
-  document.addEventListener('click', function(e) {
+  // Use capture phase and run immediately
+  function trackLinkClick(e) {
     const link = e.target.closest('a[href]');
     if (link && link.href && !link.href.startsWith('javascript:') && !link.href.startsWith('#')) {
       lastLinkClickTime = Date.now();
-      console.log('[AUTH] Link clicked, setting navigation grace period:', link.href);
+      console.log('[AUTH] Link clicked, setting navigation grace period:', link.href, 'at', lastLinkClickTime);
     }
-  }, true); // Use capture phase to catch all clicks
+  }
+  
+  // Attach immediately if possible
+  if (document.addEventListener) {
+    document.addEventListener('click', trackLinkClick, true); // Capture phase
+  } else if (document.attachEvent) {
+    document.attachEvent('onclick', trackLinkClick); // IE fallback
+  }
+  
+  // Also try to attach on DOM ready as backup
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      document.addEventListener('click', trackLinkClick, true);
+    });
+  }
 })();
 
 // Export functions to window for global access
