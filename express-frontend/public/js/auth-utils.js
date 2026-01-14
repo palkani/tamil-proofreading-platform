@@ -308,12 +308,19 @@ async function refreshAccessToken(maxRetries = 2) {
 async function apiFetch(url, options = {}, requireAuth = true) {
   // CRITICAL: Check if we're navigating - if so, don't make API calls that might redirect
   // This prevents interrupting link clicks and page navigation
+  const timeSinceLinkClick = Date.now() - lastLinkClickTime;
   const isNavigating = document.readyState === 'loading' || 
                        document.visibilityState === 'hidden' ||
-                       (window.performance?.navigation?.type === 1); // TYPE_NAVIGATE
+                       (window.performance?.navigation?.type === 1) || // TYPE_NAVIGATE
+                       timeSinceLinkClick < NAVIGATION_GRACE_PERIOD; // Recently clicked a link
   
   if (isNavigating && requireAuth) {
-    console.warn('[AUTH] Page is navigating, skipping apiFetch to prevent redirect interruption');
+    console.warn('[AUTH] Page is navigating or link recently clicked, skipping apiFetch to prevent redirect interruption', {
+      readyState: document.readyState,
+      visibilityState: document.visibilityState,
+      timeSinceLinkClick: timeSinceLinkClick,
+      navigationType: window.performance?.navigation?.type
+    });
     throw new Error('Navigation in progress');
   }
   
@@ -442,10 +449,12 @@ async function apiFetch(url, options = {}, requireAuth = true) {
         console.error('[AUTH] Still 401 after refresh, clearing tokens');
         clearAuthTokens();
         
-        // Check if we're navigating away (document is unloading)
+        // Check if we're navigating away (document is unloading or link recently clicked)
+        const timeSinceLinkClick = Date.now() - lastLinkClickTime;
         const isNavigating = document.readyState === 'loading' || 
                              document.visibilityState === 'hidden' ||
-                             window.performance?.navigation?.type === 1; // TYPE_NAVIGATE
+                             window.performance?.navigation?.type === 1 || // TYPE_NAVIGATE
+                             timeSinceLinkClick < NAVIGATION_GRACE_PERIOD; // Recently clicked a link
         
         // Only redirect if not on homepage AND not navigating (to prevent interrupting link clicks)
         const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
@@ -453,13 +462,21 @@ async function apiFetch(url, options = {}, requireAuth = true) {
           console.log('[AUTH] Redirecting to login (not on homepage, not navigating)');
           // Use setTimeout to ensure this doesn't block navigation
           setTimeout(() => {
-            // Double-check we're still on the same page (user might have navigated)
-            if (window.location.pathname !== '/' && window.location.pathname !== '/home') {
+            // Double-check we're still on the same page and no link was clicked recently
+            const stillOnSamePage = window.location.pathname !== '/' && window.location.pathname !== '/home';
+            const noRecentClick = (Date.now() - lastLinkClickTime) >= NAVIGATION_GRACE_PERIOD;
+            if (stillOnSamePage && noRecentClick) {
               window.location.href = '/login';
+            } else {
+              console.log('[AUTH] Skipping redirect - page changed or link clicked recently');
             }
           }, 100);
         } else {
-          console.log('[AUTH] On homepage or navigating, not redirecting to prevent loops');
+          console.log('[AUTH] On homepage or navigating, not redirecting to prevent loops', {
+            isHomepage,
+            isNavigating,
+            timeSinceLinkClick
+          });
         }
         throw new Error('Unauthorized');
       }
@@ -473,10 +490,12 @@ async function apiFetch(url, options = {}, requireAuth = true) {
       console.warn('[AUTH] Token refresh failed');
       clearAuthTokens();
       
-      // Check if we're navigating away (document is unloading)
+      // Check if we're navigating away (document is unloading or link recently clicked)
+      const timeSinceLinkClick = Date.now() - lastLinkClickTime;
       const isNavigating = document.readyState === 'loading' || 
                            document.visibilityState === 'hidden' ||
-                           window.performance?.navigation?.type === 1; // TYPE_NAVIGATE
+                           window.performance?.navigation?.type === 1 || // TYPE_NAVIGATE
+                           timeSinceLinkClick < NAVIGATION_GRACE_PERIOD; // Recently clicked a link
       
       // Only redirect if not on homepage AND not navigating (to prevent interrupting link clicks)
       const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
@@ -484,13 +503,21 @@ async function apiFetch(url, options = {}, requireAuth = true) {
         console.log('[AUTH] Redirecting to login (not on homepage, not navigating)');
         // Use setTimeout to ensure this doesn't block navigation
         setTimeout(() => {
-          // Double-check we're still on the same page (user might have navigated)
-          if (window.location.pathname !== '/' && window.location.pathname !== '/home') {
+          // Double-check we're still on the same page and no link was clicked recently
+          const stillOnSamePage = window.location.pathname !== '/' && window.location.pathname !== '/home';
+          const noRecentClick = (Date.now() - lastLinkClickTime) >= NAVIGATION_GRACE_PERIOD;
+          if (stillOnSamePage && noRecentClick) {
             window.location.href = '/login';
+          } else {
+            console.log('[AUTH] Skipping redirect - page changed or link clicked recently');
           }
         }, 100);
       } else {
-        console.log('[AUTH] On homepage or navigating, not redirecting to prevent loops');
+        console.log('[AUTH] On homepage or navigating, not redirecting to prevent loops', {
+          isHomepage,
+          isNavigating,
+          timeSinceLinkClick
+        });
       }
       throw new Error('Unauthorized');
     }
@@ -498,6 +525,21 @@ async function apiFetch(url, options = {}, requireAuth = true) {
   
   return response;
 }
+
+// CRITICAL: Track link clicks to prevent redirects during navigation
+let lastLinkClickTime = 0;
+const NAVIGATION_GRACE_PERIOD = 2000; // 2 seconds after link click
+
+// Track all link clicks globally
+(function() {
+  document.addEventListener('click', function(e) {
+    const link = e.target.closest('a[href]');
+    if (link && link.href && !link.href.startsWith('javascript:') && !link.href.startsWith('#')) {
+      lastLinkClickTime = Date.now();
+      console.log('[AUTH] Link clicked, setting navigation grace period:', link.href);
+    }
+  }, true); // Use capture phase to catch all clicks
+})();
 
 // Export functions to window for global access
 window.authUtils = {
