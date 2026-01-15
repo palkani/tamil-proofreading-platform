@@ -5,43 +5,24 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { adminAPI, authAPI } from '@/lib/api';
 import type { AdminAnalytics, Payment, Submission, User } from '@/types';
+import { useRequireAuth } from '@/lib/useRequireAuth';
 
 export default function AdminPage() {
   const router = useRouter();
+  const { user: authUser, loading: authLoading } = useRequireAuth();
   const [activeTab, setActiveTab] = useState<'users' | 'payments' | 'analytics' | 'logs'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
   const [logs, setLogs] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-
-  const loadUser = useCallback(async () => {
-    try {
-      const userData = await authAPI.getCurrentUser();
-      if (userData.role !== 'admin') {
-        router.push('/dashboard');
-        return;
-      }
-      setUser(userData);
-    } catch {
-      // Authentication disabled for testing - skip login requirement
-      setUser({
-        id: 0,
-        email: 'admin@example.com',
-        name: 'Admin',
-        role: 'admin',
-        subscription: 'free',
-        is_active: true,
-        created_at: '',
-        updated_at: '',
-      });
-    }
-  }, [router]);
 
   useEffect(() => {
-    void loadUser();
-  }, [loadUser]);
+    if (authLoading || !authUser) return;
+    if (authUser.role !== 'admin') {
+      router.replace('/dashboard');
+    }
+  }, [authLoading, authUser, router]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -76,10 +57,10 @@ export default function AdminPage() {
   }, [activeTab]);
 
   useEffect(() => {
-    if (user?.role === 'admin') {
+    if (authUser?.role === 'admin') {
       void loadData();
     }
-  }, [activeTab, user, loadData]);
+  }, [activeTab, authUser, loadData]);
 
   const handleUpdateUser = async (userId: number, data: Partial<User>) => {
     try {
@@ -100,7 +81,7 @@ export default function AdminPage() {
     }
   };
 
-  if (!user) {
+  if (authLoading || !authUser || authUser.role !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>

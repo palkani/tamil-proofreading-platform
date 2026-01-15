@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppHeader from '@/components/AppHeader';
 import { authAPI } from '@/lib/api';
+import { useRequireAuth } from '@/lib/useRequireAuth';
 
 const plans = [
   {
@@ -28,38 +29,30 @@ const plans = [
 
 export default function SubscriptionPage() {
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState('');
-  const [showAdmin, setShowAdmin] = useState(false);
+  const { user, loading: authLoading } = useRequireAuth();
   const [currentPlan, setCurrentPlan] = useState('free');
 
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const user = await authAPI.getCurrentUser();
-        setUserEmail(user.email);
-        setShowAdmin(user.role === 'admin');
-        setCurrentPlan(user.subscription ?? 'free');
-      } catch (err) {
-        // Authentication disabled for testing - skip login requirement
-        setUserEmail('test@example.com');
-        setShowAdmin(false);
-        setCurrentPlan('free');
-      }
-    };
-
-    loadUser();
-  }, [router]);
+    if (authLoading || !user) return;
+    setCurrentPlan(user.subscription ?? 'free');
+  }, [router, authLoading, user]);
 
   const handleLogout = async () => {
     await authAPI.logout();
-    setUserEmail('');
-    setShowAdmin(false);
-    router.push('/');
+    router.replace('/');
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-[var(--font-display)]">
-      <AppHeader showAdmin={showAdmin} userEmail={userEmail} onLogout={handleLogout} />
+      <AppHeader showAdmin={user?.role === 'admin'} userEmail={user?.email} onLogout={handleLogout} />
 
       <main className="mx-auto w-full max-w-6xl px-6 pb-24 pt-32 sm:px-12 lg:px-16">
         <header className="mb-12 space-y-3">

@@ -24,6 +24,94 @@ interface TamilIMEOptions {
   autoCommitOnSpace?: boolean;
 }
 
+function triggerDecorationUpdate(extension: any) {
+  const updateFn = extension?._updateDecorations;
+  if (!updateFn) return;
+  try {
+    updateFn();
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => {
+        try {
+          updateFn();
+        } catch {
+          // ignore
+        }
+      });
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function clearIMEState(extension: any) {
+  const storage = extension.storage as TamilIMEStorage;
+
+  if (storage.abortController) {
+    storage.abortController.abort();
+    storage.abortController = null;
+  }
+
+  storage.token = null;
+  storage.start = null;
+  storage.end = null;
+  storage.candidates = [];
+  storage.index = 0;
+  storage.ghost = null;
+  storage.fetching = false;
+
+  if (storage.debounce) {
+    clearTimeout(storage.debounce);
+    storage.debounce = null;
+  }
+
+  triggerDecorationUpdate(extension);
+}
+
+function commitIME(extension: any): boolean {
+  const storage = extension.storage as TamilIMEStorage;
+  if (!storage.ghost) {
+    return false;
+  }
+
+  const currentToken = getTokenAtCaret(extension.editor.state);
+  if (!isLatinToken(currentToken.token)) {
+    clearIMEState(extension);
+    return false;
+  }
+
+  const freshStart = currentToken.start;
+  const freshEnd = currentToken.end;
+  if (freshStart < 0 || freshEnd < 0 || freshEnd <= freshStart) {
+    clearIMEState(extension);
+    return false;
+  }
+
+  const docText = extension.editor.state.doc.textBetween(0, extension.editor.state.doc.content.size, '\n', '\n');
+  const tokenAtPosition = docText.slice(freshStart, freshEnd);
+  if (!isLatinToken(tokenAtPosition)) {
+    clearIMEState(extension);
+    return false;
+  }
+
+  extension.editor
+    .chain()
+    .focus()
+    .insertContentAt({ from: freshStart, to: freshEnd }, storage.ghost)
+    .run();
+
+  extension.editor.commands.setTextSelection(freshStart + storage.ghost.length);
+  clearIMEState(extension);
+  return true;
+}
+
+function updateGhostIME(extension: any) {
+  const storage = extension.storage as TamilIMEStorage;
+  if (storage.candidates[storage.index]) {
+    storage.ghost = storage.candidates[storage.index].text;
+    triggerDecorationUpdate(extension);
+  }
+}
+
 // Tamil character detection
 function isTamilChar(ch: string): boolean {
   const code = ch.codePointAt(0);
@@ -169,7 +257,8 @@ function rankCandidates(
 
 const TamilIMEPluginKey = new PluginKey<TamilIMEState>('tamilIME');
 
-export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
+// TipTap generics are <Options, Storage>
+export const TamilIME = Extension.create<TamilIMEOptions, TamilIMEStorage>({
   name: 'tamilIME',
 
   addOptions() {
@@ -298,7 +387,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                 closeBtn.setAttribute('aria-label', 'Close suggestions');
                 closeBtn.onclick = (e) => {
                   e.stopPropagation();
-                  extension.clear();
+                  clearIMEState(extension as any);
                 };
                 
                 // Suggestions list
@@ -337,7 +426,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                     storage.ghost = candidate.text;
                     storage.start = currentTokenInfo.start;
                     storage.end = currentTokenInfo.end;
-                    extension.commit();
+                    commitIME(extension as any);
                   };
                   
                   list.appendChild(item);
@@ -421,12 +510,12 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
               ? DecorationSet.create(state.doc, decos)
               : DecorationSet.empty;
 
-            console.log('[TamilIME] 🎨 updateDecos: Created', decos.length, 'decorations, decoSet size:', decoSet.size);
+            console.log('[TamilIME] 🎨 updateDecos: Created', decos.length, 'decorations');
 
             // Update plugin state via transaction - dispatch immediately
             const tr = state.tr.setMeta(TamilIMEPluginKey, { decorations: decoSet });
             editorView.dispatch(tr);
-            console.log('[TamilIME] 🎨 Dispatched transaction with', decoSet.size, 'decorations');
+            console.log('[TamilIME] 🎨 Dispatched transaction with', decos.length, 'decorations');
             
             // Force multiple updates to ensure dropdown appears
             requestAnimationFrame(() => {
@@ -477,7 +566,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                   closeBtn.innerHTML = '×';
                   closeBtn.onclick = (e) => {
                     e.stopPropagation();
-                    extension.clear();
+                    clearIMEState(extension as any);
                   };
                   
                   // Suggestions list
@@ -512,7 +601,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                       widgetStorage.ghost = candidate.text;
                       widgetStorage.start = currentTokenInfo.start;
                       widgetStorage.end = currentTokenInfo.end;
-                      extension.commit();
+                      commitIME(extension as any);
                     };
                     
                     list.appendChild(item);
@@ -539,15 +628,14 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                 : DecorationSet.empty;
               const tr2 = currentState.tr.setMeta(TamilIMEPluginKey, { decorations: freshDecoSet });
               editorView.dispatch(tr2);
-              console.log('[TamilIME] 🎨 Dispatched second transaction in RAF with', freshDecoSet.size, 'decorations');
+              console.log('[TamilIME] 🎨 Dispatched second transaction in RAF with', freshDecos.length, 'decorations');
             });
             
             // Verify the decorations were applied
             setTimeout(() => {
               const appliedState = TamilIMEPluginKey.getState(editorView.state);
               console.log('[TamilIME] 🎨 Applied decorations state:', {
-                hasDecorations: !!appliedState?.decorations,
-                decorationSize: appliedState?.decorations?.size || 0
+                hasDecorations: !!appliedState?.decorations
               });
               
               // Check if dropdown is in DOM
@@ -579,7 +667,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
               // Cleanup old dropdowns
               const oldDecos = TamilIMEPluginKey.getState(prevState)?.decorations;
               if (oldDecos) {
-                oldDecos.forEach((deco: any) => {
+                oldDecos.find().forEach((deco: any) => {
                   if (deco.spec?.key === 'tamil-ime-dropdown') {
                     const widget = deco.spec.widget;
                     if (widget && (widget as any)._cleanup) {
@@ -599,7 +687,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
               // Cleanup all dropdowns
               const state = TamilIMEPluginKey.getState(editorView.state);
               if (state?.decorations) {
-                state.decorations.forEach((deco: any) => {
+                state.decorations.find().forEach((deco: any) => {
                   if (deco.spec?.key === 'tamil-ime-dropdown') {
                     const widget = deco.spec.widget;
                     if (widget && (widget as any)._cleanup) {
@@ -620,24 +708,24 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
     const extension = this;
 
     return {
-      Tab: () => extension.commit(),
-      Enter: () => extension.commit(),
+      Tab: () => commitIME(extension as any),
+      Enter: () => commitIME(extension as any),
       ArrowDown: () => {
         const storage = extension.storage as TamilIMEStorage;
         if (!storage.candidates.length) return false;
         storage.index = Math.min(storage.index + 1, storage.candidates.length - 1);
-        extension.updateGhost();
+        updateGhostIME(extension as any);
         return true;
       },
       ArrowUp: () => {
         const storage = extension.storage as TamilIMEStorage;
         if (!storage.candidates.length) return false;
         storage.index = Math.max(storage.index - 1, 0);
-        extension.updateGhost();
+        updateGhostIME(extension as any);
         return true;
       },
       Escape: () => {
-        extension.clear();
+        clearIMEState(extension as any);
         return true;
       },
       Space: () => {
@@ -648,23 +736,23 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
           const currentToken = getTokenAtCaret(this.editor.state);
           if (isLatinToken(currentToken.token) && isLatinToken(storage.token)) {
             if (extension.options.autoCommitOnSpace) {
-              extension.commit();
+              commitIME(extension as any);
               this.editor.commands.insertContent(' ');
               return true;
             } else {
-              extension.clear();
+              clearIMEState(extension as any);
               return true;
             }
           } else {
             // Token is now Tamil, don't commit
             console.log('[TamilIME] ⚠️ Space pressed but token is Tamil, clearing suggestions');
-            extension.clear();
+            clearIMEState(extension as any);
             return false; // Let space through normally
           }
         }
         // No ghost or token is Tamil - let space through normally
         if (storage.ghost) {
-          extension.clear();
+          clearIMEState(extension as any);
         }
         return false;
       },
@@ -673,7 +761,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         const storage = extension.storage as TamilIMEStorage;
         if (storage.candidates.length > 0) {
           storage.index = 0;
-          extension.commit();
+          commitIME(extension as any);
           return true;
         }
         return false;
@@ -682,7 +770,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         const storage = extension.storage as TamilIMEStorage;
         if (storage.candidates.length > 1) {
           storage.index = 1;
-          extension.commit();
+          commitIME(extension as any);
           return true;
         }
         return false;
@@ -691,7 +779,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         const storage = extension.storage as TamilIMEStorage;
         if (storage.candidates.length > 2) {
           storage.index = 2;
-          extension.commit();
+          commitIME(extension as any);
           return true;
         }
         return false;
@@ -700,7 +788,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         const storage = extension.storage as TamilIMEStorage;
         if (storage.candidates.length > 3) {
           storage.index = 3;
-          extension.commit();
+          commitIME(extension as any);
           return true;
         }
         return false;
@@ -709,7 +797,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         const storage = extension.storage as TamilIMEStorage;
         if (storage.candidates.length > 4) {
           storage.index = 4;
-          extension.commit();
+          commitIME(extension as any);
           return true;
         }
         return false;
@@ -720,7 +808,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
   onUpdate({ editor }) {
     // Skip if extension is disabled
     if (!this.options.enabled) {
-      this.clear();
+      clearIMEState(this as any);
       return;
     }
 
@@ -730,19 +818,19 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
 
     // Clear if no token
     if (!token || token.length < 1) {
-      this.clear();
+      clearIMEState(this as any);
       return;
     }
 
     // Mixed language support: skip IME if token contains Tamil
     if (isMostlyTamil(token)) {
-      this.clear();
+      clearIMEState(this as any);
       return;
     }
 
     // Only process Latin tokens
     if (!isLatinToken(token)) {
-      this.clear();
+      clearIMEState(this as any);
       return;
     }
 
@@ -841,7 +929,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
           } catch {
             // Ignore parse errors
           }
-          this.clear();
+          clearIMEState(this as any);
           return;
         }
 
@@ -851,7 +939,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         // Validate response structure
         if (!data || typeof data !== 'object') {
           console.warn('[TamilIME] ⚠️ Invalid API response format:', data);
-          this.clear();
+          clearIMEState(this as any);
           return;
         }
         
@@ -881,11 +969,11 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
           confidence: s.confidence,
         })).filter((s: any) => s.text && s.text.trim().length > 0);
 
-        console.log('[TamilIME] ✅ Parsed', raw.length, 'suggestions from API response:', raw.map(s => s.text));
+        console.log('[TamilIME] ✅ Parsed', raw.length, 'suggestions from API response:', raw.map((s: any) => s.text));
 
         if (raw.length === 0) {
           console.log('[TamilIME] ⚠️ No valid suggestions in API response after filtering');
-          this.clear();
+          clearIMEState(this as any);
           return;
         }
 
@@ -895,7 +983,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
 
         if (!ranked.length) {
           console.log('[TamilIME] ⚠️ No ranked candidates after processing');
-          this.clear();
+          clearIMEState(this as any);
           return;
         }
 
@@ -929,8 +1017,8 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
           console.log('[TamilIME] ✅ Updating decorations immediately with', storage.candidates.length, 'candidates');
           
           // Force immediate update (synchronous) - call updateDecoration multiple times
-          this.updateDecoration();
-          this.updateDecoration(); // Call twice to ensure it triggers
+          triggerDecorationUpdate(this as any);
+          triggerDecorationUpdate(this as any); // Call twice to ensure it triggers
           
           // Force multiple updates to ensure visibility
           requestAnimationFrame(() => {
@@ -942,8 +1030,8 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
             });
             if (currentStorage.candidates.length > 0 && currentStorage.start !== null && currentStorage.end !== null) {
               console.log('[TamilIME] ✅ Updating decorations in RAF - candidates:', currentStorage.candidates.length);
-              this.updateDecoration();
-              this.updateDecoration(); // Call twice
+              triggerDecorationUpdate(this as any);
+              triggerDecorationUpdate(this as any); // Call twice
             }
           });
           
@@ -952,7 +1040,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
             const currentStorage = this.storage as TamilIMEStorage;
             if (currentStorage.candidates.length > 0 && currentStorage.start !== null && currentStorage.end !== null) {
               console.log('[TamilIME] ✅ Updating decorations after 50ms - candidates:', currentStorage.candidates.length);
-              this.updateDecoration();
+              triggerDecorationUpdate(this as any);
             }
           }, 50);
           
@@ -960,7 +1048,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
             const currentStorage = this.storage as TamilIMEStorage;
             if (currentStorage.candidates.length > 0 && currentStorage.start !== null && currentStorage.end !== null) {
               console.log('[TamilIME] ✅ Updating decorations after 100ms - candidates:', currentStorage.candidates.length);
-              this.updateDecoration();
+              triggerDecorationUpdate(this as any);
               
               // Verify dropdown is visible
               setTimeout(() => {
@@ -988,7 +1076,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
                     token: currentStorage.token
                   });
                   // Force one more update if dropdown still not visible
-                  this.updateDecoration();
+                  triggerDecorationUpdate(this as any);
                 }
               }, 50);
             }
@@ -1008,7 +1096,7 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
         }
         console.error('[TamilIME] Fetch error for', token, ':', err);
         if (storage.token === token && storage.lastRequestId === requestId) {
-          this.clear();
+          clearIMEState(this as any);
         }
       } finally {
         if (storage.abortController === abortController) {
@@ -1020,117 +1108,4 @@ export const TamilIME = Extension.create<TamilIMEStorage, TamilIMEOptions>({
     }, 500); // Increased debounce to 500ms to reduce cancellations and allow requests to complete
   },
 
-  commit() {
-    const storage = this.storage as TamilIMEStorage;
-    if (!storage.ghost) {
-      console.log('[TamilIME] ⚠️ Cannot commit - missing ghost text');
-      return false;
-    }
-
-    // Always get fresh token positions from current editor state
-    // This ensures we replace the correct word even if cursor moved
-    const currentToken = getTokenAtCaret(this.editor.state);
-    if (!isLatinToken(currentToken.token)) {
-      console.log('[TamilIME] ⚠️ Cannot commit - token is not Latin:', currentToken.token);
-      this.clear();
-      return false;
-    }
-
-    // Use fresh positions from current state, not stale storage values
-    const freshStart = currentToken.start;
-    const freshEnd = currentToken.end;
-    
-    if (freshStart < 0 || freshEnd < 0 || freshEnd <= freshStart) {
-      console.log('[TamilIME] ⚠️ Cannot commit - invalid token positions:', { freshStart, freshEnd });
-      this.clear();
-      return false;
-    }
-
-    // Verify the token at the position is still Latin
-    const docText = this.editor.state.doc.textBetween(0, this.editor.state.doc.content.size, '\n', '\n');
-    const tokenAtPosition = docText.slice(freshStart, freshEnd);
-    if (!isLatinToken(tokenAtPosition)) {
-      console.log('[TamilIME] ⚠️ Cannot commit - token at position is not Latin:', tokenAtPosition);
-      this.clear();
-      return false;
-    }
-
-    console.log('[TamilIME] ✅ Committing suggestion:', storage.ghost, 'replacing:', tokenAtPosition, 'at positions', freshStart, '-', freshEnd);
-    
-    // Replace the typed word with selected word
-    this.editor
-      .chain()
-      .focus()
-      .insertContentAt(
-        { from: freshStart, to: freshEnd },
-        storage.ghost
-      )
-      .run();
-
-    // Move cursor to end of replaced text
-    const newCursorPos = freshStart + storage.ghost.length;
-    this.editor.commands.setTextSelection(newCursorPos);
-
-    this.clear();
-    return true;
-  },
-
-  updateGhost() {
-    const storage = this.storage as TamilIMEStorage;
-    if (storage.candidates[storage.index]) {
-      storage.ghost = storage.candidates[storage.index].text;
-      this.updateDecoration();
-    }
-  },
-
-  updateDecoration() {
-    const updateFn = (this as any)._updateDecorations;
-    if (updateFn) {
-      console.log('[TamilIME] updateDecoration called, _updateDecorations exists:', !!updateFn);
-      // Call immediately (not in RAF) to ensure fast updates
-      try {
-        updateFn();
-        console.log('[TamilIME] Decorations updated successfully');
-        // Also call in RAF as backup
-        requestAnimationFrame(() => {
-          try {
-            updateFn();
-            console.log('[TamilIME] Decorations updated in RAF as backup');
-          } catch (err) {
-            console.error('[TamilIME] Error updating decorations in RAF:', err);
-          }
-        });
-      } catch (err) {
-        console.error('[TamilIME] Error updating decorations:', err);
-      }
-    } else {
-      console.warn('[TamilIME] _updateDecorations function not found - decorations may not update');
-    }
-  },
-
-  clear() {
-    const storage = this.storage as TamilIMEStorage;
-    
-    // Cancel any in-flight requests
-    if (storage.abortController) {
-      storage.abortController.abort();
-      storage.abortController = null;
-    }
-
-    storage.token = null;
-    storage.start = null;
-    storage.end = null;
-    storage.candidates = [];
-    storage.index = 0;
-    storage.ghost = null;
-    storage.fetching = false;
-
-    if (storage.debounce) {
-      clearTimeout(storage.debounce);
-      storage.debounce = null;
-    }
-
-    // Clear decoration
-    this.updateDecoration();
-  },
 });

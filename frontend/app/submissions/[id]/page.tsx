@@ -7,15 +7,15 @@ import type { Submission, Suggestion } from '@/types';
 import { extractApiErrorMessage } from '@/utils/errors';
 import AppHeader from '@/components/AppHeader';
 import SubmissionDiff from '@/components/SubmissionDiff';
+import { useRequireAuth } from '@/lib/useRequireAuth';
 
 export default function SubmissionDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { user, loading: authLoading } = useRequireAuth();
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [userEmail, setUserEmail] = useState('');
-  const [showAdmin, setShowAdmin] = useState(false);
 
   const submissionId = useMemo(() => {
     const raw = params?.id;
@@ -33,16 +33,6 @@ export default function SubmissionDetailPage() {
       }
 
       try {
-        const user = await authAPI.getCurrentUser();
-        setUserEmail(user.email);
-        setShowAdmin(user.role === 'admin');
-      } catch (err) {
-        // Authentication disabled for testing - skip login requirement
-        setUserEmail('test@example.com');
-        setShowAdmin(false);
-      }
-
-      try {
         const data = await submissionAPI.getSubmission(submissionId);
         setSubmission(data);
       } catch (error) {
@@ -53,14 +43,13 @@ export default function SubmissionDetailPage() {
       }
     };
 
+    if (authLoading || !user) return;
     init();
-  }, [submissionId, router]);
+  }, [submissionId, router, authLoading, user]);
 
   const handleLogout = async () => {
     await authAPI.logout();
-    setUserEmail('');
-    setShowAdmin(false);
-    router.push('/');
+    router.replace('/');
   };
 
   const suggestions: Suggestion[] = useMemo(() => {
@@ -99,7 +88,7 @@ export default function SubmissionDetailPage() {
     }
   }, [submission?.alternatives]);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
@@ -110,7 +99,7 @@ export default function SubmissionDetailPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <AppHeader showAdmin={showAdmin} userEmail={userEmail} onLogout={handleLogout} />
+        <AppHeader showAdmin={user?.role === 'admin'} userEmail={user?.email} onLogout={handleLogout} />
         <div className="max-w-3xl mx-auto py-10 px-4">
           <div className="bg-white shadow rounded-lg p-6 text-red-600">
             {error}
@@ -126,7 +115,7 @@ export default function SubmissionDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AppHeader showAdmin={showAdmin} userEmail={userEmail} onLogout={handleLogout} />
+      <AppHeader showAdmin={user?.role === 'admin'} userEmail={user?.email} onLogout={handleLogout} />
 
       <div className="max-w-4xl mx-auto py-10 px-4 space-y-6">
         <div className="bg-white shadow rounded-lg p-6 space-y-4">

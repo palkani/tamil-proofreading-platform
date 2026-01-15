@@ -172,3 +172,24 @@ export function IconFontSize(props: IconProps) {
     </svg>
   );
 }
+
+export function IconHeading(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props} viewBox="0 0 24 24">
+      <path d="M6 4v16" />
+      <path d="M18 4v16" />
+      <path d="M6 12h12" />
+    </svg>
+  );
+}
+
+export function IconParagraph(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props} viewBox="0 0 24 24">
+      <path d="M9 4h6" />
+      <path d="M12 4v16" />
+      <path d="M9 10h6" />
+      <path d="M9 16h6" />
+    </svg>
+  );
+}

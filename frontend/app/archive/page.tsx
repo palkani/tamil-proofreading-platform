@@ -6,6 +6,7 @@ import AppHeader from '@/components/AppHeader';
 import { authAPI, submissionAPI } from '@/lib/api';
 import { extractApiErrorMessage } from '@/utils/errors';
 import type { Submission } from '@/types';
+import { useRequireAuth } from '@/lib/useRequireAuth';
 
 const RETENTION_DAYS = 15;
 
@@ -19,8 +20,7 @@ const calculateDaysRemaining = (archivedAt?: string) => {
 
 export default function ArchivePage() {
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState('');
-  const [showAdmin, setShowAdmin] = useState(false);
+  const { user, loading: authLoading } = useRequireAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [archivedDrafts, setArchivedDrafts] = useState<Submission[]>([]);
@@ -30,25 +30,19 @@ export default function ArchivePage() {
     const loadArchive = async () => {
       try {
         setLoading(true);
-        const user = await authAPI.getCurrentUser();
-        setUserEmail(user.email);
-        setShowAdmin(user.role === 'admin');
-
         const { submissions, retention_days, message: apiMessage } = await submissionAPI.getArchivedSubmissions();
         setArchivedDrafts(submissions);
         setMessage(apiMessage ?? `Drafts are retained for ${retention_days} days before deletion.`);
       } catch (error) {
-        // Authentication disabled for testing - skip login requirement
-        setUserEmail('test@example.com');
-        setShowAdmin(false);
         setError(extractApiErrorMessage(error, 'Unable to load archived drafts. Please try again later.'));
       } finally {
         setLoading(false);
       }
     };
 
+    if (authLoading || !user) return;
     loadArchive();
-  }, [router]);
+  }, [router, authLoading, user]);
 
   const archiveSummary = useMemo(() => {
     if (!archivedDrafts.length) {
@@ -59,14 +53,12 @@ export default function ArchivePage() {
 
   const handleLogout = async () => {
     await authAPI.logout();
-    setUserEmail('');
-    setShowAdmin(false);
-    router.push('/');
+    router.replace('/');
   };
 
   return (
     <div className="min-h-screen bg-[#f6f6f8] text-[#1c1c1c] font-[var(--font-display)]">
-      <AppHeader showAdmin={showAdmin} userEmail={userEmail} onLogout={handleLogout} />
+      <AppHeader showAdmin={user?.role === 'admin'} userEmail={user?.email} onLogout={handleLogout} />
       <main className="mx-auto w-full max-w-5xl px-4 pb-16 pt-12 sm:px-8">
         <div className="flex flex-col gap-6">
           <header className="flex flex-col gap-2">

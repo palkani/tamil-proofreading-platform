@@ -56,7 +56,8 @@ function mapPlainTextToDoc(doc: any, plainText: string): number[] {
   return mapping;
 }
 
-export const GrammarHighlighter = Extension.create<GrammarHighlighterStorage>({
+// TipTap generics are <Options, Storage>
+export const GrammarHighlighter = Extension.create<Record<string, never>, GrammarHighlighterStorage>({
   name: 'grammarHighlighter',
 
   addStorage() {
@@ -168,7 +169,8 @@ export const GrammarHighlighter = Extension.create<GrammarHighlighterStorage>({
         // Skip if text is too short
         if (plainText.trim().length < 10) {
           storage.issues = [];
-          this.updateDecorations();
+          const updateFn = (this as any)._updateGrammarDecorations;
+          if (updateFn) updateFn();
           return;
         }
 
@@ -178,38 +180,22 @@ export const GrammarHighlighter = Extension.create<GrammarHighlighterStorage>({
 
         if (!res.ok) {
           storage.issues = [];
-          this.updateDecorations();
+          const updateFn = (this as any)._updateGrammarDecorations;
+          if (updateFn) updateFn();
           return;
         }
 
         const data = await res.json();
         storage.issues = data.issues || [];
-        this.updateDecorations();
+        const updateFn = (this as any)._updateGrammarDecorations;
+        if (updateFn) updateFn();
       } catch (err) {
         console.error('[GrammarHighlighter] Check error:', err);
         storage.issues = [];
-        this.updateDecorations();
+        const updateFn = (this as any)._updateGrammarDecorations;
+        if (updateFn) updateFn();
       }
     }, 900);
-  },
-
-  updateDecorations() {
-    const updateFn = (this as any)._updateGrammarDecorations;
-    if (updateFn) {
-      updateFn();
-    }
-  },
-
-  clear() {
-    const storage = this.storage as GrammarHighlighterStorage;
-    storage.issues = [];
-
-    if (storage.debounce) {
-      clearTimeout(storage.debounce);
-      storage.debounce = null;
-    }
-
-    this.updateDecorations();
   },
 });
 

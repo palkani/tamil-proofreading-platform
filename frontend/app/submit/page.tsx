@@ -14,6 +14,7 @@ import { analyzeGrammar, getGrammarRuleExplanation } from '@/utils/tamilGrammar'
 import { analyzeClarityStyle, getClarityStyleExplanation } from '@/utils/clarityStyle';
 import { checkGrammarSegment, AISuggestion as GeminiSuggestion } from '@/utils/geminiTamilChecker';
 import { extractApiErrorMessage } from '@/utils/errors';
+import { useRequireAuth } from '@/lib/useRequireAuth';
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 
@@ -256,6 +257,7 @@ const filterSuggestionsForText = (suggestions: AssistantSuggestion[], docText: s
 
 export default function SubmitPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useRequireAuth();
   const [text, setText] = useState('');
   const [editorHTML, setEditorHTML] = useState('');
   const [loading, setLoading] = useState(false);
@@ -269,6 +271,7 @@ export default function SubmitPage() {
   const [handledSuggestionIds, setHandledSuggestionIds] = useState<string[]>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
   const pollingRef = useRef<number | null>(null);
+  const lastAutoSubmitAtRef = useRef<number>(0);
   const [recentSubmissions, setRecentSubmissions] = useState<Submission[]>([]);
   const [mode, setMode] = useState<'list' | 'editor'>('editor');
   const [infoMessage, setInfoMessage] = useState('');
@@ -399,21 +402,60 @@ export default function SubmitPage() {
   useEffect(() => {
     const init = async () => {
       try {
-        const user = await authAPI.getCurrentUser();
-        setUserEmail(user.email);
-        setShowAdmin(user.role === 'admin');
-
         const list = await submissionAPI.getSubmissions(6, 0);
         setRecentSubmissions(list.submissions);
+
+        // If navigated from Drafts with ?draft=<id>, load that draft into the editor.
+        if (typeof window !== 'undefined') {
+          const rawDraftId = new URLSearchParams(window.location.search).get('draft');
+          const draftId = rawDraftId ? Number(rawDraftId) : null;
+          if (draftId && Number.isFinite(draftId) && !Number.isNaN(draftId)) {
+            setInfoMessage('Loading draft…');
+
+            // Stop ALL ongoing operations immediately (same as handleOpenDraft)
+            if (analysisTimeoutRef.current) {
+              window.clearTimeout(analysisTimeoutRef.current);
+              analysisTimeoutRef.current = null;
+            }
+            if (eventSourceRef.current) {
+              eventSourceRef.current.close();
+              eventSourceRef.current = null;
+            }
+            clearPolling();
+
+            isInitializingRef.current = true;
+
+            const draft = await submissionAPI.getSubmission(draftId);
+            const draftText = draft.original_text || '';
+            const draftHTML = draft.original_html || draftText || '<p></p>';
+
+            setMode('editor');
+            setRealtimeSuggestions([]);
+            setDeepSuggestions([]);
+            setHandledSuggestionIds([]);
+            setRealtimeLoading(false);
+            setError('');
+            setSubmission(draft);
+            setText(draftText);
+            setEditorHTML(draftHTML);
+
+            setTimeout(() => {
+              isInitializingRef.current = false;
+              setInfoMessage('');
+            }, 500);
+          }
+        }
       } catch (err) {
-        // Authentication disabled for testing - skip login requirement
-        setUserEmail('test@example.com');
-        setShowAdmin(false);
+        console.error('Error initializing workspace:', err);
+        setError(extractApiErrorMessage(err, 'Unable to load drafts. Please try again.'));
       }
     };
 
+    if (authLoading || !user) return;
+    setUserEmail(user.email);
+    setShowAdmin(user.role === 'admin');
     init();
-  }, [router]);
+  }, [router, authLoading, user]);
 
   // Debug: Track mode changes
   useEffect(() => {
@@ -787,15 +829,25 @@ export default function SubmitPage() {
 
   const handlePasteProofread = useCallback(
     (payload: { html: string; plain: string }) => {
-      const convertedPlain = convertEnglishToTamil(payload.plain);
-      const convertedHtml = plainTextToHtml(convertedPlain);
-      
-      setText(convertedPlain);
-      setEditorHTML(convertedHtml);
-      // Don't auto-submit on paste - user should manually submit when ready
-      // Only submit if explicitly requested (e.g., from a button)
+      const rawPlain = payload.plain ?? '';
+      const hasTamil = /[\u0B80-\u0BFF]/u.test(rawPlain);
+      const nextPlain = hasTamil ? rawPlain : convertEnglishToTamil(rawPlain);
+      const nextHtml = plainTextToHtml(nextPlain);
+
+      setText(nextPlain);
+      setEditorHTML(nextHtml);
+
+      // Auto-submit on paste (requirement): submit only when we have enough content
+      // and avoid rapid duplicate submissions.
+      const now = Date.now();
+      if (now - lastAutoSubmitAtRef.current < 1500) {
+        return;
+      }
+      lastAutoSubmitAtRef.current = now;
+
+      void submitForProofreading(nextPlain, nextHtml);
     },
-    [loading, submitForProofreading]
+    [submitForProofreading]
   );
 
   const handleNewDraft = useCallback(() => {
@@ -1066,6 +1118,14 @@ export default function SubmitPage() {
         (item.original_text || '').toLowerCase().includes(query)
     );
   }, [recentSubmissions, searchQuery]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F8FAFC] via-white to-[#F1F5F9] text-[#0F172A] font-[var(--font-display)]">

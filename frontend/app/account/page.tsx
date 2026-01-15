@@ -4,32 +4,19 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppHeader from '@/components/AppHeader';
 import { authAPI } from '@/lib/api';
+import { useRequireAuth } from '@/lib/useRequireAuth';
 
 export default function AccountPage() {
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState('');
   const [userName, setUserName] = useState('');
-  const [showAdmin, setShowAdmin] = useState(false);
+  const { user, loading: authLoading } = useRequireAuth();
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const user = await authAPI.getCurrentUser();
-        setUserEmail(user.email);
-        setUserName(user.name ?? '');
-        setShowAdmin(user.role === 'admin');
-      } catch {
-        // Authentication disabled for testing - skip login requirement
-        setUserEmail('test@example.com');
-        setUserName('Test User');
-        setShowAdmin(false);
-      }
-    };
-
-    loadUser();
-  }, [router]);
+    if (authLoading || !user) return;
+    setUserName(user.name ?? '');
+  }, [authLoading, user]);
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -40,14 +27,20 @@ export default function AccountPage() {
 
   const handleLogout = async () => {
     await authAPI.logout();
-    setUserEmail('');
-    setShowAdmin(false);
-    router.push('/');
+    router.replace('/');
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-[var(--font-display)]">
-      <AppHeader showAdmin={showAdmin} userEmail={userEmail} onLogout={handleLogout} />
+      <AppHeader showAdmin={user?.role === 'admin'} userEmail={user?.email} onLogout={handleLogout} />
       <main className="mx-auto w-full max-w-4xl px-6 pb-20 pt-32 sm:px-12 lg:px-16">
         <header className="mb-10 space-y-3">
           <p className="text-sm font-semibold text-[#6366F1] uppercase tracking-[0.3em]">Account Center</p>
@@ -79,7 +72,7 @@ export default function AccountPage() {
               <input
                 id="email"
                 type="email"
-                value={userEmail}
+                value={user?.email ?? ''}
                 disabled
                 className="w-full rounded-2xl border border-[#E2E8F0] px-4 py-3 text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
               />

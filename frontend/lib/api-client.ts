@@ -18,9 +18,12 @@ const apiClient = axios.create({
 
 // Add auth token to requests
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  // NOTE: Next.js can import modules during SSR; guard localStorage usage.
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
@@ -38,7 +41,9 @@ apiClient.interceptors.response.use(
         const refreshResponse = await apiClient.post('/auth/refresh', {});
         const newToken = refreshResponse.data?.access_token;
         if (newToken) {
-          localStorage.setItem('token', newToken);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('token', newToken);
+          }
           originalRequest.headers = {
             ...(originalRequest.headers || {}),
             Authorization: `Bearer ${newToken}`,
@@ -46,15 +51,19 @@ apiClient.interceptors.response.use(
         }
         return apiClient(originalRequest);
       } catch (refreshError) {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
+        // Do NOT redirect here. Let pages explicitly guard routes.
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('token');
+        }
         return Promise.reject(refreshError);
       }
     }
 
     if (status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+      // Do NOT redirect here. Let pages explicitly guard routes.
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+      }
     }
     return Promise.reject(error);
   }

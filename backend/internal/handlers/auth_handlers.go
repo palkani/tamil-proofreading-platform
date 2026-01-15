@@ -177,6 +177,26 @@ func (h *Handlers) clearRefreshCookie(c *gin.Context) {
         })
 }
 
+func (h *Handlers) clearAccessTokenCookie(c *gin.Context) {
+	host := c.Request.Host
+	var domain string
+	if strings.HasSuffix(host, "prooftamil.com") {
+		domain = ".prooftamil.com"
+	}
+
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		Path:     "/",
+		Domain:   domain,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteNoneMode,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	})
+}
+
 func sessionMetadataFromContext(c *gin.Context) auth.SessionMetadata {
         return auth.SessionMetadata{
                 UserAgent: c.GetHeader("User-Agent"),
@@ -349,6 +369,7 @@ func (h *Handlers) Logout(c *gin.Context) {
         }
 
         h.clearRefreshCookie(c)
+	h.clearAccessTokenCookie(c)
         c.Status(http.StatusNoContent)
 }
 

@@ -36,7 +36,7 @@ export default function Home() {
     await authAPI.logout();
     setUserEmail('');
     setShowAdmin(false);
-    router.push('/');
+    router.replace('/');
   };
 
   return (

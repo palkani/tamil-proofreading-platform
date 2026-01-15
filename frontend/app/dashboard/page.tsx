@@ -5,18 +5,19 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { dashboardAPI, authAPI } from '@/lib/api';
 import AppHeader from '@/components/AppHeader';
-import type { DashboardStats, User } from '@/types';
+import type { DashboardStats } from '@/types';
+import { useRequireAuth } from '@/lib/useRequireAuth';
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useRequireAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    if (authLoading || !user) return;
     loadDashboard();
-    loadUser();
-  }, []);
+  }, [authLoading, user]);
 
   const loadDashboard = async () => {
     try {
@@ -29,32 +30,12 @@ export default function DashboardPage() {
     }
   };
 
-  const loadUser = async () => {
-    try {
-      const userData = await authAPI.getCurrentUser();
-      setUser(userData);
-    } catch (err) {
-      // Authentication disabled for testing - skip login requirement
-      setUser({
-        id: 0,
-        email: 'test@example.com',
-        name: 'Test User',
-        role: 'writer',
-        subscription: 'free',
-        is_active: true,
-        created_at: '',
-        updated_at: '',
-      });
-    }
-  };
-
   const handleLogout = async () => {
     await authAPI.logout();
-    setUser(null);
-    router.push('/');
+    router.replace('/');
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>

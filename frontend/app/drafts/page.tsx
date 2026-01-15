@@ -5,20 +5,21 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { submissionAPI, authAPI } from '@/lib/api';
 import AppHeader from '@/components/AppHeader';
-import type { Submission, User } from '@/types';
+import type { Submission } from '@/types';
 import { extractApiErrorMessage } from '@/utils/errors';
+import { useRequireAuth } from '@/lib/useRequireAuth';
 
 export default function DraftsPage() {
   const router = useRouter();
   const [drafts, setDrafts] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [user, setUser] = useState<User | null>(null);
+  const { user, loading: authLoading } = useRequireAuth();
 
   useEffect(() => {
+    if (authLoading || !user) return;
     loadDrafts();
-    loadUser();
-  }, []);
+  }, [authLoading, user]);
 
   const loadDrafts = async () => {
     try {
@@ -39,33 +40,13 @@ export default function DraftsPage() {
     }
   };
 
-  const loadUser = async () => {
-    try {
-      const userData = await authAPI.getCurrentUser();
-      setUser(userData);
-    } catch (err) {
-      // Authentication disabled for testing - skip login requirement
-      setUser({
-        id: 0,
-        email: 'test@example.com',
-        name: 'Test User',
-        role: 'writer',
-        subscription: 'free',
-        is_active: true,
-        created_at: '',
-        updated_at: '',
-      });
-    }
-  };
-
   const handleLogout = async () => {
     await authAPI.logout();
-    setUser(null);
-    router.push('/');
+    router.replace('/');
   };
 
   const handleNewDraft = () => {
-    router.push('/workspace');
+    router.push('/submit');
   };
 
   const formatDate = (dateString: string) => {
@@ -92,7 +73,7 @@ export default function DraftsPage() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
@@ -192,8 +173,8 @@ export default function DraftsPage() {
                   </thead>
                   <tbody className="bg-white divide-y divide-[var(--surface)]/10">
                     {drafts.map((draft) => {
-                      // Extract preview text from original_text or corrected_text
-                      const previewText = draft.original_text || draft.corrected_text || '';
+                      // Extract preview text from original_text or proofread_text
+                      const previewText = draft.original_text || draft.proofread_text || '';
                       const preview = previewText.length > 100 
                         ? previewText.substring(0, 100) + '...' 
                         : previewText;
@@ -203,7 +184,7 @@ export default function DraftsPage() {
                           <td className="px-6 py-4">
                             <div className="max-w-md">
                               <Link
-                                href={`/submissions/${draft.id}`}
+                                href={`/submit?draft=${draft.id}`}
                                 className="text-sm font-medium text-[var(--surface)] hover:text-[#4F46E5] underline"
                               >
                                 Draft #{draft.id}

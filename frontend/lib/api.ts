@@ -50,7 +50,13 @@ export const authAPI = {
     } catch (err) {
       // Ignore logout network errors to allow client-side cleanup
     } finally {
+      // Clear all client-side auth state (token + any cached session flags)
       localStorage.removeItem('token');
+      try {
+        sessionStorage.clear();
+      } catch {
+        // ignore
+      }
     }
   },
 

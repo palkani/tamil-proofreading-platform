@@ -33,7 +33,7 @@ export default function RegisterPage() {
 
     try {
       await authAPI.register(email, password, name);
-      router.push('/drafts');
+      router.replace('/drafts');
     } catch (error) {
       setError(extractApiErrorMessage(error, 'Registration failed'));
     } finally {
