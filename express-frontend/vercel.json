@@ -62,12 +62,16 @@
       "destination": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/ime/:path*"
     },
     {
-      "source": "/workspace",
-      "destination": "https://prooftamil-backend-991187041222.asia-south1.run.app/workspace"
-    },
-    {
       "source": "/api/v1/:path*",
       "destination": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/workspace",
+      "destination": "/api/index.js"
     },
     {
       "source": "/((?!api/v1/).*)",

@@ -26,22 +26,16 @@ function triggerGoogleSignIn() {
   }
   
   try {
-    // CRITICAL: Always use prooftamil.com in production/Cloud Run
-    // Even if browser shows internal domain due to proxy, redirect_uri must match Google OAuth config
-    const isCloudRun = window.location.hostname.includes('run.app');
-    const isProduction = window.location.hostname.includes('prooftamil.com');
-    
-    // Redirect directly to backend Cloud Run auth endpoint (no proxy)
-    const backendAuthUrl = 'https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/auth/google';
-    
-    console.log('[GOOGLE-AUTH] Production Mode:', isProduction);
-    console.log('[GOOGLE-AUTH] Cloud Run:', isCloudRun);
-    console.log('[GOOGLE-AUTH] Hostname:', window.location.hostname);
-    console.log('[GOOGLE-AUTH] Backend Auth URL:', backendAuthUrl);
-    console.log('[GOOGLE-AUTH] Client ID:', googleClientId.substring(0, 20) + '...');
+    // CRITICAL: Always initiate OAuth from the frontend domain.
+    // This ensures cookies/redirects stay consistent and we land on /drafts after callback.
+    // The backend callback is still used, but the OAuth initiation begins at /auth/google.
+    const frontendOauthStartUrl = '/auth/google';
 
-    // Hand off to backend which owns the full OAuth flow
-    window.location.href = backendAuthUrl;
+    console.log('[GOOGLE-AUTH] Starting OAuth via frontend route:', frontendOauthStartUrl);
+    console.log('[GOOGLE-AUTH] Hostname:', window.location.hostname);
+    console.log('[GOOGLE-AUTH] Client ID present:', !!googleClientId);
+
+    window.location.href = frontendOauthStartUrl;
     
   } catch (error) {
     console.error('Error triggering Google Sign-In:', error);
