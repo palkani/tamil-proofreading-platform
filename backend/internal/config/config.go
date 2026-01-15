@@ -60,6 +60,27 @@ func Load() *Config {
 		log.Printf("[CONFIG] WARNING: Gemini API key is empty - AI proofreading will fail")
 	}
 
+	// IME / Transliterator configuration:
+	// - Runner (ProofTamilRunner) exposes API under /api/v1
+	// - If AKSHARA_URL isn't explicitly set, default to TRANSLITERATOR_BASE_URL + "/api/v1"
+	// - If IME_ENABLED isn't explicitly set, enable automatically when runner URL is present
+	transBase := getEnv("TRANSLITERATOR_BASE_URL", "https://prooftamil-runner-991187041222.asia-south1.run.app")
+	aksharaURL := strings.TrimSpace(getEnv("AKSHARA_URL", ""))
+	if aksharaURL == "" {
+		aksharaURL = strings.TrimRight(transBase, "/")
+		if !strings.HasSuffix(aksharaURL, "/api/v1") {
+			aksharaURL = aksharaURL + "/api/v1"
+		}
+	}
+	imeEnabledStr, imeEnabledSet := os.LookupEnv("IME_ENABLED")
+	imeEnabled := false
+	if imeEnabledSet {
+		imeEnabled = strings.ToLower(strings.TrimSpace(imeEnabledStr)) == "true"
+	} else {
+		// Auto-enable when Akshara/runner URL is available
+		imeEnabled = strings.TrimSpace(aksharaURL) != ""
+	}
+
 	return &Config{
 		DatabaseURL:               getEnv("DATABASE_URL", "postgres://user:password@localhost:5432/tamil_proofreading?sslmode=disable"),
 		Port:                      getEnv("PORT", "8080"),
@@ -84,10 +105,10 @@ func Load() *Config {
 		TwilioAccountSID:      getEnv("TWILIO_ACCOUNT_SID", ""),
 		TwilioAuthToken:       getEnv("TWILIO_AUTH_TOKEN", ""),
 		TwilioPhoneNumber:     getEnv("TWILIO_PHONE_NUMBER", ""),
-		AksharaURL:            getEnv("AKSHARA_URL", ""),
-		IMEEnabled:            strings.ToLower(getEnv("IME_ENABLED", "false")) == "true",
+		AksharaURL:            aksharaURL,
+		IMEEnabled:            imeEnabled,
 		IMECacheEnabled:       strings.ToLower(getEnv("IME_CACHE_ENABLED", "true")) == "true",
-		TransliteratorBaseURL: getEnv("TRANSLITERATOR_BASE_URL", "https://prooftamil-runner-991187041222.asia-south1.run.app"),
+		TransliteratorBaseURL: transBase,
 	}
 }
 
