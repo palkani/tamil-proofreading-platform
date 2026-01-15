@@ -551,8 +551,9 @@ class WorkspaceController {
     this.currentFetchQuery = query;
 
     try {
-      // Build API URL - use /ime/suggest endpoint which forwards to /api/v1/ime/suggest on backend
-      const url = `/api/ime/suggest?q=${encodeURIComponent(query)}&limit=${limit}&mode=${encodeURIComponent(mode)}&_ts=${Date.now()}&_r=${Math.random().toString(36).slice(2)}`;
+      // Build API URL - use transliterate suggest endpoint for IME suggestions
+      // (this proxies to ProofTamilRunner /transliterate/suggest)
+      const url = `/api/transliterate/suggest?q=${encodeURIComponent(query)}&limit=${limit}&mode=${encodeURIComponent(mode)}&_ts=${Date.now()}&_r=${Math.random().toString(36).slice(2)}`;
       
       console.log('[IME] Fetching suggestions for:', query, 'from:', url);
 
@@ -1022,7 +1023,7 @@ class WorkspaceController {
 
     // IME transliteration (runner-backed); enable whenever the helper exists
     // NOTE: We intentionally do NOT enable the separate runner-backed IMETypeahead here.
-    // Workspace uses its own IME pipeline (handleEditorChange -> /api/ime/suggest -> displaySuggestions).
+    // Workspace uses its own pipeline (handleEditorChange -> /api/transliterate/suggest -> displaySuggestions).
     // Having both systems enabled causes race conditions and UI showing "[object Object]".
 
     // Initialize suggestions panel
@@ -1366,7 +1367,7 @@ class WorkspaceController {
       const mode = (this.getMode && this.getMode()) || 'spoken';
       this.lastFetchTime = Date.now(); // Track when we last fetched
       console.log('[IME] 🚀 DEBOUNCE COMPLETE - About to call fetchRunnerSuggestions for token:', token);
-      console.log('[IME] 🚀 API URL will be:', `/api/ime/suggest?q=${encodeURIComponent(token)}&limit=8&mode=${mode}`);
+      console.log('[IME] 🚀 API URL will be:', `/api/transliterate/suggest?q=${encodeURIComponent(token)}&limit=8&mode=${mode}`);
       console.log('[IME] 🚀 Current state:', {
         fetchingSuggestions: this.fetchingSuggestions,
         currentFetchQuery: this.currentFetchQuery,

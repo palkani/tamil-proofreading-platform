@@ -423,19 +423,17 @@ class TamilEditor {
           try {
           const modeSelect = document.getElementById('mode-select');
           const mode = (modeSelect && modeSelect.value) ? modeSelect.value : 'spoken';
-          // Prefer backend IME suggest (better coverage + ranking)
-          const response = await fetch(
-            `/api/ime/suggest?q=${encodeURIComponent(currentWord)}&limit=8&mode=${encodeURIComponent(mode)}`,
-            { method: 'GET', headers: { 'Accept': 'application/json' }, credentials: 'same-origin' }
-          );
-          if (response.ok) {
-            const data = await response.json();
-            const raw = data.suggestions || data.candidates || [];
-            suggestions = (raw || [])
-              .map((s) => (typeof s === 'string' ? s : (s.word || s.ta || s.text || s.suggestion || '')))
-              .map((s) => String(s || '').trim())
-              .filter(Boolean);
-          }
+          // Use transliterate suggest endpoint for IME suggestions
+          const data = await transliterateViaRunnerClient(currentWord, mode, 8);
+          // Runner returns objects like {text, score} (or sometimes {word, score}); normalize to string list
+          suggestions = (data || [])
+            .map((s) => {
+              if (!s) return '';
+              if (typeof s === 'string') return s;
+              return s.text || s.word || s.ta || s.suggestion || '';
+            })
+            .map((s) => String(s || '').trim())
+            .filter(Boolean);
           } catch (err) {
             console.log('Transliteration API error:', err);
           }
