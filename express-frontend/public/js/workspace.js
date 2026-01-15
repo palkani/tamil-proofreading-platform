@@ -14,6 +14,23 @@ if (typeof window.USE_TIPTAP_EDITOR === 'undefined') {
   console.log('[WorkspaceJS] USE_TIPTAP_EDITOR already set to:', window.USE_TIPTAP_EDITOR);
 }
 
+// Read-only view mode (used by "View" action from Drafts)
+// URL: /workspace?draftId=123&mode=view
+try {
+  const params = new URLSearchParams(window.location.search || '');
+  window.WORKSPACE_READONLY = params.get('mode') === 'view';
+  if (window.WORKSPACE_READONLY) {
+    console.log('[WorkspaceJS] 🔒 Read-only mode enabled (mode=view)');
+    document.documentElement.classList.add('workspace-readonly');
+    document.body?.classList?.add('workspace-readonly');
+  }
+} catch (_e) {
+  // non-fatal
+}
+
+// Minimum words before we call /api/submit automatically (typing/paste auto analysis)
+const MIN_SUBMIT_WORDS = 20;
+
 // ============================================
 // TAMIL LINGUISTIC FILTERING UTILITIES
 // ============================================
@@ -283,6 +300,7 @@ class WorkspaceController {
     this.editor = null;
     this.suggestionsPanel = null;
     this.currentDraft = null;
+    this.readOnly = !!window.WORKSPACE_READONLY;
     this.saveTimeout = null;
     this.autosaveAuthBlocked = false;
     this.loading = false;
@@ -336,6 +354,36 @@ class WorkspaceController {
     this.CACHE_TTL_MS = 2000; // 2 seconds
 
     this.init();
+  }
+
+  applyReadOnlyMode() {
+    if (!this.readOnly) return;
+    try {
+      document.documentElement.classList.add('workspace-readonly');
+      document.body?.classList?.add('workspace-readonly');
+    } catch (_e) {}
+
+    // Disable title editing
+    const titleInput = document.getElementById('draft-title');
+    if (titleInput) {
+      titleInput.setAttribute('readonly', 'true');
+      titleInput.setAttribute('aria-readonly', 'true');
+      titleInput.classList.add('cursor-not-allowed');
+    }
+
+    // Disable legacy editor editing
+    const editorEl = document.getElementById('editor');
+    if (editorEl) {
+      editorEl.setAttribute('contenteditable', 'false');
+      editorEl.setAttribute('aria-readonly', 'true');
+    }
+
+    // Best-effort: disable toolbar interactions (UI is hidden via CSS, but keep safe)
+    document.querySelectorAll('.workspace-toolbar button, .workspace-toolbar select, .workspace-toolbar a').forEach((el) => {
+      el.setAttribute('aria-disabled', 'true');
+      if (el.tagName === 'BUTTON') el.setAttribute('disabled', 'true');
+      el.classList.add('cursor-not-allowed');
+    });
   }
 
   // Unified API helper: uses centralized auth utilities for token refresh
@@ -455,8 +503,9 @@ class WorkspaceController {
       this.suggestionCache = new Map();
     }
     
-    // Skip if TipTap is active
-    if (window.USE_TIPTAP_EDITOR) {
+    // In read-only mode (View Draft), never fetch or show IME suggestions
+    if (this.readOnly || window.WORKSPACE_READONLY) {
+      this.displaySuggestions([]);
       return [];
     }
 
@@ -707,6 +756,8 @@ class WorkspaceController {
     // If TipTap is active, we still need to wire paste->analyze and IME suggestions.
     if (window.USE_TIPTAP_EDITOR) {
       console.log('[TipTap Migration] TipTap active - wiring events for paste + IME suggestions');
+      // Apply read-only UI immediately (before mounting editor) if needed
+      this.applyReadOnlyMode();
       // Listen for TipTap updates and use them to fetch IME suggestions and/or run AI analysis.
       window.addEventListener('tiptap:update', () => {
         // Debounce heavily: this fires on every keypress
@@ -928,6 +979,9 @@ class WorkspaceController {
       console.log('[WorkspaceJS] ✅ Paste event listeners attached (bubble, capture, and document levels)');
     }
 
+    // Apply read-only mode after editor is mounted (disables contenteditable/title/toolbar)
+    this.applyReadOnlyMode();
+
     // Transliteration V2 (feature-flagged)
     if (window.TRANS_SUGGEST_V2 && window.TransliterationTypeahead && window.WorkspaceEditorAdapter && editorElement) {
       this.translitTypeahead = new window.TransliterationTypeahead(
@@ -1113,6 +1167,27 @@ class WorkspaceController {
     if (translateBtn) {
       translateBtn.addEventListener('click', () => this.translateEnglishToTamil());
     }
+
+    // Mode select should affect IME suggestions immediately
+    const modeSelect = document.getElementById('mode-select');
+    if (modeSelect) {
+      modeSelect.addEventListener('change', () => {
+        try {
+          console.log('[IME] Mode changed to:', modeSelect.value);
+          // Clear caches so new mode isn't served stale suggestions
+          if (this.suggestionCache && typeof this.suggestionCache.clear === 'function') {
+            this.suggestionCache.clear();
+          }
+          this.lastFetchToken = null;
+          this.currentTokenInfo = null;
+          this.clearSuggestions?.();
+          // Re-evaluate current token and refetch suggestions in new mode
+          setTimeout(() => this.handleEditorChange(), 50);
+        } catch (_e) {
+          // non-fatal
+        }
+      });
+    }
   }
 
   /**
@@ -1150,17 +1225,31 @@ class WorkspaceController {
     const text = this.getEditorText() || '';
     let tokenInfo = null;
     let token = '';
+    // Used only for debug logs; must be defined in both TipTap + legacy flows
+    let caretPos = null;
 
     if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
       const tipTapToken = getTipTapTokenBeforeCaret();
       if (tipTapToken && tipTapToken.token) {
         tokenInfo = { token: tipTapToken.token, start: tipTapToken.fromPos, end: tipTapToken.toPos };
         token = tipTapToken.token.trim().toLowerCase();
+        caretPos = tipTapToken.toPos;
+      } else {
+        // Best-effort caret position for debug output
+        try {
+          caretPos = tiptapWorkspaceEditor?.state?.selection?.from ?? null;
+        } catch (_e) {
+          caretPos = null;
+        }
       }
     } else {
-      const caretPos = (this.editor && typeof this.editor.getCursorPosition === 'function' && this.editor.getCursorPosition()) || text.length;
-      tokenInfo = getTokenAtCaret(text, caretPos);
+      const caretPosLocal =
+        (this.editor && typeof this.editor.getCursorPosition === 'function' && this.editor.getCursorPosition()) ||
+        text.length;
+      tokenInfo = getTokenAtCaret(text, caretPosLocal);
       token = tokenInfo.token ? tokenInfo.token.trim().toLowerCase() : '';
+      // keep for debug logs (outer var)
+      caretPos = caretPosLocal;
     }
     
     // CRITICAL: Skip fetching suggestions ONLY if we just replaced a token AND it's the same token
@@ -1297,8 +1386,8 @@ class WorkspaceController {
         return;
       }
       
-      // Use smart mode (backend handles all modes)
-      const mode = 'smart';
+      // Use selected mode from UI dropdown (spoken | formal | academic)
+      const mode = (this.getMode && this.getMode()) || 'spoken';
       this.lastFetchTime = Date.now(); // Track when we last fetched
       console.log('[IME] 🚀 DEBOUNCE COMPLETE - About to call fetchRunnerSuggestions for token:', token);
       console.log('[IME] 🚀 API URL will be:', `/api/ime/suggest?q=${encodeURIComponent(token)}&limit=8&mode=${mode}`);
@@ -1476,7 +1565,8 @@ class WorkspaceController {
     console.log('[IME] 🎯 Rendering', maxSuggestions, 'suggestions');
     
     for (let i = 0; i < maxSuggestions; i++) {
-      const suggestion = suggestions[i];
+      // IMPORTANT: render from normalized list to avoid shape mismatches
+      const suggestion = this.currentSuggestions[i];
       
       // Extract text from suggestion object (handle both {text: ...} and {word: ...} formats)
       let cleanText = '';
@@ -2178,7 +2268,14 @@ class WorkspaceController {
       
       // If we couldn't get cursor position, use fallback methods
       if (typeof left === 'undefined' || typeof top === 'undefined') {
-        if (this.editorElement) {
+        // TipTap fallback: try ProseMirror root if legacy editorElement isn't set
+        const tiptapRoot = document.querySelector('.ProseMirror');
+        if (!this.editorElement && tiptapRoot) {
+          const editorRect = tiptapRoot.getBoundingClientRect();
+          left = Math.max(10, editorRect.left + 50);
+          top = Math.max(10, editorRect.top + 100);
+          console.log('[IME] Positioned dropdown relative to TipTap editor:', { left, top, editorRect });
+        } else if (this.editorElement) {
           // Fallback: position relative to editor
           const editorRect = this.editorElement.getBoundingClientRect();
           left = Math.max(10, editorRect.left + 50);
@@ -2979,7 +3076,7 @@ class WorkspaceController {
     }
     const words = (text || '').trim().split(/\s+/).filter(Boolean);
     const wordCount = words.length;
-    if (wordCount < 10) {
+    if (wordCount < MIN_SUBMIT_WORDS) {
       return;
     }
     if (this.translitDropdownOpen) {
@@ -3007,7 +3104,7 @@ class WorkspaceController {
     if (text !== hash) {
       return;
     }
-    if (wordCount < 10) return;
+    if (wordCount < MIN_SUBMIT_WORDS) return;
     if (this.translitDropdownOpen) return;
 
     if (this.submitAbort) this.submitAbort.abort();
@@ -3035,6 +3132,10 @@ class WorkspaceController {
   }
   
   async autoAnalyze() {
+    // Optional opts: autoAnalyze({ silent: true })
+    const opts = (arguments && arguments[0] && typeof arguments[0] === 'object') ? arguments[0] : {};
+    const silent = !!opts.silent;
+
     const text = this.getEditorText().trim();
     
     console.log('[AI] 🚀 autoAnalyze() called with text length:', text.length);
@@ -3045,20 +3146,26 @@ class WorkspaceController {
       console.log('[AI] ⚠️ Text is empty - skipping');
       return;
     }
+
+    // Skip if text doesn't contain Tamil characters (avoid unnecessary submit calls)
+    const hasTamil = /[\u0B80-\u0BFF]/.test(text);
+    if (!hasTamil) {
+      console.log('[AI] ⚠️ No Tamil characters detected - skipping analysis');
+      this.updateAnalysisStatus('');
+      return;
+    }
     
-    // Skip if text is too short (minimum 5 words OR 20 characters)
-    // Proceed if wordCount >= 5 OR text.length >= 20
+    // Skip if text is too short (minimum 20 words)
     const wordCount = countWords(text);
     console.log('[AI] 📊 Text analysis:', { wordCount, textLength: text.length, preview: text.substring(0, 100) });
     
-    // Check if text meets minimum requirements (5 words OR 20 characters)
-    // Skip only if BOTH conditions are false (wordCount < 5 AND text.length < 20)
-    if (wordCount < 5 && text.length < 20) {
+    // Check if text meets minimum requirements (20 words)
+    if (wordCount < MIN_SUBMIT_WORDS) {
       console.log('[AI] ⚠️ Text too short - skipping analysis:', { wordCount, textLength: text.length });
       this.updateAnalysisStatus('');
-      // Don't show notification for very short text (it's normal)
-      if (text.length > 0) {
-        this.showNotification('Type or paste more text to get AI suggestions (minimum 5 words or 20 characters).', 'info');
+      // Don't show notification when silent
+      if (!silent && text.length > 0) {
+        this.showNotification(`Type or paste at least ${MIN_SUBMIT_WORDS} words to get AI suggestions.`, 'info');
       }
       return;
     }
@@ -3097,14 +3204,22 @@ class WorkspaceController {
       console.log('[AI] ✅ API response status:', response.status);
       console.log('[AI] ✅ API response headers:', Object.fromEntries(response.headers.entries()));
       
-      let data = await response.json();
+      // Robust JSON parsing (avoid crashes when backend returns HTML/text on errors)
+      const raw = await response.text();
+      let data = null;
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch (e) {
+        console.warn('[AI] ⚠️ Response was not valid JSON:', raw?.slice?.(0, 200));
+        data = { error: 'invalid_json', raw: raw?.slice?.(0, 300) };
+      }
       console.log('[AI] ✅ API response data keys:', Object.keys(data));
       if (response.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
         const submissionId = data.submission?.id;
         console.log('[GEMINI] submit pending, starting poll', submissionId);
         data = await this.pollSubmission(submissionId);
       } else if (!response.ok) {
-        throw new Error('Failed to analyze text');
+        throw new Error(data?.error || data?.message || 'Failed to analyze text');
       }
       
       this.lastAnalyzedText = text;
@@ -3388,6 +3503,13 @@ class WorkspaceController {
     
     // Don't save empty drafts
     if (!text || text.length < 5) {
+      return;
+    }
+
+    // Don't autosave via /api/submit until user has typed enough content
+    // (prevents submit spam on every small edit)
+    const wc = countWords(text);
+    if (wc < MIN_SUBMIT_WORDS) {
       return;
     }
     
@@ -3999,10 +4121,19 @@ class WorkspaceController {
       
       this.showNotification('Draft loaded successfully', 'success');
       
-      // Automatically trigger AI analysis for the loaded draft
+      // Trigger AI analysis ONLY if text meets minimum threshold (avoid errors/noise for short drafts)
       setTimeout(() => {
-        console.log('Triggering auto-analysis for draft');
-        this.autoAnalyze();
+        try {
+          const currentText = (this.getEditorText() || '').trim();
+          const wc = countWords(currentText);
+          const hasTamil = /[\u0B80-\u0BFF]/.test(currentText);
+          const meetsMin = hasTamil && wc >= MIN_SUBMIT_WORDS;
+          console.log('[WorkspaceJS] Draft loaded; auto-analyze gate:', { wc, len: currentText.length, hasTamil, meetsMin });
+          if (!meetsMin) return;
+          this.autoAnalyze({ silent: true });
+        } catch (e) {
+          // non-fatal
+        }
       }, 500);
     } catch (error) {
       console.error('Error loading draft:', error);
@@ -4127,6 +4258,15 @@ function mountTipTapWorkspaceEditor() {
       
       if (tiptapWorkspaceEditor) {
         console.log('[TipTap Migration] Workspace editor mounted successfully');
+        // Apply read-only mode (View Draft) to TipTap instance
+        if (window.WORKSPACE_READONLY && typeof tiptapWorkspaceEditor.setEditable === 'function') {
+          try {
+            tiptapWorkspaceEditor.setEditable(false);
+            console.log('[TipTap Migration] 🔒 TipTap setEditable(false) for read-only mode');
+          } catch (_e) {
+            // non-fatal
+          }
+        }
       } else {
         console.error('[TipTap Migration] Failed to create TipTap editor');
         el.classList.add('hidden');

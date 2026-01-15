@@ -88,6 +88,27 @@
   .workspace-editor-panel .flex-1 {
     min-height: 0;
   }
+
+  /* ==========================================================================
+     Read-only mode (View Draft)
+     Triggered by body/html class: workspace-readonly
+     ========================================================================== */
+  .workspace-readonly .workspace-toolbar {
+    display: none !important;
+  }
+  .workspace-readonly #save-status,
+  .workspace-readonly #autosave-time,
+  .workspace-readonly #accept-all-btn {
+    display: none !important;
+  }
+  .workspace-readonly #draft-title {
+    pointer-events: none;
+    opacity: 0.9;
+  }
+  .workspace-readonly #editor,
+  .workspace-readonly #tiptap-workspace-editor {
+    cursor: default;
+  }
   @media (max-width: 768px) {
     .workspace-layout {
       display: flex;
