@@ -41,6 +41,23 @@ function createServiceError(message, details) {
   return err;
 }
 
+function looksTruncatedJson(text) {
+  const s = String(text || '').trim();
+  if (!s.startsWith('{')) return false;
+  // Common truncation: doesn't end with closing brace, often ends mid-string.
+  if (!s.endsWith('}')) return true;
+  return false;
+}
+
+function chooseMaxOutputTokens(requestedWordCount) {
+  const wc = Number(requestedWordCount);
+  if (!Number.isFinite(wc) || wc <= 0) return 4096;
+  // Rough heuristic: more words => more tokens needed. Clamp to keep costs bounded.
+  if (wc <= 200) return 3072;
+  if (wc <= 500) return 6144;
+  return 8192;
+}
+
 async function geminiGenerate(systemText, userText, schema, maxOutputTokens = 2048) {
   const { apiKey, baseUrl } = getGeminiConfig();
   if (!apiKey) {
@@ -90,6 +107,13 @@ async function geminiGenerate(systemText, userText, schema, maxOutputTokens = 20
   if (extracted) {
     const parsedExtracted = safeJsonParse(extracted, null);
     if (parsedExtracted) return parsedExtracted;
+  }
+
+  if (looksTruncatedJson(aiText)) {
+    throw createServiceError(
+      'Gemini response was truncated',
+      `Gemini returned incomplete JSON (likely due to output length). Try reducing word count or disabling meta/keywords. First 300 chars: ${String(aiText).trim().slice(0, 300)}`
+    );
   }
 
   throw createServiceError(
@@ -214,7 +238,7 @@ Output MUST be valid JSON only. Do not include markdown fences, explanations, or
     // Try with schema first; if schema causes provider-side failure, fall back to plain JSON mime type.
     let result;
     try {
-      result = await geminiGenerate(systemText, userText, schema, 3072);
+      result = await geminiGenerate(systemText, userText, schema, chooseMaxOutputTokens(word_count));
     } catch (e) {
       const msg = String(e?.message || '');
       const details = e?.details ? String(e.details) : '';
@@ -222,9 +246,32 @@ Output MUST be valid JSON only. Do not include markdown fences, explanations, or
         msg.toLowerCase().includes('schema') ||
         details.toLowerCase().includes('schema') ||
         details.toLowerCase().includes('response schema');
-      if (!looksLikeSchemaIssue) throw e;
-      console.warn('[AI-WRITER] Schema mode failed, retrying without responseSchema:', { msg, details });
-      result = await geminiGenerate(systemText, userText, null, 3072);
+      const looksTruncated =
+        msg.toLowerCase().includes('truncated') ||
+        details.toLowerCase().includes('incomplete json') ||
+        details.toLowerCase().includes('truncated');
+      if (!looksLikeSchemaIssue && !looksTruncated) throw e;
+
+      if (looksLikeSchemaIssue) {
+        console.warn('[AI-WRITER] Schema mode failed, retrying without responseSchema:', { msg, details });
+        result = await geminiGenerate(systemText, userText, null, chooseMaxOutputTokens(word_count));
+      } else {
+        // Truncation: retry once with smaller target + explicit brevity constraints.
+        const retryWordCount = Math.min(300, Math.max(120, Number(word_count) || 300));
+        const retryTokens = chooseMaxOutputTokens(retryWordCount);
+
+        const retrySystemText = `${systemText}\n\nIMPORTANT: Keep the response compact so JSON is not truncated. Aim for ~${retryWordCount} words max.`;
+        const retryUserText = `Topic/prompt:\n${prompt}\n\nHard limits:\n- Keep content under ~${retryWordCount} words.\n- Keep JSON under ~12,000 characters.\n\nRequirements:\n- include_title: ${include_title}\n- include_meta: ${include_meta}\n\nReturn JSON with shape:\n{\n  \"success\": true,\n  \"content\": {\"title\": \"\", \"meta_description\": \"\", \"keywords\": \"\", \"content\": \"\"},\n  \"metadata\": {\"word_count\": ${retryWordCount}, \"language\": \"${language}\", \"content_type\": \"${content_type}\", \"model\": \"gemini-2.5-flash\"}\n}\n\nRules:\n- If include_title is false, set title to empty string.\n- If include_meta is false, set meta_description and keywords to empty string.\n- content should use paragraphs separated by blank lines.`;
+
+        console.warn('[AI-WRITER] Gemini output truncated; retrying with shorter target length', { word_count, retryWordCount, retryTokens });
+        result = await geminiGenerate(retrySystemText, retryUserText, schema, retryTokens);
+      }
+    }
+
+    // If Gemini responded but was truncated, retry once with a shorter target length.
+    // This is better UX than forcing the user to manually lower word count.
+    if (!result || result.success !== true) {
+      // no-op: handled below
     }
 
     if (!result || result.success !== true) {

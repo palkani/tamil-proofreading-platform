@@ -359,8 +359,9 @@ async function apiFetch(url, options = {}, requireAuth = true) {
   const timeSinceLinkClick = now - lastLinkClickTime;
   const timeSincePageLoad = now - pageLoadTime;
   
-  const isHardNavigating =
-    document.readyState === 'loading' || document.visibilityState === 'hidden';
+  // Treat "hidden" as hard navigation (tab switch/back/close). "loading" is normal during initial page load,
+  // so we wait for DOMContentLoaded instead of throwing.
+  const isHardNavigating = document.visibilityState === 'hidden';
   const inGraceWindow =
     timeSinceLinkClick < NAVIGATION_GRACE_PERIOD ||
     timeSincePageLoad < PAGE_LOAD_GRACE_PERIOD ||
@@ -370,6 +371,21 @@ async function apiFetch(url, options = {}, requireAuth = true) {
   // - If the page is actually unloading/hidden, fail fast to avoid interrupting navigation.
   // - If we're just inside a short grace window (fresh load / recent link click), wait briefly
   //   so authenticated pages (like /drafts) can still fetch immediately after navigation.
+  if (requireAuth && document.readyState === 'loading' && document.visibilityState === 'visible') {
+    // Wait briefly for DOMContentLoaded so pages like /drafts can fetch immediately on first render.
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 2500);
+      document.addEventListener(
+        'DOMContentLoaded',
+        () => {
+          clearTimeout(timeout);
+          resolve();
+        },
+        { once: true }
+      );
+    });
+  }
+
   if (requireAuth && isHardNavigating) {
     console.warn('[AUTH] Page is hard-navigating (loading/hidden), aborting apiFetch', {
       readyState: document.readyState,
