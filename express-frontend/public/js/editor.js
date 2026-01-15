@@ -191,6 +191,34 @@ class TamilEditor {
         }
       });
     }
+
+    // Text style dropdown (Paragraph / Heading)
+    const formatBtn = document.getElementById('format-dropdown-btn');
+    const formatDropdown = document.getElementById('format-dropdown');
+    if (formatBtn && formatDropdown) {
+      formatBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        formatDropdown.classList.toggle('hidden');
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('a[href]')) return;
+        formatDropdown.classList.add('hidden');
+      });
+
+      const items = formatDropdown.querySelectorAll('[data-format]');
+      items.forEach((item) => {
+        item.addEventListener('click', (e) => {
+          e.preventDefault();
+          const tag = item.getAttribute('data-format') || 'p';
+          document.execCommand('formatBlock', false, tag);
+          formatDropdown.classList.add('hidden');
+          this.editor.focus();
+        });
+      });
+    }
     
     // Search button (placeholder functionality)
     const searchBtn = document.getElementById('search-btn');

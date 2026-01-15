@@ -73,6 +73,43 @@ function cleanTamilSuggestions(rawSuggestions, tokenLatin) {
 
     return true;
   });
+
+  // Text style dropdown (Paragraph / Heading) for TipTap
+  const formatBtn = document.getElementById('format-dropdown-btn');
+  const formatDropdown = document.getElementById('format-dropdown');
+  if (formatBtn && formatDropdown) {
+    formatBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      formatDropdown.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('a[href]')) return;
+      if (formatDropdown && !formatDropdown.contains(e.target) && e.target !== formatBtn) {
+        formatDropdown.classList.add('hidden');
+      }
+    });
+
+    const items = formatDropdown.querySelectorAll('[data-format]');
+    items.forEach((item) => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const tag = (item.getAttribute('data-format') || 'p').toLowerCase();
+        if (tag === 'p') {
+          tiptapWorkspaceEditor.chain().focus().setParagraph().run();
+        } else if (tag === 'h1') {
+          tiptapWorkspaceEditor.chain().focus().toggleHeading({ level: 1 }).run();
+        } else if (tag === 'h2') {
+          tiptapWorkspaceEditor.chain().focus().toggleHeading({ level: 2 }).run();
+        } else if (tag === 'h3') {
+          tiptapWorkspaceEditor.chain().focus().toggleHeading({ level: 3 }).run();
+        }
+        formatDropdown.classList.add('hidden');
+      });
+    });
+  }
 }
 
 function getLastToken(text) {
@@ -667,10 +704,38 @@ class WorkspaceController {
     // CRITICAL: Check USE_TIPTAP_EDITOR flag - ensure it's actually false
     console.log('[WorkspaceJS] Initializing - USE_TIPTAP_EDITOR:', window.USE_TIPTAP_EDITOR);
     
-    // Initialize editor (only if TipTap is not active)
+    // If TipTap is active, we still need to wire paste->analyze and IME suggestions.
     if (window.USE_TIPTAP_EDITOR) {
-      // Skip legacy editor initialization when TipTap is active
-      console.log('[TipTap Migration] Skipping legacy editor init (TipTap active)');
+      console.log('[TipTap Migration] TipTap active - wiring events for paste + IME suggestions');
+      // Listen for TipTap updates and use them to fetch IME suggestions and/or run AI analysis.
+      window.addEventListener('tiptap:update', () => {
+        // Debounce heavily: this fires on every keypress
+        if (this._tiptapInputDebounce) clearTimeout(this._tiptapInputDebounce);
+        this._tiptapInputDebounce = setTimeout(() => {
+          this.handleEditorChange();
+        }, 150);
+      });
+
+      // Paste should trigger analysis quickly (same intent as legacy paste handler).
+      window.addEventListener('tiptap:paste', () => {
+        try {
+          const text = (this.getEditorText() || '').trim();
+          if (!text) return;
+          const hasTamil = /[\u0B80-\u0BFF]/.test(text);
+          if (!hasTamil) return;
+          // Trigger soon after paste so content is already in editor
+          setTimeout(() => this.autoAnalyze(), 250);
+        } catch {
+          // ignore
+        }
+      });
+
+      // Ensure TipTap editor is mounted and toolbar wired.
+      try {
+        switchWorkspaceEditor();
+      } catch (e) {
+        console.warn('[TipTap Migration] switchWorkspaceEditor failed (non-fatal):', e?.message);
+      }
       return;
     }
 
@@ -1075,21 +1140,28 @@ class WorkspaceController {
 
   handleEditorChange() {
     console.log('[IME] 📝 handleEditorChange called');
-    
-    // Skip if TipTap is active (TipTap handles IME via extension)
-    if (window.USE_TIPTAP_EDITOR) {
-      console.log('[IME] ⚠️ Skipping - TipTap is active');
-      return;
-    }
+    // Support both legacy + TipTap editors.
+    // TipTap does NOT have our IME extension here, so we still need to fetch suggestions.
     
     this.updateWordCount();
     this.scheduleSave();
     
     // Extract token FIRST before using it
     const text = this.getEditorText() || '';
-    const caretPos = (this.editor && typeof this.editor.getCursorPosition === 'function' && this.editor.getCursorPosition()) || text.length;
-    const tokenInfo = getTokenAtCaret(text, caretPos);
-    const token = tokenInfo.token ? tokenInfo.token.trim().toLowerCase() : '';
+    let tokenInfo = null;
+    let token = '';
+
+    if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
+      const tipTapToken = getTipTapTokenBeforeCaret();
+      if (tipTapToken && tipTapToken.token) {
+        tokenInfo = { token: tipTapToken.token, start: tipTapToken.fromPos, end: tipTapToken.toPos };
+        token = tipTapToken.token.trim().toLowerCase();
+      }
+    } else {
+      const caretPos = (this.editor && typeof this.editor.getCursorPosition === 'function' && this.editor.getCursorPosition()) || text.length;
+      tokenInfo = getTokenAtCaret(text, caretPos);
+      token = tokenInfo.token ? tokenInfo.token.trim().toLowerCase() : '';
+    }
     
     // CRITICAL: Skip fetching suggestions ONLY if we just replaced a token AND it's the same token
     // This prevents the dropdown from showing again immediately after selection for the SAME word
@@ -1288,12 +1360,7 @@ class WorkspaceController {
   displaySuggestions(suggestions) {
     console.log('[IME] 🔍 displaySuggestions called with:', suggestions ? suggestions.length : 0, 'suggestions');
     console.log('[IME] Suggestions data:', suggestions);
-    
-    // Skip if TipTap is active
-    if (window.USE_TIPTAP_EDITOR) {
-      console.log('[IME] ⚠️ Skipping - TipTap is active');
-      return;
-    }
+    // Support both legacy + TipTap editors (dropdown is rendered via DOM selection/caret).
 
     // CRITICAL: Store suggestions in instance variable FIRST so selectSuggestion can access them
     // Normalize suggestions to ensure consistent format
@@ -2730,6 +2797,18 @@ class WorkspaceController {
 
   // Replace token at caret position with replacement
   replaceTokenAtCaret(replacement, appendSpace = false) {
+    // TipTap mode: replace directly via TipTap commands/transaction.
+    if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
+      const ok = replaceTipTapTokenAtCaret(replacement, appendSpace);
+      if (!ok) {
+        console.warn('[IME] TipTap replaceTokenAtCaret failed (no token before caret)');
+        return;
+      }
+      this.justReplacedToken = true;
+      this.hideSuggestions?.();
+      return;
+    }
+
     if (!this.currentTokenInfo || !replacement) {
       console.warn("[IME] replaceTokenAtCaret: missing tokenInfo or replacement", {
         hasTokenInfo: !!this.currentTokenInfo,
@@ -3981,11 +4060,47 @@ class WorkspaceController {
 // ============================================
 // TIPTAP MIGRATION - Phase 3 & 4
 // ============================================
-// Migration flag: set to true to enable TipTap editor
-window.USE_TIPTAP_EDITOR = false; // Change to true to activate TipTap
+// Migration flag: default is false, but DO NOT override if the page sets it explicitly.
+// (Workspace behavior must work in both legacy + TipTap modes.)
+if (typeof window.USE_TIPTAP_EDITOR === 'undefined') {
+  window.USE_TIPTAP_EDITOR = false;
+}
 
 // Global TipTap editor instance
 let tiptapWorkspaceEditor = null;
+
+function getTipTapTokenBeforeCaret() {
+  if (!window.USE_TIPTAP_EDITOR || !tiptapWorkspaceEditor) return null;
+  try {
+    const { from } = tiptapWorkspaceEditor.state.selection;
+    const textBefore = tiptapWorkspaceEditor.state.doc.textBetween(0, from, '\n', '\n');
+    const match = textBefore.match(/[A-Za-z]+$/);
+    if (!match) return null;
+    const token = match[0];
+    return {
+      token,
+      fromPos: from - token.length,
+      toPos: from,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function replaceTipTapTokenAtCaret(replacement, appendSpace = false) {
+  if (!window.USE_TIPTAP_EDITOR || !tiptapWorkspaceEditor) return false;
+  const info = getTipTapTokenBeforeCaret();
+  if (!info || !info.token) return false;
+  const token = info.token;
+  if (!/^[A-Za-z]+$/.test(token)) return false;
+  const insert = replacement + (appendSpace ? ' ' : '');
+  try {
+    tiptapWorkspaceEditor.commands.insertContentAt({ from: info.fromPos, to: info.toPos }, insert);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 /**
  * Phase 3: Mount TipTap editor in workspace

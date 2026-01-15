@@ -395,8 +395,16 @@ let ocrService = null;
 
 // Try to load OCR service (direct implementation)
 try {
-  ocrService = require('../services/ocr-service');
-  console.log('[OCR] Direct OCR service loaded (Tesseract.js)');
+  // IMPORTANT: Do not use direct Tesseract.js OCR inside Vercel serverless.
+  // Vercel often does not include the tesseract-core WASM files at runtime, causing ENOENT and timeouts.
+  const isVercel = !!process.env.VERCEL || !!process.env.VERCEL_ENV;
+  if (isVercel) {
+    console.log('[OCR] Skipping direct OCR service on Vercel; external OCR_SERVICE_URL is required');
+    ocrService = null;
+  } else {
+    ocrService = require('../services/ocr-service');
+    console.log('[OCR] Direct OCR service loaded (Tesseract.js)');
+  }
 } catch (error) {
   console.warn('[OCR] Direct OCR service not available:', error.message);
   console.warn('[OCR] Will attempt to use external OCR service if OCR_SERVICE_URL is set');
@@ -512,13 +520,67 @@ router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
     const fileBuffer = req.file.buffer;
     const filename = req.file.originalname;
     const mimeType = req.file.mimetype;
+
+    const isVercel = !!process.env.VERCEL || !!process.env.VERCEL_ENV;
+    const isProd = process.env.NODE_ENV === 'production' || isVercel;
+    const hasExternalOcr = OCR_SERVICE_URL && OCR_SERVICE_URL !== 'http://localhost:5000';
+
+    // In production/serverless, direct Tesseract.js OCR can be extremely slow or hang.
+    // Prefer the external OCR service (Cloud Run) when available; otherwise fail fast with guidance.
+    if (isProd && !hasExternalOcr) {
+      return res.status(503).json({
+        error: 'OCR is not configured for production yet.',
+        details: 'On Vercel, direct OCR is not supported. Please set OCR_SERVICE_URL to a deployed OCR service (Cloud Run). See README_OCR_SETUP.md.',
+      });
+    }
     
-    // Try direct OCR implementation first (if available)
+    // Prefer external OCR service if configured (production path)
+    if (hasExternalOcr) {
+      console.log('[OCR] Using external OCR service:', OCR_SERVICE_URL);
+      
+      const formData = new FormData();
+      formData.append('file', fileBuffer, {
+        filename: filename,
+        contentType: mimeType
+      });
+      formData.append('lang', lang);
+      
+      const response = await axios.post(`${OCR_SERVICE_URL}/upload`, formData, {
+        headers: {
+          ...formData.getHeaders()
+        },
+        maxContentLength: 16 * 1024 * 1024,
+        maxBodyLength: 16 * 1024 * 1024,
+        timeout: 120000
+      });
+      
+      if (typeof response.data === 'object') {
+        return res.json(response.data);
+      } else {
+        try {
+          const jsonData = JSON.parse(response.data);
+          return res.json(jsonData);
+        } catch (e) {
+          throw new Error('OCR service returned invalid response');
+        }
+      }
+    }
+
+    // Try direct OCR implementation (dev fallback)
     let directOcrError = null;
     if (ocrService) {
       console.log('[OCR] Using direct OCR implementation');
       try {
-        const result = await ocrService.processFile(fileBuffer, filename, mimeType, lang);
+        const OCR_TIMEOUT_MS = 90_000; // 90s (prevents hanging requests)
+        const result = await Promise.race([
+          ocrService.processFile(fileBuffer, filename, mimeType, lang),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error('OCR processing timed out. Please try a smaller/clearer image, or try again later.')),
+              OCR_TIMEOUT_MS
+            )
+          )
+        ]);
 
         // Store document path for download (only if we actually have a file)
         ocrDocuments.set(result.download_filename, result.download_path || null);
@@ -549,38 +611,6 @@ router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
         directOcrError = ocrError;
         console.error('[OCR] Direct OCR processing failed:', ocrError.message);
         // Continue to external OCR service fallback if configured
-      }
-    }
-    
-    // Fallback to external OCR service if configured
-    if (OCR_SERVICE_URL && OCR_SERVICE_URL !== 'http://localhost:5000') {
-      console.log('[OCR] Using external OCR service:', OCR_SERVICE_URL);
-      
-      const formData = new FormData();
-      formData.append('file', fileBuffer, {
-        filename: filename,
-        contentType: mimeType
-      });
-      formData.append('lang', lang);
-      
-      const response = await axios.post(`${OCR_SERVICE_URL}/upload`, formData, {
-        headers: {
-          ...formData.getHeaders()
-        },
-        maxContentLength: 16 * 1024 * 1024,
-        maxBodyLength: 16 * 1024 * 1024,
-        timeout: 60000
-      });
-      
-      if (typeof response.data === 'object') {
-        return res.json(response.data);
-      } else {
-        try {
-          const jsonData = JSON.parse(response.data);
-          return res.json(jsonData);
-        } catch (e) {
-          throw new Error('OCR service returned invalid response');
-        }
       }
     }
     

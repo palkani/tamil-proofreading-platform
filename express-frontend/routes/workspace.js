@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../middleware/auth');
 const { getSeoData } = require('../config/seo');
 
-// Workspace page - main editor (client-side auth only)
-router.use(requireAuth);
+// Workspace page - main editor
+// IMPORTANT: Do NOT enforce server-side auth here.
+// This app uses client-side auth (localStorage token) for API calls, and server-side
+// auth can bounce users back to /drafts when access_token cookie isn't present.
 
 router.get('/', (req, res) => {
   if (req.cookies && req.cookies.access_token) {
@@ -15,7 +16,7 @@ router.get('/', (req, res) => {
   res.render('pages/workspace', { 
     title: seo.title,
     seo: seo,
-    user: req.user
+    user: req.user || null
   });
 });
 

@@ -22,6 +22,9 @@ window.createTipTapEditor = null;
     // Import TipTap core and StarterKit
     const { Editor } = await import('https://esm.sh/@tiptap/core@2.1.13');
     const { default: StarterKit } = await import('https://esm.sh/@tiptap/starter-kit@2.1.13');
+    const { default: Underline } = await import('https://esm.sh/@tiptap/extension-underline@2.1.13');
+    const { default: Link } = await import('https://esm.sh/@tiptap/extension-link@2.1.13');
+    const { default: TextAlign } = await import('https://esm.sh/@tiptap/extension-text-align@2.1.13');
 
     // Expose editor creation function globally
     window.createTipTapEditor = function (element, initialContent = '') {
@@ -40,12 +43,37 @@ window.createTipTapEditor = null;
                 levels: [1, 2, 3],
               },
             }),
+            Underline,
+            Link.configure({
+              openOnClick: false,
+              autolink: true,
+              linkOnPaste: true,
+            }),
+            TextAlign.configure({
+              types: ['heading', 'paragraph'],
+            }),
           ],
           content: initialContent || '<p></p>',
           editorProps: {
             attributes: {
               class: 'ProseMirror prose prose-sm max-w-none focus:outline-none',
               'data-placeholder': 'தமிழில் எழுதத் தொடங்குங்கள்...',
+            },
+            handlePaste: (view, event) => {
+              try {
+                const text =
+                  (event.clipboardData && event.clipboardData.getData('text/plain')) ||
+                  (window.clipboardData && window.clipboardData.getData('Text')) ||
+                  '';
+                window.dispatchEvent(
+                  new CustomEvent('tiptap:paste', {
+                    detail: { text },
+                  })
+                );
+              } catch (e) {
+                // non-fatal
+              }
+              return false; // allow TipTap to handle paste normally
             },
           },
           onUpdate: ({ editor }) => {

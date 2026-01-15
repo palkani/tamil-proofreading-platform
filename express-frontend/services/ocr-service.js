@@ -10,20 +10,54 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// Reuse a single worker across requests to avoid repeated language downloads/initialization.
+// This is a major speed-up vs Tesseract.recognize() per request.
+let workerPromise = null;
+let workerCurrentLang = null;
+
+async function getWorker(logger) {
+  if (!workerPromise) {
+    workerPromise = (async () => {
+      const worker = await Tesseract.createWorker({
+        logger: logger || undefined,
+      });
+      // Load the common languages once. (eng+tam) covers both; later we can initialize per-request.
+      await worker.loadLanguage('eng+tam');
+      await worker.initialize('eng+tam');
+      workerCurrentLang = 'eng+tam';
+      return worker;
+    })();
+  }
+  return workerPromise;
+}
+
 /**
  * Extract text from image using Tesseract.js
  */
 async function extractTextFromImage(imageBuffer, lang = 'eng+tam') {
   try {
     console.log('[OCR] Starting image OCR with language:', lang);
-    
-    const { data: { text } } = await Tesseract.recognize(imageBuffer, lang, {
-      logger: (m) => {
-        if (m.status === 'recognizing text') {
-          console.log(`[OCR] Progress: ${Math.round(m.progress * 100)}%`);
-        }
+
+    const logger = (m) => {
+      if (m.status === 'recognizing text') {
+        console.log(`[OCR] Progress: ${Math.round(m.progress * 100)}%`);
       }
-    });
+    };
+
+    const worker = await getWorker(logger);
+    const desiredLang = lang || 'eng+tam';
+    if (workerCurrentLang !== desiredLang) {
+      try {
+        await worker.loadLanguage(desiredLang);
+      } catch (e) {
+        // If loading the desired language fails, we can still try with eng.
+        console.warn('[OCR] Failed to load language, will fallback if needed:', desiredLang, e?.message);
+      }
+      await worker.initialize(desiredLang);
+      workerCurrentLang = desiredLang;
+    }
+
+    const { data: { text } } = await worker.recognize(imageBuffer);
     
     console.log('[OCR] Image OCR completed, extracted', text.length, 'characters');
     return text.trim();
@@ -33,7 +67,13 @@ async function extractTextFromImage(imageBuffer, lang = 'eng+tam') {
     if (lang.includes('tam') && lang !== 'eng') {
       console.log('[OCR] Falling back to English only');
       try {
-        const { data: { text } } = await Tesseract.recognize(imageBuffer, 'eng');
+        const worker = await getWorker();
+        if (workerCurrentLang !== 'eng') {
+          await worker.loadLanguage('eng');
+          await worker.initialize('eng');
+          workerCurrentLang = 'eng';
+        }
+        const { data: { text } } = await worker.recognize(imageBuffer);
         return text.trim();
       } catch (e) {
         throw new Error(`OCR failed: ${error.message}`);

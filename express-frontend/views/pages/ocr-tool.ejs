@@ -3,6 +3,20 @@
 <!-- Navigation -->
 <%- include('../partials/nav', { active: 'tools', user: user || null }) %>
 
+<style>
+  /* Force select text visibility across browsers (some global styles can make it look blank) */
+  #langSelect {
+    background-color: #ffffff !important;
+    color: #111827 !important; /* gray-900 */
+    -webkit-text-fill-color: #111827 !important;
+    appearance: auto !important;
+  }
+  #langSelect option {
+    color: #111827 !important;
+    background-color: #ffffff !important;
+  }
+</style>
+
 <div class="min-h-screen bg-gradient-to-b from-blue-50 via-white to-white py-12">
   <div class="max-w-4xl mx-auto px-6">
     <!-- Header -->
@@ -33,7 +47,7 @@
       <!-- Language Selection -->
       <div class="mt-6">
         <label class="block text-sm font-semibold text-gray-700 mb-2">OCR Language:</label>
-        <select id="langSelect" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+        <select id="langSelect" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 cursor-pointer focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
           <option value="eng+tam">English + Tamil (Recommended)</option>
           <option value="tam">Tamil Only</option>
           <option value="eng">English Only</option>
@@ -143,6 +157,10 @@
   const fileName = document.getElementById('fileName');
   const fileSize = document.getElementById('fileSize');
   const langSelect = document.getElementById('langSelect');
+  // Ensure a visible default selection (some browsers can render empty if value isn't set explicitly)
+  if (langSelect && !langSelect.value) {
+    langSelect.value = 'eng+tam';
+  }
   
   let selectedFile = null;
   let downloadFilename = null;
@@ -203,13 +221,26 @@
     resultArea.classList.add('hidden');
     
     try {
-      const response = await fetch('/api/ocr/upload', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-      });
-      
-      const data = await response.json();
+      const controller = new AbortController();
+      const timeoutMs = 95_000;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      let response;
+      try {
+        response = await fetch('/api/ocr/upload', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      const raw = await response.text();
+      const data = (() => {
+        try { return JSON.parse(raw); } catch { return { error: 'OCR failed', details: raw?.slice(0, 300) || 'Invalid response' }; }
+      })();
       
       loading.classList.add('hidden');
       
@@ -233,6 +264,10 @@
       let errorMessage = 'Failed to process file. Please try again.';
       if (err.message) {
         errorMessage = err.message;
+      }
+
+      if (err.name === 'AbortError') {
+        errorMessage = 'OCR is taking too long and was stopped. Please try a smaller/clearer image, or try again later.';
       }
       
       // Check if it's a JSON parse error (service returned HTML)

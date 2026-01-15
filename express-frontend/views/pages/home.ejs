@@ -25,6 +25,74 @@
   #home-editor:focus:before {
     content: '';
   }
+
+  /* Home editor toolbar (match Workspace style) */
+  .home-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .home-toolbar .toolbar-btn {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    color: #0f172a;
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+    transition: all 140ms ease;
+  }
+  .home-toolbar .toolbar-btn:hover {
+    background: #f8fafc;
+    border-color: rgba(79, 70, 229, 0.35);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+  }
+  .home-toolbar .toolbar-btn.active {
+    background: linear-gradient(135deg, rgba(30, 58, 138, 0.10) 0%, rgba(59, 130, 246, 0.12) 50%, rgba(30, 64, 175, 0.10) 100%);
+    border-color: rgba(59, 130, 246, 0.45);
+  }
+  .home-toolbar .toolbar-btn svg {
+    stroke: currentColor;
+    stroke-width: 2.4;
+    fill: none;
+  }
+  .home-toolbar .toolbar-pill {
+    display: inline-flex;
+    gap: 6px;
+    padding: 6px;
+    border-radius: 16px;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+  .home-toolbar .toolbar-divider {
+    width: 1px;
+    height: 26px;
+    background: rgba(15, 23, 42, 0.14);
+    margin: 0 10px;
+  }
+  .home-toolbar .dropdown-panel {
+    border-radius: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+    overflow: hidden;
+  }
+  .home-toolbar .dropdown-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #0f172a;
+    background: #ffffff;
+    transition: background 120ms ease;
+  }
+  .home-toolbar .dropdown-item:hover {
+    background: rgba(59, 130, 246, 0.08);
+  }
 </style>
 
 <!-- Navigation (always visible) -->
@@ -35,22 +103,17 @@
   <section class="relative bg-gradient-to-b from-blue-50 via-white to-white py-20 md:py-32">
     <div class="max-w-7xl mx-auto px-6 text-center">
       <div class="space-y-8">
-        <!-- Logo -->
-        <div class="inline-flex items-center justify-center mb-4">
-          <img src="/images/tamil-logo.svg" alt="ProofTamil Logo" class="w-24 h-24">
-        </div>
-        
         <!-- Main Heading -->
-        <h1 class="text-5xl md:text-7xl font-extrabold text-gray-900 leading-tight">
+        <h1 class="text-4xl md:text-6xl font-extrabold text-gray-900 leading-tight">
           <span class="bg-gradient-to-r from-primary-600 via-primary-500 to-primary-400 bg-clip-text text-transparent">
             Write Confidently in Tamil with an AI
-          </span><br/>
-          <span class="text-4xl md:text-5xl text-primary-600">
+          </span>
+          <span class="block mt-3 text-2xl md:text-4xl text-primary-700">
             that Understands Your Words
           </span>
         </h1>
         
-        <p class="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+        <p class="text-lg md:text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
           Transform your writing with smart, context-aware Tamil grammar, spelling, and sentence correction—crafted to help students, writers, bloggers, and creators express ideas clearly.
         </p>
         
@@ -91,11 +154,138 @@
               </div>
               <span class="text-xs text-gray-500" id="home-char-count">0 / 200 words</span>
             </div>
-            <!-- Toolbar -->
-            <div class="bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-1">
-              <button id="home-bold-btn" class="px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-100 rounded transition" title="Bold (Ctrl+B)">B</button>
-              <button id="home-italic-btn" class="px-3 py-1.5 text-sm italic text-gray-700 hover:bg-gray-100 rounded transition" title="Italic (Ctrl+I)">I</button>
-              <button id="home-underline-btn" class="px-3 py-1.5 text-sm underline text-gray-700 hover:bg-gray-100 rounded transition" title="Underline (Ctrl+U)">U</button>
+            <!-- Toolbar (same behavior as Workspace; home never saves drafts) -->
+            <div class="home-toolbar bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-1 overflow-x-auto">
+              <div class="flex items-center gap-1 min-w-max">
+                <div class="toolbar-pill">
+                  <button class="toolbar-btn" data-command="undo" title="Undo">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M9 14l-4-4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M5 10h9a6 6 0 0 1 6 6v1" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button class="toolbar-btn" data-command="redo" title="Redo">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M15 6l4 4-4 4" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M19 10H10a6 6 0 0 0-6 6v1" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <div class="toolbar-divider"></div>
+
+                <div class="relative inline-block">
+                  <button class="toolbar-btn" id="home-format-dropdown-btn" title="Text style">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M4 5h16" stroke-linecap="round"/>
+                      <path d="M9 5v14" stroke-linecap="round"/>
+                      <path d="M15 5v14" stroke-linecap="round"/>
+                    </svg>
+                    <svg class="w-3 h-3 ml-1" viewBox="0 0 20 20" style="stroke-width:2.8">
+                      <path d="M6 8l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <div id="home-format-dropdown" class="dropdown-panel hidden absolute left-0 mt-2 w-44 bg-white z-10">
+                    <button class="dropdown-item" data-format="p"><span class="font-semibold">Paragraph</span></button>
+                    <button class="dropdown-item" data-format="h1"><span class="font-extrabold">Heading 1</span></button>
+                    <button class="dropdown-item" data-format="h2"><span class="font-bold">Heading 2</span></button>
+                    <button class="dropdown-item" data-format="h3"><span class="font-semibold">Heading 3</span></button>
+                  </div>
+                </div>
+
+                <div class="toolbar-divider"></div>
+
+                <div class="toolbar-pill">
+                  <button class="toolbar-btn" data-command="bold" title="Bold">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M7 5h6a4 4 0 0 1 0 8H7V5z" stroke-linejoin="round"/>
+                      <path d="M7 13h7a4 4 0 0 1 0 8H7v-8z" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button class="toolbar-btn" data-command="italic" title="Italic">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M19 4h-7" stroke-linecap="round"/>
+                      <path d="M12 20H5" stroke-linecap="round"/>
+                      <path d="M14 4l-4 16" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                  <button class="toolbar-btn" data-command="underline" title="Underline">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M7 4v6a5 5 0 0 0 10 0V4" stroke-linecap="round"/>
+                      <path d="M5 20h14" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                  <button class="toolbar-btn" data-command="strikeThrough" title="Strikethrough">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M4 12h16" stroke-linecap="round"/>
+                      <path d="M8 7a4 4 0 0 1 8 0" stroke-linecap="round"/>
+                      <path d="M9 17a4 4 0 0 0 6.5 3.1" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <div class="toolbar-divider"></div>
+
+                <div class="toolbar-pill">
+                  <button class="toolbar-btn" data-command="insertUnorderedList" title="Bullet list">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M8 6h13" stroke-linecap="round"/>
+                      <path d="M8 12h13" stroke-linecap="round"/>
+                      <path d="M8 18h13" stroke-linecap="round"/>
+                      <path d="M4.5 6h.01" stroke-linecap="round"/>
+                      <path d="M4.5 12h.01" stroke-linecap="round"/>
+                      <path d="M4.5 18h.01" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                  <button class="toolbar-btn" data-command="insertOrderedList" title="Numbered list">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M9 6h12" stroke-linecap="round"/>
+                      <path d="M9 12h12" stroke-linecap="round"/>
+                      <path d="M9 18h12" stroke-linecap="round"/>
+                      <path d="M4 6h1v4" stroke-linecap="round"/>
+                      <path d="M3.5 12h2.5l-2.5 3H6" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M4 18h2" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <div class="toolbar-divider"></div>
+
+                <div class="relative inline-block">
+                  <button class="toolbar-btn" id="home-align-dropdown-btn" title="Alignment">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M4 6h16" stroke-linecap="round"/>
+                      <path d="M4 10h12" stroke-linecap="round"/>
+                      <path d="M4 14h16" stroke-linecap="round"/>
+                      <path d="M4 18h12" stroke-linecap="round"/>
+                    </svg>
+                    <svg class="w-3 h-3 ml-1" viewBox="0 0 20 20" style="stroke-width:2.8">
+                      <path d="M6 8l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <div id="home-align-dropdown" class="dropdown-panel hidden absolute left-0 mt-2 w-44 bg-white z-10">
+                    <button class="dropdown-item" data-command="justifyLeft"><span class="font-semibold">Align Left</span></button>
+                    <button class="dropdown-item" data-command="justifyCenter"><span class="font-semibold">Align Center</span></button>
+                    <button class="dropdown-item" data-command="justifyRight"><span class="font-semibold">Align Right</span></button>
+                    <button class="dropdown-item" data-command="justifyFull"><span class="font-semibold">Justify</span></button>
+                  </div>
+                </div>
+
+                <div class="toolbar-divider"></div>
+
+                <button class="toolbar-btn" id="home-insert-link-btn" title="Insert link">
+                  <svg class="w-5 h-5" viewBox="0 0 24 24">
+                    <path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 0 1-7-7l1-1" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button class="toolbar-btn" id="home-search-btn" title="Search">
+                  <svg class="w-5 h-5" viewBox="0 0 24 24">
+                    <path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M21 21l-4.3-4.3" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
             </div>
             <div class="p-8 relative">
               <div 

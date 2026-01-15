@@ -11,6 +11,80 @@
   .workspace-ai-panel {
     min-height: 0;
   }
+
+  /* ==========================================================================
+     Workspace Toolbar (Bold icons + modern styling)
+     ========================================================================== */
+  .workspace-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+  .workspace-toolbar .toolbar-btn {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    color: #0f172a; /* slate-900 */
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+    transition: all 140ms ease;
+  }
+  .workspace-toolbar .toolbar-btn:hover {
+    background: #f8fafc;
+    border-color: rgba(79, 70, 229, 0.35);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+  }
+  .workspace-toolbar .toolbar-btn:active {
+    transform: translateY(0px);
+  }
+  .workspace-toolbar .toolbar-btn.active {
+    background: linear-gradient(135deg, rgba(30, 58, 138, 0.10) 0%, rgba(59, 130, 246, 0.12) 50%, rgba(30, 64, 175, 0.10) 100%);
+    border-color: rgba(59, 130, 246, 0.45);
+    box-shadow: 0 10px 22px rgba(59, 130, 246, 0.12);
+  }
+  .workspace-toolbar .toolbar-btn svg {
+    stroke: currentColor;
+    stroke-width: 2.4;
+    fill: none;
+  }
+  .workspace-toolbar .toolbar-divider {
+    width: 1px;
+    height: 26px;
+    background: rgba(15, 23, 42, 0.14);
+    margin: 0 10px;
+  }
+  .workspace-toolbar .toolbar-pill {
+    display: inline-flex;
+    gap: 6px;
+    padding: 6px;
+    border-radius: 16px;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+  .workspace-toolbar .dropdown-panel {
+    border-radius: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+    overflow: hidden;
+  }
+  .workspace-toolbar .dropdown-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #0f172a;
+    background: #ffffff;
+    transition: background 120ms ease;
+  }
+  .workspace-toolbar .dropdown-item:hover {
+    background: rgba(59, 130, 246, 0.08);
+  }
   .workspace-editor-panel .flex-1 {
     min-height: 0;
   }
@@ -387,101 +461,181 @@
     <!-- Left: Editor Panel -->
     <div class="flex flex-col bg-slate-50 border-r border-gray-200 workspace-editor-panel" style="overflow: hidden;">
       <!-- Enhanced Toolbar -->
-      <div class="bg-white border-b border-gray-200 px-4 py-2 shadow-sm overflow-x-auto">
+      <div class="workspace-toolbar bg-white border-b border-gray-200 px-4 py-2 shadow-sm overflow-x-auto">
         <div class="flex items-center gap-1 min-w-max">
-          <!-- Undo/Redo -->
-          <button class="toolbar-btn" data-command="undo" title="Undo">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
-            </svg>
-          </button>
-          <button class="toolbar-btn" data-command="redo" title="Redo">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/>
-            </svg>
-          </button>
+          <div class="toolbar-pill">
+            <button class="toolbar-btn" data-command="undo" title="Undo">
+              <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M9 14l-4-4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M5 10h9a6 6 0 0 1 6 6v1" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="toolbar-btn" data-command="redo" title="Redo">
+              <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M15 6l4 4-4 4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M19 10H10a6 6 0 0 0-6 6v1" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
           
-          <div class="w-px h-6 bg-gray-300 mx-2"></div>
+          <div class="toolbar-divider"></div>
+
+          <!-- Text style dropdown (T) -->
+          <div class="relative inline-block">
+            <button class="toolbar-btn" id="format-dropdown-btn" title="Text style">
+              <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M4 5h16" stroke-linecap="round"/>
+                <path d="M9 5v14" stroke-linecap="round"/>
+                <path d="M15 5v14" stroke-linecap="round"/>
+              </svg>
+              <svg class="w-3 h-3 ml-1" viewBox="0 0 20 20" style="stroke-width:2.8">
+                <path d="M6 8l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div id="format-dropdown" class="dropdown-panel hidden absolute left-0 mt-2 w-44 bg-white z-10">
+              <button class="dropdown-item" data-format="p">
+                <span class="font-semibold">Paragraph</span>
+              </button>
+              <button class="dropdown-item" data-format="h1">
+                <span class="font-extrabold">Heading 1</span>
+              </button>
+              <button class="dropdown-item" data-format="h2">
+                <span class="font-bold">Heading 2</span>
+              </button>
+              <button class="dropdown-item" data-format="h3">
+                <span class="font-semibold">Heading 3</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="toolbar-divider"></div>
+
+          <!-- Bold / Italic / Underline / Strikethrough -->
+          <div class="toolbar-pill">
+            <button class="toolbar-btn" data-command="bold" title="Bold">
+              <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M7 5h6a4 4 0 0 1 0 8H7V5z" stroke-linejoin="round"/>
+                <path d="M7 13h7a4 4 0 0 1 0 8H7v-8z" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="toolbar-btn" data-command="italic" title="Italic">
+              <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M19 4h-7" stroke-linecap="round"/>
+                <path d="M12 20H5" stroke-linecap="round"/>
+                <path d="M14 4l-4 16" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <button class="toolbar-btn" data-command="underline" title="Underline">
+              <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M7 4v6a5 5 0 0 0 10 0V4" stroke-linecap="round"/>
+                <path d="M5 20h14" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <button class="toolbar-btn" data-command="strikeThrough" title="Strikethrough">
+              <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M4 12h16" stroke-linecap="round"/>
+                <path d="M8 7a4 4 0 0 1 8 0" stroke-linecap="round"/>
+                <path d="M9 17a4 4 0 0 0 6.5 3.1" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
           
-          <!-- Font Size -->
-          <select class="toolbar-select" id="font-size-select" title="Font size">
-            <option value="12px">12</option>
-            <option value="14px">14</option>
-            <option value="16px" selected>16</option>
-            <option value="18px">18</option>
-            <option value="20px">20</option>
-            <option value="24px">24</option>
-            <option value="28px">28</option>
-            <option value="32px">32</option>
-          </select>
-          
-          <div class="w-px h-6 bg-gray-300 mx-2"></div>
-          
+          <div class="toolbar-divider"></div>
+
           <!-- Lists -->
-          <button class="toolbar-btn" data-command="insertUnorderedList" title="Bullet list">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"/>
-            </svg>
-          </button>
-          <button class="toolbar-btn" data-command="insertOrderedList" title="Numbered list">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1zm5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z"/>
-            </svg>
-          </button>
+          <div class="toolbar-pill">
+            <button class="toolbar-btn" data-command="insertUnorderedList" title="Bullet list">
+              <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M8 6h13" stroke-linecap="round"/>
+                <path d="M8 12h13" stroke-linecap="round"/>
+                <path d="M8 18h13" stroke-linecap="round"/>
+                <path d="M4.5 6h.01" stroke-linecap="round"/>
+                <path d="M4.5 12h.01" stroke-linecap="round"/>
+                <path d="M4.5 18h.01" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <button class="toolbar-btn" data-command="insertOrderedList" title="Numbered list">
+              <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M9 6h12" stroke-linecap="round"/>
+                <path d="M9 12h12" stroke-linecap="round"/>
+                <path d="M9 18h12" stroke-linecap="round"/>
+                <path d="M4 6h1v4" stroke-linecap="round"/>
+                <path d="M3.5 12h2.5l-2.5 3H6" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 18h2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
           
-          <div class="w-px h-6 bg-gray-300 mx-2"></div>
+          <div class="toolbar-divider"></div>
           
           <!-- Alignment Dropdown -->
           <div class="relative inline-block">
             <button class="toolbar-btn" id="align-dropdown-btn" title="Alignment">
-              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M3 21h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18V7H3v2zm0-6v2h18V3H3z"/>
+              <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M4 6h16" stroke-linecap="round"/>
+                <path d="M4 10h12" stroke-linecap="round"/>
+                <path d="M4 14h16" stroke-linecap="round"/>
+                <path d="M4 18h12" stroke-linecap="round"/>
               </svg>
-              <svg class="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+              <svg class="w-3 h-3 ml-1" viewBox="0 0 20 20" style="stroke-width:2.8">
+                <path d="M6 8l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <div id="align-dropdown" class="hidden absolute left-0 mt-1 w-40 bg-white rounded-md shadow-lg border border-gray-200 z-10">
+            <div id="align-dropdown" class="dropdown-panel hidden absolute left-0 mt-2 w-44 bg-white z-10">
               <button class="dropdown-item" data-command="justifyLeft">
-                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M3 21h18v-2H3v2zm0-4h12v-2H3v2zm0-4h18v-2H3v2zm0-4h12V7H3v2zm0-6v2h18V3H3z"/>
+                <svg class="w-4 h-4" viewBox="0 0 24 24">
+                  <path d="M4 6h16" stroke-linecap="round"/>
+                  <path d="M4 10h12" stroke-linecap="round"/>
+                  <path d="M4 14h16" stroke-linecap="round"/>
+                  <path d="M4 18h12" stroke-linecap="round"/>
                 </svg>
                 Align Left
               </button>
               <button class="dropdown-item" data-command="justifyCenter">
-                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M7 15v2h10v-2H7zm-4 6h18v-2H3v2zm0-8h18v-2H3v2zm4-6v2h10V7H7zM3 3v2h18V3H3z"/>
+                <svg class="w-4 h-4" viewBox="0 0 24 24">
+                  <path d="M4 6h16" stroke-linecap="round"/>
+                  <path d="M6 10h12" stroke-linecap="round"/>
+                  <path d="M4 14h16" stroke-linecap="round"/>
+                  <path d="M6 18h12" stroke-linecap="round"/>
                 </svg>
                 Align Center
               </button>
               <button class="dropdown-item" data-command="justifyRight">
-                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M3 21h18v-2H3v2zm6-4h12v-2H9v2zm-6-4h18v-2H3v2zm6-4h12V7H9v2zM3 3v2h18V3H3z"/>
+                <svg class="w-4 h-4" viewBox="0 0 24 24">
+                  <path d="M4 6h16" stroke-linecap="round"/>
+                  <path d="M8 10h12" stroke-linecap="round"/>
+                  <path d="M4 14h16" stroke-linecap="round"/>
+                  <path d="M8 18h12" stroke-linecap="round"/>
                 </svg>
                 Align Right
               </button>
               <button class="dropdown-item" data-command="justifyFull">
-                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M3 21h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18V7H3v2zm0-6v2h18V3H3z"/>
+                <svg class="w-4 h-4" viewBox="0 0 24 24">
+                  <path d="M4 6h16" stroke-linecap="round"/>
+                  <path d="M4 10h16" stroke-linecap="round"/>
+                  <path d="M4 14h16" stroke-linecap="round"/>
+                  <path d="M4 18h16" stroke-linecap="round"/>
                 </svg>
                 Justify
               </button>
             </div>
           </div>
           
-          <div class="w-px h-6 bg-gray-300 mx-2"></div>
+          <div class="toolbar-divider"></div>
           
           <!-- Link -->
           <button class="toolbar-btn" id="insert-link-btn" title="Insert link">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
+            <svg class="w-5 h-5" viewBox="0 0 24 24">
+              <path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 0 1-7-7l1-1" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
           
           <!-- Search (Placeholder) -->
           <button class="toolbar-btn" id="search-btn" title="Search">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            <svg class="w-5 h-5" viewBox="0 0 24 24">
+              <path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M21 21l-4.3-4.3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
           
@@ -489,8 +643,11 @@
           
           <!-- Translate English to Tamil -->
           <button class="toolbar-btn bg-primary-50 hover:bg-accent-50 text-primary-700" id="translate-english-btn" title="Translate English to Tamil">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
+            <svg class="w-5 h-5" viewBox="0 0 24 24">
+              <path d="M4 5h12" stroke-linecap="round"/>
+              <path d="M10 5v14" stroke-linecap="round"/>
+              <path d="M5 9h10" stroke-linecap="round"/>
+              <path d="M16 19l2-6 2 6" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             <span class="ml-1 text-xs font-medium">Translate</span>
           </button>

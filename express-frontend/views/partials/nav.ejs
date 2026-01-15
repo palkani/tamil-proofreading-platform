@@ -17,7 +17,7 @@
             <a href="/drafts" id="my-drafts-link" class="<%= active === 'drafts' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
               My Drafts
             </a>
-            <a href="/workspace" class="<%= active === 'workspace' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
+            <a href="/workspace" id="nav-workspace-link" class="<%= active === 'workspace' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
               Workspace
             </a>
             <a href="/archive" class="<%= active === 'archive' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
@@ -201,6 +201,28 @@
       window.location.href = '/';
     });
   };
+
+  // Ensure the Workspace nav link always navigates (some pages attach aggressive click handlers).
+  ;(function () {
+    try {
+      const link = document.getElementById('nav-workspace-link');
+      if (!link) return;
+      link.addEventListener(
+        'click',
+        function (e) {
+          // Allow opening in new tab/window
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          if (typeof e.button === 'number' && e.button !== 0) return;
+          e.preventDefault();
+          console.log('[NAV] Workspace link clicked, navigating to /workspace');
+          window.location.href = '/workspace';
+        },
+        true // capture phase to win against other handlers
+      );
+    } catch (err) {
+      // Non-fatal
+    }
+  })();
   
   // CRITICAL: On homepage load, check if we just logged out and prevent re-logout
   ;(function() {

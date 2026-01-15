@@ -21,6 +21,17 @@ async function apiFetch(path, options = {}, requireAuth = false) {
   // Use centralized auth-utils if available (handles token refresh and homepage checks)
   if (window.authUtils && window.authUtils.apiFetch) {
     try {
+      // IMPORTANT: auth-utils only auto-adds Authorization when requireAuth=true.
+      // For homepage we often call with requireAuth=false (to avoid redirects),
+      // but we still want logged-in users to get authenticated responses.
+      const token = localStorage.getItem('access_token');
+      if (token && !isTokenExpired(token)) {
+        const headers = new Headers(options.headers || {});
+        if (!headers.has('Authorization')) {
+          headers.set('Authorization', `Bearer ${token}`);
+        }
+        options = { ...options, headers };
+      }
       return await window.authUtils.apiFetch(path, options, requireAuth);
     } catch (error) {
       // If auth-utils throws, and we're on homepage with requireAuth=false, 
@@ -102,9 +113,13 @@ class HomeEditor {
     this.editor = document.getElementById('home-editor');
     this.charCount = document.getElementById('home-char-count');
     this.suggestionsContainer = document.getElementById('home-suggestions-container');
-    this.boldBtn = document.getElementById('home-bold-btn');
-    this.italicBtn = document.getElementById('home-italic-btn');
-    this.underlineBtn = document.getElementById('home-underline-btn');
+    // Home toolbar buttons (match workspace behavior)
+    this.formatDropdownBtn = document.getElementById('home-format-dropdown-btn');
+    this.formatDropdown = document.getElementById('home-format-dropdown');
+    this.alignDropdownBtn = document.getElementById('home-align-dropdown-btn');
+    this.alignDropdown = document.getElementById('home-align-dropdown');
+    this.insertLinkBtn = document.getElementById('home-insert-link-btn');
+    this.searchBtn = document.getElementById('home-search-btn');
     this.maxWords = 200;
     
     // Auto-analysis state
@@ -220,15 +235,84 @@ class HomeEditor {
     }
     console.log('[INIT] Editor element found, attaching event listeners');
     
-    // Setup toolbar buttons
-    if (this.boldBtn) {
-      this.boldBtn.addEventListener('click', () => this.formatText('bold'));
+    // Toolbar buttons (execCommand)
+    document.querySelectorAll('.home-toolbar .toolbar-btn[data-command]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const cmd = btn.getAttribute('data-command');
+        if (!cmd) return;
+        document.execCommand(cmd, false, null);
+        this.editor.focus();
+
+        // Toggle active state for formatting buttons
+        if (['bold', 'italic', 'underline', 'strikeThrough'].includes(cmd)) {
+          const isActive = document.queryCommandState(cmd);
+          if (isActive) btn.classList.add('active');
+          else btn.classList.remove('active');
+        }
+      });
+    });
+
+    // Text style dropdown (Paragraph/Heading)
+    if (this.formatDropdownBtn && this.formatDropdown) {
+      this.formatDropdownBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.formatDropdown.classList.toggle('hidden');
+      });
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('a[href]')) return;
+        this.formatDropdown.classList.add('hidden');
+      });
+      this.formatDropdown.querySelectorAll('[data-format]').forEach((item) => {
+        item.addEventListener('click', (e) => {
+          e.preventDefault();
+          const tag = item.getAttribute('data-format') || 'p';
+          document.execCommand('formatBlock', false, tag);
+          this.formatDropdown.classList.add('hidden');
+          this.editor.focus();
+        });
+      });
     }
-    if (this.italicBtn) {
-      this.italicBtn.addEventListener('click', () => this.formatText('italic'));
+
+    // Alignment dropdown
+    if (this.alignDropdownBtn && this.alignDropdown) {
+      this.alignDropdownBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.alignDropdown.classList.toggle('hidden');
+      });
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('a[href]')) return;
+        this.alignDropdown.classList.add('hidden');
+      });
+      this.alignDropdown.querySelectorAll('[data-command]').forEach((item) => {
+        item.addEventListener('click', (e) => {
+          e.preventDefault();
+          const cmd = item.getAttribute('data-command');
+          if (!cmd) return;
+          document.execCommand(cmd, false, null);
+          this.alignDropdown.classList.add('hidden');
+          this.editor.focus();
+        });
+      });
     }
-    if (this.underlineBtn) {
-      this.underlineBtn.addEventListener('click', () => this.formatText('underline'));
+
+    // Link + Search
+    if (this.insertLinkBtn) {
+      this.insertLinkBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const url = prompt('Enter URL:');
+        if (url) document.execCommand('createLink', false, url);
+        this.editor.focus();
+      });
+    }
+    if (this.searchBtn) {
+      this.searchBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const term = prompt('Search in text:');
+        if (term) window.find(term);
+      });
     }
     
     // Handle input events

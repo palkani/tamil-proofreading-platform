@@ -89,10 +89,8 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use((req, res, next) => {
-  if (req.path.startsWith('/workspace')) return next();
-  attachUser(req, res, next);
-});
+// IMPORTANT: attachUser must run for /workspace so requireAuth can work and Draft View/Edit links don't bounce back to /drafts.
+app.use((req, res, next) => attachUser(req, res, next));
 
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0,
