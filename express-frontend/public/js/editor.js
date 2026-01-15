@@ -421,8 +421,18 @@ class TamilEditor {
         // Check if typing in English - call Gemini transliteration API
         else if (/^[a-zA-Z]+$/.test(currentWord) && currentWord.length >= 2) {
           try {
-          const data = await transliterateViaRunnerClient(currentWord, 'spoken', 8);
-          suggestions = data || [];
+          const modeSelect = document.getElementById('mode-select');
+          const mode = (modeSelect && modeSelect.value) ? modeSelect.value : 'spoken';
+          const data = await transliterateViaRunnerClient(currentWord, mode, 8);
+          // Runner returns objects sometimes; normalize to string list to avoid "[object Object]"
+          suggestions = (data || [])
+            .map((s) => {
+              if (!s) return '';
+              if (typeof s === 'string') return s;
+              return s.word || s.ta || s.text || s.suggestion || '';
+            })
+            .map((s) => String(s || '').trim())
+            .filter(Boolean);
           } catch (err) {
             console.log('Transliteration API error:', err);
           }
