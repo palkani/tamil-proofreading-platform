@@ -214,7 +214,8 @@
       loading.classList.add('hidden');
       
       if (data.error) {
-        errorText.textContent = data.error;
+        // Show both high-level error and details (if provided)
+        errorText.textContent = data.details ? `${data.error} — ${data.details}` : data.error;
         error.classList.remove('hidden');
         processBtn.disabled = false;
       } else {

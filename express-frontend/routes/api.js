@@ -514,28 +514,30 @@ router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
     const mimeType = req.file.mimetype;
     
     // Try direct OCR implementation first (if available)
+    let directOcrError = null;
     if (ocrService) {
       console.log('[OCR] Using direct OCR implementation');
       try {
         const result = await ocrService.processFile(fileBuffer, filename, mimeType, lang);
-        
-        // Store document path for download
-        ocrDocuments.set(result.download_filename, result.download_path);
-        
+
+        // Store document path for download (only if we actually have a file)
+        ocrDocuments.set(result.download_filename, result.download_path || null);
+
         // Clean up old documents (keep last 10)
         if (ocrDocuments.size > 10) {
           const firstKey = ocrDocuments.keys().next().value;
           try {
             const fs = require('fs');
-            if (fs.existsSync(ocrDocuments.get(firstKey))) {
-              fs.unlinkSync(ocrDocuments.get(firstKey));
+            const oldPath = ocrDocuments.get(firstKey);
+            if (oldPath && fs.existsSync(oldPath)) {
+              fs.unlinkSync(oldPath);
             }
           } catch (e) {
             // Ignore cleanup errors
           }
           ocrDocuments.delete(firstKey);
         }
-        
+
         return res.json({
           success: true,
           text: result.text.substring(0, 500) + (result.text.length > 500 ? '...' : ''),
@@ -544,8 +546,9 @@ router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
           char_count: result.char_count
         });
       } catch (ocrError) {
+        directOcrError = ocrError;
         console.error('[OCR] Direct OCR processing failed:', ocrError.message);
-        // Fall through to try external service if configured
+        // Continue to external OCR service fallback if configured
       }
     }
     
@@ -581,8 +584,21 @@ router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
       }
     }
     
-    // No OCR service available
-    return res.status(503).json({ 
+    // No external OCR service configured.
+    // If direct OCR exists but failed, return the real error instead of "service unavailable".
+    if (directOcrError) {
+      const msg = directOcrError.message || 'OCR processing failed';
+      const isPdfNoText = mimeType === 'application/pdf' && msg.toLowerCase().includes('no extractable text');
+      return res.status(422).json({
+        error: isPdfNoText ? 'This PDF appears to be image-based and cannot be extracted yet.' : msg,
+        details: isPdfNoText
+          ? 'Currently we can extract text from PDFs that contain embedded text. For scanned PDFs, please upload an image (JPG/PNG) or use an external OCR service.'
+          : msg
+      });
+    }
+
+    // Truly no OCR service available
+    return res.status(503).json({
       error: 'OCR service is not currently available. Please contact support.',
       details: 'OCR functionality requires Tesseract.js or an external OCR service'
     });
@@ -718,7 +734,7 @@ router.post('/converter/convert', uploadConverter.single('file'), async (req, re
     console.error('[Converter] Conversion error:', error.message);
     return res.status(error.response?.status || 500).json({
       error: error.message || 'Conversion failed',
-      details: error.response?.data?.error || error.message
+      details: error.details || error.response?.data?.error || error.message
     });
   }
 });
@@ -880,7 +896,7 @@ router.post('/ai-content-writer/generate-content', async (req, res) => {
     console.error('[AI-CONTENT-WRITER] Generate content error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.message || 'Content generation failed',
-      details: error.response?.data?.error || error.message
+      details: error.details || error.response?.data?.error || error.message
     });
   }
 });
@@ -905,7 +921,7 @@ router.post('/ai-content-writer/improve-content', async (req, res) => {
     console.error('[AI-CONTENT-WRITER] Improve content error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.message || 'Content improvement failed',
-      details: error.response?.data?.error || error.message
+      details: error.details || error.response?.data?.error || error.message
     });
   }
 });
@@ -930,7 +946,7 @@ router.post('/ai-content-writer/translate', async (req, res) => {
     console.error('[AI-CONTENT-WRITER] Translate content error:', error.message);
     res.status(error.response?.status || 500).json({
       error: error.message || 'Translation failed',
-      details: error.response?.data?.error || error.message
+      details: error.details || error.response?.data?.error || error.message
     });
   }
 });

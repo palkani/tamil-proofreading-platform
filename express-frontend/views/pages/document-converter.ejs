@@ -161,8 +161,8 @@
   let selectedFile = null;
   let conversionResult = null;
 
-  // Supported conversions
-  const conversions = {
+  // Supported conversions (will be overwritten by server-reported capabilities)
+  let conversions = {
     pdf: ['docx', 'txt', 'html', 'rtf'],
     docx: ['pdf', 'txt', 'html', 'rtf', 'odt'],
     txt: ['pdf', 'docx', 'html', 'rtf'],
@@ -170,6 +170,19 @@
     rtf: ['pdf', 'docx', 'txt', 'html'],
     odt: ['pdf', 'docx', 'txt', 'html']
   };
+
+  // Load supported conversions from backend so the UI matches what's available in production
+  (async function loadSupportedConversions() {
+    try {
+      const resp = await fetch('/api/converter/supported-conversions');
+      const data = await resp.json();
+      if (data && data.conversions && typeof data.conversions === 'object') {
+        conversions = data.conversions;
+      }
+    } catch (e) {
+      // Non-fatal: fall back to hardcoded conversions
+    }
+  })();
 
   // Upload area click
   uploadArea.addEventListener('click', () => fileInput.click());
@@ -278,7 +291,7 @@
         `;
         successArea.classList.remove('hidden');
       } else {
-        showError(data.error || 'Conversion failed');
+        showError(data.details ? `${data.error} — ${data.details}` : (data.error || 'Conversion failed'));
       }
     } catch (err) {
       showError('Network error: ' + err.message);

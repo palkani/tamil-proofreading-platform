@@ -1,12 +1,8 @@
 package handlers
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	"tamil-proofreading-platform/backend/internal/models"
@@ -14,74 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// LogVisitRequest represents a page visit event
-type LogVisitRequest struct {
-	Route      string `json:"route" binding:"required"`
-	Referrer   string `json:"referrer"`
-	UserAgent  string `json:"user_agent"`
-	DeviceType string `json:"device_type"`
-	UserID     *uint  `json:"user_id"` // Optional user ID from session
-}
-
 // LogActivityRequest represents a user activity event
 type LogActivityRequest struct {
 	EventType string                 `json:"event_type" binding:"required"`
 	Metadata  map[string]interface{} `json:"metadata"`
-}
-
-// LogVisit logs a page visit event
-func (h *Handlers) LogVisit(c *gin.Context) {
-	var req LogVisitRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
-		return
-	}
-
-	// Get session ID from cookie or generate new one
-	sessionID, err := c.Cookie("session_id")
-	if err != nil || sessionID == "" {
-		// Generate new session ID
-		sessionID = generateSessionID()
-		c.SetCookie("session_id", sessionID, 3600*24*30, "/", "", false, true)
-	}
-
-	// Get user ID from request body (from session) or context
-	var userID *uint
-	if req.UserID != nil {
-		userID = req.UserID
-	} else if uid, exists := c.Get("user_id"); exists {
-		if id, ok := uid.(uint); ok {
-			userID = &id
-		}
-	}
-
-	// Truncate IP for privacy (first 3 octets only)
-	truncatedIP := truncateIP(c.ClientIP())
-
-	// Hash user agent for privacy
-	userAgentHash := hashString(req.UserAgent)
-
-	// Clean referrer (remove query params)
-	referrer := cleanReferrer(req.Referrer)
-
-	visitEvent := models.VisitEvent{
-		SessionID:     sessionID,
-		UserID:        userID,
-		Route:         req.Route,
-		Referrer:      referrer,
-		TruncatedIP:   truncatedIP,
-		UserAgentHash: userAgentHash,
-		DeviceType:    req.DeviceType,
-		OccurredAt:    time.Now(),
-	}
-
-	if err := h.db.Create(&visitEvent).Error; err != nil {
-		// Log error but don't fail the request
-		c.JSON(http.StatusOK, gin.H{"logged": false})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"logged": true})
 }
 
 // LogActivity logs a user activity event
@@ -200,43 +132,5 @@ func (h *Handlers) GetAnalyticsDashboard(c *gin.Context) {
 	})
 }
 
-// Helper functions
-
-func generateSessionID() string {
-	// Generate a simple session ID based on timestamp and random component
-	timestampComponent := strconv.FormatInt(time.Now().UnixNano(), 10)
-	return hashString(time.Now().String() + timestampComponent)
-}
-
-func hashString(s string) string {
-	hash := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(hash[:])
-}
-
-func truncateIP(ip string) string {
-	// Truncate IPv4 to first 3 octets (e.g., "192.168.1.100" -> "192.168.1")
-	parts := strings.Split(ip, ".")
-	if len(parts) >= 3 {
-		return strings.Join(parts[:3], ".")
-	}
-	// For IPv6, take first 48 bits
-	if strings.Contains(ip, ":") {
-		parts := strings.Split(ip, ":")
-		if len(parts) >= 3 {
-			return strings.Join(parts[:3], ":")
-		}
-	}
-	return ""
-}
-
-func cleanReferrer(referrer string) string {
-	// Remove query parameters from referrer for privacy
-	if idx := strings.Index(referrer, "?"); idx > 0 {
-		return referrer[:idx]
-	}
-	// Limit length
-	if len(referrer) > 500 {
-		return referrer[:500]
-	}
-	return referrer
-}
+// NOTE: Visit logging endpoint (/api/v1/events/visit) has been removed.
+// Any remaining analytics features are based on activity events only.

@@ -59,43 +59,6 @@ function shouldSkipRoute(path) {
 function trackPageView(req, res, next) {
   // Call next() immediately - don't block request
   next();
-  
-  // Track analytics asynchronously after response
-  setImmediate(() => {
-    // Skip certain routes and bots
-    if (shouldSkipRoute(req.path)) {
-      return;
-    }
-
-    const userAgent = req.get('user-agent') || '';
-    
-    if (isBot(userAgent)) {
-      return;
-    }
-
-    // Get user ID from authenticated request if available
-    const userId = req.user?.id || null;
-
-    // Fire and forget - don't wait for analytics to complete
-    const visitData = {
-      route: req.path,
-      referrer: req.get('referer') || req.get('referrer') || '',
-      user_agent: userAgent,
-      device_type: detectDeviceType(userAgent),
-      user_id: userId, // Include user ID if authenticated
-    };
-
-    // Log visit asynchronously with timeout
-    axios.post(`${BACKEND_URL}/events/visit`, visitData, {
-      timeout: 2000, // 2 second timeout
-    }).catch(err => {
-      // Silently fail - analytics shouldn't break the app
-      // Only log in development
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Analytics logging failed:', err.message);
-      }
-    });
-  });
 }
 
 // Helper function to log activity events from other parts of the app

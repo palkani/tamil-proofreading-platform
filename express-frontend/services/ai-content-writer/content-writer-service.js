@@ -25,10 +25,29 @@ function safeJsonParse(text, fallback) {
   }
 }
 
+function extractFirstJsonObject(text) {
+  const s = String(text || '').trim();
+  const firstBrace = s.indexOf('{');
+  const lastBrace = s.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return s.slice(firstBrace, lastBrace + 1);
+  }
+  return null;
+}
+
+function createServiceError(message, details) {
+  const err = new Error(message);
+  err.details = details;
+  return err;
+}
+
 async function geminiGenerate(systemText, userText, schema, maxOutputTokens = 2048) {
   const { apiKey, baseUrl } = getGeminiConfig();
   if (!apiKey) {
-    throw new Error('AI Content Writer is not configured (missing Gemini API key)');
+    throw createServiceError(
+      'AI Content Writer is not configured',
+      'Missing Gemini API key. Set AI_INTEGRATIONS_GEMINI_API_KEY (preferred) or GOOGLE_GENAI_API_KEY in production env.'
+    );
   }
 
   const response = await axios.post(
@@ -55,12 +74,28 @@ async function geminiGenerate(systemText, userText, schema, maxOutputTokens = 20
   );
 
   if (response.status < 200 || response.status >= 300) {
-    const msg = response.data?.error?.message || response.data?.error || `Gemini API failed (${response.status})`;
-    throw new Error(msg);
+    const msg =
+      response.data?.error?.message ||
+      response.data?.error ||
+      `Gemini API failed (${response.status})`;
+    throw createServiceError('Gemini API error', msg);
   }
 
   const aiText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  return safeJsonParse(aiText, null);
+  const parsed = safeJsonParse(aiText, null);
+  if (parsed) return parsed;
+
+  // Sometimes Gemini wraps JSON in prose; try to extract the first JSON object.
+  const extracted = extractFirstJsonObject(aiText);
+  if (extracted) {
+    const parsedExtracted = safeJsonParse(extracted, null);
+    if (parsedExtracted) return parsedExtracted;
+  }
+
+  throw createServiceError(
+    'Gemini response was not valid JSON',
+    `Could not parse JSON response. First 300 chars: ${String(aiText).trim().slice(0, 300)}`
+  );
 }
 
 /**
@@ -159,18 +194,44 @@ async function generateContent(options) {
       required: ['success', 'content', 'metadata'],
     };
 
-    const systemText = `You are an expert content writer. Produce high-quality ${content_type} content.
-Language: ${language}
-Tone: ${tone}
-Target length: ~${word_count} words
+    const languageRule =
+      String(language).toLowerCase() === 'tamil'
+        ? 'Write the full content in Tamil (தமிழ்) only.'
+        : String(language).toLowerCase() === 'bilingual'
+          ? 'Write bilingual content: Tamil first, then English translation for each paragraph.'
+          : 'Write the full content in English only.';
 
-Return ONLY valid JSON.`;
+    const systemText = `You are an expert content writer.
+Task: Produce a high-quality ${content_type}.
+Tone: ${tone}
+Target length: ~${word_count} words.
+${languageRule}
+
+Output MUST be valid JSON only. Do not include markdown fences, explanations, or extra text.`;
 
     const userText = `Topic/prompt:\n${prompt}\n\nRequirements:\n- include_title: ${include_title}\n- include_meta: ${include_meta}\n\nReturn JSON with shape:\n{\n  \"success\": true,\n  \"content\": {\"title\": \"\", \"meta_description\": \"\", \"keywords\": \"\", \"content\": \"\"},\n  \"metadata\": {\"word_count\": ${word_count}, \"language\": \"${language}\", \"content_type\": \"${content_type}\", \"model\": \"gemini-2.5-flash\"}\n}\n\nRules:\n- If include_title is false, set title to empty string.\n- If include_meta is false, set meta_description and keywords to empty string.\n- content should use paragraphs separated by blank lines.`;
 
-    const result = await geminiGenerate(systemText, userText, schema, 3072);
+    // Try with schema first; if schema causes provider-side failure, fall back to plain JSON mime type.
+    let result;
+    try {
+      result = await geminiGenerate(systemText, userText, schema, 3072);
+    } catch (e) {
+      const msg = String(e?.message || '');
+      const details = e?.details ? String(e.details) : '';
+      const looksLikeSchemaIssue =
+        msg.toLowerCase().includes('schema') ||
+        details.toLowerCase().includes('schema') ||
+        details.toLowerCase().includes('response schema');
+      if (!looksLikeSchemaIssue) throw e;
+      console.warn('[AI-WRITER] Schema mode failed, retrying without responseSchema:', { msg, details });
+      result = await geminiGenerate(systemText, userText, null, 3072);
+    }
+
     if (!result || result.success !== true) {
-      throw new Error('Content generation failed');
+      throw createServiceError(
+        'Content generation failed',
+        `Invalid AI response: ${JSON.stringify(result).slice(0, 400)}`
+      );
     }
     // Ensure metadata model is set
     result.metadata = result.metadata || {};
@@ -178,9 +239,6 @@ Return ONLY valid JSON.`;
     return result;
   } catch (error) {
     console.error('[AI-WRITER] Generate content error:', error.message);
-    if (error.response) {
-      throw new Error(error.response.data?.error || 'Content generation failed');
-    }
     throw error;
   }
 }
