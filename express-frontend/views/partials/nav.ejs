@@ -172,18 +172,18 @@
       console.warn('[NAV] Could not set logout flag in localStorage:', e);
     }
     
-    fetch('/auth/logout', {
+    // Call logout API with keepalive so the request can complete even if we navigate.
+    // Also wait briefly to allow Set-Cookie clears to apply before the next page render.
+    const logoutRequest = fetch('/auth/logout', {
       method: 'POST',
       credentials: 'include',
+      keepalive: true,
       headers: {
         'Content-Type': 'application/json'
       }
-    }).catch(() => {
-      // Ignore errors
-    });
+    }).catch(() => null);
     
-    // Force redirect immediately (don't wait for anything)
-    console.log('[NAV] Redirecting to home page immediately');
+    console.log('[NAV] Logging out (keepalive) and redirecting to home page');
     
     // CRITICAL: Clear the logout flag after a delay to prevent loops
     // But set a flag to prevent immediate re-logout
@@ -194,7 +194,12 @@
       console.warn('[NAV] Could not set sessionStorage flag:', e);
     }
     
-    window.location.href = '/';
+    Promise.race([
+      logoutRequest,
+      new Promise((resolve) => setTimeout(resolve, 800))
+    ]).finally(() => {
+      window.location.href = '/';
+    });
   };
   
   // CRITICAL: On homepage load, check if we just logged out and prevent re-logout

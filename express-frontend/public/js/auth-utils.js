@@ -359,21 +359,40 @@ async function apiFetch(url, options = {}, requireAuth = true) {
   const timeSinceLinkClick = now - lastLinkClickTime;
   const timeSincePageLoad = now - pageLoadTime;
   
-  const isNavigating = document.readyState === 'loading' || 
-                       document.visibilityState === 'hidden' ||
-                       (window.performance?.navigation?.type === 1) || // TYPE_NAVIGATE
-                       timeSinceLinkClick < NAVIGATION_GRACE_PERIOD || // Recently clicked a link
-                       timeSincePageLoad < PAGE_LOAD_GRACE_PERIOD; // Recently loaded page
-  
-  if (isNavigating && requireAuth) {
-    console.warn('[AUTH] Page is navigating or recently loaded, skipping apiFetch to prevent redirect interruption', {
+  const isHardNavigating =
+    document.readyState === 'loading' || document.visibilityState === 'hidden';
+  const inGraceWindow =
+    timeSinceLinkClick < NAVIGATION_GRACE_PERIOD ||
+    timeSincePageLoad < PAGE_LOAD_GRACE_PERIOD ||
+    (window.performance?.navigation?.type === 1); // reload
+
+  // IMPORTANT:
+  // - If the page is actually unloading/hidden, fail fast to avoid interrupting navigation.
+  // - If we're just inside a short grace window (fresh load / recent link click), wait briefly
+  //   so authenticated pages (like /drafts) can still fetch immediately after navigation.
+  if (requireAuth && isHardNavigating) {
+    console.warn('[AUTH] Page is hard-navigating (loading/hidden), aborting apiFetch', {
       readyState: document.readyState,
       visibilityState: document.visibilityState,
-      timeSinceLinkClick: timeSinceLinkClick,
-      timeSincePageLoad: timeSincePageLoad,
-      navigationType: window.performance?.navigation?.type
+      timeSinceLinkClick,
+      timeSincePageLoad,
     });
     throw new Error('Navigation in progress');
+  }
+
+  if (requireAuth && inGraceWindow) {
+    const remainingLinkMs = Math.max(0, NAVIGATION_GRACE_PERIOD - timeSinceLinkClick);
+    const remainingLoadMs = Math.max(0, PAGE_LOAD_GRACE_PERIOD - timeSincePageLoad);
+    const waitMs = Math.min(2500, Math.max(remainingLinkMs, remainingLoadMs, 0));
+
+    if (waitMs > 0) {
+      console.log('[AUTH] In navigation grace window; delaying apiFetch to avoid redirect interruption', {
+        waitMs,
+        timeSinceLinkClick,
+        timeSincePageLoad,
+      });
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
   }
   
   // Create a fresh headers object to avoid mutation issues

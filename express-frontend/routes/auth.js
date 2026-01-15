@@ -72,7 +72,44 @@ const forward = async (req, res, path, method = 'post') => {
 router.post('/register', (req, res) => forward(req, res, '/auth/register', 'post'));
 router.post('/login', (req, res) => forward(req, res, '/auth/login', 'post'));
 router.post('/refresh', (req, res) => forward(req, res, '/auth/refresh', 'post'));
-router.post('/logout', (req, res) => forward(req, res, '/auth/logout', 'post'));
+router.post('/logout', async (req, res) => {
+  // IMPORTANT: Always clear cookies on the frontend domain (prooftamil.com),
+  // even if the backend is unreachable or the browser navigates early.
+  const clearCookieEverywhere = (name) => {
+    // Host-only cookie
+    res.clearCookie(name, { path: '/' });
+    // Domain cookie (covers subdomains) - safe even if not present
+    res.clearCookie(name, { path: '/', domain: '.prooftamil.com' });
+  };
+
+  try {
+    // Fire backend logout best-effort (revokes refresh token server-side)
+    await axios({
+      method: 'post',
+      url: `${BACKEND_URL}/auth/logout`,
+      data: req.body,
+      params: req.query,
+      headers: {
+        ...req.headers,
+        host: undefined,
+        cookie: req.headers.cookie,
+        origin: undefined,
+      },
+      withCredentials: true,
+      validateStatus: () => true,
+      timeout: 8000,
+    });
+  } catch (err) {
+    console.warn('[AUTH-PROXY] Logout backend call failed (non-fatal):', err.message);
+  } finally {
+    clearCookieEverywhere('access_token');
+    clearCookieEverywhere('proof_refresh_token');
+    clearCookieEverywhere('refresh_token');
+
+    // Match backend: 204 No Content
+    res.status(204).send();
+  }
+});
 router.post('/social', (req, res) => forward(req, res, '/auth/social', 'post'));
 router.post('/password-strength', (req, res) =>
   forward(req, res, '/auth/password-strength', 'post')
