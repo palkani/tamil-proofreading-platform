@@ -15,8 +15,12 @@ import (
 func newFakeRunner(t *testing.T) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/transliterate" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"output":"எனது","request_id":"test"}`))
+		_, _ = w.Write([]byte(`{"success":true,"suggestions":[{"word":"எனது","ta":"எனது","score":1.0},{"word":"என்பது","ta":"என்பது","score":0.9}]}`))
 	}))
 }
 

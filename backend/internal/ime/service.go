@@ -103,14 +103,28 @@ func (s *Service) Suggest(ctx context.Context, q, mode string, limit int) (cands
 	}
 	meta["cache"] = "miss"
 
+	// Call transliterator in two ways:
+	// - raw token (best when the backend already understands the token)
+	// - phonetic-normalized token (helps Aksharamukha for some inputs)
+	// Merge results for better coverage.
+	rawWords, rawErr := s.client.Transliterate(ctx, q, mode, limit)
 	phonetic := normalizePhonetic(q)
-	words, err := s.client.Transliterate(ctx, phonetic, mode)
-	if err != nil {
-		log.Printf("[AKSHARA] request_id=%v q=%q err=%v", ctx.Value("request_id"), q, err)
+	var phonWords []string
+	var phonErr error
+	if phonetic != q {
+		phonWords, phonErr = s.client.Transliterate(ctx, phonetic, mode, limit)
+	}
+
+	if rawErr != nil && phonErr != nil {
+		log.Printf("[AKSHARA] request_id=%v q=%q raw_err=%v phon_err=%v", ctx.Value("request_id"), q, rawErr, phonErr)
 		meta["engine"] = "aksharamukha_error"
 		meta["latency_ms"] = time.Since(start).Milliseconds()
 		return []Candidate{}, meta
 	}
+
+	words := make([]string, 0, len(rawWords)+len(phonWords))
+	words = append(words, rawWords...)
+	words = append(words, phonWords...)
 
 	reqID := ctx.Value("request_id")
 	cands = s.rankCandidates(words, q, limit, reqID)
