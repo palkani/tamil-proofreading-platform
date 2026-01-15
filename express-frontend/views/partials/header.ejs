@@ -84,7 +84,7 @@
   <noscript><link rel="stylesheet" href="/css/output.css"></noscript>
   <link rel="preload" href="/images/tamil-logo.svg" as="image">
   
-  <% if (pageType === 'home' || typeof seo === 'undefined') { %>
+  <% if (pageType === 'home' || (typeof seo !== 'undefined' && seo.includeStructuredData) || typeof seo === 'undefined') { %>
   <!-- Structured Data - WebApplication (Home page only) -->
   <script type="application/ld+json">
   {

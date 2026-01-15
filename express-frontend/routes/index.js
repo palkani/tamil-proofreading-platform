@@ -49,7 +49,7 @@ router.get('/how-to-use', (req, res) => {
 // OCR Tool page - accessible to everyone
 router.get('/tools/ocr', (req, res) => {
   const user = getCurrentUser(req);
-  const seo = getSeoData('home');
+  const seo = getSeoData('ocrTool');
   res.render('pages/ocr-tool', { 
     title: 'Tamil OCR Tool - Extract Text from Images | ProofTamil',
     seo: seo,
@@ -60,7 +60,7 @@ router.get('/tools/ocr', (req, res) => {
 // Document Converter Tool page - accessible to everyone
 router.get('/tools/converter', (req, res) => {
   const user = getCurrentUser(req);
-  const seo = getSeoData('home');
+  const seo = getSeoData('converterTool');
   res.render('pages/document-converter', { 
     title: 'Document Converter - Convert PDF, DOCX, TXT, HTML | ProofTamil',
     seo: seo,
@@ -71,9 +71,20 @@ router.get('/tools/converter', (req, res) => {
 // AI Content Writer Tool page - accessible to everyone
 router.get('/tools/ai-content-writer', (req, res) => {
   const user = getCurrentUser(req);
-  const seo = getSeoData('home');
+  const seo = getSeoData('aiContentWriterTool');
   res.render('pages/ai-content-writer', { 
     title: 'AI Content Writer - Generate Blogs & Articles in Tamil & English | ProofTamil',
+    seo: seo,
+    user: user
+  });
+});
+
+// Free Tamil Editor landing page - accessible to everyone (SEO)
+router.get('/free-tamil-editor', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('freeTamilEditor');
+  res.render('pages/free-tamil-editor', {
+    title: seo.title,
     seo: seo,
     user: user
   });

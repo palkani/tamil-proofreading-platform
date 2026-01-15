@@ -31,6 +31,47 @@ const seoConfig = {
     pageType: 'article'
   },
 
+  freeTamilEditor: {
+    title: 'Free Tamil Editor Online - Tamil Grammar & Spell Check | ProofTamil',
+    description: 'Free Tamil editor online for fast Tamil editing and proofreading. Fix Tamil grammar and spelling mistakes instantly, rewrite sentences, and improve Tamil writing—100% free, no download.',
+    keywords: 'free tamil editor, free tamil editing, tamil editor online free, tamil editing online, tamil proofreading free, tamil grammar check free, tamil spell check free, tamil sentence correction, tamil writing correction, tamil grammar corrector, tamil proofread online, edit tamil text online, tamil text editor',
+    canonical: BASE_URL + '/free-tamil-editor',
+    ogTitle: 'Free Tamil Editor Online - ProofTamil',
+    ogDescription: 'Edit Tamil text online for free. AI Tamil grammar checker + spell check to improve your writing instantly.',
+    pageType: 'landing',
+    includeStructuredData: true
+  },
+
+  ocrTool: {
+    title: 'Tamil OCR Online Free - Extract Tamil Text from Images & PDFs | ProofTamil',
+    description: 'Free Tamil OCR tool to extract Tamil text from images and PDFs. Upload JPG/PNG/PDF and get editable Tamil text instantly. Best OCR for Tamil documents online.',
+    keywords: 'tamil ocr, tamil ocr online, tamil ocr free, extract tamil text from image, tamil image to text, tamil pdf to text, scanned tamil document to text, tamil ocr tool',
+    canonical: BASE_URL + '/tools/ocr',
+    ogTitle: 'Tamil OCR Online Free - ProofTamil',
+    ogDescription: 'Extract Tamil text from images and PDFs online. Fast, free, and accurate Tamil OCR.',
+    pageType: 'tool'
+  },
+
+  converterTool: {
+    title: 'Document Converter Online - Convert PDF DOCX TXT HTML RTF ODT | ProofTamil',
+    description: 'Convert documents between PDF, DOCX, TXT, HTML, RTF, and ODT. Preserve Tamil text and formatting. Fast online document converter for Tamil files.',
+    keywords: 'document converter online, tamil document converter, convert pdf to docx tamil, convert docx to txt tamil, convert html to docx tamil, rtf converter, odt converter',
+    canonical: BASE_URL + '/tools/converter',
+    ogTitle: 'Document Converter Online - ProofTamil',
+    ogDescription: 'Convert Tamil documents between formats. Preserve Tamil text and formatting.',
+    pageType: 'tool'
+  },
+
+  aiContentWriterTool: {
+    title: 'AI Tamil Content Writer - Generate Tamil Blogs, Articles & Captions | ProofTamil',
+    description: 'Generate high-quality Tamil content with AI: blogs, essays, articles, and translations. Create Tamil writing faster with a Tamil-friendly AI content writer.',
+    keywords: 'ai tamil content writer, tamil blog generator, tamil article generator, tamil content generation, tamil writing ai, tamil content creator',
+    canonical: BASE_URL + '/tools/ai-content-writer',
+    ogTitle: 'AI Tamil Content Writer - ProofTamil',
+    ogDescription: 'Generate Tamil blogs, essays, and articles with AI in seconds.',
+    pageType: 'tool'
+  },
+
   login: {
     title: 'Login - Tamil Grammar Checker & Proofreading Tool | ProofTamil',
     description: 'Login to ProofTamil - Free Tamil proofreader online. Access your saved drafts, personalized grammar suggestions, and AI-powered Tamil writing assistance.',

@@ -7,12 +7,16 @@ Allow: /
 
 # Public pages - fully crawlable (SEO optimized)
 Allow: /
+Allow: /free-tamil-editor
 Allow: /how-to-use
 Allow: /contact
 Allow: /privacy
 Allow: /terms
 Allow: /login
 Allow: /register
+Allow: /tools/ocr
+Allow: /tools/converter
+Allow: /tools/ai-content-writer
 
 # Disallow private/authenticated pages from indexing
 Disallow: /dashboard
