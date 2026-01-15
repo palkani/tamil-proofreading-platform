@@ -164,6 +164,7 @@ func (h *Handlers) clearRefreshCookie(c *gin.Context) {
                 domain = ".prooftamil.com"
         }
         
+        // Clear domain-scoped cookie (if used)
         http.SetCookie(c.Writer, &http.Cookie{
                 Name:     refreshTokenCookieName,
                 Value:    "",
@@ -172,6 +173,18 @@ func (h *Handlers) clearRefreshCookie(c *gin.Context) {
                 HttpOnly: true,
                 Secure:   h.refreshCookieSecure(),
                 SameSite: http.SameSiteNoneMode, // Changed from LaxMode to NoneMode for cross-site support
+                MaxAge:   -1,
+                Expires:  time.Unix(0, 0),
+        })
+
+        // Also clear host-only cookie variant (no Domain attribute)
+        http.SetCookie(c.Writer, &http.Cookie{
+                Name:     refreshTokenCookieName,
+                Value:    "",
+                Path:     refreshTokenCookiePath,
+                HttpOnly: true,
+                Secure:   h.refreshCookieSecure(),
+                SameSite: http.SameSiteNoneMode,
                 MaxAge:   -1,
                 Expires:  time.Unix(0, 0),
         })
@@ -184,11 +197,24 @@ func (h *Handlers) clearAccessTokenCookie(c *gin.Context) {
 		domain = ".prooftamil.com"
 	}
 
+	// Clear domain-scoped cookie (if used)
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     "access_token",
 		Value:    "",
 		Path:     "/",
 		Domain:   domain,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteNoneMode,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	})
+
+	// Also clear host-only cookie variant (no Domain attribute)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteNoneMode,

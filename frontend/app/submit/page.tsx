@@ -971,9 +971,9 @@ export default function SubmitPage() {
     }
   };
 
-  const handleLogout = useCallback(() => {
-    authAPI.logout();
-    router.push('/');
+  const handleLogout = useCallback(async () => {
+    await authAPI.logout();
+    router.replace('/');
   }, [router]);
 
   const handleCheckWithGemini = useCallback(async () => {
