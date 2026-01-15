@@ -95,10 +95,23 @@ app.use((req, res, next) => attachUser(req, res, next));
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0,
   setHeaders: (res, filePath) => {
+    if (process.env.NODE_ENV !== 'production') {
+      return;
+    }
+    if (filePath.endsWith('/js/workspace.js')) {
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+      return;
+    }
     if (filePath.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-    } else if (filePath.endsWith('.js')) {
-      res.setHeader('Cache-Control', 'no-store, no-cache');
+      res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+      return;
+    }
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+      return;
+    }
+    if (/\.(png|jpg|jpeg|webp|gif|svg|ico|woff2|woff|ttf|otf)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
     }
   }
 }));

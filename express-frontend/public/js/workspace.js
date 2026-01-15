@@ -301,6 +301,9 @@ class WorkspaceController {
     this.suggestionsPanel = null;
     this.currentDraft = null;
     this.readOnly = !!window.WORKSPACE_READONLY;
+    // Track suggestion request ordering so stale responses can't overwrite newer ones
+    this._imeRequestSeq = 0;
+    this._imeLastAppliedSeq = 0;
     this.saveTimeout = null;
     this.autosaveAuthBlocked = false;
     this.loading = false;
@@ -542,7 +545,8 @@ class WorkspaceController {
       return [];
     }
 
-    // Set fetching state
+    // Set fetching state + request sequencing (prevents stale responses overwriting the UI)
+    const requestSeq = ++this._imeRequestSeq;
     this.fetchingSuggestions = true;
     this.currentFetchQuery = query;
 
@@ -571,6 +575,12 @@ class WorkspaceController {
         credentials: 'same-origin', // Include cookies but don't require auth headers
       });
 
+      // If the token has changed since this request started, ignore the result
+      if (this.lastFetchToken && this.lastFetchToken !== query) {
+        console.log('[IME] Stale response ignored (token changed):', { query, lastFetchToken: this.lastFetchToken });
+        return [];
+      }
+
       // Handle response
       if (!response.ok) {
         console.error('[IME] API error:', response.status, response.statusText);
@@ -596,7 +606,11 @@ class WorkspaceController {
         console.error('[IME] Query parameter "mode":', mode);
         console.error('[IME] Query parameter "limit":', limit);
         
-        this.displaySuggestions([]);
+        // Only clear UI if this request is still the latest for the current token
+        if (requestSeq >= this._imeLastAppliedSeq && this.lastFetchToken === query) {
+          this._imeLastAppliedSeq = requestSeq;
+          this.displaySuggestions([]);
+        }
         return [];
       }
 
@@ -683,7 +697,13 @@ class WorkspaceController {
       // Display suggestions
       console.log('[IME] About to display suggestions:', finalSuggestions.length, 'items');
       console.log('[IME] Suggestions data:', finalSuggestions);
-      this.displaySuggestions(finalSuggestions);
+      // Apply results only if still relevant + newest
+      if (requestSeq >= this._imeLastAppliedSeq && this.lastFetchToken === query) {
+        this._imeLastAppliedSeq = requestSeq;
+        this.displaySuggestions(finalSuggestions);
+      } else {
+        console.log('[IME] Not applying suggestions (stale)', { requestSeq, lastApplied: this._imeLastAppliedSeq, query, lastFetchToken: this.lastFetchToken });
+      }
       console.log('[IME] displaySuggestions called, checking if dropdown exists...');
 
       return finalSuggestions;
@@ -696,7 +716,10 @@ class WorkspaceController {
       }
       
       console.error('[IME] Error fetching suggestions:', error);
-      this.displaySuggestions([]);
+      if (requestSeq >= this._imeLastAppliedSeq && this.lastFetchToken === query) {
+        this._imeLastAppliedSeq = requestSeq;
+        this.displaySuggestions([]);
+      }
       return [];
       
     } finally {
@@ -998,56 +1021,9 @@ class WorkspaceController {
     }
 
     // IME transliteration (runner-backed); enable whenever the helper exists
-    if (window.IMETypeahead && editorElement) {
-      const adapter = {
-        getSelectionToken: () => {
-          const sel = window.getSelection();
-          if (!sel || sel.rangeCount === 0) return '';
-          const range = sel.getRangeAt(0);
-          const node = range.startContainer;
-          const text = node.textContent || '';
-          const offset = range.startOffset;
-          const before = text.slice(0, offset);
-          const match = before.match(/([A-Za-z]+)$/);
-          return match ? match[1] : '';
-        },
-        replaceToken: (replacement) => {
-          const sel = window.getSelection();
-          if (!sel || sel.rangeCount === 0) return;
-          const range = sel.getRangeAt(0);
-          const node = range.startContainer;
-          const text = node.textContent || '';
-          const offset = range.startOffset;
-          const before = text.slice(0, offset);
-          const match = before.match(/([A-Za-z]+)$/);
-          if (!match) return;
-          const start = offset - match[1].length;
-          const newText = text.slice(0, start) + replacement + text.slice(offset);
-          node.textContent = newText;
-          const newOffset = start + replacement.length;
-          const newRange = document.createRange();
-          newRange.setStart(node, Math.min(newOffset, node.textContent.length));
-          newRange.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(newRange);
-        },
-        getCaretRect: () => {
-          const sel = window.getSelection();
-          if (!sel || sel.rangeCount === 0) return null;
-          const range = sel.getRangeAt(0).cloneRange();
-          range.collapse(true);
-          const rects = range.getClientRects();
-          return rects.length ? rects[0] : null;
-        },
-      };
-      this.imeTypeahead = new window.IMETypeahead(adapter, { mode: 'spoken' });
-      editorElement.addEventListener('input', () => this.imeTypeahead.onInput());
-      editorElement.addEventListener('keydown', (e) => {
-        if (this.imeTypeahead && this.imeTypeahead.handleKey(e, null)) {
-          e.preventDefault();
-        }
-      });
-    }
+    // NOTE: We intentionally do NOT enable the separate runner-backed IMETypeahead here.
+    // Workspace uses its own IME pipeline (handleEditorChange -> /api/ime/suggest -> displaySuggestions).
+    // Having both systems enabled causes race conditions and UI showing "[object Object]".
 
     // Initialize suggestions panel
     const container = document.getElementById('suggestions-container');

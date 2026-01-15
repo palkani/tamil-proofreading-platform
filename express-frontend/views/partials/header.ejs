@@ -326,28 +326,9 @@
   </script>
   <% } %>
   
-  <link rel="stylesheet" href="/css/output.css?v=<%= new Date().getTime() %>">
-  <!-- Centralized Authentication Utilities - Load early for global access -->
-  <script src="/js/auth-utils.js"></script>
-  <!-- Global error handler to catch uncaught errors -->
-  <script>
-    window.addEventListener('error', function(event) {
-      console.error('[GLOBAL] Uncaught error:', event.error);
-      console.error('[GLOBAL] Error message:', event.message);
-      console.error('[GLOBAL] Error filename:', event.filename);
-      console.error('[GLOBAL] Error lineno:', event.lineno);
-      console.error('[GLOBAL] Error colno:', event.colno);
-      console.error('[GLOBAL] Error stack:', event.error?.stack);
-      // Don't prevent default - let browser handle it, but log for debugging
-    });
-    
-    window.addEventListener('unhandledrejection', function(event) {
-      console.error('[GLOBAL] Unhandled promise rejection:', event.reason);
-      console.error('[GLOBAL] Rejection stack:', event.reason?.stack);
-      // Prevent default to avoid console errors, but log for debugging
-      event.preventDefault();
-    });
-  </script>
+  <!-- Centralized Authentication Utilities -->
+  <!-- Defer so it doesn't block first paint (still runs before DOMContentLoaded) -->
+  <script src="/js/auth-utils.js" defer></script>
   <style>
     @font-face {
       font-family: 'Tamil';

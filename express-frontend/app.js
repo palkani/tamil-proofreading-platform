@@ -128,18 +128,29 @@ if (process.env.NODE_ENV !== 'production') {
 // Static files with cache control
 app.use(
   express.static(path.join(__dirname, 'public'), {
-    maxAge: process.env.NODE_ENV === 'production' ? '1h' : '0', // Shorter cache in production
+    maxAge: process.env.NODE_ENV === 'production' ? '7d' : '0',
     etag: true,
     setHeaders: (res, path) => {
-      // No cache for JS files to ensure latest version
-      if (path.endsWith('.js')) {
-        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-      }
-      // Short cache for CSS
-      if (path.endsWith('.css')) {
-        res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      // Long-lived caching for static assets (improves PageSpeed cache-lifetimes)
+      // Keep workspace.js revalidated because it changes frequently.
+      if (process.env.NODE_ENV === 'production') {
+        const isJs = path.endsWith('.js');
+        const isCss = path.endsWith('.css');
+        const isImage = /\.(png|jpg|jpeg|webp|gif|svg|ico)$/.test(path);
+        const isFont = /\.(woff2|woff|ttf|otf)$/.test(path);
+
+        if (isJs) {
+          if (path.endsWith('/js/workspace.js')) {
+            // Allow caching but require revalidation
+            res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+          } else {
+            res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+          }
+        } else if (isCss) {
+          res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+        } else if (isImage || isFont) {
+          res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        }
       }
     }
   })
