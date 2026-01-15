@@ -195,10 +195,10 @@
     }
     
     window.location.href = '/';
-  }
+  };
   
   // CRITICAL: On homepage load, check if we just logged out and prevent re-logout
-  (function() {
+  ;(function() {
     const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
     if (isHomepage) {
       try {
@@ -236,7 +236,7 @@
   })();
   
   // CRITICAL: Check on page load if we're in a logout loop
-  (function() {
+  ;(function() {
     try {
       const logoutFlag = localStorage.getItem('logout_in_progress');
       const logoutTimestamp = localStorage.getItem('logout_timestamp');
@@ -261,7 +261,7 @@
   })();
   
   // Setup logout button - simplified and more reliable
-  (function() {
+  ;(function() {
     function attachLogoutHandler() {
       const logoutBtn = document.getElementById('logout-btn');
       if (!logoutBtn) {

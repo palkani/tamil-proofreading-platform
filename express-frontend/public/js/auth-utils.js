@@ -610,48 +610,6 @@ async function apiFetch(url, options = {}, requireAuth = true) {
   return response;
 }
 
-// CRITICAL: Track link clicks to prevent redirects during navigation
-let lastLinkClickTime = 0;
-let pageLoadTime = Date.now();
-const NAVIGATION_GRACE_PERIOD = 3000; // 3 seconds after link click
-const PAGE_LOAD_GRACE_PERIOD = 2000; // 2 seconds after page load
-
-// Track page load time
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', function() {
-    pageLoadTime = Date.now();
-    console.log('[AUTH] Page loaded, setting page load grace period');
-  });
-} else {
-  pageLoadTime = Date.now();
-}
-
-// Track all link clicks globally - MUST run immediately
-(function() {
-  // Use capture phase and run immediately
-  function trackLinkClick(e) {
-    const link = e.target.closest('a[href]');
-    if (link && link.href && !link.href.startsWith('javascript:') && !link.href.startsWith('#')) {
-      lastLinkClickTime = Date.now();
-      console.log('[AUTH] Link clicked, setting navigation grace period:', link.href, 'at', lastLinkClickTime);
-    }
-  }
-  
-  // Attach immediately if possible
-  if (document.addEventListener) {
-    document.addEventListener('click', trackLinkClick, true); // Capture phase
-  } else if (document.attachEvent) {
-    document.attachEvent('onclick', trackLinkClick); // IE fallback
-  }
-  
-  // Also try to attach on DOM ready as backup
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-      document.addEventListener('click', trackLinkClick, true);
-    });
-  }
-})();
-
 // Export functions to window for global access
 window.authUtils = {
   clearAuthTokens,
