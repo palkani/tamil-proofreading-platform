@@ -32,22 +32,25 @@ const attachUser = (req, res, next) => {
       const isExpired = payload.exp < (now - clockSkewTolerance);
       
       if (isExpired) {
-        // Token is expired, but check if we have a refresh token
-        // If refresh token exists, allow the request through and let client-side handle refresh
-        // This prevents redirect loops when token expires during a session
-        // Backend uses 'proof_refresh_token' as the cookie name
+        // Token is expired.
+        // IMPORTANT: Do NOT treat the user as authenticated when access token is expired,
+        // even if a refresh token exists. Otherwise pages like /login will immediately
+        // redirect to /drafts while API calls still 401 (bad UX loop).
+        //
+        // Backend uses 'proof_refresh_token' as the cookie name.
         const hasRefreshToken = req.cookies && (req.cookies.proof_refresh_token || req.cookies.refresh_token);
         
         if (hasRefreshToken) {
-          // We have a refresh token, so user is still authenticated
-          // Set user from token payload (even though expired, we can still read the user info)
-          // Client-side will handle refreshing the token
-          console.log('[AUTH] Token expired but refresh token exists, allowing request through:', { 
+          // Refresh token exists, so the session is refreshable, but NOT authenticated yet.
+          // Let client-side refresh, but don't populate req.user (prevents server-side redirects).
+          req.user = null;
+          req.authRefreshable = true;
+          console.log('[AUTH] Token expired but refresh token exists; marking refreshable (req.user=null):', { 
             exp: payload.exp, 
             now: now, 
             diff: payload.exp - now 
           });
-          // Continue to set req.user below - don't return early
+          return next();
         } else {
           // No refresh token, token is expired - clear everything
           req.user = null;
