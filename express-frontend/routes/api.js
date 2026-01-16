@@ -56,12 +56,16 @@ router.post('/gemini/analyze', async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    // Use Replit AI Integrations for Gemini
-    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
-    const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+    // Gemini config:
+    // - In some deployments we use Replit AI Integrations (AI_INTEGRATIONS_*).
+    // - In others we use Google GenAI directly (GOOGLE_GENAI_API_KEY).
+    // Always allow direct Google mode with a sane default baseUrl.
+    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+    const baseUrl =
+      process.env.AI_INTEGRATIONS_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
     
-    if (!apiKey || !baseUrl) {
-      return res.status(500).json({ error: 'Gemini AI not configured' });
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Gemini AI not configured - API key missing' });
     }
 
     // Split into chunks to improve detection accuracy

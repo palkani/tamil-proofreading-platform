@@ -1224,15 +1224,63 @@ class HomeEditor {
       }
       
       this.abortController = new AbortController();
-      
-      // On homepage, don't require auth for analysis (allow unauthenticated users to try the tool)
-      // On homepage, don't require auth for analysis (allow unauthenticated users to try the tool)
-      const response = await apiFetch('/api/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, save_draft: false }),
-        signal: this.abortController.signal
-      }, false); // requireAuth = false for homepage
+
+      // Home page: avoid calling the protected backend submit endpoint when not logged in.
+      // If no valid token, use Gemini analyze directly to prevent noisy 401s.
+      const token = localStorage.getItem('access_token');
+      const hasValidToken = !!token && !isTokenExpired(token);
+
+      if (!hasValidToken) {
+        console.log('[HomeEditor] No valid token; using /api/gemini/analyze');
+        const gem = await apiFetch(
+          '/api/gemini/analyze',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+            signal: this.abortController.signal,
+          },
+          false
+        );
+        const rawGem = await gem.text();
+        let gemData = null;
+        try {
+          gemData = rawGem ? JSON.parse(rawGem) : null;
+        } catch (e) {
+          // ignore
+        }
+        if (!gem.ok) {
+          const msg =
+            (gemData && (gemData.error || gemData.message || gemData.details)) ||
+            (rawGem && rawGem.trim().slice(0, 300)) ||
+            `HTTP ${gem.status}`;
+          this.showError(`AI analysis failed: ${msg}`);
+          return;
+        }
+        const rawSuggestions = Array.isArray(gemData?.suggestions) ? gemData.suggestions : [];
+        const suggestions = rawSuggestions.map((item, index) => ({
+          id: index,
+          original: item.original || '',
+          corrected: item.suggestion || item.corrected || '',
+          reason: item.description || item.reason || '',
+          type: item.type || 'grammar',
+          alternatives: [],
+        }));
+        this.displaySuggestions(suggestions);
+        return;
+      }
+
+      // Logged-in: call submit (includes auth header via apiFetch)
+      const response = await apiFetch(
+        '/api/submit',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, save_draft: false }),
+          signal: this.abortController.signal,
+        },
+        false // requireAuth=false to avoid homepage redirect loops; token still sent if present
+      );
       
       if (!response.ok) {
         // On homepage, handle 401 gracefully (user not logged in)
