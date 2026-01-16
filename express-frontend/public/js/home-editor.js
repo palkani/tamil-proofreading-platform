@@ -131,35 +131,78 @@ function normalizeTamilWord(item) {
   return String(raw || '').trim();
 }
 
-function getEnglishTokenAtCaret() {
+function firstTextNode(root) {
+  if (!root) return null;
+  if (root.nodeType === Node.TEXT_NODE) return root;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  return walker.nextNode();
+}
+
+function lastTextNode(root) {
+  if (!root) return null;
+  if (root.nodeType === Node.TEXT_NODE) return root;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let n = null;
+  let cur = walker.nextNode();
+  while (cur) {
+    n = cur;
+    cur = walker.nextNode();
+  }
+  return n;
+}
+
+function resolveCaretTextPosition(editorRoot) {
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;
   const range = sel.getRangeAt(0);
   let node = range.startContainer;
   let offset = range.startOffset;
 
-  // Try to operate on a text node; contenteditable sometimes yields an element node.
-  if (node && node.nodeType !== Node.TEXT_NODE) {
-    const candidate = node.childNodes?.[offset - 1] || node.childNodes?.[0];
-    if (candidate && candidate.nodeType === Node.TEXT_NODE) {
-      node = candidate;
-      offset = candidate.textContent?.length || 0;
-    } else if (node.firstChild && node.firstChild.nodeType === Node.TEXT_NODE) {
-      node = node.firstChild;
-      offset = Math.min(offset, node.textContent?.length || 0);
-    } else {
-      return null;
-    }
+  if (editorRoot && node && !editorRoot.contains(node)) return null;
+
+  if (node && node.nodeType === Node.TEXT_NODE) {
+    return { node, offset: Math.min(offset, (node.nodeValue || '').length) };
   }
 
-  const text = node.textContent || '';
+  // If caret is on an element boundary, resolve to a nearby text node.
+  if (node && node.nodeType === Node.ELEMENT_NODE) {
+    const el = node;
+    const beforeChild = offset > 0 ? el.childNodes[offset - 1] : null;
+    const afterChild = el.childNodes[offset] || null;
+    const candidate = beforeChild || afterChild || el;
+    const textNode = beforeChild ? lastTextNode(candidate) : firstTextNode(candidate);
+    if (textNode) {
+      const len = (textNode.nodeValue || '').length;
+      return { node: textNode, offset: beforeChild ? len : 0 };
+    }
+
+    // As a last resort, create a text node so we can compute token boundaries.
+    const tn = document.createTextNode('');
+    el.appendChild(tn);
+    return { node: tn, offset: 0 };
+  }
+
+  return null;
+}
+
+function getEnglishTokenAtCaret(editorRoot) {
+  const pos = resolveCaretTextPosition(editorRoot);
+  if (!pos) return null;
+  const node = pos.node;
+  const offset = pos.offset;
+
+  const text = node.nodeValue || '';
   const before = text.slice(0, offset);
-  const match = before.match(/([A-Za-z]+)$/);
-  if (!match) return null;
-  const token = match[1];
+  const after = text.slice(offset);
+
+  const left = (before.match(/([A-Za-z]+)$/) || [])[1] || '';
+  const right = (after.match(/^([A-Za-z]+)/) || [])[1] || '';
+  const token = left + right;
   if (!token || token.length < 2) return null;
-  const start = offset - token.length;
-  return { token, node, start, end: offset };
+
+  const start = offset - left.length;
+  const end = offset + right.length;
+  return { token, node, start, end };
 }
 // Home Page Editor - Simplified Tamil Editor with 200 Character Limit
 
@@ -168,6 +211,8 @@ class HomeEditor {
     this.editor = document.getElementById('home-editor');
     this.charCount = document.getElementById('home-char-count');
     this.suggestionsContainer = document.getElementById('home-suggestions-container');
+    this.modeSelect = document.getElementById('home-mode-select');
+    this.translateBtn = document.getElementById('home-translate-english-btn');
     // Home toolbar buttons (match workspace behavior)
     this.formatDropdownBtn = document.getElementById('home-format-dropdown-btn');
     this.formatDropdown = document.getElementById('home-format-dropdown');
@@ -227,10 +272,15 @@ class HomeEditor {
       this.translitTypeahead = new window.TransliterationTypeahead(
         new window.HomeEditorAdapter(editorEl),
         {
-          getMode: () => 'spoken',
+          getMode: () => this.getMode(),
         }
       );
     }
+  }
+
+  getMode() {
+    const v = this.modeSelect && this.modeSelect.value ? String(this.modeSelect.value) : 'spoken';
+    return v || 'spoken';
   }
   
   init() {
@@ -320,6 +370,118 @@ class HomeEditor {
         if (term) window.find(term);
       });
     }
+
+    // Mode selector (match Workspace; affects transliteration suggestion endpoint params)
+    if (this.modeSelect) {
+      this.modeSelect.addEventListener('change', () => {
+        this.autocompleteCache = {};
+        this.currentSuggestions = [];
+        this.currentCaretInfo = null;
+        if (this.autocompleteBox) this.autocompleteBox.classList.add('hidden');
+        // re-render suggestions for the current token
+        this.showAutocomplete();
+      });
+    }
+
+    // Translate English → Tamil (match Workspace behavior; do not save drafts)
+    if (this.translateBtn) {
+      this.translateBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const text = (this.getPlainText() || '').trim();
+        if (!text) {
+          alert('Please enter some English text to translate.');
+          return;
+        }
+        const wc = this.countWords(text);
+        if (wc < 5 || text.length < 20) {
+          alert('Type at least 5 words to translate.');
+          return;
+        }
+
+        const original = this.translateBtn.innerHTML;
+        this.translateBtn.disabled = true;
+        this.translateBtn.innerHTML = 'Submitting...';
+
+        try {
+          const response = await apiFetch(
+            '/api/submit',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text, save_draft: false }),
+            },
+            false
+          );
+
+          if (response.status === 401) {
+            // Anonymous home-page fallback: use Gemini translate proxy (does not require auth)
+            const gem = await apiFetch(
+              '/api/gemini/translate',
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+              },
+              false
+            );
+            const rawGem = await gem.text();
+            let dataGem = null;
+            try {
+              dataGem = rawGem ? JSON.parse(rawGem) : null;
+            } catch (e2) {
+              // ignore
+            }
+            if (!gem.ok) {
+              const msg =
+                (dataGem && (dataGem.error || dataGem.message || dataGem.details)) ||
+                (rawGem && rawGem.trim().slice(0, 300)) ||
+                `HTTP ${gem.status}`;
+              throw new Error(msg);
+            }
+            if (dataGem && (dataGem.translated_text || dataGem.translated)) {
+              this.editor.textContent = dataGem.translated_text || dataGem.translated;
+              this.moveCursorToEnd();
+              this.updateWordCount();
+              this.scheduleAutoAnalysis();
+            } else {
+              alert('No translation returned. Please try again.');
+            }
+            return;
+          }
+
+          const raw = await response.text();
+          let data = null;
+          try {
+            data = raw ? JSON.parse(raw) : null;
+          } catch (e2) {
+            // ignore
+          }
+
+          if (!response.ok) {
+            const msg =
+              (data && (data.error || data.message || data.details)) ||
+              (raw && raw.trim().slice(0, 300)) ||
+              `HTTP ${response.status}`;
+            throw new Error(msg);
+          }
+
+          if (data && data.translated_text) {
+            this.editor.textContent = data.translated_text;
+            this.moveCursorToEnd();
+            this.updateWordCount();
+            this.scheduleAutoAnalysis();
+          } else {
+            alert('No translation returned. Please try again.');
+          }
+        } catch (err) {
+          console.error('[HomeEditor][Translate] Error:', err);
+          alert('Translation failed. Please try again.');
+        } finally {
+          this.translateBtn.innerHTML = original;
+          this.translateBtn.disabled = false;
+        }
+      });
+    }
     
     // Handle input events
     this.editor.addEventListener('keydown', (e) => {
@@ -362,7 +524,33 @@ class HomeEditor {
     const range = sel.getRangeAt(0).cloneRange();
     range.collapse(true);
     const rects = range.getClientRects();
-    return rects && rects.length ? rects[0] : null;
+    if (rects && rects.length) return rects[0];
+
+    // Fallback: insert a temporary marker to reliably get caret coordinates (line ends / empty blocks)
+    try {
+      const marker = document.createElement('span');
+      marker.textContent = '\u200b';
+      marker.style.display = 'inline-block';
+      marker.style.width = '1px';
+      marker.style.height = '1em';
+      marker.style.pointerEvents = 'none';
+      marker.setAttribute('data-caret-marker', 'true');
+
+      const liveRange = sel.getRangeAt(0);
+      liveRange.insertNode(marker);
+      const rect = marker.getBoundingClientRect();
+
+      const newRange = document.createRange();
+      newRange.setStartAfter(marker);
+      newRange.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+
+      marker.remove();
+      return rect;
+    } catch (e) {
+      return null;
+    }
   }
 
   positionAutocomplete() {
@@ -400,7 +588,8 @@ class HomeEditor {
       // Space selects top suggestion
       if (e.key === ' ' || e.code === 'Space' || e.keyCode === 32) {
         e.preventDefault();
-        this.insertSuggestion(0);
+        // Google IME behavior: Space commits the top suggestion and keeps the space
+        this.insertSuggestion(0, true);
         return;
       }
       // Number keys 1-5 select matching suggestion
@@ -408,7 +597,8 @@ class HomeEditor {
         e.preventDefault();
         const idx = Number(e.key) - 1;
         if (this.currentSuggestions[idx]) {
-          this.insertSuggestion(idx);
+          // Do not auto-insert a space for number selection (user can type next char/space)
+          this.insertSuggestion(idx, false);
         }
         return;
       }
@@ -531,7 +721,7 @@ class HomeEditor {
     }
 
     // Prefer the exact token at the caret (more accurate than "last word in full text")
-    const caretInfo = getEnglishTokenAtCaret();
+    const caretInfo = getEnglishTokenAtCaret(this.editor);
     const lastWord = caretInfo?.token || '';
 
     // Only show for English words >= 2 chars
@@ -542,10 +732,13 @@ class HomeEditor {
 
     console.log('[AUTOCOMPLETE] Checking word:', lastWord);
 
-    // Check cache first
-    if (this.autocompleteCache[lastWord]) {
+    const mode = this.getMode();
+    const cacheKey = `${mode}:${lastWord.toLowerCase()}`;
+
+    // Check cache first (mode-aware)
+    if (this.autocompleteCache[cacheKey]) {
       console.log('[AUTOCOMPLETE] Using cached suggestions for:', lastWord);
-      this.renderSuggestions(this.autocompleteCache[lastWord]);
+      this.renderSuggestions(this.autocompleteCache[cacheKey]);
       return;
     }
 
@@ -555,14 +748,14 @@ class HomeEditor {
     if (this.translitTimeout) clearTimeout(this.translitTimeout);
     this.translitTimeout = setTimeout(async () => {
       try {
-        const suggestions = await callTransliterator(lastWord, 'spoken', 8);
+        const suggestions = await callTransliterator(lastWord, mode, 8);
         const normalized = (suggestions || [])
           .map((s) => ({
             word: normalizeTamilWord(s),
             score: (typeof s === 'object' && s) ? (s.score || s.confidence || 0) : 0,
           }))
           .filter(s => s.word);
-        this.autocompleteCache[lastWord] = normalized;
+        this.autocompleteCache[cacheKey] = normalized;
         this.currentSuggestions = normalized;
         this.currentCaretInfo = caretInfo;
         this.renderSuggestions(normalized);
@@ -580,7 +773,7 @@ class HomeEditor {
     
     if (!suggestions?.length) {
       this.autocompleteBox.classList.remove('hidden');
-      const container = this.autocompleteBox.querySelector('.p-3');
+      const container = this.autocompleteList || this.autocompleteBox.querySelector('#home-autocomplete-list');
       if (container) container.innerHTML = `<div class="p-3 text-sm text-gray-500">No suggestions found</div>`;
       return;
     }
@@ -619,41 +812,66 @@ class HomeEditor {
     }
   }
 
-  insertSuggestion(index) {
+  insertSuggestion(index, appendSpace = false) {
     if (!this.currentSuggestions?.[index]) return;
     
     const suggestion = this.currentSuggestions[index];
     const tamilWord = normalizeTamilWord(suggestion);
-    const caretInfo = this.currentCaretInfo || getEnglishTokenAtCaret();
+    let caretInfo = this.currentCaretInfo || getEnglishTokenAtCaret(this.editor);
+    if (!caretInfo) return;
 
-    if (caretInfo && caretInfo.node) {
-      const text = caretInfo.node.textContent || '';
-      const nextText =
-        text.slice(0, caretInfo.start) + tamilWord + text.slice(caretInfo.end);
-      caretInfo.node.textContent = nextText;
+    // Ensure we operate on a text node and a Latin token
+    if (!caretInfo.node || caretInfo.node.nodeType !== Node.TEXT_NODE) {
+      caretInfo = getEnglishTokenAtCaret(this.editor);
+      if (!caretInfo || caretInfo.node.nodeType !== Node.TEXT_NODE) return;
+    }
 
-      // Move caret to end of inserted word + a space
+    const node = caretInfo.node;
+    let text = node.nodeValue || '';
+    let start = caretInfo.start;
+    let end = caretInfo.end;
+
+    // Validate current token is still Latin; otherwise recompute at current caret.
+    const currentToken = text.slice(start, end);
+    if (!/^[A-Za-z]+$/.test(currentToken)) {
+      const fresh = getEnglishTokenAtCaret(this.editor);
+      if (!fresh || !fresh.node || fresh.node.nodeType !== Node.TEXT_NODE) return;
+      if (fresh.node !== node) {
+        // Switch nodes if caret moved
+        caretInfo = fresh;
+        text = fresh.node.nodeValue || '';
+        start = fresh.start;
+        end = fresh.end;
+      } else {
+        start = fresh.start;
+        end = fresh.end;
+      }
+    }
+
+    // If user continued typing, extend end to cover the full Latin run
+    let actualEnd = end;
+    while (actualEnd < text.length && /[A-Za-z]/.test(text.charAt(actualEnd))) actualEnd++;
+
+    const replacementText = tamilWord + (appendSpace ? ' ' : '');
+    node.nodeValue = text.slice(0, start) + replacementText + text.slice(actualEnd);
+
+    // Place caret right after the inserted Tamil
+    try {
       const sel = window.getSelection();
       if (sel) {
         const range = document.createRange();
-        const newOffset = caretInfo.start + tamilWord.length;
-        range.setStart(caretInfo.node, Math.min(newOffset, caretInfo.node.textContent.length));
+        range.setStart(node, Math.min(start + replacementText.length, (node.nodeValue || '').length));
         range.collapse(true);
         sel.removeAllRanges();
         sel.addRange(range);
       }
-      document.execCommand('insertText', false, ' ');
-    } else {
-      // Fallback: replace last word in full text
-      const fullText = (this.editor.textContent || '').trimEnd();
-      const words = fullText.split(/\s+/);
-      const lastWord = words[words.length - 1] || '';
-      const beforeLastWord = fullText.substring(0, fullText.length - lastWord.length);
-      this.editor.textContent = beforeLastWord + tamilWord + ' ';
-      this.moveCursorToEnd();
+    } catch (e) {
+      // non-fatal
     }
 
     this.autocompleteBox.classList.add('hidden');
+    this.currentCaretInfo = null;
+    this.currentSuggestions = [];
     this.updateWordCount();
     this.scheduleAutoAnalysis();
   }
@@ -661,7 +879,7 @@ class HomeEditor {
   async transliterateFromInput(englishWord) {
     console.log('[API-INPUT] Transliterating:', englishWord);
     try {
-      const suggestions = await callTransliterator(englishWord, 'spoken', 8);
+      const suggestions = await callTransliterator(englishWord, this.getMode(), 8);
       const suggestion = suggestions?.[0];
       if (suggestion) {
         const tamilWord = normalizeTamilWord(suggestion);
@@ -1004,14 +1222,77 @@ class HomeEditor {
       if (!response.ok) {
         // On homepage, handle 401 gracefully (user not logged in)
         if (response.status === 401) {
-          console.log('[HomeEditor] User not authenticated, showing message to sign in');
-          this.showError('Please sign in to get AI suggestions. You can still use the editor without signing in.');
-          return;
+          // Anonymous home-page fallback: use Gemini analyze proxy (does not require auth)
+          try {
+            console.log('[HomeEditor] /api/submit returned 401; falling back to /api/gemini/analyze');
+            const gem = await apiFetch(
+              '/api/gemini/analyze',
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+                signal: this.abortController.signal,
+              },
+              false
+            );
+            const rawGem = await gem.text();
+            let gemData = null;
+            try {
+              gemData = rawGem ? JSON.parse(rawGem) : null;
+            } catch (e) {
+              // ignore
+            }
+            if (!gem.ok) {
+              const msg =
+                (gemData && (gemData.error || gemData.message || gemData.details)) ||
+                (rawGem && rawGem.trim().slice(0, 300)) ||
+                `HTTP ${gem.status}`;
+              this.showError(`AI analysis failed: ${msg}`);
+              return;
+            }
+            const rawSuggestions = Array.isArray(gemData?.suggestions) ? gemData.suggestions : [];
+            const suggestions = rawSuggestions.map((item, index) => ({
+              id: index,
+              original: item.original || '',
+              corrected: item.suggestion || item.corrected || '',
+              reason: item.description || item.reason || '',
+              type: item.type || 'grammar',
+              alternatives: [],
+            }));
+            this.displaySuggestions(suggestions);
+            return;
+          } catch (e) {
+            console.error('[HomeEditor] Gemini fallback failed:', e);
+            this.showError('Please sign in to get AI suggestions (fallback failed).');
+            return;
+          }
         }
-        throw new Error('Analysis failed');
+        const rawErr = await response.text();
+        let msg = `AI analysis failed (HTTP ${response.status})`;
+        try {
+          const j = rawErr ? JSON.parse(rawErr) : null;
+          if (j && (j.error || j.message || j.details)) {
+            msg = String(j.error || j.message || j.details);
+          }
+        } catch (e) {
+          // ignore
+        }
+        if (rawErr && rawErr.trim() && msg === `AI analysis failed (HTTP ${response.status})`) {
+          msg = `${msg}: ${rawErr.trim().slice(0, 300)}`;
+        }
+        this.showError(msg);
+        return;
       }
       
-      const data = await response.json();
+      const rawOk = await response.text();
+      let data = {};
+      try {
+        data = rawOk ? JSON.parse(rawOk) : {};
+      } catch (e) {
+        console.error('[HomeEditor] /api/submit returned non-JSON:', rawOk?.slice?.(0, 300));
+        this.showError('AI analysis failed: server returned an invalid response.');
+        return;
+      }
       console.log('AI analysis response (full):', JSON.stringify(data, null, 2));
       console.log('Response structure check:', {
         hasResult: !!data.result,

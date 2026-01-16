@@ -154,6 +154,15 @@
               </div>
               <span class="text-xs text-gray-500" id="home-char-count">0 / 200 words</span>
             </div>
+            <!-- Mode selector (match Workspace behavior) -->
+            <div class="bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-3">
+              <label for="home-mode-select" class="text-sm text-gray-700">Mode:</label>
+              <select id="home-mode-select" class="toolbar-select">
+                <option value="spoken">Spoken Tamil</option>
+                <option value="formal">Written / Formal</option>
+                <option value="academic">Academic / Article</option>
+              </select>
+            </div>
             <!-- Toolbar (same behavior as Workspace; home never saves drafts) -->
             <div class="home-toolbar bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-1 overflow-x-auto">
               <div class="flex items-center gap-1 min-w-max">
@@ -285,13 +294,27 @@
                     <path d="M21 21l-4.3-4.3" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </button>
+
+                <div class="toolbar-divider"></div>
+
+                <!-- Translate English to Tamil -->
+                <button class="toolbar-btn bg-primary-50 hover:bg-accent-50 text-primary-700" id="home-translate-english-btn" title="Translate English to Tamil">
+                  <svg class="w-5 h-5" viewBox="0 0 24 24">
+                    <path d="M4 5h12" stroke-linecap="round"/>
+                    <path d="M10 5v14" stroke-linecap="round"/>
+                    <path d="M5 9h10" stroke-linecap="round"/>
+                    <path d="M16 19l2-6 2 6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <span class="ml-1 text-xs font-medium">Translate</span>
+                </button>
               </div>
             </div>
-            <div class="p-8 relative">
+            <div class="flex-1 overflow-auto px-6 py-4 pb-6 relative">
               <div 
                 id="home-editor" 
                 contenteditable="true"
-                class="min-h-screen lg:min-h-[700px] text-gray-900 text-2xl leading-relaxed focus:outline-none w-full"
+                class="editor-content bg-white rounded-xl shadow-sm border border-gray-200 min-h-[500px] p-6 tamil-text text-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none w-full"
+                spellcheck="false"
                 placeholder="Type in English (e.g., vanakkam) or paste Tamil text..."
               ></div>
               <!-- Autocomplete Dropdown (Thanglish → Tamil) -->
