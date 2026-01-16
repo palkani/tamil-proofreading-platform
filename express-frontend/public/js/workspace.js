@@ -3452,6 +3452,11 @@ class WorkspaceController {
     if (this.autosaveAuthBlocked) {
       return;
     }
+    // If a paste just happened, avoid immediately doing a second /api/submit (save_draft)
+    // Paste should trigger ONE analysis submit; autosave can happen on the next edit.
+    if (this.suppressSubmitUntil && Date.now() < this.suppressSubmitUntil) {
+      return;
+    }
 
     const text = this.getEditorText().trim();
     

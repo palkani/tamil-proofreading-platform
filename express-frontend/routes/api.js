@@ -811,7 +811,9 @@ router.post('/submit', async (req, res) => {
     console.log('[SUBMIT] Request path:', req.path);
     console.log('[SUBMIT] Request method:', req.method);
     
-    const url = `${BACKEND_URL}/submissions`;
+    // Backend expects POST /api/v1/submit (NOT /submissions)
+    // /submissions is for listing/retrieving past submissions.
+    const url = `${BACKEND_URL}/submit`;
     
     if (ENABLE_PROXY_LOGS) {
       console.log(`[SUBMIT] POST ${url}`);
