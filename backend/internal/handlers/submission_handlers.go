@@ -212,7 +212,11 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 
 	// Return success response immediately with the created submission record
 	c.JSON(http.StatusAccepted, gin.H{
+		"success":    true,
 		"submission": submission,
+		// Keep a stable response shape for clients that expect GoTamil-style fields.
+		// The async pipeline will populate corrections later (via GET submission / SSE result).
+		"corrections": []any{},
 		"message":    "Submission received, proofreading started...",
 		"request_id": requestID,
 	})
