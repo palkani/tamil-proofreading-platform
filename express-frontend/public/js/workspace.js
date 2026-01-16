@@ -365,6 +365,75 @@ class WorkspaceController {
   }
 
   /**
+   * Prefer SSE stream (1 request) over polling (many requests).
+   * Falls back to polling with backoff if EventSource is unavailable or fails.
+   */
+  async awaitSubmissionResult(submissionId) {
+    if (!submissionId) return {};
+
+    // 1) Try SSE (best UX + minimal requests)
+    const canSse = typeof window !== 'undefined' && typeof window.EventSource === 'function';
+    if (canSse) {
+      try {
+        const url = `/api/v1/stream/submissions/${submissionId}`;
+        console.log('[AI] Attempting SSE stream for submission', submissionId, url);
+
+        const payload = await new Promise((resolve, reject) => {
+          const es = new EventSource(url, { withCredentials: true });
+          const timeout = setTimeout(() => {
+            try { es.close(); } catch (_e) {}
+            reject(new Error('sse_timeout'));
+          }, 30000);
+
+          const cleanup = () => {
+            clearTimeout(timeout);
+            try { es.close(); } catch (_e) {}
+          };
+
+          es.addEventListener('result', (evt) => {
+            try {
+              const data = JSON.parse(evt.data || '{}');
+              cleanup();
+              resolve(data);
+            } catch (e) {
+              cleanup();
+              reject(e);
+            }
+          });
+
+          es.addEventListener('failure', (evt) => {
+            cleanup();
+            try {
+              const data = JSON.parse(evt.data || '{}');
+              reject(new Error(data.message || 'submission_failed'));
+            } catch (_e) {
+              reject(new Error('submission_failed'));
+            }
+          });
+
+          es.addEventListener('end', () => {
+            // If backend ends without a result payload, fall back.
+            cleanup();
+            reject(new Error('sse_end_without_result'));
+          });
+
+          es.onerror = () => {
+            cleanup();
+            reject(new Error('sse_error'));
+          };
+        });
+
+        return payload || {};
+      } catch (e) {
+        console.warn('[AI] SSE stream unavailable; falling back to polling', e?.message);
+      }
+    }
+
+    // 2) Fallback: polling with backoff (reduces request spam vs tight loops)
+    return await this.pollSubmission(submissionId);
+  }
+
+  /**
    * Queue exactly one AI analysis after paste.
    * Multiple paste listeners may fire (capture/bubble/input); this consolidates them.
    */
@@ -3172,8 +3241,8 @@ class WorkspaceController {
       console.log('[AI] ✅ API response data keys:', Object.keys(data));
       if (response.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
         const submissionId = data.submission?.id;
-        console.log('[GEMINI] submit pending, starting poll', submissionId);
-        data = await this.pollSubmission(submissionId);
+        console.log('[AI] submit accepted, awaiting completion', submissionId);
+        data = await this.awaitSubmissionResult(submissionId);
         // If polling didn't return a completed payload, keep UI in "analyzing" instead of claiming "no issues".
         const polledStatus = String(data?.submission?.status || '').toLowerCase();
         if (!data?.submission || (polledStatus && polledStatus !== 'completed' && polledStatus !== 'failed')) {
@@ -3740,17 +3809,18 @@ class WorkspaceController {
     if (!submissionId) return {};
     // Backend transitions: pending -> processing -> completed/failed.
     // We must keep polling through "processing" (previously we stopped too early).
-    const maxTries = 45; // ~45s worst-case with delay=1000
-    const delay = 1000;
+    const maxTries = 12;
+    const delays = [800, 1200, 1800, 2500, 3500, 5000, 7000, 9000, 11000, 13000, 15000, 15000];
     for (let i = 0; i < maxTries; i++) {
-      await new Promise((r) => setTimeout(r, delay));
+      const waitMs = delays[i] || 15000;
+      await new Promise((r) => setTimeout(r, waitMs));
       try {
         // Go backend exposes this under /api/v1 (Vercel rewrite forwards it to Cloud Run backend).
         const res = await this.apiFetch(`/api/v1/submissions/${submissionId}`, { method: 'GET' });
         if (!res.ok) continue;
         const data = await res.json();
         const status = String(data.submission?.status || '').toLowerCase();
-        console.log('[GEMINI] poll attempt', i + 1, 'status', status || '(empty)');
+        console.log('[GEMINI] poll attempt', i + 1, 'status', status || '(empty)', 'waitedMs', waitMs);
 
         // Only stop when the backend is actually done.
         if (status === 'completed' || status === 'failed') {
