@@ -3151,7 +3151,9 @@ class WorkspaceController {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ text, save_draft: false }),
+        // Workspace uses draft-saving submit so we can poll for completed suggestions.
+        // This avoids a second "inline" submit call and matches backend async design.
+        body: JSON.stringify({ text, html: this.getEditorHTML(), save_draft: true }),
         signal: this.abortController.signal
       });
       
@@ -3193,8 +3195,24 @@ class WorkspaceController {
 
       // Map backend response format to suggestions
       // API can return suggestions at different levels: submission.suggestions (preferred), result.suggestions, corrections, or suggestions
+      // Backend stores submission.suggestions as a JSON STRING.
+      const parsedSubmissionSuggestions = (() => {
+        const rawSug = data.submission?.suggestions;
+        if (!rawSug) return [];
+        if (Array.isArray(rawSug)) return rawSug;
+        if (typeof rawSug === 'string') {
+          try {
+            const parsed = JSON.parse(rawSug);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch (_e) {
+            return [];
+          }
+        }
+        return [];
+      })();
+
       const corrections =
-        data.submission?.suggestions ||
+        parsedSubmissionSuggestions ||
         data.result?.suggestions ||
         data.corrections ||
         data.suggestions ||
@@ -3225,8 +3243,8 @@ class WorkspaceController {
       const geminiSuggestions = corrections
         // FILTER: Only include suggestions where original ≠ corrected (safety filter)
         .filter(result => {
-          const original = result.original || result.originalText || result.sourceText || '';
-          const corrected = result.corrected || result.correction || result.suggestedText || '';
+          const original = result.original || result.originalText || result.Original || result.sourceText || '';
+          const corrected = result.corrected || result.correction || result.Corrected || result.suggestedText || '';
           const hasValidSuggestion = original && corrected && original !== corrected;
           if (!hasValidSuggestion) {
             console.log('[AI Debug] Filtered out suggestion:', { original, corrected, result });
@@ -3235,9 +3253,9 @@ class WorkspaceController {
         })
         .map((result, index) => {
           // Map backend fields to frontend expected format
-          const original = result.original || result.originalText || '';
-          const corrected = result.corrected || result.correction || '';
-          const reason = result.reason || result.description || result.title || '';
+          const original = result.original || result.originalText || result.Original || '';
+          const corrected = result.corrected || result.correction || result.Corrected || '';
+          const reason = result.reason || result.description || result.title || result.Reason || '';
           
           console.log('[AI Debug] Mapping suggestion:', { original, corrected, reason, type: result.type });
           
@@ -3245,12 +3263,17 @@ class WorkspaceController {
             id: `gemini-${result.id || index}-${Date.now()}`,
             title: reason || 'Grammar Suggestion',
             description: reason,
-            type: result.type || 'grammar',
+            type: result.type || result.Type || 'grammar',
             preview: original && corrected ? `${original} → ${corrected}` : corrected || original || '',
             sourceText: original,
             onApply: original && corrected ? () => {
               const currentText = this.getEditorText();
-              const { text: newText, changed } = applyReplacement(currentText, original, corrected, result.start_index);
+              const startIdx =
+                result.start_index ??
+                result.startIndex ??
+                result.StartIndex ??
+                null;
+              const { text: newText, changed } = applyReplacement(currentText, original, corrected, startIdx);
               
               if (changed) {
                 this.editor.setText(newText);
@@ -3444,7 +3467,9 @@ class WorkspaceController {
     }
 
     this.saveTimeout = setTimeout(() => {
-      this.autosave();
+      // Unify "save" with proofreading submit to avoid double /api/submit calls.
+      // This will only run when text meets MIN_SUBMIT_WORDS and contains Tamil.
+      this.autoAnalyze({ silent: true });
     }, 2000);
   }
 
@@ -3700,7 +3725,8 @@ class WorkspaceController {
     for (let i = 0; i < maxTries; i++) {
       await new Promise((r) => setTimeout(r, delay));
       try {
-        const res = await this.apiFetch(`/api/submissions/${submissionId}`, { method: 'GET' });
+        // Go backend exposes this under /api/v1 (Vercel rewrite forwards it to Cloud Run backend).
+        const res = await this.apiFetch(`/api/v1/submissions/${submissionId}`, { method: 'GET' });
         if (!res.ok) continue;
         const data = await res.json();
         const status = data.submission?.status || '';
