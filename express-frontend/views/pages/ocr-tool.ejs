@@ -100,12 +100,20 @@
       
       <div id="resultText" class="bg-gray-50 rounded-lg p-6 max-h-96 overflow-y-auto mb-6 border border-gray-200 whitespace-pre-wrap text-gray-900 leading-relaxed"></div>
       
-      <div class="flex gap-4 justify-center">
+      <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+        <div class="flex items-center gap-3">
+          <label for="downloadFormat" class="text-sm font-semibold text-gray-700">Download as:</label>
+          <select id="downloadFormat" class="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 cursor-pointer focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+            <option value="docx">DOCX (Word)</option>
+            <option value="txt">TXT</option>
+            <option value="html">HTML</option>
+          </select>
+        </div>
         <button 
           id="downloadBtn" 
           class="px-6 py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors shadow-lg"
         >
-          📥 Download Word Document
+          📥 Download
         </button>
         <button 
           id="copyBtn" 
@@ -153,6 +161,7 @@
   const stats = document.getElementById('stats');
   const downloadBtn = document.getElementById('downloadBtn');
   const copyBtn = document.getElementById('copyBtn');
+  const downloadFormat = document.getElementById('downloadFormat');
   const fileInfo = document.getElementById('fileInfo');
   const fileName = document.getElementById('fileName');
   const fileSize = document.getElementById('fileSize');
@@ -165,6 +174,7 @@
   let selectedFile = null;
   let downloadFilename = null;
   let extractedText = '';
+  let sourceFilename = null;
   
   // Click to upload
   uploadArea.addEventListener('click', () => fileInput.click());
@@ -197,6 +207,7 @@
   
   function handleFileSelect(file) {
     selectedFile = file;
+    sourceFilename = file.name;
     processBtn.disabled = false;
     error.classList.add('hidden');
     resultArea.classList.add('hidden');
@@ -285,8 +296,55 @@
   
   // Download
   downloadBtn.addEventListener('click', () => {
-    if (downloadFilename) {
-      window.location.href = `/api/ocr/download/${downloadFilename}`;
+    const fmt = (downloadFormat && downloadFormat.value) ? downloadFormat.value : 'docx';
+    const baseName = (sourceFilename || 'ocr-extracted')
+      .replace(/\.[^/.]+$/, '')
+      .replace(/[^\w\-]+/g, '_')
+      .slice(0, 60) || 'ocr-extracted';
+
+    if (fmt === 'docx') {
+      if (downloadFilename) {
+        window.location.href = `/api/ocr/download/${downloadFilename}`;
+      } else {
+        // If backend didn't provide a docx, fallback to TXT so user can still download.
+        const blob = new Blob([extractedText || ''], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${baseName}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      }
+      return;
+    }
+
+    if (fmt === 'txt') {
+      const blob = new Blob([extractedText || ''], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${baseName}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      return;
+    }
+
+    if (fmt === 'html') {
+      const safe = (extractedText || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>${baseName}</title></head><body><pre style="white-space:pre-wrap;font-family:ui-sans-serif,system-ui;">${safe}</pre></body></html>`;
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${baseName}.html`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     }
   });
   
