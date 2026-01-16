@@ -1341,52 +1341,11 @@ class HomeEditor {
       );
       
       if (!response.ok) {
-        // On homepage, handle 401 gracefully (user not logged in)
+        // Home has a demo mode (no login) via /api/submit server-side. If we still get 401,
+        // it means the backend is seeing a token but rejecting it (expired/mismatch).
         if (response.status === 401) {
-          // Anonymous home-page fallback: use Gemini analyze proxy (does not require auth)
-          try {
-            console.log('[HomeEditor] /api/submit returned 401; falling back to /api/gemini/analyze');
-            const gem = await apiFetch(
-              '/api/gemini/analyze',
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text }),
-                signal: this.abortController.signal,
-              },
-              false
-            );
-            const rawGem = await gem.text();
-            let gemData = null;
-            try {
-              gemData = rawGem ? JSON.parse(rawGem) : null;
-            } catch (e) {
-              // ignore
-            }
-            if (!gem.ok) {
-              const msg =
-                (gemData && (gemData.error || gemData.message || gemData.details)) ||
-                (rawGem && rawGem.trim().slice(0, 300)) ||
-                `HTTP ${gem.status}`;
-              this.showError(`AI analysis failed: ${msg}`);
-              return;
-            }
-            const rawSuggestions = Array.isArray(gemData?.suggestions) ? gemData.suggestions : [];
-            const suggestions = rawSuggestions.map((item, index) => ({
-              id: index,
-              original: item.original || '',
-              corrected: item.suggestion || item.corrected || '',
-              reason: item.description || item.reason || '',
-              type: item.type || 'grammar',
-              alternatives: [],
-            }));
-            this.displaySuggestions(suggestions);
-            return;
-          } catch (e) {
-            console.error('[HomeEditor] Gemini fallback failed:', e);
-            this.showError('Please sign in to get AI suggestions (fallback failed).');
-            return;
-          }
+          this.showError('Session expired. Please login again.');
+          return;
         }
         const rawErr = await response.text();
         let msg = `AI analysis failed (HTTP ${response.status})`;

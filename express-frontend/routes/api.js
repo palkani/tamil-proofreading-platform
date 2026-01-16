@@ -838,6 +838,117 @@ router.post('/submit', async (req, res) => {
     if (req.headers.authorization) {
       headers.Authorization = req.headers.authorization;
     }
+    // IMPORTANT: Backend auth prefers HTTP-only cookie "access_token".
+    // Since this is a server-side proxy call, we must forward the incoming Cookie header.
+    if (req.headers.cookie) {
+      headers.Cookie = req.headers.cookie;
+    }
+
+    // ----------------------------
+    // HOME DEMO MODE (no login)
+    // ----------------------------
+    // If request is unauthenticated (no Authorization and no access_token cookie),
+    // provide a "taste" experience by running Gemini proofread directly and returning
+    // a Workspace-compatible payload (corrections[]).
+    const hasAuthHeader = !!req.headers.authorization;
+    const hasAccessCookie = typeof req.headers.cookie === 'string' && req.headers.cookie.includes('access_token=');
+    const isAnonymous = !hasAuthHeader && !hasAccessCookie;
+
+    if (isAnonymous) {
+      const text = String(req.body?.text || '').trim();
+      if (!text) {
+        return res.status(400).json({ error: 'Text is required' });
+      }
+
+      const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+      const baseUrl =
+        process.env.AI_INTEGRATIONS_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
+
+      if (!apiKey) {
+        return res.status(503).json({
+          error: 'AI demo unavailable',
+          details: 'Missing GOOGLE_GENAI_API_KEY (or AI_INTEGRATIONS_GEMINI_API_KEY).',
+        });
+      }
+
+      const demoReqId = `home-demo-${Date.now()}`;
+      const geminiResp = await axios.post(
+        `${baseUrl}/models/gemini-2.5-flash:generateContent`,
+        {
+          systemInstruction: {
+            parts: [
+              {
+                text: `You are a strict Tamil proofreader.
+Return ONLY valid JSON (no markdown):
+{ "corrections": [ { "originalText":"...", "correction":"...", "reason":"...", "type":"spelling|grammar|punctuation|space|sandhi" } ] }
+Rules:
+- Only include real errors (originalText must differ from correction)
+- Keep reason in Tamil.
+- Include common formatting fixes like "23 ஆம் தேதி" -> "23-ஆம் தேதி".`,
+              },
+            ],
+          },
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text }],
+            },
+          ],
+          generationConfig: {
+            temperature: 0,
+            topP: 0.1,
+            maxOutputTokens: 1024,
+            responseMimeType: 'application/json',
+          },
+        },
+        {
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+          timeout: 20000,
+          validateStatus: () => true,
+        }
+      );
+
+      const aiText = geminiResp.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      let parsed = {};
+      try {
+        parsed = JSON.parse(String(aiText).trim());
+      } catch (_e) {
+        parsed = { corrections: [] };
+      }
+      const raw = Array.isArray(parsed?.corrections) ? parsed.corrections : [];
+      const corrections = raw
+        .filter((c) => c && c.originalText && c.correction && c.originalText !== c.correction)
+        .map((c, idx) => ({
+          blockId: String(c.blockId || 0),
+          originalText: String(c.originalText || ''),
+          correction: String(c.correction || ''),
+          reason: String(c.reason || ''),
+          type: String(c.type || 'grammar'),
+          id: String(c.id || idx),
+        }));
+
+      // Provide a consistent shape expected by home/workspace extractors.
+      return res.status(200).json({
+        success: true,
+        request_id: demoReqId,
+        message: 'Demo proofreading completed',
+        corrections,
+        submission: {
+          id: 0,
+          status: 'completed',
+          request_id: demoReqId,
+          suggestions: JSON.stringify(
+            corrections.map((c) => ({
+              original: c.originalText,
+              corrected: c.correction,
+              reason: c.reason,
+              type: c.type,
+            }))
+          ),
+        },
+        meta: { demo: true, engine: 'gemini' },
+      });
+    }
     
     // Prepare request body
     const requestBody = {
@@ -856,75 +967,8 @@ router.post('/submit', async (req, res) => {
       validateStatus: () => true, // Don't throw on any status
     });
 
-    // Home-page + logged-out UX: if backend submit requires auth and returns 401,
-    // fall back to Gemini analyze but keep the same endpoint (/api/submit) for the client.
-    if (response.status === 401) {
-      try {
-        const text = requestBody.text || "";
-        const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
-        const baseUrl =
-          process.env.AI_INTEGRATIONS_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
-        if (!apiKey) {
-          return res.status(401).json({
-            error: 'Authentication required',
-            details: 'Backend submit is protected and Gemini fallback is not configured (missing GOOGLE_GENAI_API_KEY).',
-          });
-        }
-
-        const geminiResp = await axios.post(
-          `${baseUrl}/models/gemini-2.5-flash:generateContent`,
-          {
-            systemInstruction: {
-              parts: [
-                {
-                  text: `You are a strict Tamil language expert. Analyze Tamil text for grammar errors, misspellings, and invalid word forms.
-Return ONLY JSON:
-{ "suggestions": [ { "type":"spelling|grammar|punctuation|space|sandhi", "original":"...", "suggestion":"...", "description":"தமிழில் காரணம்" } ] }`,
-                },
-              ],
-            },
-            contents: [
-              {
-                role: 'user',
-                parts: [{ text: `Analyze this Tamil text and return suggestions JSON:\n\n${text}` }],
-              },
-            ],
-            generationConfig: {
-              temperature: 0,
-              topP: 0.1,
-              maxOutputTokens: 1024,
-              responseMimeType: 'application/json',
-            },
-          },
-          {
-            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-            timeout: 15000,
-            validateStatus: () => true,
-          }
-        );
-
-        const aiText = geminiResp.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-        let parsed = {};
-        try {
-          parsed = JSON.parse(String(aiText).trim());
-        } catch (e) {
-          parsed = { suggestions: [] };
-        }
-        return res.status(200).json({
-          success: true,
-          request_id: `home-fallback-${Date.now()}`,
-          corrections: [],
-          suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
-          meta: { fallback: 'gemini_analyze', backend_status: 401 },
-        });
-      } catch (fallbackErr) {
-        console.error('[SUBMIT] 401 fallback failed:', fallbackErr.response?.data || fallbackErr.message);
-        return res.status(401).json({
-          error: 'Authentication required',
-          details: 'Backend submit returned 401 and Gemini fallback failed.',
-        });
-      }
-    }
+    // Logged-in path should behave exactly like Workspace.
+    // If backend returns 401 here, surface it (client should re-login).
     
     if (ENABLE_PROXY_LOGS) {
       console.log(`[SUBMIT] Response status: ${response.status}`);
