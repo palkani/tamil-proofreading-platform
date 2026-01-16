@@ -221,7 +221,7 @@ document.getElementById('verification-form')?.addEventListener('submit', async (
   successDiv.classList.add('hidden');
   
   try {
-    const response = await fetch('/api/auth/otp/verify', {
+    const response = await fetch('/auth/otp/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: registeredEmail, otp })
@@ -271,7 +271,7 @@ document.getElementById('resend-btn')?.addEventListener('click', async () => {
   successDiv.classList.add('hidden');
   
   try {
-    const response = await fetch('/api/auth/otp/send', {
+    const response = await fetch('/auth/otp/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: registeredEmail })

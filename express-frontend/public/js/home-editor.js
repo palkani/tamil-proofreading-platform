@@ -238,6 +238,7 @@ class HomeEditor {
     this.previousText = ''; // Track previous text for space detection
     this.currentSuggestions = [];
     this.currentCaretInfo = null;
+    this.activeSuggestionIndex = 0;
     // Prevent dropdown re-opening immediately after a selection (Google-IME style)
     this.justReplacedUntil = 0;
     this.lastReplacedToken = '';
@@ -486,15 +487,24 @@ class HomeEditor {
       });
     }
     
-    // Handle input events
+    // Handle keyboard for IME dropdown (arrow navigation + selection)
     this.editor.addEventListener('keydown', (e) => {
-      console.log('[EVENT-DEBUG] keydown fired, key:', e.key, 'code:', e.code);
-      if (e.key === ' ' || e.code === 'Space' || e.keyCode === 32) {
-        console.log('[EVENT-DEBUG] Space key detected in keydown');
+      const key = e.key;
+      // Only intercept keys when dropdown is visible
+      const dropdownOpen = this.autocompleteBox && !this.autocompleteBox.classList.contains('hidden');
+      if (!dropdownOpen) return;
+
+      const handledKeys = new Set([
+        'ArrowDown',
+        'ArrowUp',
+        'Enter',
+        'Tab',
+        'Escape',
+        ' ',
+      ]);
+
+      if (handledKeys.has(key) || /^[1-5]$/.test(key)) {
         this.handleKeyDown(e);
-      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        // Allow arrow key navigation in suggestions
-        e.preventDefault();
       }
     });
     this.editor.addEventListener('input', () => {
@@ -588,11 +598,26 @@ class HomeEditor {
     // If autocomplete dropdown is open, allow quick selection
     const dropdownOpen = this.autocompleteBox && !this.autocompleteBox.classList.contains('hidden');
     if (dropdownOpen && this.currentSuggestions && this.currentSuggestions.length) {
+      // Arrow navigation (Google IME style)
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        this.activeSuggestionIndex = Math.min(this.activeSuggestionIndex + 1, Math.min(this.currentSuggestions.length, 5) - 1);
+        this.updateSuggestionHighlight();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        this.activeSuggestionIndex = Math.max(this.activeSuggestionIndex - 1, 0);
+        this.updateSuggestionHighlight();
+        return;
+      }
+
       // Space selects top suggestion
       if (e.key === ' ' || e.code === 'Space' || e.keyCode === 32) {
         e.preventDefault();
-        // Google IME behavior: Space commits the top suggestion and keeps the space
-        this.insertSuggestion(0, true);
+        // Google IME behavior: Space commits the active suggestion and keeps the space
+        const idx = Number.isFinite(this.activeSuggestionIndex) ? this.activeSuggestionIndex : 0;
+        this.insertSuggestion(idx, true);
         return;
       }
       // Number keys 1-5 select matching suggestion
@@ -603,6 +628,13 @@ class HomeEditor {
           // Do not auto-insert a space for number selection (user can type next char/space)
           this.insertSuggestion(idx, false);
         }
+        return;
+      }
+      // Enter/Tab commits the active suggestion (no auto-space)
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const idx = Number.isFinite(this.activeSuggestionIndex) ? this.activeSuggestionIndex : 0;
+        this.insertSuggestion(idx, false);
         return;
       }
       // Escape closes dropdown
@@ -770,11 +802,43 @@ class HomeEditor {
         this.autocompleteCache[cacheKey] = normalized;
         this.currentSuggestions = normalized;
         this.currentCaretInfo = caretInfo;
+        this.activeSuggestionIndex = 0;
         this.renderSuggestions(normalized);
       } catch (err) {
         console.error('[AUTOCOMPLETE] Fetch error:', err);
       }
     }, 300); // 300ms debounce
+  }
+
+  updateSuggestionHighlight() {
+    try {
+      if (!this.autocompleteList) return;
+      const buttons = Array.from(this.autocompleteList.querySelectorAll('button[data-index]'));
+      if (!buttons.length) return;
+      const max = Math.min(buttons.length, 5);
+      const idx = Math.max(0, Math.min(this.activeSuggestionIndex || 0, max - 1));
+      this.activeSuggestionIndex = idx;
+
+      buttons.forEach((btn, i) => {
+        const active = i === idx;
+        btn.classList.toggle('bg-purple-50', active);
+        btn.classList.toggle('border-purple-200', active);
+        btn.classList.toggle('hover:bg-gray-50', !active);
+        // Update the number badge style
+        const badge = btn.querySelector('span[data-badge]');
+        if (badge) {
+          badge.className =
+            'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border ' +
+            (active ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-500 border-gray-200');
+        }
+      });
+
+      // Ensure active item is visible
+      const activeBtn = buttons[idx];
+      activeBtn?.scrollIntoView?.({ block: 'nearest' });
+    } catch (_e) {
+      // ignore
+    }
   }
 
   renderSuggestions(suggestions) {
@@ -801,13 +865,13 @@ class HomeEditor {
         .slice(0, 5)
         .map((item, idx) => {
           const tamilWord = typeof item === 'string' ? item : normalizeTamilWord(item.word || item);
-          const active = idx === 0;
+          const active = idx === (this.activeSuggestionIndex || 0);
           return `
           <button type="button"
             class="w-full text-left flex items-center gap-3 px-3 py-3 rounded-xl border transition ${active ? 'bg-purple-50 border-purple-200' : 'bg-white border-transparent hover:bg-gray-50'}"
             data-index="${idx}"
-            onclick="homeEditor.insertSuggestion(${idx})">
-            <span class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border ${active ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-500 border-gray-200'}">
+            aria-label="Select suggestion ${idx + 1}">
+            <span data-badge="1" class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border ${active ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-500 border-gray-200'}">
               ${idx + 1}
             </span>
             <span class="text-base font-semibold text-gray-900 flex-1">${tamilWord}</span>
@@ -819,6 +883,25 @@ class HomeEditor {
       console.log('[AUTOCOMPLETE] Showing dropdown with', suggestions.length, 'suggestions');
       this.positionAutocomplete();
       this.autocompleteBox.classList.remove('hidden');
+
+      // Attach click handlers (no inline onclick — works for mouse/touchpad reliably)
+      Array.from(container.querySelectorAll('button[data-index]')).forEach((btn) => {
+        // Prevent mousedown from moving the caret before we read caretInfo
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+        });
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const idx = Number(btn.getAttribute('data-index') || '0');
+          this.activeSuggestionIndex = Number.isFinite(idx) ? idx : 0;
+          this.updateSuggestionHighlight();
+          // Click commits without auto-space (user keeps typing)
+          this.insertSuggestion(this.activeSuggestionIndex, false);
+        });
+      });
+
+      // Ensure highlight is in sync
+      this.updateSuggestionHighlight();
     } catch (err) {
       console.error('[AUTOCOMPLETE] Render error:', err);
     }
@@ -1552,4 +1635,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   window.__homeEditor = editor;
+  // Back-compat for any legacy inline handlers
+  window.homeEditor = editor;
 });

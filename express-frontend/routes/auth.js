@@ -72,6 +72,8 @@ const forward = async (req, res, path, method = 'post') => {
 router.post('/register', (req, res) => forward(req, res, '/auth/register', 'post'));
 router.post('/login', (req, res) => forward(req, res, '/auth/login', 'post'));
 router.post('/refresh', (req, res) => forward(req, res, '/auth/refresh', 'post'));
+router.post('/otp/send', (req, res) => forward(req, res, '/auth/otp/send', 'post'));
+router.post('/otp/verify', (req, res) => forward(req, res, '/auth/otp/verify', 'post'));
 router.post('/logout', async (req, res) => {
   // IMPORTANT: Always clear cookies on the frontend domain (prooftamil.com),
   // even if the backend is unreachable or the browser navigates early.

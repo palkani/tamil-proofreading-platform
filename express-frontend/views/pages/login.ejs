@@ -5,10 +5,29 @@
   // Injected from server env (NEXT_PUBLIC_GOOGLE_CLIENT_ID preferred)
   window.GOOGLE_CLIENT_ID = "<%= googleClientId || '' %>";
 
-  // Early token capture: handle /login?redirect=/workspace?access_token=JWT
+  // Early token capture + safe redirect handling:
+  // - supports backend OAuth redirect to /drafts?access_token=...
+  // - supports /login?redirect=/workspace (or other internal paths)
   (function consumeRedirectTokenEarly() {
     const params = new URLSearchParams(window.location.search);
     const rawRedirect = params.get('redirect') || '';
+
+    function isSafeInternalPath(path) {
+      if (!path) return false;
+      if (path.startsWith('//')) return false;
+      if (!path.startsWith('/')) return false;
+      return true;
+    }
+
+    function stripTokenFromUrl(u) {
+      try {
+        const url = new URL(u, window.location.origin);
+        url.searchParams.delete('access_token');
+        return url.pathname + (url.search ? url.search : '');
+      } catch (_e) {
+        return '/drafts';
+      }
+    }
 
     // Try to extract access_token from the redirect param.
     // Handles cases where redirect contains multiple comma-separated URLs.
@@ -44,8 +63,9 @@
         localStorage.setItem('access_token', token);
         document.cookie = `access_token=${token}; path=/; SameSite=Lax; Max-Age=900`;
       }
-      // Redirect immediately to drafts page after storing token
-      window.location.replace('/drafts');
+      // Redirect to target (if provided), but never leak token in URL.
+      const dest = stripTokenFromUrl(rawRedirect) || '/drafts';
+      window.location.replace(isSafeInternalPath(dest) ? dest : '/drafts');
     }
   })();
 </script>
@@ -183,9 +203,25 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
       throw new Error(String(errorMessage));
     }
     
+    // Determine redirect target (default: /drafts)
+    const params = new URLSearchParams(window.location.search);
+    const rawRedirect = params.get('redirect') || '/drafts';
+    const redirectTarget = (function () {
+      // Only allow internal redirects
+      if (!rawRedirect || rawRedirect.startsWith('//') || !rawRedirect.startsWith('/')) return '/drafts';
+      // If redirect contains access_token, strip it
+      try {
+        const u = new URL(rawRedirect, window.location.origin);
+        u.searchParams.delete('access_token');
+        return u.pathname + (u.search ? u.search : '');
+      } catch (_e) {
+        return '/drafts';
+      }
+    })();
+
     // Login successful - use centralized auth utility if available
     if (window.authUtils && window.authUtils.handleAuthSuccess) {
-      window.authUtils.handleAuthSuccess(data.access_token, '/drafts');
+      window.authUtils.handleAuthSuccess(data.access_token, redirectTarget || '/drafts');
     } else {
       // Fallback if auth-utils not loaded
       localStorage.removeItem('access_token');
@@ -199,8 +235,8 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
         console.warn('[LOGIN] No access_token in response:', data);
       }
       
-      // Redirect to drafts page
-      window.location.href = '/drafts';
+      // Redirect to target page
+      window.location.href = redirectTarget || '/drafts';
     }
   } catch (error) {
     const errorMessage = error?.message || 'An unexpected error occurred';
@@ -214,91 +250,3 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
 
 <%- include('../partials/footer') %>
 
-<script>
-  // Auto-consume ?redirect=/drafts?access_token=... on page load
-  (function handleRedirectToken() {
-    const params = new URLSearchParams(window.location.search);
-    const redirectParam = params.get('redirect');
-
-    /**
-     * Persist the token for subsequent requests.
-     * - localStorage: used by client-side fetches
-     * - cookie: sent to the Express auth guard on the next request
-     */
-    function persistAccessToken(token) {
-      if (!token) return;
-      // Use centralized auth utility if available
-      if (window.authUtils && window.authUtils.storeAccessToken) {
-        window.authUtils.storeAccessToken(token);
-      } else {
-        // Fallback
-        localStorage.setItem('access_token', token);
-        document.cookie = `access_token=${token}; path=/; SameSite=Lax; Max-Age=900`;
-      }
-    }
-
-    // Try to extract access_token from the encoded redirect URL
-    function extractTokenFromRedirect(rawRedirect) {
-      if (!rawRedirect) return null;
-      try {
-        // Support both absolute and relative redirect values
-        const redirectUrl = new URL(rawRedirect, window.location.origin);
-        return redirectUrl.searchParams.get('access_token');
-      } catch (err) {
-        console.warn('[Login] Failed to parse redirect param', err);
-        return null;
-      }
-    }
-
-    const tokenFromRedirect = extractTokenFromRedirect(redirectParam);
-
-    if (tokenFromRedirect) {
-      // 1) Save token
-      persistAccessToken(tokenFromRedirect);
-      // 2) Send the user to the drafts page without leaking the token in the URL
-      window.location.replace('/drafts');
-      return;
-    }
-
-    // If we already have a token in storage, check if it's expired
-    const existingToken = localStorage.getItem('access_token');
-    if (existingToken) {
-      // Check if token is expired
-      try {
-        const parts = existingToken.split('.');
-        if (parts.length === 3) {
-          let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-          while (base64.length % 4) base64 += '=';
-          const payload = JSON.parse(atob(base64));
-          const now = Math.floor(Date.now() / 1000);
-          if (payload.exp && payload.exp > now) {
-            // Token is valid, redirect to drafts
-            persistAccessToken(existingToken); // ensure cookie is present
-            window.location.replace('/drafts');
-            return;
-          } else {
-            // Token is expired, clear it
-            if (window.authUtils && window.authUtils.clearAuthTokens) {
-              window.authUtils.clearAuthTokens();
-            } else {
-              // Fallback
-              localStorage.removeItem('access_token');
-              document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-              document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-            }
-          }
-        }
-      } catch (e) {
-        // If we can't decode, clear the token
-        if (window.authUtils && window.authUtils.clearAuthTokens) {
-          window.authUtils.clearAuthTokens();
-        } else {
-          // Fallback
-          localStorage.removeItem('access_token');
-          document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-          document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-        }
-      }
-    }
-  })();
-</script>

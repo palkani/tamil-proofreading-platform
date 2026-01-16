@@ -102,7 +102,7 @@ router.get('/login', (req, res) => {
     seo: seo,
     error: req.query.error || null,
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
-    redirectTo: req.query.redirect || '/dashboard'
+    redirectTo: req.query.redirect || '/drafts'
   });
 });
 
@@ -120,7 +120,7 @@ router.get('/register', (req, res) => {
     title: seo.title,
     seo: seo,
     googleClientId: GOOGLE_CLIENT_ID,
-    redirectTo: req.query.redirect || '/dashboard'
+    redirectTo: req.query.redirect || '/drafts'
   });
 });
 
