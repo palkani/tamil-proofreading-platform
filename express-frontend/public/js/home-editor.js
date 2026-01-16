@@ -1086,7 +1086,11 @@ class HomeEditor {
     }
     
     this.updateWordCount();
-    this.scheduleAutoAnalysis();
+    // Paste should trigger analysis immediately (no "lost" debounce on delete → paste flows)
+    // Also reset lastAnalyzedText so re-pasting different content always triggers a request.
+    this.lastAnalyzedText = '';
+    // Run on next tick so the DOM insertText has applied.
+    setTimeout(() => this.autoAnalyze(), 0);
   }
   
   convertWordToTamil(word) {
@@ -1163,6 +1167,105 @@ class HomeEditor {
       this.autoAnalyze();
     }, 1000);
   }
+
+  /**
+   * When /api/submit returns 202 (async), wait for the backend SSE result.
+   * This mirrors Workspace behavior but keeps the Home logic lightweight.
+   */
+  async awaitSubmissionResult(submissionId) {
+    if (!submissionId) return {};
+    const canSse = typeof window !== 'undefined' && typeof window.EventSource === 'function';
+    if (!canSse) return {};
+
+    const url = `/api/v1/stream/submissions/${submissionId}`;
+    console.log('[HomeEditor] Waiting for SSE result:', url);
+
+    return await new Promise((resolve, reject) => {
+      const es = new EventSource(url, { withCredentials: true });
+      const timeout = setTimeout(() => {
+        try { es.close(); } catch (_e) {}
+        reject(new Error('sse_timeout'));
+      }, 30000);
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        try { es.close(); } catch (_e) {}
+      };
+
+      es.addEventListener('result', (evt) => {
+        try {
+          const data = JSON.parse(evt.data || '{}');
+          cleanup();
+          resolve(data);
+        } catch (e) {
+          cleanup();
+          reject(e);
+        }
+      });
+
+      es.addEventListener('failure', (evt) => {
+        cleanup();
+        try {
+          const data = JSON.parse(evt.data || '{}');
+          reject(new Error(data.message || 'submission_failed'));
+        } catch (_e) {
+          reject(new Error('submission_failed'));
+        }
+      });
+
+      es.addEventListener('end', () => {
+        cleanup();
+        reject(new Error('sse_end_without_result'));
+      });
+
+      es.onerror = () => {
+        cleanup();
+        reject(new Error('sse_error'));
+      };
+    });
+  }
+
+  normalizeRawSuggestions(raw) {
+    // Backend often stores JSON as a string in submission.suggestions
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (!trimmed || trimmed === '[]') return [];
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_e) {
+        return [];
+      }
+    }
+    return Array.isArray(raw) ? raw : [];
+  }
+
+  extractSuggestionsFromPayload(payload) {
+    // 1) GoTamil-style corrections from SSE stream handler (preferred)
+    if (Array.isArray(payload?.corrections)) {
+      return payload.corrections.map((c, index) => ({
+        id: index,
+        original: c.originalText || c.original || '',
+        corrected: c.correction || c.corrected || '',
+        reason: c.reason || '',
+        type: c.type || 'grammar',
+        alternatives: [],
+      }));
+    }
+
+    // 2) Raw suggestions stored on submission (stringified JSON)
+    const raw = payload?.submission?.suggestions ?? payload?.submission?.corrections ?? payload?.suggestions ?? payload?.corrections;
+    const list = this.normalizeRawSuggestions(raw);
+
+    return list.map((item, index) => ({
+      id: index,
+      original: item.original || item.originalText || '',
+      corrected: item.corrected || item.correction || item.suggestion || '',
+      reason: item.reason || item.description || '',
+      type: item.type || 'grammar',
+      alternatives: item.alternatives || [],
+    }));
+  }
   
   async autoAnalyze() {
     const text = this.getPlainText();
@@ -1188,9 +1291,7 @@ class HomeEditor {
     }
     
     // Skip if same as last analyzed
-    if (text === this.lastAnalyzedText) {
-      return;
-    }
+    if (text === this.lastAnalyzedText) return;
     
     // Check if text is mostly Tamil (not English)
     const tamilChars = text.match(/[\u0B80-\u0BFF]/g) || [];
@@ -1210,7 +1311,8 @@ class HomeEditor {
       return;
     }
     
-    this.lastAnalyzedText = text;
+    // We'll set lastAnalyzedText only after we have a successful response,
+    // so deleting/re-pasting doesn't accidentally suppress requests.
     this.isAnalyzing = true;
     this.pendingAnalysis = false;
     
@@ -1225,52 +1327,8 @@ class HomeEditor {
       
       this.abortController = new AbortController();
 
-      // Home page: avoid calling the protected backend submit endpoint when not logged in.
-      // If no valid token, use Gemini analyze directly to prevent noisy 401s.
-      const token = localStorage.getItem('access_token');
-      const hasValidToken = !!token && !isTokenExpired(token);
-
-      if (!hasValidToken) {
-        console.log('[HomeEditor] No valid token; using /api/gemini/analyze');
-        const gem = await apiFetch(
-          '/api/gemini/analyze',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text }),
-            signal: this.abortController.signal,
-          },
-          false
-        );
-        const rawGem = await gem.text();
-        let gemData = null;
-        try {
-          gemData = rawGem ? JSON.parse(rawGem) : null;
-        } catch (e) {
-          // ignore
-        }
-        if (!gem.ok) {
-          const msg =
-            (gemData && (gemData.error || gemData.message || gemData.details)) ||
-            (rawGem && rawGem.trim().slice(0, 300)) ||
-            `HTTP ${gem.status}`;
-          this.showError(`AI analysis failed: ${msg}`);
-          return;
-        }
-        const rawSuggestions = Array.isArray(gemData?.suggestions) ? gemData.suggestions : [];
-        const suggestions = rawSuggestions.map((item, index) => ({
-          id: index,
-          original: item.original || '',
-          corrected: item.suggestion || item.corrected || '',
-          reason: item.description || item.reason || '',
-          type: item.type || 'grammar',
-          alternatives: [],
-        }));
-        this.displaySuggestions(suggestions);
-        return;
-      }
-
-      // Logged-in: call submit (includes auth header via apiFetch)
+      // Home page always calls /api/submit.
+      // If user is logged out, the server-side /api/submit route will fallback to Gemini.
       const response = await apiFetch(
         '/api/submit',
         {
@@ -1365,42 +1423,31 @@ class HomeEditor {
         hasResultCorrections: !!data.result?.corrections,
       });
       
-      // Extract suggestions from API response
-      // The API returns suggestions array with properties: original, corrected, reason, type
-      // It could be at data.result.suggestions, data.result.corrections, or data.corrections
-      let rawSuggestions = [];
-      
-      if (data.submission?.suggestions) {
-        rawSuggestions = data.submission.suggestions;
-      } else if (data.result?.suggestions) {
-        rawSuggestions = data.result.suggestions;
-      } else if (data.result?.corrections) {
-        rawSuggestions = data.result.corrections;
-      } else if (Array.isArray(data.result)) {
-        rawSuggestions = data.result;
-      } else if (data.suggestions) {
-        rawSuggestions = data.suggestions;
-      } else if (data.corrections) {
-        rawSuggestions = data.corrections;
-      } else if (data.result && typeof data.result === 'object') {
-        rawSuggestions = data.result.suggestions || data.result.corrections || [];
+      // If backend accepted async (202/pending), wait for completion via SSE
+      const submissionId = data?.submission?.id;
+      const status = data?.submission?.status;
+      const looksAsync = response.status === 202 || status === 'pending' || status === 'processing';
+
+      if (looksAsync && submissionId) {
+        try {
+          const resultPayload = await this.awaitSubmissionResult(submissionId);
+          const suggestions = this.extractSuggestionsFromPayload(resultPayload);
+          console.log('[HomeEditor] SSE suggestions:', suggestions.length, suggestions);
+          this.displaySuggestions(suggestions);
+          this.lastAnalyzedText = text;
+          return;
+        } catch (e) {
+          console.warn('[HomeEditor] SSE wait failed:', e?.message);
+          // Fall through: show what we have (often none) rather than hanging.
+        }
       }
-      
-      console.log('Extracted rawSuggestions:', rawSuggestions);
-      console.log('Suggestions count:', rawSuggestions.length);
-      
-      // Transform to match displaySuggestions format: original, corrected, reason, type, alternatives
-      const suggestions = rawSuggestions.map((item, index) => ({
-        id: index,
-        original: item.original || item.originalText || '',
-        corrected: item.corrected || item.correction || '',
-        reason: item.reason || item.description || '',
-        type: item.type || 'grammar',
-        alternatives: item.alternatives || []
-      }));
-      
-      console.log('Final suggestions to display:', suggestions.length, suggestions);
+
+      // Non-async (or SSE failed): best-effort extraction from current payload
+      const suggestions = this.extractSuggestionsFromPayload(data);
+      console.log('[HomeEditor] Immediate suggestions:', suggestions.length, suggestions);
       this.displaySuggestions(suggestions);
+      // Only now mark the text as analyzed successfully (prevents missing triggers on quick edits)
+      this.lastAnalyzedText = text;
       
     } catch (error) {
       if (error.name !== 'AbortError') {

@@ -855,6 +855,76 @@ router.post('/submit', async (req, res) => {
       headers,
       validateStatus: () => true, // Don't throw on any status
     });
+
+    // Home-page + logged-out UX: if backend submit requires auth and returns 401,
+    // fall back to Gemini analyze but keep the same endpoint (/api/submit) for the client.
+    if (response.status === 401) {
+      try {
+        const text = requestBody.text || "";
+        const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+        const baseUrl =
+          process.env.AI_INTEGRATIONS_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
+        if (!apiKey) {
+          return res.status(401).json({
+            error: 'Authentication required',
+            details: 'Backend submit is protected and Gemini fallback is not configured (missing GOOGLE_GENAI_API_KEY).',
+          });
+        }
+
+        const geminiResp = await axios.post(
+          `${baseUrl}/models/gemini-2.5-flash:generateContent`,
+          {
+            systemInstruction: {
+              parts: [
+                {
+                  text: `You are a strict Tamil language expert. Analyze Tamil text for grammar errors, misspellings, and invalid word forms.
+Return ONLY JSON:
+{ "suggestions": [ { "type":"spelling|grammar|punctuation|space|sandhi", "original":"...", "suggestion":"...", "description":"தமிழில் காரணம்" } ] }`,
+                },
+              ],
+            },
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: `Analyze this Tamil text and return suggestions JSON:\n\n${text}` }],
+              },
+            ],
+            generationConfig: {
+              temperature: 0,
+              topP: 0.1,
+              maxOutputTokens: 1024,
+              responseMimeType: 'application/json',
+            },
+          },
+          {
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+            timeout: 15000,
+            validateStatus: () => true,
+          }
+        );
+
+        const aiText = geminiResp.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        let parsed = {};
+        try {
+          parsed = JSON.parse(String(aiText).trim());
+        } catch (e) {
+          parsed = { suggestions: [] };
+        }
+        return res.status(200).json({
+          success: true,
+          request_id: `home-fallback-${Date.now()}`,
+          corrections: [],
+          suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+          meta: { fallback: 'gemini_analyze', backend_status: 401 },
+        });
+      } catch (fallbackErr) {
+        console.error('[SUBMIT] 401 fallback failed:', fallbackErr.response?.data || fallbackErr.message);
+        return res.status(401).json({
+          error: 'Authentication required',
+          details: 'Backend submit returned 401 and Gemini fallback failed.',
+        });
+      }
+    }
     
     if (ENABLE_PROXY_LOGS) {
       console.log(`[SUBMIT] Response status: ${response.status}`);
