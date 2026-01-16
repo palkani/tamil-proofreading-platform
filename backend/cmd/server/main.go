@@ -164,6 +164,9 @@ func main() {
 		api.POST("/validate", h.ValidateText)
 		api.POST("/webhooks/stripe", h.StripeWebhook)
 		api.POST("/webhooks/razorpay", h.RazorpayWebhook)
+		// IMPORTANT: Submit supports anonymous inline proofreading when save_draft=false.
+		// Auth is enforced inside the handler only for draft-saving mode.
+		api.POST("/submit", h.SubmitText)
 	}
 
 	// Protected routes enforce JWT validation before any DB access
@@ -174,7 +177,6 @@ func main() {
 	)
 	{
 		protected.GET("/auth/me", h.GetCurrentUser)
-		protected.POST("/submit", h.SubmitText)
 		protected.GET("/submissions", h.GetSubmissions)
 		protected.GET("/submissions/:id", h.GetSubmission)
 		protected.DELETE("/submissions/:id", h.ArchiveSubmission)
