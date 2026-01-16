@@ -1536,5 +1536,14 @@ class HomeEditor {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  new HomeEditor();
+  const editor = new HomeEditor();
+  // Simple close behavior for the right-side AI panel (UI-only; analysis still works)
+  const closeBtn = document.getElementById('home-ai-close');
+  const panel = document.getElementById('home-ai-panel');
+  if (closeBtn && panel) {
+    closeBtn.addEventListener('click', () => {
+      panel.classList.add('hidden');
+    });
+  }
+  window.__homeEditor = editor;
 });

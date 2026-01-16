@@ -223,48 +223,44 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
         selectedModel := s.selectOptimalModel(cleaned, wordCount)
 
         // Try Google Gemini first
-        if s.googleAPIKey != "" {
-                content, err := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey)
-                if err == nil && strings.TrimSpace(content) != "" {
-                        log.Printf("[GEMINI-SUCCESS] Got response (request_id=%s, len=%d)", requestID, len(content))
-                        corrected, suggestions, changes, alternatives, ok := parseProofreadJSON(content)
-                        if ok {
-                                if corrected == "" {
-                                        corrected = cleaned
-                                }
-                                
-                                // Fallback: If suggestions array is empty but text was corrected, auto-detect changes
-                                if len(suggestions) == 0 && corrected != cleaned {
-                                        log.Printf("[FALLBACK] Auto-detecting changes (request_id=%s)", requestID)
-                                        suggestions = detectChangesFromText(cleaned, corrected)
-                                }
-                                
-                                return &ProofreadResult{
-                                        CorrectedText:  corrected,
-                                        Suggestions:    suggestions,
-                                        Changes:        changes,
-                                        Alternatives:   alternatives,
-                                        ModelUsed:      selectedModel,
-                                        ProcessingTime: time.Since(start).Seconds(),
-                                }, nil
-                        }
-                        // If JSON parsing failed, log and fall through to return safe response
-                        log.Printf("[GEMINI-PARSE-FAIL] Failed to parse Gemini JSON response (request_id=%s): %s", requestID, content)
-                } else if err != nil {
-                        log.Printf("[GEMINI-API-ERROR] google proofread error (request_id=%s): %v", requestID, err)
-                }
-        } else {
+        if s.googleAPIKey == "" {
+                // IMPORTANT: Don't silently return empty suggestions (it looks like "no issues found").
+                // Fail loudly so deployments fix env configuration.
                 log.Printf("[GEMINI-NO-KEY] Google API key not configured (request_id=%s)", requestID)
+                return nil, fmt.Errorf("Gemini AI not configured: missing GOOGLE_GENAI_API_KEY (or AI_INTEGRATIONS_GEMINI_API_KEY)")
         }
 
-        // Safe fallback: return text as-is with no suggestions instead of error
-        // This allows the demo editor to work even if Gemini API fails
-        log.Printf("[FALLBACK] Returning text without corrections (request_id=%s)", requestID)
+        content, err := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey)
+        if err != nil {
+                log.Printf("[GEMINI-API-ERROR] google proofread error (request_id=%s): %v", requestID, err)
+                return nil, err
+        }
+        if strings.TrimSpace(content) == "" {
+                return nil, fmt.Errorf("empty response from Gemini")
+        }
+
+        log.Printf("[GEMINI-SUCCESS] Got response (request_id=%s, len=%d)", requestID, len(content))
+        corrected, suggestions, changes, alternatives, ok := parseProofreadJSON(content)
+        if !ok {
+                log.Printf("[GEMINI-PARSE-FAIL] Failed to parse Gemini JSON response (request_id=%s): %s", requestID, content)
+                return nil, fmt.Errorf("failed to parse Gemini response")
+        }
+
+        if corrected == "" {
+                corrected = cleaned
+        }
+
+        // Fallback: If suggestions array is empty but text was corrected, auto-detect changes
+        if len(suggestions) == 0 && corrected != cleaned {
+                log.Printf("[FALLBACK] Auto-detecting changes (request_id=%s)", requestID)
+                suggestions = detectChangesFromText(cleaned, corrected)
+        }
+
         return &ProofreadResult{
-                CorrectedText:  cleaned,
-                Suggestions:    []Suggestion{},
-                Changes:        []Change{},
-                Alternatives:   []string{},
+                CorrectedText:  corrected,
+                Suggestions:    suggestions,
+                Changes:        changes,
+                Alternatives:   alternatives,
                 ModelUsed:      selectedModel,
                 ProcessingTime: time.Since(start).Seconds(),
         }, nil

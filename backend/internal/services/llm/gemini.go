@@ -21,6 +21,7 @@ Find these error types:
 4. INCOMPLETE WORDS: Cut off words (வணக் → வணக்கம்)
 5. SPACE ERRORS: Missing/extra spaces (நண்பர்கள்எல்லாம் → நண்பர்கள் எல்லாம்)
 6. SANDHI: Wrong word joining (அவன் உடன் → அவனுடன்)
+7. DATE/ORDINAL FORMATTING: When a number is followed by "ஆம்/வது", it should use a hyphen (23 ஆம் தேதி → 23-ஆம் தேதி)
 
 RULES (STRICT):
 - Return ONLY valid JSON. No markdown, no code fences.
