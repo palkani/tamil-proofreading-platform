@@ -3174,6 +3174,13 @@ class WorkspaceController {
         const submissionId = data.submission?.id;
         console.log('[GEMINI] submit pending, starting poll', submissionId);
         data = await this.pollSubmission(submissionId);
+        // If polling didn't return a completed payload, keep UI in "analyzing" instead of claiming "no issues".
+        const polledStatus = String(data?.submission?.status || '').toLowerCase();
+        if (!data?.submission || (polledStatus && polledStatus !== 'completed' && polledStatus !== 'failed')) {
+          console.warn('[AI] Poll did not reach completed state yet; keeping analyzing UI');
+          this.updateAnalysisStatus('analyzing');
+          return;
+        }
       } else if (!response.ok) {
         throw new Error(data?.error || data?.message || 'Failed to analyze text');
       }
@@ -3312,6 +3319,13 @@ class WorkspaceController {
       
       console.log('[AI Debug] Final panel suggestions count:', this.suggestionsPanel.suggestions.length);
       
+      // Only show "no issues" after backend completion.
+      const finalStatus = String(data?.submission?.status || '').toLowerCase();
+      if (finalStatus && finalStatus !== 'completed') {
+        this.updateAnalysisStatus('analyzing');
+        return;
+      }
+
       if (geminiSuggestions.length === 0) {
         this.updateAnalysisStatus('no-issues');
       } else {
@@ -3720,8 +3734,10 @@ class WorkspaceController {
 
   async pollSubmission(submissionId) {
     if (!submissionId) return {};
-    const maxTries = 15;
-    const delay = 700;
+    // Backend transitions: pending -> processing -> completed/failed.
+    // We must keep polling through "processing" (previously we stopped too early).
+    const maxTries = 45; // ~45s worst-case with delay=1000
+    const delay = 1000;
     for (let i = 0; i < maxTries; i++) {
       await new Promise((r) => setTimeout(r, delay));
       try {
@@ -3729,11 +3745,14 @@ class WorkspaceController {
         const res = await this.apiFetch(`/api/v1/submissions/${submissionId}`, { method: 'GET' });
         if (!res.ok) continue;
         const data = await res.json();
-        const status = data.submission?.status || '';
-        console.log('[GEMINI] poll attempt', i + 1, 'status', status);
-        if (status && status.toLowerCase() !== 'pending') {
+        const status = String(data.submission?.status || '').toLowerCase();
+        console.log('[GEMINI] poll attempt', i + 1, 'status', status || '(empty)');
+
+        // Only stop when the backend is actually done.
+        if (status === 'completed' || status === 'failed') {
           return data;
         }
+        // Keep polling while pending/processing/unknown transient statuses.
       } catch (err) {
         console.warn('[GEMINI] poll error', err);
       }
