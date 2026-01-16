@@ -238,6 +238,9 @@ class HomeEditor {
     this.previousText = ''; // Track previous text for space detection
     this.currentSuggestions = [];
     this.currentCaretInfo = null;
+    // Prevent dropdown re-opening immediately after a selection (Google-IME style)
+    this.justReplacedUntil = 0;
+    this.lastReplacedToken = '';
     
     // Tamil conversion dictionary (simplified version)
     this.tamilDict = {
@@ -730,6 +733,15 @@ class HomeEditor {
       return;
     }
 
+    // If we just committed a suggestion for this exact token, keep the dropdown hidden.
+    // It should show only when typing the next word (i.e., token changes).
+    const now = Date.now();
+    const lw = String(lastWord).toLowerCase();
+    if (now < (this.justReplacedUntil || 0) && lw && lw === (this.lastReplacedToken || '')) {
+      this.autocompleteBox.classList.add('hidden');
+      return;
+    }
+
     console.log('[AUTOCOMPLETE] Checking word:', lastWord);
 
     const mode = this.getMode();
@@ -870,6 +882,9 @@ class HomeEditor {
     }
 
     this.autocompleteBox.classList.add('hidden');
+    // Block re-open for the same token for a short window to avoid immediate re-fetch on the same word.
+    this.lastReplacedToken = String(caretInfo.token || '').toLowerCase();
+    this.justReplacedUntil = Date.now() + 600;
     this.currentCaretInfo = null;
     this.currentSuggestions = [];
     this.updateWordCount();

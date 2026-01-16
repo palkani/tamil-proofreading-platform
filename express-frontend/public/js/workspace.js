@@ -351,12 +351,52 @@ class WorkspaceController {
     this.activeSuggestionIndex = 0; // For keyboard navigation
     this.isSelectingSuggestion = false; // Flag to prevent duplicate selection calls
     this.justReplacedToken = false; // Flag to prevent fetching suggestions immediately after replacement
+
+    // Paste gating: ensure only ONE /api/submit happens per paste action
+    this.pasteAnalyzeTimeout = null;
+    this.pasteSuppressUntil = 0; // suppress secondary autoAnalyze triggers from handleEditorChange
+    this.suppressSubmitUntil = 0; // suppress scheduleSubmitThrottled/runAutoSubmit right after paste
     
     // PART D: Prefix cache for suggestions
     this.suggestionCache = new Map(); // key: "mode:token", value: { suggestions, timestamp }
     this.CACHE_TTL_MS = 2000; // 2 seconds
 
     this.init();
+  }
+
+  /**
+   * Queue exactly one AI analysis after paste.
+   * Multiple paste listeners may fire (capture/bubble/input); this consolidates them.
+   */
+  queuePasteAnalyze(source = 'paste') {
+    try {
+      const now = Date.now();
+      // Suppress duplicate triggers for a short window
+      this.pasteSuppressUntil = now + 1500;
+      this.suppressSubmitUntil = now + 1500;
+
+      // Cancel any pending timers that could trigger extra submits
+      if (this.analysisTimeout) {
+        clearTimeout(this.analysisTimeout);
+        this.analysisTimeout = null;
+      }
+      if (this.submitTimer) {
+        clearTimeout(this.submitTimer);
+        this.submitTimer = null;
+      }
+      if (this.pasteAnalyzeTimeout) {
+        clearTimeout(this.pasteAnalyzeTimeout);
+      }
+
+      // Give the editor a moment to finish inserting pasted content
+      this.pasteAnalyzeTimeout = setTimeout(() => {
+        this.pasteAnalyzeTimeout = null;
+        console.log('[AI] 📋 Paste detected; running single autoAnalyze()', { source });
+        this.autoAnalyze({ silent: true });
+      }, 300);
+    } catch (e) {
+      // non-fatal
+    }
   }
 
   applyReadOnlyMode() {
@@ -793,16 +833,7 @@ class WorkspaceController {
 
       // Paste should trigger analysis quickly (same intent as legacy paste handler).
       window.addEventListener('tiptap:paste', () => {
-        try {
-          const text = (this.getEditorText() || '').trim();
-          if (!text) return;
-          const hasTamil = /[\u0B80-\u0BFF]/.test(text);
-          if (!hasTamil) return;
-          // Trigger soon after paste so content is already in editor
-          setTimeout(() => this.autoAnalyze(), 250);
-        } catch {
-          // ignore
-        }
+        this.queuePasteAnalyze('tiptap:paste');
       });
 
       // Ensure TipTap editor is mounted and toolbar wired.
@@ -838,33 +869,7 @@ class WorkspaceController {
         const isPaste = e.inputType === 'insertFromPaste' || e.inputType === 'insertFromPasteAsQuotation';
         if (isPaste) {
           console.log("[IME] 📋 Input event triggered by paste, inputType:", e.inputType);
-          
-          // Get editor text after paste
-          const text = this.getEditorText() || '';
-          const hasTamil = /[\u0B80-\u0BFF]/.test(text);
-          const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
-          
-          console.log("[IME] 📋 Paste input event - text length:", text.length, 'hasTamil:', hasTamil, 'wordCount:', wordCount);
-          
-          // If Tamil text is pasted, trigger AI analysis immediately
-          if (hasTamil && (wordCount >= 5 || text.trim().length >= 20)) {
-            console.log("[IME] 📋 ✅ Tamil text pasted - triggering AI analysis immediately");
-            // Clear any existing timeout
-            if (this.analysisTimeout) {
-              clearTimeout(this.analysisTimeout);
-            }
-            // Trigger immediately - input event fires after paste is complete
-            console.log("[IME] 📋 🚀 Calling autoAnalyze() immediately from input event after paste");
-            this.autoAnalyze();
-          } else {
-            console.log("[IME] 📋 ⚠️ Paste detected but conditions not met:", {
-              hasTamil,
-              wordCount,
-              textLength: text.trim().length,
-              meetsWordMin: wordCount >= 5,
-              meetsCharMin: text.trim().length >= 20
-            });
-          }
+          this.queuePasteAnalyze('legacy:input');
         }
         
         if (inputDebounce) {
@@ -939,49 +944,8 @@ class WorkspaceController {
         
         // Don't prevent default - let the browser handle paste normally
         
-        // Schedule AI analysis after paste completes
-        // Use multiple timeouts to ensure we catch the paste
-        const triggerAnalysis = () => {
-          const text = controller.getEditorText() || '';
-          const finalHasTamil = /[\u0B80-\u0BFF]/.test(text);
-          const finalWordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
-          
-          console.log('[WorkspaceJS] 📋 After paste - Editor state:', {
-            textLength: text.trim().length,
-            hasTamil: finalHasTamil,
-            wordCount: finalWordCount,
-            textPreview: text.substring(0, 100)
-          });
-          
-          // Update word count and save
-          controller.updateWordCount();
-          controller.scheduleSave();
-          
-          // Trigger AI analysis if Tamil text is present and meets minimum requirements
-          if (finalHasTamil && (finalWordCount >= 5 || text.trim().length >= 20)) {
-            console.log('[WorkspaceJS] 📋 ✅ Triggering AI analysis for pasted Tamil text');
-            // Clear any existing analysis timeout
-            if (controller.analysisTimeout) {
-              clearTimeout(controller.analysisTimeout);
-            }
-            // Trigger immediately - paste is already complete
-            console.log('[WorkspaceJS] 📋 🚀 Calling autoAnalyze() immediately for pasted text');
-            controller.autoAnalyze();
-          } else {
-            console.log('[WorkspaceJS] 📋 ⚠️ Not triggering AI analysis:', {
-              hasTamil: finalHasTamil,
-              textLength: text.trim().length,
-              wordCount: finalWordCount,
-              meetsWordMin: finalWordCount >= 5,
-              meetsCharMin: text.trim().length >= 20
-            });
-          }
-        };
-        
-        // Try multiple times to catch the paste (some browsers are slow)
-        setTimeout(triggerAnalysis, 100);
-        setTimeout(triggerAnalysis, 500);
-        setTimeout(triggerAnalysis, 1000);
+        // Consolidate to a single paste-triggered analysis.
+        controller.queuePasteAnalyze('legacy:paste');
       };
       
       // Add paste event listener (don't use preventDefault - let browser handle it)
@@ -1276,6 +1240,11 @@ class WorkspaceController {
       // If token is Tamil or other non-Latin, trigger AI analysis instead of transliteration
       const hasTamil = /[\u0B80-\u0BFF]/.test(text);
       if (hasTamil) {
+        // If a paste just happened, let the paste handler drive exactly ONE analyze call.
+        if (this.pasteSuppressUntil && Date.now() < this.pasteSuppressUntil) {
+          console.log('[AI] 📋 Skipping handleEditorChange-triggered analysis (paste gate active)');
+          return;
+        }
         console.log('[IME] 🔍 Tamil text detected in editor, triggering AI analysis...');
         // Debounce AI analysis to avoid too many calls
         if (this.analysisTimeout) {
@@ -3047,6 +3016,10 @@ class WorkspaceController {
   }
 
   scheduleSubmitThrottled(text) {
+    if (this.suppressSubmitUntil && Date.now() < this.suppressSubmitUntil) {
+      if (this.DEBUG_IME) console.debug('[SUBMIT] skipped (suppressed after paste)');
+      return;
+    }
     if (this.imeActive || this.editorMode === EditorMode.IME_TYPING) {
       if (this.DEBUG_IME) console.debug('[SUBMIT] skipped (IME active)');
       return;
@@ -3076,6 +3049,10 @@ class WorkspaceController {
   }
 
   async runAutoSubmit(hash, wordCount) {
+    if (this.suppressSubmitUntil && Date.now() < this.suppressSubmitUntil) {
+      if (this.DEBUG_IME) console.debug('[SUBMIT] skipped (suppressed after paste)');
+      return;
+    }
     // Phase 7: Use helper method that works with both legacy and TipTap
     const text = (this.getEditorText() || '').trim();
     if (text !== hash) {

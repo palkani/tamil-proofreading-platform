@@ -406,20 +406,11 @@ class TamilEditor {
           return;
         }
 
-        // Check if typing in Tamil (1+ character)
-        if (/[\u0B80-\u0BFF]/.test(currentWord)) {
-          try {
-            const response = await apiFetch(`/api/autocomplete?prefix=${encodeURIComponent(currentWord)}&limit=8`);
-            if (response.ok) {
-              const data = await response.json();
-              suggestions = data.suggestions || [];
-            }
-          } catch (err) {
-            console.log('Autocomplete API error:', err);
-          }
-        } 
-        // Check if typing in English - call Gemini transliteration API
-        else if (/^[a-zA-Z]+$/.test(currentWord) && currentWord.length >= 2) {
+        // IMPORTANT:
+        // We no longer call /api/autocomplete for Tamil tokens.
+        // That endpoint isn't part of the current stack and was causing noisy 400s in production.
+        // IME suggestions should only trigger for Latin (English) tokens and use the runner.
+        if (/^[a-zA-Z]+$/.test(currentWord) && currentWord.length >= 2) {
           try {
           const modeSelect = document.getElementById('mode-select');
           const mode = (modeSelect && modeSelect.value) ? modeSelect.value : 'spoken';
@@ -498,17 +489,19 @@ class TamilEditor {
       item.className = 'px-4 py-3 cursor-pointer tamil-text transition-all duration-150 border-b border-gray-100 last:border-b-0';
       item.textContent = suggestion;
       item.style.fontSize = '1.1rem';
+      // Ensure text is always readable (avoid inheriting white text from parent/theme)
+      item.style.color = '#111827'; // gray-900
       
-      // Add hover effect with theme color
+      // Hover/active effect with site theme color (primary)
       item.addEventListener('mouseenter', () => {
-        item.style.backgroundColor = '#ea580c'; // Blue-500
+        item.style.backgroundColor = '#2563eb'; // primary blue-600
         item.style.color = '#ffffff';
         item.style.transform = 'translateX(4px)';
       });
       
       item.addEventListener('mouseleave', () => {
         item.style.backgroundColor = '';
-        item.style.color = '';
+        item.style.color = '#111827';
         item.style.transform = '';
       });
       
@@ -519,7 +512,8 @@ class TamilEditor {
       
       // Auto-select first item
       if (index === 0) {
-        item.style.backgroundColor = '#fed7aa'; // Blue-100
+        item.style.backgroundColor = '#dbeafe'; // blue-100
+        item.style.color = '#111827';
       }
       
       box.appendChild(item);
