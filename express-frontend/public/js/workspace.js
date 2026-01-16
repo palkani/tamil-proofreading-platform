@@ -3218,8 +3218,12 @@ class WorkspaceController {
         return [];
       })();
 
+      // Prefer stored submission suggestions ONLY when present; otherwise fall back to GoTamil-style corrections[]
+      // (Note: [] is truthy in JS, so we must check length explicitly.)
       const corrections =
-        parsedSubmissionSuggestions ||
+        (Array.isArray(parsedSubmissionSuggestions) && parsedSubmissionSuggestions.length > 0
+          ? parsedSubmissionSuggestions
+          : null) ||
         data.result?.suggestions ||
         data.corrections ||
         data.suggestions ||

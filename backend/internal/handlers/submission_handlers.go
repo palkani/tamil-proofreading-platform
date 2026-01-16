@@ -445,7 +445,52 @@ func (h *Handlers) GetSubmission(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"submission": submission})
+	// Provide a stable "corrections" array for frontend clients (GoTamil-style),
+	// while keeping the raw submission object for backward compatibility.
+	type correction struct {
+		BlockID      string `json:"blockId"`
+		OriginalText string `json:"originalText"`
+		Correction   string `json:"correction"`
+		Reason       string `json:"reason"`
+		Type         string `json:"type"`
+	}
+	type storedSuggestion struct {
+		Original   string `json:"original"`
+		Corrected  string `json:"corrected"`
+		Reason     string `json:"reason"`
+		Type       string `json:"type"`
+		StartIndex int    `json:"start_index"`
+		EndIndex   int    `json:"end_index"`
+	}
+
+	corrections := []correction{}
+	if submission.Status == models.StatusCompleted && strings.TrimSpace(submission.Suggestions) != "" {
+		raw := strings.TrimSpace(submission.Suggestions)
+		// Suggestions are stored as a JSON string in DB (jsonb field).
+		var suggs []storedSuggestion
+		if err := json.Unmarshal([]byte(raw), &suggs); err == nil {
+			blockID := "0"
+			for _, s := range suggs {
+				if s.Original == "" || s.Corrected == "" || s.Original == s.Corrected {
+					continue
+				}
+				corrections = append(corrections, correction{
+					BlockID:      blockID,
+					OriginalText: s.Original,
+					Correction:   s.Corrected,
+					Reason:       s.Reason,
+					Type:         s.Type,
+				})
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"request_id": submission.RequestID,
+		"submission": submission,
+		"corrections": corrections,
+	})
 }
 
 // ArchiveSubmission marks a submission as archived for 45 days before deletion
@@ -573,7 +618,39 @@ func (h *Handlers) StreamSubmission(c *gin.Context) {
 	payload := gin.H{"status": submission.Status, "request_id": submission.RequestID}
 	c.SSEvent("status", payload)
 	if submission.Status == models.StatusCompleted {
-		c.SSEvent("result", gin.H{"submission": submission, "request_id": submission.RequestID})
+		// Also include a normalized "corrections" array for clients.
+		corrections := []gin.H{}
+		raw := strings.TrimSpace(submission.Suggestions)
+		if raw != "" && raw != "[]" {
+			type storedSuggestion struct {
+				Original  string `json:"original"`
+				Corrected string `json:"corrected"`
+				Reason    string `json:"reason"`
+				Type      string `json:"type"`
+			}
+			var suggs []storedSuggestion
+			if err := json.Unmarshal([]byte(raw), &suggs); err == nil {
+				for _, s := range suggs {
+					if s.Original == "" || s.Corrected == "" || s.Original == s.Corrected {
+						continue
+					}
+					corrections = append(corrections, gin.H{
+						"blockId":       "0",
+						"originalText":  s.Original,
+						"correction":    s.Corrected,
+						"reason":        s.Reason,
+						"type":          s.Type,
+					})
+				}
+			}
+		}
+
+		c.SSEvent("result", gin.H{
+			"success":     true,
+			"submission":  submission,
+			"request_id":  submission.RequestID,
+			"corrections": corrections,
+		})
 		c.SSEvent("end", gin.H{"status": submission.Status, "request_id": submission.RequestID})
 		flusher.Flush()
 		return
