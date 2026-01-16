@@ -76,10 +76,23 @@ router.post('/logout', async (req, res) => {
   // IMPORTANT: Always clear cookies on the frontend domain (prooftamil.com),
   // even if the backend is unreachable or the browser navigates early.
   const clearCookieEverywhere = (name) => {
+    // Cookie identity is name + domain + path. Some deployments have different domain attributes.
+    // Clear aggressively across common variants so attachUser cannot rehydrate the navbar.
+    const baseOpts = {
+      path: '/',
+      // Secure helps ensure clearing works on HTTPS-only cookies too (Vercel/Cloud Run).
+      secure: true,
+      sameSite: 'lax',
+    };
+
     // Host-only cookie
-    res.clearCookie(name, { path: '/' });
-    // Domain cookie (covers subdomains) - safe even if not present
-    res.clearCookie(name, { path: '/', domain: '.prooftamil.com' });
+    res.clearCookie(name, { ...baseOpts });
+    // Bare apex domain cookie
+    res.clearCookie(name, { ...baseOpts, domain: 'prooftamil.com' });
+    // Subdomain cookie (covers www + other subdomains)
+    res.clearCookie(name, { ...baseOpts, domain: '.prooftamil.com' });
+    // Explicit www domain cookie (some stacks set this)
+    res.clearCookie(name, { ...baseOpts, domain: 'www.prooftamil.com' });
   };
 
   try {

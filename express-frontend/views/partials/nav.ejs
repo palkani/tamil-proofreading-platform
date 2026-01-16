@@ -159,9 +159,17 @@
     
     // Clear all cookies
     const cookieOptions = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-    document.cookie = `access_token=; ${cookieOptions}`;
-    document.cookie = `refresh_token=; ${cookieOptions}`;
-    document.cookie = `proof_refresh_token=; ${cookieOptions}`;
+    const clearCookie = (name) => {
+      // Host-only
+      document.cookie = `${name}=; ${cookieOptions}`;
+      // Best-effort domain clears (works only for non-HttpOnly cookies)
+      document.cookie = `${name}=; ${cookieOptions}; domain=prooftamil.com`;
+      document.cookie = `${name}=; ${cookieOptions}; domain=.prooftamil.com`;
+      document.cookie = `${name}=; ${cookieOptions}; domain=www.prooftamil.com`;
+    };
+    clearCookie('access_token');
+    clearCookie('refresh_token');
+    clearCookie('proof_refresh_token');
     
     // Try to call logout API (non-blocking, fire and forget)
     // CRITICAL: Add a flag to localStorage to prevent logout loop
@@ -198,7 +206,8 @@
       logoutRequest,
       new Promise((resolve) => setTimeout(resolve, 800))
     ]).finally(() => {
-      window.location.href = '/';
+      // Prefer login page after logout so navbar rehydrates unauthenticated state immediately.
+      window.location.replace('/login');
     });
   };
 
