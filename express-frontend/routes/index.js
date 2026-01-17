@@ -93,8 +93,17 @@ router.get('/free-tamil-editor', (req, res) => {
 // Login page - redirect authenticated users to drafts
 router.get('/login', (req, res) => {
   if (req.user) {
-    console.log('[AUTH] user already authenticated, redirecting to /drafts');
-    return res.redirect('/drafts');
+    // If user is already authenticated and a redirect target is provided, honor it.
+    // This prevents /workspace?draftId=... flows from bouncing back to /drafts after a 401-triggered /login.
+    const rawRedirect = typeof req.query.redirect === 'string' ? req.query.redirect : '';
+    const isSafeInternal =
+      rawRedirect &&
+      rawRedirect.startsWith('/') &&
+      !rawRedirect.startsWith('//') &&
+      !rawRedirect.includes('://');
+    const target = isSafeInternal ? rawRedirect : '/drafts';
+    console.log('[AUTH] user already authenticated, redirecting to', target);
+    return res.redirect(target);
   }
   const seo = getSeoData('login');
   res.render('pages/login', { 
@@ -112,8 +121,15 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env
 // Register page - redirect authenticated users to drafts
 router.get('/register', (req, res) => {
   if (req.user) {
-    console.log('[AUTH] user already authenticated, redirecting to /drafts');
-    return res.redirect('/drafts');
+    const rawRedirect = typeof req.query.redirect === 'string' ? req.query.redirect : '';
+    const isSafeInternal =
+      rawRedirect &&
+      rawRedirect.startsWith('/') &&
+      !rawRedirect.startsWith('//') &&
+      !rawRedirect.includes('://');
+    const target = isSafeInternal ? rawRedirect : '/drafts';
+    console.log('[AUTH] user already authenticated, redirecting to', target);
+    return res.redirect(target);
   }
   const seo = getSeoData('register');
   res.render('pages/register', { 
