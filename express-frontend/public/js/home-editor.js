@@ -1383,14 +1383,35 @@ class HomeEditor {
     const raw = payload?.submission?.suggestions ?? payload?.submission?.corrections ?? payload?.suggestions ?? payload?.corrections;
     const list = this.normalizeRawSuggestions(raw);
 
-    return list.map((item, index) => ({
+    const normalizeComparable = (s) => {
+      try {
+        return String(s || '')
+          .normalize('NFC')
+          .replace(/[\u200B-\u200D\uFEFF]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .replace(/^[\"'“”‘’«»‹›「」『』『』《》〈〉「」『』ʻʼ’‘‚‛„‟\u2018\u2019\u201C\u201D\u201E\u2039\u203A\u00AB\u00BB\u201A\u201B]+/, '')
+          .replace(/[\"'“”‘’«»‹›「」『』『』《》〈〉「」『』ʻʼ’‘‚‛„‟\u2018\u2019\u201C\u201D\u201E\u2039\u203A\u00AB\u00BB\u201A\u201B]+$/, '')
+          .trim();
+      } catch (_e) {
+        return String(s || '').replace(/\s+/g, ' ').trim();
+      }
+    };
+
+    return list
+      .map((item, index) => ({
       id: index,
       original: item.original || item.originalText || '',
       corrected: item.corrected || item.correction || item.suggestion || '',
       reason: item.reason || item.description || '',
       type: item.type || 'grammar',
       alternatives: item.alternatives || [],
-    }));
+      }))
+      .filter((s) => {
+        const o = normalizeComparable(s.original);
+        const c = normalizeComparable(s.corrected);
+        return o && c && o !== c;
+      });
   }
   
   async autoAnalyze() {

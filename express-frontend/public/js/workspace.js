@@ -3389,13 +3389,34 @@ class WorkspaceController {
       }
       
       const geminiSuggestions = corrections
-        // FILTER: Only include suggestions where original ≠ corrected (safety filter)
+        // FILTER: Only include suggestions where original ≠ corrected (after normalization).
+        // This removes "duplicate" suggestions where both look the same to the user
+        // but may differ only by whitespace/quotes/zero-width chars.
         .filter(result => {
           const original = result.original || result.originalText || result.Original || result.sourceText || '';
           const corrected = result.corrected || result.correction || result.Corrected || result.suggestedText || '';
-          const hasValidSuggestion = original && corrected && original !== corrected;
+          const normalizeComparable = (s) => {
+            try {
+              return String(s || '')
+                .normalize('NFC')
+                // remove zero-width chars
+                .replace(/[\u200B-\u200D\uFEFF]/g, '')
+                // normalize whitespace
+                .replace(/\s+/g, ' ')
+                .trim()
+                // strip wrapping quotes (ASCII + Tamil quotes + smart quotes)
+                .replace(/^[\"'“”‘’«»‹›「」『』『』《》〈〉「」『』ʻʼ’‘‚‛„‟\u2018\u2019\u201C\u201D\u201E\u2039\u203A\u00AB\u00BB\u201A\u201B]+/, '')
+                .replace(/[\"'“”‘’«»‹›「」『』『』《》〈〉「」『』ʻʼ’‘‚‛„‟\u2018\u2019\u201C\u201D\u201E\u2039\u203A\u00AB\u00BB\u201A\u201B]+$/, '')
+                .trim();
+            } catch (_e) {
+              return String(s || '').replace(/\s+/g, ' ').trim();
+            }
+          };
+          const oNorm = normalizeComparable(original);
+          const cNorm = normalizeComparable(corrected);
+          const hasValidSuggestion = oNorm && cNorm && oNorm !== cNorm;
           if (!hasValidSuggestion) {
-            console.log('[AI Debug] Filtered out suggestion:', { original, corrected, result });
+            console.log('[AI Debug] Filtered out duplicate/no-op suggestion:', { original, corrected, oNorm, cNorm, result });
           }
           return hasValidSuggestion;
         })

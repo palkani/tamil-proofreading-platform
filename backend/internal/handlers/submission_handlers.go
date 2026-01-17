@@ -33,6 +33,125 @@ var scriptTagRegex = regexp.MustCompile(`(?is)<script.*?>.*?</script>`)
 var eventAttrRegex = regexp.MustCompile(`(?i)\s+on[a-z]+\s*=\s*(".*?"|'.*?')`)
 var javascriptProtoRegex = regexp.MustCompile(`(?i)javascript:`)
 
+// storedSuggestion matches the JSON objects stored in Submission.Suggestions.
+// Note: Some engines return start/end indexes as 0 even when a correction exists.
+type storedSuggestion struct {
+	Type       string `json:"type"`
+	Reason     string `json:"reason"`
+	Original   string `json:"original"`
+	Corrected  string `json:"corrected"`
+	StartIndex int    `json:"start_index"`
+	EndIndex   int    `json:"end_index"`
+}
+
+func normalizeComparableText(s string) string {
+	// Normalize for duplicate/no-op detection: trim, collapse whitespace, remove zero-width chars, strip quotes.
+	t := strings.TrimSpace(s)
+	if t == "" {
+		return ""
+	}
+	// remove common zero-width chars
+	t = strings.Map(func(r rune) rune {
+		switch r {
+		case '\u200B', '\u200C', '\u200D', '\uFEFF':
+			return -1
+		default:
+			return r
+		}
+	}, t)
+	// collapse whitespace
+	t = strings.Join(strings.Fields(t), " ")
+	// strip wrapping quotes (ASCII + common smart quotes)
+	t = strings.Trim(t, `"'“”‘’«»‹›`)
+	t = strings.TrimSpace(t)
+	return t
+}
+
+type usedRange struct {
+	Start int
+	End   int
+}
+
+func overlapsAny(start, end int, used []usedRange) bool {
+	for _, r := range used {
+		if start < r.End && end > r.Start {
+			return true
+		}
+	}
+	return false
+}
+
+func findFirstUnusedOccurrence(haystack, needle string, used []usedRange) (int, int) {
+	if needle == "" || haystack == "" {
+		return 0, 0
+	}
+	// simple scan from beginning; pick first non-overlapping occurrence
+	searchFrom := 0
+	for {
+		idx := strings.Index(haystack[searchFrom:], needle)
+		if idx < 0 {
+			return 0, 0
+		}
+		start := searchFrom + idx
+		end := start + len(needle)
+		if !overlapsAny(start, end, used) {
+			return start, end
+		}
+		// continue search after this occurrence
+		searchFrom = end
+		if searchFrom >= len(haystack) {
+			return 0, 0
+		}
+	}
+}
+
+func buildCorrectionsForSubmission(sub models.Submission) []gin.H {
+	corrections := []gin.H{}
+	raw := strings.TrimSpace(sub.Suggestions)
+	if raw == "" || raw == "[]" {
+		return corrections
+	}
+
+	var suggs []storedSuggestion
+	if err := json.Unmarshal([]byte(raw), &suggs); err != nil {
+		return corrections
+	}
+
+	used := []usedRange{}
+	for _, s := range suggs {
+		orig := s.Original
+		corr := s.Corrected
+
+		oNorm := normalizeComparableText(orig)
+		cNorm := normalizeComparableText(corr)
+		if oNorm == "" || cNorm == "" || oNorm == cNorm {
+			// skip no-op / duplicate suggestions
+			continue
+		}
+
+		startIdx := s.StartIndex
+		endIdx := s.EndIndex
+		// If model didn't provide indexes, compute a best-effort match location.
+		if startIdx <= 0 || endIdx <= 0 || startIdx >= endIdx {
+			startIdx, endIdx = findFirstUnusedOccurrence(sub.OriginalText, orig, used)
+		}
+		if startIdx > 0 && endIdx > startIdx {
+			used = append(used, usedRange{Start: startIdx, End: endIdx})
+		}
+
+		corrections = append(corrections, gin.H{
+			"blockId":      "0",
+			"originalText": orig,
+			"correction":   corr,
+			"reason":       s.Reason,
+			"type":         s.Type,
+			"start_index":  startIdx,
+			"end_index":    endIdx,
+		})
+	}
+	return corrections
+}
+
 func stripHTML(input string) string {
 	if strings.TrimSpace(input) == "" {
 		return ""
@@ -318,13 +437,15 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, req
 	if err := h.db.First(&updated, submissionID).Error; err != nil {
 		log.Printf("Error loading updated submission %d: %v", submissionID, err)
 	} else {
+		// Broadcast a normalized corrections[] so SSE clients don't have to parse stringified suggestions.
+		corrections := buildCorrectionsForSubmission(updated)
 		h.streamHub.broadcast(submissionID, submissionEvent{
 			Event: "status",
 			Data:  gin.H{"status": models.StatusCompleted, "request_id": requestID},
 		})
 		h.streamHub.broadcast(submissionID, submissionEvent{
 			Event: "result",
-			Data:  gin.H{"submission": updated, "request_id": requestID},
+			Data:  gin.H{"success": true, "submission": updated, "request_id": requestID, "corrections": corrections},
 		})
 	}
 
@@ -451,42 +572,9 @@ func (h *Handlers) GetSubmission(c *gin.Context) {
 
 	// Provide a stable "corrections" array for frontend clients (GoTamil-style),
 	// while keeping the raw submission object for backward compatibility.
-	type correction struct {
-		BlockID      string `json:"blockId"`
-		OriginalText string `json:"originalText"`
-		Correction   string `json:"correction"`
-		Reason       string `json:"reason"`
-		Type         string `json:"type"`
-	}
-	type storedSuggestion struct {
-		Original   string `json:"original"`
-		Corrected  string `json:"corrected"`
-		Reason     string `json:"reason"`
-		Type       string `json:"type"`
-		StartIndex int    `json:"start_index"`
-		EndIndex   int    `json:"end_index"`
-	}
-
-	corrections := []correction{}
-	if submission.Status == models.StatusCompleted && strings.TrimSpace(submission.Suggestions) != "" {
-		raw := strings.TrimSpace(submission.Suggestions)
-		// Suggestions are stored as a JSON string in DB (jsonb field).
-		var suggs []storedSuggestion
-		if err := json.Unmarshal([]byte(raw), &suggs); err == nil {
-			blockID := "0"
-			for _, s := range suggs {
-				if s.Original == "" || s.Corrected == "" || s.Original == s.Corrected {
-					continue
-				}
-				corrections = append(corrections, correction{
-					BlockID:      blockID,
-					OriginalText: s.Original,
-					Correction:   s.Corrected,
-					Reason:       s.Reason,
-					Type:         s.Type,
-				})
-			}
-		}
+	corrections := []gin.H{}
+	if submission.Status == models.StatusCompleted {
+		corrections = buildCorrectionsForSubmission(submission)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -622,32 +710,8 @@ func (h *Handlers) StreamSubmission(c *gin.Context) {
 	payload := gin.H{"status": submission.Status, "request_id": submission.RequestID}
 	c.SSEvent("status", payload)
 	if submission.Status == models.StatusCompleted {
-		// Also include a normalized "corrections" array for clients.
-		corrections := []gin.H{}
-		raw := strings.TrimSpace(submission.Suggestions)
-		if raw != "" && raw != "[]" {
-			type storedSuggestion struct {
-				Original  string `json:"original"`
-				Corrected string `json:"corrected"`
-				Reason    string `json:"reason"`
-				Type      string `json:"type"`
-			}
-			var suggs []storedSuggestion
-			if err := json.Unmarshal([]byte(raw), &suggs); err == nil {
-				for _, s := range suggs {
-					if s.Original == "" || s.Corrected == "" || s.Original == s.Corrected {
-						continue
-					}
-					corrections = append(corrections, gin.H{
-						"blockId":       "0",
-						"originalText":  s.Original,
-						"correction":    s.Corrected,
-						"reason":        s.Reason,
-						"type":          s.Type,
-					})
-				}
-			}
-		}
+		// Also include a normalized "corrections" array for clients, with best-effort indices.
+		corrections := buildCorrectionsForSubmission(submission)
 
 		c.SSEvent("result", gin.H{
 			"success":     true,
