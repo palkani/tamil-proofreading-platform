@@ -345,9 +345,40 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
                 return nil, fmt.Errorf("Gemini AI not configured: missing GOOGLE_GENAI_API_KEY (or AI_INTEGRATIONS_GEMINI_API_KEY)")
         }
 
-        // Default to Gemini 1.5 Flash for lower latency; allow override.
-        geminiModel := getEnvTrim("GEMINI_PROOFREAD_MODEL", "gemini-1.5-flash")
-        content, err := CallGeminiProofread(cleaned, geminiModel, s.googleAPIKey, maxTokens)
+        // Gemini model selection:
+        // - Prefer explicit env override if provided
+        // - Otherwise use our known-good constants (models.ModelGeminiFlash)
+        // - If a model is unavailable (404), retry with flash-lite then flash.
+        primaryGeminiModel := getEnvTrim("GEMINI_PROOFREAD_MODEL", models.ModelGeminiFlash)
+        geminiModelCandidates := []string{
+                primaryGeminiModel,
+                models.ModelGeminiFlashLite,
+                models.ModelGeminiFlash,
+        }
+
+        var (
+                content    string
+                err        error
+                geminiUsed string
+        )
+        for _, m := range geminiModelCandidates {
+                if strings.TrimSpace(m) == "" {
+                        continue
+                }
+                geminiUsed = m
+                content, err = CallGeminiProofread(cleaned, m, s.googleAPIKey, maxTokens)
+                if err == nil {
+                        break
+                }
+                // If model is missing, try next Gemini model before falling back to other providers.
+                var pe *ProviderError
+                if errors.As(err, &pe) && pe.StatusCode == 404 {
+                        log.Printf("[GEMINI-MODEL-NOT-FOUND] model=%s (request_id=%s): %s", m, requestID, pe.Message)
+                        continue
+                }
+                // Otherwise, don't spam multiple Gemini calls; break and evaluate fallback.
+                break
+        }
         if err != nil {
                 log.Printf("[GEMINI-API-ERROR] gemini proofread error (request_id=%s): %v", requestID, err)
                 // Provider fallback pipeline on quota/rate-limit/5xx when configured:
@@ -398,7 +429,7 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
                 Suggestions:    suggestions,
                 Changes:        changes,
                 Alternatives:   alternatives,
-                ModelUsed:      models.ModelType(geminiModel),
+                ModelUsed:      models.ModelType(geminiUsed),
                 ProcessingTime: time.Since(start).Seconds(),
         }, nil
 }
