@@ -554,7 +554,8 @@ class WorkspaceController {
             const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
             if (!isHomepage) {
               console.log('[WORKSPACE] Redirecting to login (not on homepage)');
-              window.location.href = '/login';
+              const redirectParam = encodeURIComponent(window.location.pathname + window.location.search);
+              window.location.href = `/login?redirect=${redirectParam}`;
             } else {
               console.log('[WORKSPACE] On homepage, not redirecting to prevent loops');
             }
@@ -571,7 +572,8 @@ class WorkspaceController {
           const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
           if (!isHomepage) {
             console.log('[WORKSPACE] Redirecting to login (not on homepage)');
-            window.location.href = '/login';
+            const redirectParam = encodeURIComponent(window.location.pathname + window.location.search);
+            window.location.href = `/login?redirect=${redirectParam}`;
           } else {
             console.log('[WORKSPACE] On homepage, not redirecting to prevent loops');
           }
@@ -584,7 +586,8 @@ class WorkspaceController {
         const isHomepage = window.location.pathname === '/' || window.location.pathname === '/home';
         if (!isHomepage) {
           console.log('[WORKSPACE] Redirecting to login (not on homepage)');
-          window.location.href = '/login';
+          const redirectParam = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.href = `/login?redirect=${redirectParam}`;
         } else {
           console.log('[WORKSPACE] On homepage, not redirecting to prevent loops');
         }
@@ -1101,9 +1104,9 @@ class WorkspaceController {
           if (editorReady) {
             console.log('[WorkspaceJS] Editor is ready, loading draft');
             this.openDraft(draftId);
-            // Clean up URL to remove query parameter after loading
-            const newUrl = window.location.pathname;
-            window.history.replaceState({}, '', newUrl);
+            // IMPORTANT: Do NOT strip ?draftId= immediately.
+            // If the draft load triggers a 401 → /login, we need the redirect URL to retain draftId
+            // so the user returns to the same draft after login.
           } else {
             console.log('[WorkspaceJS] Editor not ready yet, waiting...');
             setTimeout(checkEditorReady, 200);

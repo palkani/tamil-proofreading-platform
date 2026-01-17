@@ -569,7 +569,8 @@ async function apiFetch(url, options = {}, requireAuth = true) {
           
           if (stillOnSamePage && noRecentClick && noRecentPageLoad) {
             console.log('[AUTH] All checks passed, redirecting to login');
-            window.location.href = '/login';
+            const redirectParam = encodeURIComponent(window.location.pathname + window.location.search);
+            window.location.href = `/login?redirect=${redirectParam}`;
           } else {
             console.log('[AUTH] Skipping redirect - page changed, link clicked recently, or page just loaded');
           }
@@ -626,7 +627,8 @@ async function apiFetch(url, options = {}, requireAuth = true) {
           
           if (stillOnSamePage && noRecentClick && noRecentPageLoad) {
             console.log('[AUTH] All checks passed, redirecting to login');
-            window.location.href = '/login';
+            const redirectParam = encodeURIComponent(window.location.pathname + window.location.search);
+            window.location.href = `/login?redirect=${redirectParam}`;
           } else {
             console.log('[AUTH] Skipping redirect - page changed, link clicked recently, or page just loaded');
           }
