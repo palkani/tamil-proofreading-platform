@@ -166,7 +166,7 @@ func main() {
 		api.POST("/webhooks/razorpay", h.RazorpayWebhook)
 		// IMPORTANT: Submit supports anonymous inline proofreading when save_draft=false.
 		// Auth is enforced inside the handler only for draft-saving mode.
-		api.POST("/submit", h.SubmitText)
+		api.POST("/submit", middleware.OptionalAuthMiddleware(cfg.JWTSecret), h.SubmitText)
 	}
 
 	// Protected routes enforce JWT validation before any DB access

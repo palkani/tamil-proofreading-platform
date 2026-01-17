@@ -364,8 +364,16 @@
     }
   })();
 
-  // Light-weight client-side check: never auto-redirect; just surface a CTA when missing a token.
+  // Light-weight client-side check: never auto-redirect; just surface a CTA when missing auth.
+  // IMPORTANT: Auth may be present via HTTP-only cookie (can't be read by JS), so we also check /api/v1/whoami.
   (function syncTokenAndShowCta() {
+    const banner = document.getElementById('workspace-auth-banner');
+    const loginLink = banner ? banner.querySelector('a[href="/login"]') : null;
+    const redirectParam = encodeURIComponent(window.location.pathname + window.location.search);
+    if (loginLink) {
+      loginLink.setAttribute('href', `/login?redirect=${redirectParam}`);
+    }
+
     const token = localStorage.getItem('access_token');
     if (token) {
       // Check if token is expired
@@ -377,30 +385,36 @@
           const payload = JSON.parse(atob(base64));
           const now = Math.floor(Date.now() / 1000);
           if (payload.exp && payload.exp > now) {
-            // Token is valid, ensure cookie is set
+            // Token is valid, ensure cookie is set (non-httpOnly helper for same-site APIs)
             document.cookie = `access_token=${token}; path=/; SameSite=Lax`;
-            // Hide banner if visible
-            const banner = document.getElementById('workspace-auth-banner');
             if (banner) banner.classList.add('hidden');
             return;
-          } else {
-            // Token is expired, clear it
-            localStorage.removeItem('access_token');
-            document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
           }
         }
-      } catch (e) {
-        // If we can't decode, clear the token
-        localStorage.removeItem('access_token');
-        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-      }
-      return;
+      } catch (_e) {}
+
+      // Token is invalid/expired, clear it and continue to cookie check
+      localStorage.removeItem('access_token');
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
     }
-    // No token: show banner with login button (no automatic redirect or Google flow)
-    const banner = document.getElementById('workspace-auth-banner');
-    if (banner) {
-      banner.classList.remove('hidden');
-    }
+
+    // No localStorage token: check cookie-based auth via backend diagnostic.
+    // If cookie exists, we should NOT show the banner (workspace can operate normally).
+    fetch('/api/v1/whoami', { credentials: 'include' })
+      .then((r) => r.json().catch(() => ({})))
+      .then((data) => {
+        const hasCookie = !!data?.hasCookie;
+        const hasAuthHeader = !!data?.hasAuthHeader;
+        if (hasCookie || hasAuthHeader) {
+          if (banner) banner.classList.add('hidden');
+        } else {
+          if (banner) banner.classList.remove('hidden');
+        }
+      })
+      .catch(() => {
+        // If whoami fails, show banner (safe default)
+        if (banner) banner.classList.remove('hidden');
+      });
   })();
 </script>
 
