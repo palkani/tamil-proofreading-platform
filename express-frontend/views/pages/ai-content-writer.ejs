@@ -224,6 +224,118 @@
       <div id="result-content"></div>
 
       <div id="result-metadata" class="metadata"></div>
+
+      <!-- Publish + Social Variants (shown only for Generated Content) -->
+      <div id="publish-tools" class="publish-tools" style="display: none;">
+        <div class="publish-grid">
+          <!-- Blog Publish -->
+          <div class="publish-card">
+            <div class="publish-card-header">
+              <h3 class="publish-card-title">Publish to Blog</h3>
+              <p class="publish-card-subtitle">Preview with a template, then publish to in-app blog.</p>
+            </div>
+
+            <div class="publish-row">
+              <label class="publish-label" for="blog-template-select">Template</label>
+              <select id="blog-template-select" class="form-select">
+                <option value="minimal" selected>Minimal</option>
+                <option value="howto">How To</option>
+                <option value="story">Story</option>
+              </select>
+            </div>
+
+            <div class="publish-row">
+              <label class="publish-label" for="blog-title-input">Title</label>
+              <input id="blog-title-input" class="form-input" placeholder="Blog title" />
+            </div>
+
+            <div class="publish-row">
+              <label class="publish-label" for="blog-slug-input">Slug</label>
+              <input id="blog-slug-input" class="form-input" placeholder="my-blog-post" />
+            </div>
+
+            <div class="publish-row">
+              <label class="publish-label" for="blog-meta-input">Meta description</label>
+              <textarea id="blog-meta-input" class="form-textarea" rows="2" placeholder="Short SEO description"></textarea>
+            </div>
+
+            <div class="publish-row">
+              <label class="publish-label" for="blog-keywords-input">Keywords</label>
+              <input id="blog-keywords-input" class="form-input" placeholder="tamil, writing, proofreading" />
+            </div>
+
+            <div class="publish-row">
+              <label class="publish-label" for="blog-status-select">Status</label>
+              <select id="blog-status-select" class="form-select">
+                <option value="draft" selected>Save as Draft</option>
+                <option value="published">Publish Now</option>
+              </select>
+            </div>
+
+            <div class="publish-actions">
+              <button id="blog-preview-btn" class="btn btn-secondary">Preview</button>
+              <button id="blog-publish-btn" class="btn btn-generate">Publish</button>
+            </div>
+
+            <div id="blog-publish-status" class="publish-status" style="display:none;"></div>
+
+            <div class="preview-block">
+              <div class="preview-header">
+                <div class="preview-title">Preview</div>
+                <div id="blog-reading-time" class="preview-meta"></div>
+              </div>
+              <div id="blog-preview" class="blog-preview"></div>
+            </div>
+          </div>
+
+          <!-- Social Variants -->
+          <div class="publish-card">
+            <div class="publish-card-header">
+              <h3 class="publish-card-title">Social Variants</h3>
+              <p class="publish-card-subtitle">Generate platform-ready copy to post manually.</p>
+            </div>
+
+            <div class="publish-row">
+              <label class="publish-label" for="reels-duration-select">Instagram Reels duration</label>
+              <select id="reels-duration-select" class="form-select">
+                <option value="15">15 seconds</option>
+                <option value="30" selected>30 seconds</option>
+                <option value="60">60 seconds</option>
+              </select>
+            </div>
+
+            <div class="publish-actions">
+              <button id="social-generate-btn" class="btn btn-generate">Generate Social Variants</button>
+            </div>
+
+            <div id="social-status" class="publish-status" style="display:none;"></div>
+
+            <div class="social-block">
+              <div class="social-header">
+                <div class="social-title">LinkedIn</div>
+                <button type="button" class="btn-icon-small" data-copy-target="linkedin-output" title="Copy">📋</button>
+              </div>
+              <textarea id="linkedin-output" class="form-textarea" rows="6" placeholder="Generated LinkedIn post will appear here..." readonly></textarea>
+            </div>
+
+            <div class="social-block">
+              <div class="social-header">
+                <div class="social-title">Facebook</div>
+                <button type="button" class="btn-icon-small" data-copy-target="facebook-output" title="Copy">📋</button>
+              </div>
+              <textarea id="facebook-output" class="form-textarea" rows="5" placeholder="Generated Facebook post will appear here..." readonly></textarea>
+            </div>
+
+            <div class="social-block">
+              <div class="social-header">
+                <div class="social-title">Instagram Reels Pack</div>
+                <button type="button" class="btn-icon-small" data-copy-target="reels-output" title="Copy">📋</button>
+              </div>
+              <textarea id="reels-output" class="form-textarea" rows="8" placeholder="Generated Reels script pack will appear here..." readonly></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Info Footer -->

@@ -143,15 +143,29 @@
 /* Suggestion card styles */
 .suggestion-card {
   @apply border rounded-2xl p-4 transition-all;
-  background: var(--bg-surface);
-  border-color: var(--border-soft);
-  color: var(--text-secondary);
-  box-shadow: 0 20px 40px rgba(0,0,0,0.45);
+  /* Dark premium card, but MUST keep text readable */
+  background: #0b1430;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e2e8f0; /* slate-200 */
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.35);
 }
 
 .suggestion-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   border-color: var(--color-primary);
+}
+
+/* Ensure generated Tailwind "text-gray-*" classes inside dark cards remain readable */
+.suggestion-card h5 {
+  color: #f8fafc; /* slate-50 */
+}
+.suggestion-card > p {
+  color: #cbd5e1; /* slate-300 */
+}
+/* The inner Original/Suggested box should stay light with dark text */
+.suggestion-card .bg-gray-50 {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #111827;
 }
 
 /* Enhanced Toolbar Styles */

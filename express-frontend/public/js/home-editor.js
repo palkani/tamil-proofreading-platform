@@ -221,6 +221,7 @@ class HomeEditor {
     this.insertLinkBtn = document.getElementById('home-insert-link-btn');
     this.searchBtn = document.getElementById('home-search-btn');
     this.maxWords = 200;
+    this.limitToastTimer = null;
     
     // Auto-analysis state
     this.analysisTimeout = null;
@@ -507,6 +508,33 @@ class HomeEditor {
         this.handleKeyDown(e);
       }
     });
+    // Hard cap: prevent inserting more words once limit is reached (typing + paste)
+    this.editor.addEventListener('beforeinput', (e) => {
+      try {
+        const type = e.inputType || '';
+        // Only care about insertions
+        const isInsert =
+          type.startsWith('insert') ||
+          type === 'insertFromPaste' ||
+          type === 'insertParagraph' ||
+          type === 'insertLineBreak';
+        if (!isInsert) return;
+
+        const text = this.getPlainText();
+        const wc = this.countWords(text);
+        if (wc < this.maxWords) return;
+
+        // Allow pure whitespace inserts (e.g., formatting artifacts), block actual content.
+        const data = typeof e.data === 'string' ? e.data : '';
+        const hasNonWs = data ? /\S/.test(data) : true; // if unknown, be safe and block
+        if (!hasNonWs) return;
+
+        e.preventDefault();
+        this.showWordLimitToast();
+      } catch (_e2) {
+        // non-fatal
+      }
+    });
     this.editor.addEventListener('input', () => {
       this.handleInput();
       this.showAutocomplete();
@@ -687,20 +715,21 @@ class HomeEditor {
   handleInput() {
     const fullText = this.editor.textContent || '';
     console.log('[INPUT-HANDLER] Current text length:', fullText.length, 'Previous length:', this.previousText.length);
-    
-    // Detect if space was just added
+
+    // Detect if space was just added (we still enforce word limit in all cases)
     const hasSpaceNow = fullText.length > this.previousText.length && fullText[fullText.length - 1] === ' ';
-    
     if (hasSpaceNow) {
       console.log('[INPUT-HANDLER] Space detected! Calling handleSpaceInInput');
       this.handleSpaceInInput();
-    } else {
-      this.enforceWordLimit();
-      this.updateWordCount();
-      this.scheduleAutoAnalysis();
     }
-    
-    this.previousText = fullText; // Update previous text for next comparison
+
+    // ALWAYS enforce 200-word cap (space typing previously skipped this, allowing >200 words)
+    this.enforceWordLimit();
+    this.updateWordCount();
+    this.scheduleAutoAnalysis();
+
+    // Update previous text for next comparison (after truncation, if any)
+    this.previousText = this.editor.textContent || '';
   }
   
   handleSpaceInInput() {
@@ -1230,9 +1259,23 @@ class HomeEditor {
     const isOverLimit = count >= this.maxWords;
     
     if (this.charCount) {
-      this.charCount.textContent = `${count} / ${this.maxWords} words`;
+      this.charCount.textContent = `${count} / ${this.maxWords} words${isOverLimit ? ' (limit reached)' : ''}`;
       this.charCount.style.color = isOverLimit ? '#dc2626' : '#6b7280';
     }
+  }
+
+  showWordLimitToast() {
+    // Lightweight UX: reuse the word counter area (no modal)
+    if (!this.charCount) return;
+    const original = this.charCount.textContent;
+    this.charCount.textContent = `Max ${this.maxWords} words on Home demo. Please sign in for full access.`;
+    this.charCount.style.color = '#dc2626';
+    if (this.limitToastTimer) clearTimeout(this.limitToastTimer);
+    this.limitToastTimer = setTimeout(() => {
+      this.limitToastTimer = null;
+      // Restore the normal counter (in case user deletes words)
+      this.updateWordCount();
+    }, 1800);
   }
   
   getPlainText() {

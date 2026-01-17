@@ -79,6 +79,102 @@ router.get('/tools/ai-content-writer', (req, res) => {
   });
 });
 
+// Blog (public) - hosted posts
+router.get('/blog', async (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('blog') || getSeoData('home');
+  const page = Number(req.query.page || 1) || 1;
+  try {
+    const backendRes = await axios.get(`${BACKEND_URL}/blog/posts`, {
+      params: { page, limit: 12 },
+      timeout: 10000,
+      validateStatus: () => true,
+    });
+    if (backendRes.status < 200 || backendRes.status >= 300) {
+      const msg = backendRes.data?.error || `HTTP ${backendRes.status}`;
+      return res.render('pages/blog-index', {
+        title: 'Blog | ProofTamil',
+        seo,
+        user,
+        posts: [],
+        error: msg,
+      });
+    }
+    const posts = backendRes.data?.posts || [];
+    return res.render('pages/blog-index', {
+      title: 'Blog | ProofTamil',
+      seo,
+      user,
+      posts,
+      error: null,
+    });
+  } catch (e) {
+    return res.render('pages/blog-index', {
+      title: 'Blog | ProofTamil',
+      seo,
+      user,
+      posts: [],
+      error: e.message || 'Failed to load posts',
+    });
+  }
+});
+
+router.get('/blog/:slug', async (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('blogPost') || getSeoData('home');
+  const slug = String(req.params.slug || '').trim();
+  try {
+    const backendRes = await axios.get(`${BACKEND_URL}/blog/posts/${encodeURIComponent(slug)}`, {
+      timeout: 10000,
+      validateStatus: () => true,
+    });
+    if (backendRes.status === 404) {
+      const seoErr = getSeoData('error');
+      return res.status(404).render('pages/error', {
+        title: 'Not Found',
+        seo: seoErr,
+        message: 'Blog post not found.',
+        user,
+      });
+    }
+    if (backendRes.status < 200 || backendRes.status >= 300) {
+      const msg = backendRes.data?.error || `HTTP ${backendRes.status}`;
+      return res.render('pages/blog-post', {
+        title: 'Blog | ProofTamil',
+        seo,
+        user,
+        post: null,
+        error: msg,
+      });
+    }
+    const post = backendRes.data?.post;
+    if (!post) {
+      return res.render('pages/blog-post', {
+        title: 'Blog | ProofTamil',
+        seo,
+        user,
+        post: null,
+        error: 'Invalid backend response',
+      });
+    }
+    return res.render('pages/blog-post', {
+      title: `${post.title} | ProofTamil`,
+      seo,
+      user,
+      post,
+      error: null,
+    });
+  } catch (e) {
+    return res.render('pages/blog-post', {
+      title: 'Blog | ProofTamil',
+      seo,
+      user,
+      post: null,
+      error: e.message || 'Failed to load post',
+    });
+  }
+});
+
 // Free Tamil Editor landing page - accessible to everyone (SEO)
 router.get('/free-tamil-editor', (req, res) => {
   const user = getCurrentUser(req);

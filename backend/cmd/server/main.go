@@ -111,6 +111,7 @@ func main() {
 			err = db.AutoMigrate(
 				&models.User{},
 				&models.Submission{},
+				&models.BlogPost{},
 				&models.Payment{},
 				&models.Usage{},
 				&models.RefreshToken{},
@@ -167,6 +168,10 @@ func main() {
 		// IMPORTANT: Submit supports anonymous inline proofreading when save_draft=false.
 		// Auth is enforced inside the handler only for draft-saving mode.
 		api.POST("/submit", middleware.OptionalAuthMiddleware(cfg.JWTSecret), h.SubmitText)
+
+		// Public blog routes
+		api.GET("/blog/posts", h.BlogListPublished)
+		api.GET("/blog/posts/:slug", h.BlogGetPublishedBySlug)
 	}
 
 	// Protected routes enforce JWT validation before any DB access
@@ -182,6 +187,10 @@ func main() {
 		protected.DELETE("/submissions/:id", h.ArchiveSubmission)
 		protected.GET("/stream/submissions/:id", h.StreamSubmission)
 		protected.GET("/archive", h.GetArchivedSubmissions)
+		// Blog (protected)
+		protected.POST("/blog/posts", h.BlogCreatePost)
+		protected.PUT("/blog/posts/:id", h.BlogUpdatePost)
+		protected.GET("/blog/me/posts", h.BlogListMyPosts)
 		protected.POST("/contact", h.SubmitContactMessage)
 		protected.POST("/payments/create", h.CreatePayment)
 		protected.POST("/payments/verify", h.VerifyPayment)

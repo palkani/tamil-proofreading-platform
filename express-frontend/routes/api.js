@@ -950,6 +950,44 @@ router.post('/ai-content-writer/generate-content', async (req, res) => {
   }
 });
 
+// Render a blog template for preview/publishing (deterministic, no AI)
+router.post('/ai-content-writer/render-blog-template', async (req, res) => {
+  try {
+    if (!contentWriterService || typeof contentWriterService.renderBlogTemplate !== 'function') {
+      return res.status(503).json({
+        error: 'AI Content Writer service is not available',
+      });
+    }
+    const result = await contentWriterService.renderBlogTemplate(req.body);
+    return res.json(result);
+  } catch (error) {
+    console.error('[AI-CONTENT-WRITER] Render blog template error:', error.message);
+    res.status(500).json({
+      error: error.message || 'Template render failed',
+      details: error.details || error.message,
+    });
+  }
+});
+
+// Generate social variants (LinkedIn/Facebook/Instagram Reels) - copy/export only
+router.post('/ai-content-writer/social-variants', async (req, res) => {
+  try {
+    if (!contentWriterService || typeof contentWriterService.generateSocialVariants !== 'function') {
+      return res.status(503).json({
+        error: 'AI Content Writer service is not available',
+      });
+    }
+    const result = await contentWriterService.generateSocialVariants(req.body);
+    return res.json(result);
+  } catch (error) {
+    console.error('[AI-CONTENT-WRITER] Social variants error:', error.message);
+    res.status(500).json({
+      error: error.message || 'Social variant generation failed',
+      details: error.details || error.message,
+    });
+  }
+});
+
 // Improve content endpoint
 router.post('/ai-content-writer/improve-content', async (req, res) => {
   try {
@@ -1001,6 +1039,36 @@ router.post('/ai-content-writer/translate', async (req, res) => {
 });
 
 // ============= END AI CONTENT WRITER API ROUTES =============
+
+// ============= BLOG PUBLISH API (Express -> Go backend) =============
+// Create a blog post in the backend (requires auth cookies/Authorization)
+router.post('/blog/publish', async (req, res) => {
+  try {
+    const url = `${BACKEND_URL}/blog/posts`;
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    if (req.headers.authorization) {
+      headers.Authorization = req.headers.authorization;
+    }
+    if (req.headers.cookie) {
+      headers.cookie = req.headers.cookie; // forward httpOnly cookies
+    }
+
+    const backendRes = await axios.post(url, req.body, {
+      headers,
+      withCredentials: true,
+      validateStatus: () => true,
+    });
+
+    res.status(backendRes.status).json(backendRes.data);
+  } catch (error) {
+    console.error('[BLOG-PUBLISH] error:', error.message);
+    res.status(502).json({ error: 'Blog publish failed', details: error.message });
+  }
+});
+
+// ============= END BLOG PUBLISH API =============
 
 // CRITICAL: IME suggestions endpoint MUST be before router.all('/*') catch-all
 // IME suggestions endpoint - proxy to backend

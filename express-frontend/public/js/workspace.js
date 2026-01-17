@@ -356,6 +356,10 @@ class WorkspaceController {
     this.pasteAnalyzeTimeout = null;
     this.pasteSuppressUntil = 0; // suppress secondary autoAnalyze triggers from handleEditorChange
     this.suppressSubmitUntil = 0; // suppress scheduleSubmitThrottled/runAutoSubmit right after paste
+
+    // AI submission result tracking (prevents multiple concurrent poll loops / SSE streams)
+    this.analysisSeq = 0;
+    this.activeEventSource = null;
     
     // PART D: Prefix cache for suggestions
     this.suggestionCache = new Map(); // key: "mode:token", value: { suggestions, timestamp }
@@ -368,7 +372,7 @@ class WorkspaceController {
    * Prefer SSE stream (1 request) over polling (many requests).
    * Falls back to polling with backoff if EventSource is unavailable or fails.
    */
-  async awaitSubmissionResult(submissionId) {
+  async awaitSubmissionResult(submissionId, seq = this.analysisSeq) {
     if (!submissionId) return {};
 
     // 1) Try SSE (best UX + minimal requests)
@@ -379,19 +383,36 @@ class WorkspaceController {
         console.log('[AI] Attempting SSE stream for submission', submissionId, url);
 
         const payload = await new Promise((resolve, reject) => {
+          // Close any prior stream so we never have multiple streams/pollers running.
+          if (this.activeEventSource) {
+            try { this.activeEventSource.close(); } catch (_e) {}
+            this.activeEventSource = null;
+          }
+
           const es = new EventSource(url, { withCredentials: true });
+          this.activeEventSource = es;
           const timeout = setTimeout(() => {
             try { es.close(); } catch (_e) {}
+            // If we waited a long time and still no result, fall back to polling.
             reject(new Error('sse_timeout'));
-          }, 30000);
+          }, 90000);
 
           const cleanup = () => {
             clearTimeout(timeout);
             try { es.close(); } catch (_e) {}
+            if (this.activeEventSource === es) {
+              this.activeEventSource = null;
+            }
           };
 
           es.addEventListener('result', (evt) => {
             try {
+              // Ignore stale results (e.g., user pasted new text while old request was in-flight)
+              if (seq !== this.analysisSeq) {
+                cleanup();
+                resolve({});
+                return;
+              }
               const data = JSON.parse(evt.data || '{}');
               cleanup();
               resolve(data);
@@ -419,6 +440,11 @@ class WorkspaceController {
 
           es.onerror = () => {
             cleanup();
+            // If user already started a newer analysis, don't fall back (avoid extra numbered calls)
+            if (seq !== this.analysisSeq) {
+              resolve({});
+              return;
+            }
             reject(new Error('sse_error'));
           };
         });
@@ -430,7 +456,7 @@ class WorkspaceController {
     }
 
     // 2) Fallback: polling with backoff (reduces request spam vs tight loops)
-    return await this.pollSubmission(submissionId);
+    return await this.pollSubmission(submissionId, seq);
   }
 
   /**
@@ -3238,6 +3264,15 @@ class WorkspaceController {
     if (this.abortController) {
       this.abortController.abort();
     }
+
+    // Cancel any in-flight SSE stream from a previous submission (prevents multiple open streams)
+    if (this.activeEventSource) {
+      try { this.activeEventSource.close(); } catch (_e) {}
+      this.activeEventSource = null;
+    }
+
+    // New analysis sequence (used to cancel stale SSE/poll watchers)
+    const analysisSeq = ++this.analysisSeq;
     
     this.isAnalyzing = true;
     this.abortController = new AbortController();
@@ -3275,7 +3310,7 @@ class WorkspaceController {
       if (response.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
         const submissionId = data.submission?.id;
         console.log('[AI] submit accepted, awaiting completion', submissionId);
-        data = await this.awaitSubmissionResult(submissionId);
+        data = await this.awaitSubmissionResult(submissionId, analysisSeq);
         // If polling didn't return a completed payload, keep UI in "analyzing" instead of claiming "no issues".
         const polledStatus = String(data?.submission?.status || '').toLowerCase();
         if (!data?.submission || (polledStatus && polledStatus !== 'completed' && polledStatus !== 'failed')) {
@@ -3838,16 +3873,19 @@ class WorkspaceController {
     this.showNotification('All suggestions applied!', 'success');
   }
 
-  async pollSubmission(submissionId) {
+  async pollSubmission(submissionId, seq = this.analysisSeq) {
     if (!submissionId) return {};
     // Backend transitions: pending -> processing -> completed/failed.
     // We must keep polling through "processing" (previously we stopped too early).
     const maxTries = 12;
     const delays = [800, 1200, 1800, 2500, 3500, 5000, 7000, 9000, 11000, 13000, 15000, 15000];
     for (let i = 0; i < maxTries; i++) {
+      // If a newer analysis started, stop this poller immediately (prevents extra numbered calls).
+      if (seq !== this.analysisSeq) return {};
       const waitMs = delays[i] || 15000;
       await new Promise((r) => setTimeout(r, waitMs));
       try {
+        if (seq !== this.analysisSeq) return {};
         // Go backend exposes this under /api/v1 (Vercel rewrite forwards it to Cloud Run backend).
         const res = await this.apiFetch(`/api/v1/submissions/${submissionId}`, { method: 'GET' });
         if (!res.ok) continue;

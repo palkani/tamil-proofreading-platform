@@ -401,10 +401,230 @@ Return ONLY valid JSON.`;
   }
 }
 
+function countWords(text) {
+  const s = String(text || '').trim();
+  if (!s) return 0;
+  return s.split(/\s+/).filter(Boolean).length;
+}
+
+function readingTimeMinutes(text) {
+  const wc = countWords(text);
+  // 200 wpm heuristic
+  return Math.max(1, Math.ceil(wc / 200));
+}
+
+function makeExcerpt(text, maxLen = 180) {
+  const s = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  if (s.length <= maxLen) return s;
+  return s.slice(0, maxLen).replace(/\s+\S*$/, '').trim() + '…';
+}
+
+function escapeHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Render a deterministic blog template (no AI required).
+ * Returns HTML plus excerpt and readingTimeMinutes.
+ */
+async function renderBlogTemplate(options) {
+  const {
+    template_id = 'minimal',
+    title = '',
+    content = '',
+    language = 'tamil',
+    meta_description = '',
+    keywords = '',
+  } = options || {};
+
+  const safeTitle = String(title || '').trim() || 'Untitled';
+  const contentText = String(content || '').trim();
+  const paragraphs = contentText.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+  const readMins = readingTimeMinutes(contentText);
+  const excerpt = String(meta_description || '').trim() || makeExcerpt(contentText, 190);
+
+  const bodyHtml = paragraphs
+    .map((p) => `<p>${escapeHtml(p)}</p>`)
+    .join('\n');
+
+  // Template variants differ in header + section styling, but remain simple + safe.
+  let headerKicker = '';
+  let subhead = '';
+  if (template_id === 'howto') {
+    headerKicker = 'How-to';
+    subhead = `${readMins} min read • ${escapeHtml(language)}`;
+  } else if (template_id === 'story') {
+    headerKicker = 'Story';
+    subhead = `${readMins} min read • ${escapeHtml(language)}`;
+  } else {
+    headerKicker = 'Blog';
+    subhead = `${readMins} min read • ${escapeHtml(language)}`;
+  }
+
+  const html = `
+<article class="prooftamil-blog ${escapeHtml(template_id)}" data-template="${escapeHtml(template_id)}">
+  <header>
+    <div class="kicker">${escapeHtml(headerKicker)}</div>
+    <h1>${escapeHtml(safeTitle)}</h1>
+    <div class="subhead">${subhead}</div>
+    ${excerpt ? `<p class="excerpt">${escapeHtml(excerpt)}</p>` : ''}
+    ${keywords ? `<p class="keywords">${escapeHtml(keywords)}</p>` : ''}
+  </header>
+  <section class="content">
+    ${bodyHtml}
+  </section>
+</article>`.trim();
+
+  return {
+    success: true,
+    template_id,
+    html,
+    excerpt,
+    reading_time_minutes: readMins,
+    language,
+  };
+}
+
+/**
+ * Generate social variants (LinkedIn/Facebook/Instagram Reels pack) using Gemini.
+ * Copy/export only; no direct posting.
+ */
+async function generateSocialVariants(options) {
+  const {
+    title = '',
+    content = '',
+    language = 'tamil',
+    tone = 'professional',
+    reels_duration_seconds = 30,
+  } = options || {};
+
+  const baseTitle = String(title || '').trim();
+  const baseContent = String(content || '').trim();
+  if (!baseContent) {
+    throw createServiceError('Content is required', 'Provide content to generate social variants.');
+  }
+
+  const duration = [15, 30, 60].includes(Number(reels_duration_seconds))
+    ? Number(reels_duration_seconds)
+    : 30;
+
+  const schema = {
+    type: 'object',
+    properties: {
+      success: { type: 'boolean' },
+      variants: {
+        type: 'object',
+        properties: {
+          linkedin: {
+            type: 'object',
+            properties: { text: { type: 'string' } },
+            required: ['text'],
+          },
+          facebook: {
+            type: 'object',
+            properties: { text: { type: 'string' } },
+            required: ['text'],
+          },
+          instagram_reels: {
+            type: 'object',
+            properties: {
+              duration_seconds: { type: 'integer' },
+              hook: { type: 'string' },
+              scene_beats: { type: 'array', items: { type: 'string' } },
+              voiceover_script: { type: 'string' },
+              on_screen_text: { type: 'array', items: { type: 'string' } },
+              caption: { type: 'string' },
+              hashtags: { type: 'array', items: { type: 'string' } },
+            },
+            required: [
+              'duration_seconds',
+              'hook',
+              'scene_beats',
+              'voiceover_script',
+              'on_screen_text',
+              'caption',
+              'hashtags',
+            ],
+          },
+        },
+        required: ['linkedin', 'facebook', 'instagram_reels'],
+      },
+      metadata: {
+        type: 'object',
+        properties: {
+          language: { type: 'string' },
+          tone: { type: 'string' },
+          model: { type: 'string' },
+        },
+        required: ['language', 'tone', 'model'],
+      },
+    },
+    required: ['success', 'variants', 'metadata'],
+  };
+
+  const languageRule =
+    String(language).toLowerCase() === 'tamil'
+      ? 'Write outputs in Tamil (தமிழ்) only.'
+      : String(language).toLowerCase() === 'bilingual'
+        ? 'Write bilingual outputs: Tamil first, then English.'
+        : 'Write outputs in English only.';
+
+  const systemText = `You are a social media copywriter.
+Tone: ${tone}
+${languageRule}
+
+Return ONLY valid JSON (no markdown).
+LinkedIn: keep under 2500 characters, include line breaks and a gentle CTA.
+Facebook: concise, friendly, shareable.
+Instagram Reels: produce a creator pack with hook + beats + voiceover + on-screen text + caption + hashtags.
+Avoid sensitive claims and avoid hallucinating facts.`;
+
+  const userText = `Title: ${baseTitle}
+Content:
+${baseContent}
+
+Instagram Reels duration: ${duration} seconds.
+
+Return JSON with shape:
+{
+  "success": true,
+  "variants": {
+    "linkedin": {"text": "..."},
+    "facebook": {"text": "..."},
+    "instagram_reels": {
+      "duration_seconds": ${duration},
+      "hook": "...",
+      "scene_beats": ["..."],
+      "voiceover_script": "...",
+      "on_screen_text": ["..."],
+      "caption": "...",
+      "hashtags": ["#..."]
+    }
+  },
+  "metadata": {"language": "${language}", "tone": "${tone}", "model": "gemini-2.5-flash"}
+}`;
+
+  const result = await geminiGenerate(systemText, userText, schema, 3072);
+  if (!result || result.success !== true) {
+    throw createServiceError('Social variant generation failed', `Invalid AI response: ${JSON.stringify(result).slice(0, 400)}`);
+  }
+  result.metadata = result.metadata || {};
+  result.metadata.model = result.metadata.model || 'gemini-2.5-flash';
+  return result;
+}
+
 module.exports = {
   healthCheck,
   generateContent,
   improveContent,
-  translateContent
+  translateContent,
+  renderBlogTemplate,
+  generateSocialVariants
 };
 

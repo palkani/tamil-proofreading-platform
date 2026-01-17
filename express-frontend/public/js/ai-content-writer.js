@@ -229,6 +229,7 @@
     const resultSection = document.getElementById('result-section');
     const resultContent = document.getElementById('result-content');
     const resultMetadata = document.getElementById('result-metadata');
+    const publishTools = document.getElementById('publish-tools');
 
     if (!resultSection || !resultContent) return;
 
@@ -308,7 +309,14 @@
           </div>
         `;
       }
+
+      // Show publish + social tools for generated content only
+      if (publishTools) {
+        publishTools.style.display = 'block';
+        initPublishAndSocial(data);
+      }
     } else if (type === 'improve' && data.improved) {
+      if (publishTools) publishTools.style.display = 'none';
       html += `
         <div class="content-block">
           <h3 class="content-block-title">Original</h3>
@@ -320,6 +328,7 @@
         </div>
       `;
     } else if (type === 'translate' && data.translated) {
+      if (publishTools) publishTools.style.display = 'none';
       html += `
         <div class="content-block">
           <h3 class="content-block-title">Original (${escapeHtml(data.from_language)})</h3>
@@ -337,6 +346,239 @@
 
     // Scroll to result
     resultSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function slugify(text) {
+    return String(text || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 200) || 'post';
+  }
+
+  function setStatus(el, msg, kind) {
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('error', 'success');
+    if (kind) el.classList.add(kind);
+    el.style.display = 'block';
+  }
+
+  async function initPublishAndSocial(data) {
+    // Elements
+    const templateSelect = document.getElementById('blog-template-select');
+    const titleInput = document.getElementById('blog-title-input');
+    const slugInput = document.getElementById('blog-slug-input');
+    const metaInput = document.getElementById('blog-meta-input');
+    const keywordsInput = document.getElementById('blog-keywords-input');
+    const statusSelect = document.getElementById('blog-status-select');
+    const previewBtn = document.getElementById('blog-preview-btn');
+    const publishBtn = document.getElementById('blog-publish-btn');
+    const publishStatus = document.getElementById('blog-publish-status');
+    const previewEl = document.getElementById('blog-preview');
+    const readingTimeEl = document.getElementById('blog-reading-time');
+
+    const socialBtn = document.getElementById('social-generate-btn');
+    const socialStatus = document.getElementById('social-status');
+    const durationSelect = document.getElementById('reels-duration-select');
+    const linkedinOut = document.getElementById('linkedin-output');
+    const facebookOut = document.getElementById('facebook-output');
+    const reelsOut = document.getElementById('reels-output');
+
+    // Inputs from generated content
+    const language = data?.metadata?.language || document.getElementById('language-select')?.value || 'tamil';
+    const tone = document.getElementById('tone-select')?.value || data?.metadata?.tone || 'professional';
+    const generatedTitle = data?.content?.title || '';
+    const generatedMeta = data?.content?.meta_description || '';
+    const generatedKeywords = data?.content?.keywords || '';
+    const generatedContent = data?.content?.content || '';
+
+    // Set defaults once (do not clobber user edits after first init)
+    if (titleInput && !titleInput.dataset.init) {
+      titleInput.value = generatedTitle || (document.getElementById('prompt-input')?.value || 'Untitled');
+      titleInput.dataset.init = '1';
+    }
+    if (slugInput && !slugInput.dataset.init) {
+      slugInput.value = slugify(titleInput ? titleInput.value : generatedTitle);
+      slugInput.dataset.init = '1';
+    }
+    if (metaInput && !metaInput.dataset.init) {
+      metaInput.value = generatedMeta || '';
+      metaInput.dataset.init = '1';
+    }
+    if (keywordsInput && !keywordsInput.dataset.init) {
+      keywordsInput.value = generatedKeywords || '';
+      keywordsInput.dataset.init = '1';
+    }
+
+    if (titleInput && slugInput) {
+      titleInput.addEventListener('input', () => {
+        // only auto-update slug if user hasn't manually edited it
+        if (!slugInput.dataset.touched) {
+          slugInput.value = slugify(titleInput.value);
+        }
+      });
+      slugInput.addEventListener('input', () => {
+        slugInput.dataset.touched = '1';
+      });
+    }
+
+    let lastTemplateHtml = '';
+    let lastExcerpt = '';
+
+    async function renderPreview() {
+      if (!previewEl) return;
+      setStatus(publishStatus, 'Rendering preview...', null);
+      try {
+        const response = await fetch('/api/ai-content-writer/render-blog-template', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            template_id: templateSelect ? templateSelect.value : 'minimal',
+            title: titleInput ? titleInput.value : generatedTitle,
+            content: generatedContent,
+            language,
+            meta_description: metaInput ? metaInput.value : generatedMeta,
+            keywords: keywordsInput ? keywordsInput.value : generatedKeywords,
+          }),
+        });
+        const json = await response.json();
+        if (!response.ok || !json?.success) {
+          throw new Error(json?.error || 'Preview render failed');
+        }
+        lastTemplateHtml = json.html || '';
+        lastExcerpt = json.excerpt || '';
+        previewEl.innerHTML = lastTemplateHtml;
+        if (readingTimeEl) {
+          readingTimeEl.textContent = `${json.reading_time_minutes || 1} min read`;
+        }
+        setStatus(publishStatus, 'Preview updated.', 'success');
+        setTimeout(() => { if (publishStatus) publishStatus.style.display = 'none'; }, 1200);
+      } catch (e) {
+        setStatus(publishStatus, e.message || 'Preview render failed', 'error');
+      }
+    }
+
+    if (previewBtn && !previewBtn.dataset.bound) {
+      previewBtn.dataset.bound = '1';
+      previewBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        renderPreview();
+      });
+    }
+    if (templateSelect && !templateSelect.dataset.bound) {
+      templateSelect.dataset.bound = '1';
+      templateSelect.addEventListener('change', () => renderPreview());
+    }
+
+    // Render once on init for immediate preview
+    if (previewEl && !previewEl.dataset.init) {
+      previewEl.dataset.init = '1';
+      await renderPreview();
+    }
+
+    if (publishBtn && !publishBtn.dataset.bound) {
+      publishBtn.dataset.bound = '1';
+      publishBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        setStatus(publishStatus, 'Publishing...', null);
+        try {
+          if (!lastTemplateHtml) {
+            await renderPreview();
+          }
+          const resp = await fetch('/api/blog/publish', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              title: titleInput ? titleInput.value : generatedTitle,
+              slug: slugInput ? slugInput.value : slugify(generatedTitle),
+              language,
+              content_html: lastTemplateHtml,
+              content_text: generatedContent,
+              excerpt: lastExcerpt,
+              meta_description: metaInput ? metaInput.value : generatedMeta,
+              keywords: keywordsInput ? keywordsInput.value : generatedKeywords,
+              status: statusSelect ? statusSelect.value : 'draft',
+            }),
+          });
+          const json = await resp.json();
+          if (!resp.ok || !json?.success) {
+            throw new Error(json?.error || 'Publish failed');
+          }
+          const slug = json.post?.slug || (slugInput ? slugInput.value : '');
+          setStatus(
+            publishStatus,
+            `Published! View: /blog/${slug}`,
+            'success'
+          );
+        } catch (err) {
+          setStatus(publishStatus, err.message || 'Publish failed', 'error');
+        }
+      });
+    }
+
+    // Copy buttons (social)
+    document.querySelectorAll('[data-copy-target]').forEach((btn) => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const id = btn.getAttribute('data-copy-target');
+        const el = id ? document.getElementById(id) : null;
+        if (!el) return;
+        try {
+          await navigator.clipboard.writeText(el.value || '');
+          alert('Copied!');
+        } catch (_e2) {
+          alert('Copy failed');
+        }
+      });
+    });
+
+    if (socialBtn && !socialBtn.dataset.bound) {
+      socialBtn.dataset.bound = '1';
+      socialBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        setStatus(socialStatus, 'Generating social variants...', null);
+        try {
+          const duration = Number(durationSelect ? durationSelect.value : 30) || 30;
+          const resp = await fetch('/api/ai-content-writer/social-variants', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: titleInput ? titleInput.value : generatedTitle,
+              content: generatedContent,
+              language,
+              tone,
+              reels_duration_seconds: duration,
+            }),
+          });
+          const json = await resp.json();
+          if (!resp.ok || !json?.success) {
+            throw new Error(json?.error || 'Social variant generation failed');
+          }
+          if (linkedinOut) linkedinOut.value = json.variants?.linkedin?.text || '';
+          if (facebookOut) facebookOut.value = json.variants?.facebook?.text || '';
+          if (reelsOut) {
+            const r = json.variants?.instagram_reels || {};
+            reelsOut.value =
+              `Duration: ${r.duration_seconds || duration}s\n\n` +
+              `Hook:\n${r.hook || ''}\n\n` +
+              `Scene beats:\n${(r.scene_beats || []).map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\n` +
+              `Voiceover:\n${r.voiceover_script || ''}\n\n` +
+              `On-screen text:\n${(r.on_screen_text || []).map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\n` +
+              `Caption:\n${r.caption || ''}\n\n` +
+              `Hashtags:\n${(r.hashtags || []).join(' ')}`;
+          }
+          setStatus(socialStatus, 'Social variants generated.', 'success');
+          setTimeout(() => { if (socialStatus) socialStatus.style.display = 'none'; }, 1200);
+        } catch (err) {
+          setStatus(socialStatus, err.message || 'Social variant generation failed', 'error');
+        }
+      });
+    }
   }
 
   function formatContent(content) {
