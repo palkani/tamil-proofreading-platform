@@ -70,24 +70,6 @@ func slugify(s string) string {
 	return s
 }
 
-// best-effort html sanitization without adding new deps (strip scripts + inline event handlers).
-func sanitizeHTML(s string) string {
-	if s == "" {
-		return s
-	}
-	out := s
-	// Remove script blocks
-	reScript := regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	out = reScript.ReplaceAllString(out, "")
-	// Remove inline event handlers like onclick="..."
-	reOnAttr := regexp.MustCompile(`(?i)\\son\\w+\\s*=\\s*(".*?"|'.*?'|[^\\s>]+)`)
-	out = reOnAttr.ReplaceAllString(out, "")
-	// Remove javascript: URLs in href/src
-	reJsUrl := regexp.MustCompile(`(?i)(href|src)\\s*=\\s*("javascript:[^"]*"|'javascript:[^']*'|javascript:[^\\s>]+)`)
-	out = reJsUrl.ReplaceAllString(out, "")
-	return out
-}
-
 func normalizeStatus(s string) models.BlogPostStatus {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case string(models.BlogStatusPublished):

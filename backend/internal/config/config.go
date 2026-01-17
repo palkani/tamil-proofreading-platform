@@ -23,6 +23,7 @@ type Config struct {
 	RefreshCookieKey          []byte
 	OpenAIAPIKey              string
 	GoogleGenAIKey            string
+	AnthropicAPIKey           string
 	StripeSecretKey           string
 	StripeWebhookSecret       string
 	RazorpayKeyID             string
@@ -94,6 +95,7 @@ func Load() *Config {
 		RefreshCookieKey:      refreshCookieKey,
 		OpenAIAPIKey:          getEnv("OPENAI_API_KEY", ""),
 		GoogleGenAIKey:        geminiKey,
+		AnthropicAPIKey:       getEnv("ANTHROPIC_API_KEY", ""),
 		StripeSecretKey:       getEnv("STRIPE_SECRET_KEY", ""),
 		StripeWebhookSecret:   getEnv("STRIPE_WEBHOOK_SECRET", ""),
 		RazorpayKeyID:         getEnv("RAZORPAY_KEY_ID", ""),

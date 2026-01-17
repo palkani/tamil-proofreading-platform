@@ -8,6 +8,7 @@ import (
         "io"
         "log"
         "net/http"
+        "os"
         "strings"
         "time"
 )
@@ -26,7 +27,7 @@ Find these error types:
 RULES (STRICT):
 - Return ONLY valid JSON. No markdown, no code fences.
 - Return corrected_text and corrections array
-- Each correction: {original, corrected, reason (Tamil), type}
+- Each correction: {"original": "...", "corrected": "...", "reason": "...", "type": "...", "start_index": 0, "end_index": 0}
 - If original = corrected → DO NOT include it
 - Only include actual errors, NO alternatives for correct words
 - Preserve meaning exactly
@@ -37,7 +38,7 @@ JSON FORMAT:
 {
   "corrected_text": "corrected Tamil text",
   "corrections": [
-    {original: "wrong", corrected: "fixed", reason: "தமிழ் விளக்கம்", type: "spelling|grammar|punctuation|incomplete|space|sandhi"}
+    {"original": "wrong", "corrected": "fixed", "reason": "தமிழ் விளக்கம்", "type": "spelling|grammar|punctuation|incomplete|space|sandhi", "start_index": 0, "end_index": 0}
   ]
 }
 
@@ -65,10 +66,11 @@ var geminiClient = &http.Client{
         },
 }
 
-// CallGeminiProofread calls Gemini 2.5 Flash with the proofreading prompt
-func CallGeminiProofread(userText string, model string, apiKey string) (string, error) {
+// CallGeminiProofread calls Gemini with the proofreading prompt.
+// maxOutputTokens is a latency lever: smaller outputs return faster.
+func CallGeminiProofread(userText string, model string, apiKey string, maxOutputTokens int) (string, error) {
         if apiKey == "" {
-                return "", fmt.Errorf("API key not provided")
+                return "", &ProviderError{Provider: "gemini", Message: "API key not provided", Retryable: false}
         }
 
         startTime := time.Now()
@@ -82,8 +84,11 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
         url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
                 model, apiKey)
 
+        if maxOutputTokens <= 0 {
+                maxOutputTokens = 2048
+        }
+
         // Request payload with optimized settings for faster response
-        // - maxOutputTokens increased to 4096 (from 2048) to handle long responses
         // - Lower temperature for more deterministic output
         payload := map[string]interface{}{
                 "contents": []map[string]interface{}{
@@ -99,7 +104,7 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
                         "temperature":      0.1,
                         "topP":             0.8,
                         "topK":             40,
-                        "maxOutputTokens":  4096,
+                        "maxOutputTokens":  maxOutputTokens,
                         "responseMimeType": "application/json",
                 },
         }
@@ -134,8 +139,24 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
                 return "", err
         }
 
-        bodyStr := string(bodyBytes)
-        log.Printf("[GEMINI] Raw response: %s", bodyStr)
+        if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+                msg := strings.TrimSpace(string(bodyBytes))
+                if len(msg) > 600 {
+                        msg = msg[:600]
+                }
+                retryable := resp.StatusCode == 429 || resp.StatusCode == 408 || resp.StatusCode >= 500
+                return "", &ProviderError{Provider: "gemini", StatusCode: resp.StatusCode, Message: msg, Retryable: retryable}
+        }
+
+        if strings.TrimSpace(os.Getenv("GEMINI_DEBUG")) != "" {
+                bodyStr := string(bodyBytes)
+                if len(bodyStr) > 800 {
+                        bodyStr = bodyStr[:800] + "..."
+                }
+                log.Printf("[GEMINI] Raw response (truncated): %s", bodyStr)
+        } else {
+                log.Printf("[GEMINI] Response bytes: %d", len(bodyBytes))
+        }
 
         // Parse response
         var geminiResp GeminiResponse
@@ -147,7 +168,7 @@ func CallGeminiProofread(userText string, model string, apiKey string) (string, 
         // Extract final text
         if len(geminiResp.Candidates) == 0 {
                 log.Printf("[GEMINI] No candidates in response")
-                return "", fmt.Errorf("no candidates returned from Gemini")
+                return "", &ProviderError{Provider: "gemini", StatusCode: resp.StatusCode, Message: "no candidates returned", Retryable: true}
         }
 
         if len(geminiResp.Candidates[0].Content.Parts) == 0 {

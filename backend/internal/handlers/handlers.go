@@ -47,7 +47,7 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	authService := auth.NewAuthService(db, cfg.JWTSecret, cfg.RefreshTokenSecret, accessTTL, refreshTTL)
 	emailService := email.NewEmailService()
 	nlpService := nlp.NewTamilNLPService()
-	llmService := llm.NewLLMService(cfg.OpenAIAPIKey, cfg.GoogleGenAIKey, nlpService)
+	llmService := llm.NewLLMService(cfg.OpenAIAPIKey, cfg.GoogleGenAIKey, cfg.AnthropicAPIKey, nlpService)
 	paymentService := payment.NewPaymentService(db, cfg)
 
 	imeSvc := ime.NewService(".", cfg.AksharaURL, cfg.IMEEnabled, cfg.IMECacheEnabled)

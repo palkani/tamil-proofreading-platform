@@ -6,6 +6,7 @@ import (
         "errors"
         "fmt"
         "log"
+        "os"
         "strings"
         "time"
 
@@ -18,6 +19,7 @@ import (
 type LLMService struct {
         openAIClient *openai.Client
         googleAPIKey string
+        anthropicKey string
         nlpService   *nlp.TamilNLPService
 }
 
@@ -45,7 +47,7 @@ type Change struct {
         Position  int    `json:"position"`
 }
 
-func NewLLMService(openAIKey, googleKey string, nlpService *nlp.TamilNLPService) *LLMService {
+func NewLLMService(openAIKey, googleKey, anthropicKey string, nlpService *nlp.TamilNLPService) *LLMService {
         cleanedKey := strings.TrimSpace(openAIKey)
         var client *openai.Client
         if cleanedKey != "" {
@@ -55,8 +57,54 @@ func NewLLMService(openAIKey, googleKey string, nlpService *nlp.TamilNLPService)
         return &LLMService{
                 openAIClient: client,
                 googleAPIKey: strings.TrimSpace(googleKey),
+                anthropicKey: strings.TrimSpace(anthropicKey),
                 nlpService:   nlpService,
         }
+}
+
+// ProviderError is a normalized error type used for provider fallback decisions.
+type ProviderError struct {
+        Provider   string
+        StatusCode int
+        Message    string
+        Retryable  bool
+}
+
+func (e *ProviderError) Error() string {
+        if e == nil {
+                return "provider error"
+        }
+        if e.StatusCode != 0 {
+                return fmt.Sprintf("%s error (status=%d): %s", e.Provider, e.StatusCode, e.Message)
+        }
+        return fmt.Sprintf("%s error: %s", e.Provider, e.Message)
+}
+
+func getEnvTrim(key, def string) string {
+        v := strings.TrimSpace(os.Getenv(key))
+        if v == "" {
+                return def
+        }
+        return v
+}
+
+func shouldFallbackOn(err error) bool {
+        if err == nil {
+                return false
+        }
+        var pe *ProviderError
+        if errors.As(err, &pe) {
+                if pe.Retryable {
+                        return true
+                }
+                if pe.StatusCode == 429 || pe.StatusCode == 408 {
+                        return true
+                }
+                if pe.StatusCode >= 500 && pe.StatusCode <= 599 {
+                        return true
+                }
+        }
+        return false
 }
 
 var promptInjectionPhrases = []string{
@@ -83,6 +131,70 @@ func (s *LLMService) selectOptimalModel(text string, wordCount int) models.Model
         // Use full flash for longer texts (better accuracy)
         log.Printf("[MODEL-SELECT] Using flash (chars=%d, words=%d)", charCount, wordCount)
         return models.ModelType(models.ModelGeminiFlash)
+}
+
+func maxOutputTokensForProofread(wordCount int, charCount int) int {
+        // Latency lever: smaller max tokens -> faster decoding.
+        switch {
+        case charCount < 600 && wordCount < 120:
+                return 1024
+        case charCount < 2000 && wordCount < 400:
+                return 2048
+        default:
+                return 4096
+        }
+}
+
+func normalizeComparable(s string) string {
+        t := strings.TrimSpace(s)
+        t = strings.Trim(t, `"'`)
+        t = strings.Join(strings.Fields(t), " ")
+        t = strings.ReplaceAll(t, "\u200b", "")
+        t = strings.ReplaceAll(t, "\u200c", "")
+        t = strings.ReplaceAll(t, "\u200d", "")
+        t = strings.ReplaceAll(t, "\ufeff", "")
+        return t
+}
+
+func fillSuggestionIndices(originalText string, suggestions []Suggestion) []Suggestion {
+        if len(suggestions) == 0 || strings.TrimSpace(originalText) == "" {
+                return suggestions
+        }
+        used := make(map[int]bool)
+        out := make([]Suggestion, 0, len(suggestions))
+        for _, s := range suggestions {
+                orig := strings.TrimSpace(s.Original)
+                corr := strings.TrimSpace(s.Corrected)
+                if orig == "" || corr == "" {
+                        continue
+                }
+                if normalizeComparable(orig) == normalizeComparable(corr) {
+                        continue
+                }
+                if (s.StartIndex <= 0 || s.EndIndex <= 0) && orig != "" {
+                        idx := 0
+                        for {
+                                pos := strings.Index(originalText[idx:], orig)
+                                if pos < 0 {
+                                        break
+                                }
+                                start := idx + pos
+                                end := start + len(orig)
+                                if !used[start] {
+                                        s.StartIndex = start
+                                        s.EndIndex = end
+                                        used[start] = true
+                                        break
+                                }
+                                idx = end
+                                if idx >= len(originalText) {
+                                        break
+                                }
+                        }
+                }
+                out = append(out, s)
+        }
+        return out
 }
 
 // detectChangesFromText auto-generates suggestions by finding differences between original and corrected text
@@ -161,9 +273,10 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
         // Smart model selection based on text length
         wordCount := s.nlpService.CountWords(cleaned)
         selectedModel := s.selectOptimalModel(cleaned, wordCount)
+        maxTokens := maxOutputTokensForProofread(wordCount, len(cleaned))
 
         // Use the Gemini API with the selected model
-        content, err := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey)
+        content, err := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey, maxTokens)
         if err != nil {
                 log.Printf("gemini proofread error (request_id=%s): %v", requestID, err)
                 return nil, err
@@ -188,6 +301,7 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
                 log.Printf("[FALLBACK] Auto-detecting changes (request_id=%s)", requestID)
                 suggestions = detectChangesFromText(cleaned, corrected)
         }
+        suggestions = fillSuggestionIndices(cleaned, suggestions)
 
         return &ProofreadResult{
                 CorrectedText:  corrected,
@@ -220,7 +334,8 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
         
         // Smart model selection based on text length
         wordCount := s.nlpService.CountWords(cleaned)
-        selectedModel := s.selectOptimalModel(cleaned, wordCount)
+        _ = s.selectOptimalModel(cleaned, wordCount)
+        maxTokens := maxOutputTokensForProofread(wordCount, len(cleaned))
 
         // Try Google Gemini first
         if s.googleAPIKey == "" {
@@ -230,9 +345,30 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
                 return nil, fmt.Errorf("Gemini AI not configured: missing GOOGLE_GENAI_API_KEY (or AI_INTEGRATIONS_GEMINI_API_KEY)")
         }
 
-        content, err := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey)
+        // Default to Gemini 1.5 Flash for lower latency; allow override.
+        geminiModel := getEnvTrim("GEMINI_PROOFREAD_MODEL", "gemini-1.5-flash")
+        content, err := CallGeminiProofread(cleaned, geminiModel, s.googleAPIKey, maxTokens)
         if err != nil {
-                log.Printf("[GEMINI-API-ERROR] google proofread error (request_id=%s): %v", requestID, err)
+                log.Printf("[GEMINI-API-ERROR] gemini proofread error (request_id=%s): %v", requestID, err)
+                // Provider fallback pipeline on quota/rate-limit/5xx when configured:
+                // 1) GPT-4.1-mini (OpenAI)
+                // 2) Claude 3.7 Sonnet (Anthropic)
+                if shouldFallbackOn(err) {
+                        if s.openAIClient != nil {
+                                if out, ferr := s.proofreadWithOpenAI(ctx, cleaned, requestID); ferr == nil {
+                                        return out, nil
+                                } else {
+                                        log.Printf("[FALLBACK-OPENAI-ERROR] (request_id=%s): %v", requestID, ferr)
+                                }
+                        }
+                        if strings.TrimSpace(s.anthropicKey) != "" {
+                                if out, ferr := s.proofreadWithAnthropic(ctx, cleaned, requestID); ferr == nil {
+                                        return out, nil
+                                } else {
+                                        log.Printf("[FALLBACK-ANTHROPIC-ERROR] (request_id=%s): %v", requestID, ferr)
+                                }
+                        }
+                }
                 return nil, err
         }
         if strings.TrimSpace(content) == "" {
@@ -255,13 +391,14 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
                 log.Printf("[FALLBACK] Auto-detecting changes (request_id=%s)", requestID)
                 suggestions = detectChangesFromText(cleaned, corrected)
         }
+        suggestions = fillSuggestionIndices(cleaned, suggestions)
 
         return &ProofreadResult{
                 CorrectedText:  corrected,
                 Suggestions:    suggestions,
                 Changes:        changes,
                 Alternatives:   alternatives,
-                ModelUsed:      selectedModel,
+                ModelUsed:      models.ModelType(geminiModel),
                 ProcessingTime: time.Since(start).Seconds(),
         }, nil
 }
@@ -488,6 +625,98 @@ func sanitizeUserInput(text string) string {
                 }
         }
         return text
+}
+
+func (s *LLMService) proofreadWithOpenAI(ctx context.Context, cleaned string, requestID string) (*ProofreadResult, error) {
+        start := time.Now()
+        if s.openAIClient == nil {
+                return nil, &ProviderError{Provider: "openai", Message: "OpenAI client not configured", Retryable: false}
+        }
+        model := getEnvTrim("OPENAI_PROOFREAD_MODEL", "gpt-4.1-mini")
+
+        sys := "You are a Tamil Proofreading Assistant. Return ONLY valid JSON (no markdown)."
+        user := strings.Replace(proofreadingPrompt, "[USER'S TAMIL TEXT HERE]", cleaned, 1)
+
+        req := openai.ChatCompletionRequest{
+                Model:       model,
+                Temperature: 0.1,
+                Messages: []openai.ChatCompletionMessage{
+                        {Role: openai.ChatMessageRoleSystem, Content: sys},
+                        {Role: openai.ChatMessageRoleUser, Content: user},
+                },
+        }
+
+        resp, err := s.openAIClient.CreateChatCompletion(ctx, req)
+        if err != nil {
+                var apiErr *openai.APIError
+                if errors.As(err, &apiErr) {
+                        return nil, &ProviderError{
+                                Provider:   "openai",
+                                StatusCode: apiErr.HTTPStatusCode,
+                                Message:    apiErr.Message,
+                                Retryable:  apiErr.HTTPStatusCode == 429 || apiErr.HTTPStatusCode >= 500,
+                        }
+                }
+                return nil, &ProviderError{Provider: "openai", Message: err.Error(), Retryable: true}
+        }
+        if len(resp.Choices) == 0 {
+                return nil, &ProviderError{Provider: "openai", Message: "no choices returned", Retryable: true}
+        }
+
+        content := resp.Choices[0].Message.Content
+        corrected, suggestions, changes, alternatives, ok := parseProofreadJSON(content)
+        if !ok {
+                return nil, &ProviderError{Provider: "openai", Message: "failed to parse JSON", Retryable: true}
+        }
+        if corrected == "" {
+                corrected = cleaned
+        }
+        if len(suggestions) == 0 && corrected != cleaned {
+                suggestions = detectChangesFromText(cleaned, corrected)
+        }
+        suggestions = fillSuggestionIndices(cleaned, suggestions)
+
+        return &ProofreadResult{
+                CorrectedText:  corrected,
+                Suggestions:    suggestions,
+                Changes:        changes,
+                Alternatives:   alternatives,
+                ModelUsed:      models.ModelType(model),
+                ProcessingTime: time.Since(start).Seconds(),
+        }, nil
+}
+
+func (s *LLMService) proofreadWithAnthropic(ctx context.Context, cleaned string, requestID string) (*ProofreadResult, error) {
+        start := time.Now()
+        if strings.TrimSpace(s.anthropicKey) == "" {
+                return nil, &ProviderError{Provider: "anthropic", Message: "Anthropic API key not configured", Retryable: false}
+        }
+        model := getEnvTrim("ANTHROPIC_PROOFREAD_MODEL", "claude-3-7-sonnet-latest")
+
+        content, err := CallAnthropicProofread(ctx, cleaned, model, s.anthropicKey)
+        if err != nil {
+                return nil, err
+        }
+        corrected, suggestions, changes, alternatives, ok := parseProofreadJSON(content)
+        if !ok {
+                return nil, &ProviderError{Provider: "anthropic", Message: "failed to parse JSON", Retryable: true}
+        }
+        if corrected == "" {
+                corrected = cleaned
+        }
+        if len(suggestions) == 0 && corrected != cleaned {
+                suggestions = detectChangesFromText(cleaned, corrected)
+        }
+        suggestions = fillSuggestionIndices(cleaned, suggestions)
+
+        return &ProofreadResult{
+                CorrectedText:  corrected,
+                Suggestions:    suggestions,
+                Changes:        changes,
+                Alternatives:   alternatives,
+                ModelUsed:      models.ModelType(model),
+                ProcessingTime: time.Since(start).Seconds(),
+        }, nil
 }
 
 // ProofreadText is the main method called by handlers - wraps Proofread for backward compatibility
