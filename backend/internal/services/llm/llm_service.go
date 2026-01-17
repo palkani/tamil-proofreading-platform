@@ -12,6 +12,7 @@ import (
 
         "tamil-proofreading-platform/backend/internal/models"
         "tamil-proofreading-platform/backend/internal/services/nlp"
+        "tamil-proofreading-platform/backend/internal/util/properties"
 
         openai "github.com/sashabaranov/go-openai"
 )
@@ -83,6 +84,9 @@ func (e *ProviderError) Error() string {
 func getEnvTrim(key, def string) string {
         v := strings.TrimSpace(os.Getenv(key))
         if v == "" {
+                if pv, ok := properties.Get(key); ok {
+                        return pv
+                }
                 return def
         }
         return v
