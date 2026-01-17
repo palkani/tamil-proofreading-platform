@@ -211,6 +211,10 @@ class HomeEditor {
     this.editor = document.getElementById('home-editor');
     this.charCount = document.getElementById('home-char-count');
     this.suggestionsContainer = document.getElementById('home-suggestions-container');
+    // emptyState controls what we show when grammar suggestions are empty.
+    // - 'idle': initial guidance before successful analysis
+    // - 'no-issues': analysis completed and no corrections found
+    this.emptyState = 'idle';
     this.modeSelect = document.getElementById('home-mode-select');
     this.translateBtn = document.getElementById('home-translate-english-btn');
     // Home toolbar buttons (match workspace behavior)
@@ -1420,6 +1424,7 @@ class HomeEditor {
     if (wc < 5 || text.length < 20) {
       this.showInfo('Grammar suggestions require a full sentence.');
       this.lastAnalyzedText = '';
+      this.emptyState = 'idle';
       this.displaySuggestions([]);
       return;
     }
@@ -1427,6 +1432,7 @@ class HomeEditor {
     // If empty, clear suggestions and reset
     if (!text) {
       this.lastAnalyzedText = '';
+      this.emptyState = 'idle';
       this.displaySuggestions([]);
       return;
     }
@@ -1539,6 +1545,7 @@ class HomeEditor {
           const resultPayload = await this.awaitSubmissionResult(submissionId);
           const suggestions = this.extractSuggestionsFromPayload(resultPayload);
           console.log('[HomeEditor] SSE suggestions:', suggestions.length, suggestions);
+          this.emptyState = suggestions.length ? 'idle' : 'no-issues';
           this.displaySuggestions(suggestions);
           this.lastAnalyzedText = text;
           return;
@@ -1551,6 +1558,7 @@ class HomeEditor {
       // Non-async (or SSE failed): best-effort extraction from current payload
       const suggestions = this.extractSuggestionsFromPayload(data);
       console.log('[HomeEditor] Immediate suggestions:', suggestions.length, suggestions);
+      this.emptyState = suggestions.length ? 'idle' : 'no-issues';
       this.displaySuggestions(suggestions);
       // Only now mark the text as analyzed successfully (prevents missing triggers on quick edits)
       this.lastAnalyzedText = text;
@@ -1592,6 +1600,16 @@ class HomeEditor {
       </div>
     `;
   }
+
+  showInfo(message) {
+    if (!this.suggestionsContainer) return;
+    const msg = String(message || '').trim();
+    this.suggestionsContainer.innerHTML = `
+      <div class="text-center text-gray-500 py-8">
+        <p class="text-sm">${msg || 'Type or paste Tamil text to get AI suggestions'}</p>
+      </div>
+    `;
+  }
   
   showError() {
     if (!this.suggestionsContainer) return;
@@ -1610,19 +1628,19 @@ class HomeEditor {
     const currentText = this.getPlainText().trim();
     
     if (suggestions.length === 0) {
-      // Only show "Looks great!" if there's actual text
-      if (currentText) {
+      if (currentText && this.emptyState === 'no-issues') {
         this.suggestionsContainer.innerHTML = `
-          <div class="text-center text-gray-500 py-8">
-            <svg class="w-16 h-16 mx-auto mb-4 text-green-400" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-            </svg>
-            <p class="text-sm font-semibold text-green-600">Looks great!</p>
-            <p class="text-xs text-gray-400 mt-2">No grammar issues found</p>
+          <div class="text-center py-8">
+            <div class="mx-auto mb-4 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+              <svg class="w-7 h-7 text-green-700" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/>
+              </svg>
+            </div>
+            <p class="text-sm font-semibold text-gray-900">Looks solid! Keep writing—ProofTamilwill help fine-tune as you go</p>
           </div>
         `;
       } else {
-        // Show default empty state
+        // Default idle guidance
         this.suggestionsContainer.innerHTML = `
           <div class="text-center text-gray-500 py-8">
             <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="currentColor" viewBox="0 0 24 24">

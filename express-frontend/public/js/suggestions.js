@@ -7,10 +7,15 @@ class SuggestionsPanel {
     this.acceptAllBtn = acceptAllBtn;
     this.suggestions = [];
     this.handledIds = new Set();
+    // emptyState controls what we show when suggestions.length === 0
+    // - 'idle': initial guidance before analysis
+    // - 'no-issues': analysis completed and no corrections found
+    this.emptyState = 'idle';
   }
 
   setSuggestions(suggestions) {
     this.suggestions = suggestions || [];
+    this.emptyState = this.suggestions.length ? 'idle' : this.emptyState;
     this.render();
   }
 
@@ -28,13 +33,22 @@ class SuggestionsPanel {
     
     this.suggestions = [...this.suggestions, ...filtered];
     console.log('[SuggestionsPanel] Total suggestions now:', this.suggestions.length);
+    if (this.suggestions.length > 0) {
+      this.emptyState = 'idle';
+    }
     
+    this.render();
+  }
+
+  setEmptyState(state) {
+    this.emptyState = state || 'idle';
     this.render();
   }
 
   clearSuggestions() {
     this.suggestions = [];
     this.handledIds.clear();
+    this.emptyState = 'idle';
     this.render();
   }
 
@@ -54,7 +68,7 @@ class SuggestionsPanel {
     // Update summary
     const total = this.suggestions.length;
     if (total === 0) {
-      this.summary.textContent = 'No suggestions yet';
+      this.summary.textContent = this.emptyState === 'no-issues' ? 'Looks solid!' : 'No suggestions yet';
       this.acceptAllBtn.classList.add('hidden');
     } else {
       this.summary.textContent = `${total} suggestion${total > 1 ? 's' : ''} found`;
@@ -65,15 +79,28 @@ class SuggestionsPanel {
     this.container.innerHTML = '';
 
     if (total === 0) {
-      this.container.innerHTML = `
-        <div class="text-center text-gray-400 py-12">
-          <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-          </svg>
-          <p class="text-sm">Type or paste Tamil text in the editor</p>
-          <p class="text-xs mt-2">Click "Check with Gemini AI" for suggestions</p>
-        </div>
-      `;
+      if (this.emptyState === 'no-issues') {
+        this.container.innerHTML = `
+          <div class="text-center py-12">
+            <div class="mx-auto mb-4 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+              <svg class="w-7 h-7 text-green-700" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/>
+              </svg>
+            </div>
+            <p class="text-base font-semibold text-gray-900">Looks solid! Keep writing—ProofTamilwill help fine-tune as you go</p>
+          </div>
+        `;
+      } else {
+        this.container.innerHTML = `
+          <div class="text-center text-gray-400 py-12">
+            <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+            <p class="text-sm">Type or paste Tamil text in the editor</p>
+            <p class="text-xs mt-2">Click "Check with Gemini AI" for suggestions</p>
+          </div>
+        `;
+      }
       return;
     }
 
