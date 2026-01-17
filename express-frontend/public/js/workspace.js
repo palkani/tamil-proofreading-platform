@@ -1149,9 +1149,39 @@ class WorkspaceController {
     // Logout button - use centralized logout function if available, otherwise use this.logout()
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
-      // Don't add another handler if nav.ejs already has one - let nav.ejs handle it
-      // But if nav.ejs handler didn't work, this will be a fallback
-      console.log('[WORKSPACE] Logout button found, but letting nav.ejs handler manage it');
+      // Workspace page uses its own header (no nav.ejs), so we MUST attach a handler here.
+      // Keep this idempotent so hot reload / multiple inits don't double-bind.
+      if (!logoutBtn.dataset.bound) {
+        logoutBtn.dataset.bound = 'true';
+        logoutBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('[WORKSPACE] Logout clicked');
+
+          try {
+            // Best-effort: call logout API (revokes refresh token server-side)
+            await fetch('/auth/logout', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              keepalive: true,
+            }).catch(() => {});
+          } finally {
+            // Always clear client-side tokens
+            if (window.authUtils && window.authUtils.clearAuthTokens) {
+              window.authUtils.clearAuthTokens();
+            } else {
+              try { localStorage.removeItem('access_token'); } catch (_e) {}
+              const cookieOptions = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+              document.cookie = `access_token=; ${cookieOptions}`;
+              document.cookie = `refresh_token=; ${cookieOptions}`;
+              document.cookie = `proof_refresh_token=; ${cookieOptions}`;
+            }
+            // Redirect to login (clear UX)
+            window.location.replace('/login');
+          }
+        });
+      }
     }
 
     // New Draft button
