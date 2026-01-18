@@ -3,6 +3,7 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const querystring = require('querystring');
+const axios = require('axios');
 const { trackPageView } = require('./middleware/analytics');
 const { getSeoData } = require('./config/seo');
 const authRoutes = require('./routes/auth');
@@ -166,6 +167,17 @@ app.get(['/v1/auth/google/callback', '/auth/google/callback'], (req, res) => {
 app.get('/sitemap.xml', (req, res) => {
   const baseUrl = 'https://prooftamil.com';
   const currentDate = new Date().toISOString().split('T')[0];
+  
+  // Cache blog URLs in-memory to keep sitemap fast on serverless.
+  // TTL: 10 minutes
+  global.__sitemapBlogCache = global.__sitemapBlogCache || { ts: 0, urls: [] };
+
+  function getBackendApiUrl() {
+    const base = process.env.BACKEND_URL || 'http://localhost:8080';
+    if (base.endsWith('/api/v1')) return base;
+    return base.replace(/\/$/, '') + '/api/v1';
+  }
+  const BACKEND_API = getBackendApiUrl();
 
   const pages = [
     { url: '/', priority: '1.0', changefreq: 'daily' },
@@ -183,6 +195,14 @@ app.get('/sitemap.xml', (req, res) => {
     { url: '/terms', priority: '0.4', changefreq: 'yearly' },
   ];
 
+  const escapeXml = (s) =>
+    String(s || '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&apos;');
+
   let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n';
   sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n';
   sitemap += '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n';
@@ -191,16 +211,76 @@ app.get('/sitemap.xml', (req, res) => {
 
   pages.forEach((page) => {
     sitemap += '  <url>\n';
-    sitemap += `    <loc>${baseUrl}${page.url}</loc>\n`;
+    sitemap += `    <loc>${escapeXml(baseUrl + page.url)}</loc>\n`;
     sitemap += `    <lastmod>${currentDate}</lastmod>\n`;
     sitemap += `    <changefreq>${page.changefreq}</changefreq>\n`;
     sitemap += `    <priority>${page.priority}</priority>\n`;
     sitemap += '  </url>\n';
   });
 
+  // Add published blog post URLs (best-effort)
+  const now = Date.now();
+  const isCacheFresh = now - (global.__sitemapBlogCache.ts || 0) < 10 * 60 * 1000;
+  const cached = Array.isArray(global.__sitemapBlogCache.urls) ? global.__sitemapBlogCache.urls : [];
+  const addBlogUrls = (list) => {
+    (list || []).forEach((u) => {
+      if (!u || !u.loc) return;
+      sitemap += '  <url>\n';
+      sitemap += `    <loc>${escapeXml(u.loc)}</loc>\n`;
+      sitemap += `    <lastmod>${escapeXml(u.lastmod || currentDate)}</lastmod>\n`;
+      sitemap += `    <changefreq>${escapeXml(u.changefreq || 'monthly')}</changefreq>\n`;
+      sitemap += `    <priority>${escapeXml(u.priority || '0.65')}</priority>\n`;
+      sitemap += '  </url>\n';
+    });
+  };
+
+  if (isCacheFresh && cached.length) {
+    addBlogUrls(cached);
+  } else {
+    // Fetch up to 200 posts; keep timeout low so sitemap stays responsive.
+    axios
+      .get(`${BACKEND_API}/blog/posts`, {
+        params: { page: 1, limit: 200 },
+        timeout: 2500,
+        validateStatus: () => true,
+      })
+      .then((r) => {
+        const posts = r.data?.posts || [];
+        const blogUrls = posts
+          .filter((p) => p && (p.slug || p.Slug))
+          .map((p) => {
+            const slug = String(p.slug || p.Slug || '').trim();
+            const updated = String(p.updated_at || p.updatedAt || p.UpdatedAt || p.published_at || p.publishedAt || p.PublishedAt || '')
+              .slice(0, 10);
+            return {
+              loc: `${baseUrl}/blog/${encodeURIComponent(slug)}`,
+              lastmod: updated || currentDate,
+              changefreq: 'monthly',
+              priority: '0.65',
+            };
+          });
+        global.__sitemapBlogCache = { ts: Date.now(), urls: blogUrls };
+        addBlogUrls(blogUrls);
+
+        sitemap += '</urlset>';
+        res.header('Content-Type', 'application/xml');
+        res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+        return res.send(sitemap);
+      })
+      .catch(() => {
+        // ignore - fall through to static pages only
+        sitemap += '</urlset>';
+        res.header('Content-Type', 'application/xml');
+        res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+        return res.send(sitemap);
+      });
+    return;
+  }
+
   sitemap += '</urlset>';
 
   res.header('Content-Type', 'application/xml');
+  res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
   res.send(sitemap);
 });
 
