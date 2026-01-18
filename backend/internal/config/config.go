@@ -39,6 +39,7 @@ type Config struct {
 	IMEEnabled                bool
 	IMECacheEnabled           bool
 	TransliteratorBaseURL     string
+	OCRServiceURL             string
 }
 
 func Load() *Config {
@@ -111,6 +112,7 @@ func Load() *Config {
 		IMEEnabled:            imeEnabled,
 		IMECacheEnabled:       strings.ToLower(getEnv("IME_CACHE_ENABLED", "true")) == "true",
 		TransliteratorBaseURL: transBase,
+		OCRServiceURL:         strings.TrimRight(getEnv("OCR_SERVICE_URL", ""), "/"),
 	}
 }
 

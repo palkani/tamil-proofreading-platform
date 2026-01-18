@@ -79,8 +79,8 @@
     <!-- Loading -->
     <div id="loading" class="hidden bg-white rounded-2xl shadow-xl border border-gray-200 p-12 text-center mb-6">
       <div class="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-primary-600 mb-4"></div>
-      <div class="text-xl font-semibold text-primary-700">Extracting text... Please wait</div>
-      <div class="text-sm text-gray-600 mt-2">This may take a few moments depending on file size</div>
+      <div id="loadingTitle" class="text-xl font-semibold text-primary-700">Extracting text... Please wait</div>
+      <div id="loadingHint" class="text-sm text-gray-600 mt-2">This may take a few moments depending on file size</div>
     </div>
 
     <!-- Error -->
@@ -166,6 +166,8 @@
   const fileName = document.getElementById('fileName');
   const fileSize = document.getElementById('fileSize');
   const langSelect = document.getElementById('langSelect');
+  const loadingTitle = document.getElementById('loadingTitle');
+  const loadingHint = document.getElementById('loadingHint');
   // Ensure a visible default selection (some browsers can render empty if value isn't set explicitly)
   if (langSelect && !langSelect.value) {
     langSelect.value = 'eng+tam';
@@ -175,6 +177,91 @@
   let downloadFilename = null;
   let extractedText = '';
   let sourceFilename = null;
+  let activeClientOcr = null;
+
+  function setLoading(title, hint) {
+    if (loadingTitle) loadingTitle.textContent = title || 'Working...';
+    if (loadingHint) loadingHint.textContent = hint || '';
+  }
+
+  function isImageFile(file) {
+    return !!file && typeof file.type === 'string' && file.type.startsWith('image/');
+  }
+
+  function isPdfFile(file) {
+    return !!file && file.type === 'application/pdf';
+  }
+
+  function shouldFallbackToClientOcr(resp, data) {
+    const status = resp?.status;
+    const msg = (data?.error || '') + ' ' + (data?.details || '');
+    return status === 503 && /OCR_SERVICE_URL|not configured for production|On Vercel/i.test(msg);
+  }
+
+  function loadScriptOnce(src) {
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[data-src="${src}"]`);
+      if (existing) return resolve();
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.defer = true;
+      s.setAttribute('data-src', src);
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error(`Failed to load ${src}`));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function runClientSideOcr(file, lang) {
+    // We only support browser OCR for images. PDFs should use an external OCR service.
+    if (isPdfFile(file)) {
+      throw new Error('For PDF OCR in production, please set OCR_SERVICE_URL (Cloud Run). For now, convert the PDF page to an image (JPG/PNG) and upload.');
+    }
+    if (!isImageFile(file)) {
+      throw new Error('Client-side OCR supports images only. Please upload JPG/PNG/TIFF/BMP/GIF, or configure OCR_SERVICE_URL for PDFs.');
+    }
+
+    // Load Tesseract.js in the browser on-demand (keeps other pages fast)
+    if (!window.Tesseract) {
+      await loadScriptOnce('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+    }
+    if (!window.Tesseract || typeof window.Tesseract.recognize !== 'function') {
+      throw new Error('OCR engine failed to load in the browser. Please try again, or configure OCR_SERVICE_URL.');
+    }
+
+    // Show progress
+    setLoading('Extracting text in your browser…', 'Downloading OCR language data…');
+    const tessdataFast = 'https://tessdata.projectnaptha.com/4.0.0_fast';
+
+    activeClientOcr = { cancelled: false };
+    const localRef = activeClientOcr;
+
+    const result = await window.Tesseract.recognize(file, lang || 'eng+tam', {
+      langPath: tessdataFast,
+      logger: (m) => {
+        if (!localRef || localRef.cancelled) return;
+        try {
+          const pct = typeof m.progress === 'number' ? Math.round(m.progress * 100) : null;
+          const status = m.status ? String(m.status) : 'processing';
+          if (pct !== null) {
+            setLoading('Extracting text in your browser…', `${status} — ${pct}%`);
+          } else {
+            setLoading('Extracting text in your browser…', status);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    });
+
+    if (!localRef || localRef.cancelled) {
+      throw new Error('OCR was cancelled.');
+    }
+
+    const text = result?.data?.text || '';
+    return { text };
+  }
   
   // Click to upload
   uploadArea.addEventListener('click', () => fileInput.click());
@@ -221,6 +308,12 @@
   // Process file
   processBtn.addEventListener('click', async () => {
     if (!selectedFile) return;
+
+    // Cancel any in-flight client OCR
+    if (activeClientOcr) {
+      activeClientOcr.cancelled = true;
+      activeClientOcr = null;
+    }
     
     const formData = new FormData();
     formData.append('file', selectedFile);
@@ -230,6 +323,7 @@
     processBtn.disabled = true;
     error.classList.add('hidden');
     resultArea.classList.add('hidden');
+    setLoading('Extracting text... Please wait', 'This may take a few moments depending on file size');
     
     try {
       const controller = new AbortController();
@@ -253,6 +347,26 @@
         try { return JSON.parse(raw); } catch { return { error: 'OCR failed', details: raw?.slice(0, 300) || 'Invalid response' }; }
       })();
       
+      // If server OCR is not configured on Vercel, fall back to client-side OCR (images only)
+      if (shouldFallbackToClientOcr(response, data)) {
+        try {
+          const lang = (langSelect && langSelect.value) ? langSelect.value : 'eng+tam';
+          const out = await runClientSideOcr(selectedFile, lang);
+          extractedText = out.text || '';
+          loading.classList.add('hidden');
+          resultText.textContent = extractedText;
+          stats.textContent = `${extractedText.length} characters extracted`;
+          downloadFilename = null; // no server docx in client OCR
+          resultArea.classList.remove('hidden');
+          return;
+        } catch (clientErr) {
+          // fall through to show the real error below
+          console.warn('[OCR] Client-side OCR fallback failed:', clientErr?.message);
+          data.error = 'OCR failed';
+          data.details = clientErr?.message || data.details;
+        }
+      }
+
       loading.classList.add('hidden');
       
       if (data.error) {

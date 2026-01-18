@@ -494,6 +494,16 @@ router.get('/ocr/health', (req, res) => {
         version: '1.0.0'
       });
     }
+
+    // Fallback: if backend exposes OCR proxy endpoints, report that
+    // This allows Vercel to only configure BACKEND_URL and keep OCR_SERVICE_URL on backend Cloud Run.
+    return res.status(200).json({
+      status: 'unknown',
+      service: 'OCR Service',
+      implementation: 'Backend proxy (if configured)',
+      url: `${BACKEND_URL}/ocr/upload`,
+      version: '1.0.0'
+    });
     
     return res.status(503).json({
       status: 'unhealthy',
@@ -530,12 +540,38 @@ router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
     const hasExternalOcr = OCR_SERVICE_URL && OCR_SERVICE_URL !== 'http://localhost:5000';
 
     // In production/serverless, direct Tesseract.js OCR can be extremely slow or hang.
-    // Prefer the external OCR service (Cloud Run) when available; otherwise fail fast with guidance.
+    // Prefer the external OCR service (Cloud Run) when available.
+    // If OCR_SERVICE_URL is not configured on Vercel, fall back to BACKEND_URL OCR proxy endpoints (if backend is configured).
     if (isProd && !hasExternalOcr) {
-      return res.status(503).json({
-        error: 'OCR is not configured for production yet.',
-        details: 'On Vercel, direct OCR is not supported. Please set OCR_SERVICE_URL to a deployed OCR service (Cloud Run). See README_OCR_SETUP.md.',
-      });
+      try {
+        const url = `${BACKEND_URL}/ocr/upload`;
+        if (ENABLE_PROXY_LOGS) console.log('[OCR] Using backend OCR proxy:', url);
+
+        const formData = new FormData();
+        formData.append('file', fileBuffer, { filename, contentType: mimeType });
+        formData.append('lang', lang);
+
+        const response = await axios.post(url, formData, {
+          headers: {
+            ...formData.getHeaders(),
+            // Forward cookies/auth if present (some backends may gate large uploads)
+            cookie: req.headers.cookie,
+            authorization: req.headers.authorization,
+          },
+          maxContentLength: 16 * 1024 * 1024,
+          maxBodyLength: 16 * 1024 * 1024,
+          timeout: 120000,
+          validateStatus: () => true,
+        });
+
+        return res.status(response.status).send(response.data);
+      } catch (e) {
+        return res.status(503).json({
+          error: 'OCR is not configured for production yet.',
+          details:
+            'On Vercel, direct OCR is not supported. Configure OCR on the backend by setting OCR_SERVICE_URL on Cloud Run (or set OCR_SERVICE_URL in Vercel to an OCR microservice). See README_OCR_SETUP.md.',
+        });
+      }
     }
     
     // Prefer external OCR service if configured (production path)
@@ -694,6 +730,31 @@ router.get('/ocr/download/:filename', async (req, res) => {
       res.setHeader('Content-Disposition', response.headers['content-disposition'] || `attachment; filename="${filename}"`);
       res.setHeader('Content-Type', response.headers['content-type'] || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       return response.data.pipe(res);
+    }
+
+    // Fallback to backend OCR proxy (Cloud Run backend) if available
+    try {
+      const response = await axios.get(`${BACKEND_URL}/ocr/download/${encodeURIComponent(filename)}`, {
+        responseType: 'stream',
+        headers: {
+          cookie: req.headers.cookie,
+          authorization: req.headers.authorization,
+        },
+        validateStatus: () => true,
+      });
+
+      res.status(response.status);
+      if (response.headers['content-disposition']) {
+        res.setHeader('Content-Disposition', response.headers['content-disposition']);
+      } else {
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      }
+      if (response.headers['content-type']) {
+        res.setHeader('Content-Type', response.headers['content-type']);
+      }
+      return response.data.pipe(res);
+    } catch (e) {
+      // ignore, fall through
     }
     
     return res.status(404).json({ error: 'File not found' });

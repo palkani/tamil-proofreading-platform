@@ -163,6 +163,10 @@ func main() {
 		api.POST("/tamil-words/confirm", h.ConfirmTamilWord)
 		api.GET("/transliterate/suggest", h.TransliterateSuggest)
 		api.POST("/validate", h.ValidateText)
+		// OCR proxy endpoints (backend -> OCR microservice). This lets Vercel only configure BACKEND_URL.
+		api.GET("/ocr/health", h.OCRHealth)
+		api.POST("/ocr/upload", h.OCRUpload)
+		api.GET("/ocr/download/:filename", h.OCRDownload)
 		api.POST("/webhooks/stripe", h.StripeWebhook)
 		api.POST("/webhooks/razorpay", h.RazorpayWebhook)
 		// IMPORTANT: Submit supports anonymous inline proofreading when save_draft=false.

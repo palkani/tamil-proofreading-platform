@@ -29,6 +29,17 @@ gcloud run deploy ocr-service \
    - Go to Vercel Dashboard → Your Project → Settings → Environment Variables
    - Add: `OCR_SERVICE_URL=https://ocr-service-xxx.asia-south1.run.app`
 
+### Option 1B: Use BACKEND_URL only in Vercel (Recommended if you already proxy everything via Go backend)
+
+If your Vercel app already has `BACKEND_URL` configured (Go backend), you can avoid setting `OCR_SERVICE_URL` in Vercel.
+
+Instead:
+- **Set `OCR_SERVICE_URL` on your Cloud Run Go backend service** (not Vercel)
+- The Go backend now exposes:
+  - `POST /api/v1/ocr/upload`
+  - `GET /api/v1/ocr/download/:filename`
+- The Express frontend will call these backend endpoints when `OCR_SERVICE_URL` is missing on Vercel.
+
 ### Option 2: Run OCR Service Locally (Development)
 
 1. **Install dependencies:**
@@ -86,6 +97,7 @@ For a simpler deployment, we could integrate OCR processing directly into the Ex
 
 Required in Vercel/Production:
 - `OCR_SERVICE_URL`: URL of the OCR service (e.g., `https://ocr-service-xxx.run.app`)
+  - OR (if using the backend proxy mode): only `BACKEND_URL` in Vercel, and set `OCR_SERVICE_URL` on Cloud Run backend.
 
 Optional:
 - `NODE_ENV`: Set to `production` for production environment

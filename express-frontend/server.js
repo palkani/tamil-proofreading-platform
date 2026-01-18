@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
+const compression = require('compression');
 const { trackPageView } = require('./middleware/analytics');
 const { getSeoData } = require('./config/seo');
 const authRoutes = require('./routes/auth');
@@ -70,6 +71,14 @@ const ensureAppReadyMiddleware = (req, res, next) => {
 };
 
 app.use(ensureAppReadyMiddleware);
+
+// Performance: compress HTML/JSON/CSS/JS responses
+app.use(
+  compression({
+    level: 6,
+    threshold: 1024,
+  })
+);
 
 app.use(
   cors({
