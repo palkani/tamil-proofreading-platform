@@ -26,7 +26,8 @@ Find these error types:
 
 RULES (STRICT):
 - Return ONLY valid JSON. No markdown, no code fences.
-- Return corrected_text and corrections array
+- Return corrections array first, corrected_text last.
+- If output might be long, set corrected_text to "" (empty string) but ALWAYS return valid JSON.
 - Each correction: {"original": "...", "corrected": "...", "reason": "...", "type": "...", "start_index": 0, "end_index": 0}
 - If original = corrected → DO NOT include it
 - Only include actual errors, NO alternatives for correct words
@@ -36,10 +37,10 @@ RULES (STRICT):
 
 JSON FORMAT:
 {
-  "corrected_text": "corrected Tamil text",
   "corrections": [
     {"original": "wrong", "corrected": "fixed", "reason": "தமிழ் விளக்கம்", "type": "spelling|grammar|punctuation|incomplete|space|sandhi", "start_index": 0, "end_index": 0}
-  ]
+  ],
+  "corrected_text": "corrected Tamil text (or empty string if too long)"
 }
 
 TEXT TO PROOFREAD:

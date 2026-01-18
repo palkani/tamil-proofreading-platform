@@ -414,7 +414,35 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
         corrected, suggestions, changes, alternatives, ok := parseProofreadJSON(content)
         if !ok {
                 log.Printf("[GEMINI-PARSE-FAIL] Failed to parse Gemini JSON response (request_id=%s): %s", requestID, content)
-                return nil, fmt.Errorf("failed to parse Gemini response")
+                // Treat parse failure as retryable: try other providers before failing the submission.
+                if s.openAIClient != nil {
+                        if out, ferr := s.proofreadWithOpenAI(ctx, cleaned, requestID); ferr == nil {
+                                return out, nil
+                        } else {
+                                log.Printf("[FALLBACK-OPENAI-ERROR] (request_id=%s): %v", requestID, ferr)
+                        }
+                }
+                if strings.TrimSpace(s.anthropicKey) != "" {
+                        if out, ferr := s.proofreadWithAnthropic(ctx, cleaned, requestID); ferr == nil {
+                                return out, nil
+                        } else {
+                                log.Printf("[FALLBACK-ANTHROPIC-ERROR] (request_id=%s): %v", requestID, ferr)
+                        }
+                }
+                // Final fallback: do not fail the submission; return best-effort corrected_text if present.
+                if best, ok2 := extractCorrectedTextBestEffort(content); ok2 {
+                        corrected = best
+                } else {
+                        corrected = cleaned
+                }
+                return &ProofreadResult{
+                        CorrectedText:  corrected,
+                        Suggestions:    []Suggestion{},
+                        Changes:        []Change{},
+                        Alternatives:   []string{},
+                        ModelUsed:      models.ModelType(geminiUsed),
+                        ProcessingTime: time.Since(start).Seconds(),
+                }, nil
         }
 
         if corrected == "" {
@@ -472,6 +500,59 @@ func parseProofreadJSON(raw string) (string, []Suggestion, []Change, []string, b
         corrected, suggestions, changes, alternatives := extractFromInterface(data)
         ok := corrected != "" || len(suggestions) > 0 || len(changes) > 0 || len(alternatives) > 0
         return corrected, suggestions, changes, alternatives, ok
+}
+
+func extractCorrectedTextBestEffort(raw string) (string, bool) {
+        cleaned := stripCodeFence(raw)
+        idx := strings.Index(cleaned, "\"corrected_text\"")
+        if idx < 0 {
+                return "", false
+        }
+        // Find ':' after the key
+        colon := strings.Index(cleaned[idx:], ":")
+        if colon < 0 {
+                return "", false
+        }
+        colonAbs := idx + colon + 1
+        // Skip spaces
+        for colonAbs < len(cleaned) && (cleaned[colonAbs] == ' ' || cleaned[colonAbs] == '\n' || cleaned[colonAbs] == '\t' || cleaned[colonAbs] == '\r') {
+                colonAbs++
+        }
+        if colonAbs >= len(cleaned) || cleaned[colonAbs] != '"' {
+                return "", false
+        }
+        start := colonAbs + 1
+        // Scan for next unescaped quote
+        escaped := false
+        for i := start; i < len(cleaned); i++ {
+                ch := cleaned[i]
+                if escaped {
+                        escaped = false
+                        continue
+                }
+                if ch == '\\' {
+                        escaped = true
+                        continue
+                }
+                if ch == '"' {
+                        // Try to unescape using json.Unmarshal on a JSON string literal
+                        lit := cleaned[start:i]
+                        var out string
+                        if err := json.Unmarshal([]byte("\""+lit+"\""), &out); err == nil {
+                                return out, strings.TrimSpace(out) != ""
+                        }
+                        // fallback: return raw slice
+                        return lit, strings.TrimSpace(lit) != ""
+                }
+        }
+        // Unterminated string: take remainder and try to decode by appending quote
+        lit := strings.TrimSpace(cleaned[start:])
+        lit = strings.TrimRight(lit, "}\n\r\t ")
+        var out string
+        if err := json.Unmarshal([]byte("\""+lit+"\""), &out); err == nil {
+                return out, strings.TrimSpace(out) != ""
+        }
+        return lit, strings.TrimSpace(lit) != ""
 }
 
 func extractFromInterface(v any) (string, []Suggestion, []Change, []string) {
