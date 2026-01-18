@@ -371,6 +371,79 @@
     el.style.display = 'block';
   }
 
+  function setStatusHtml(el, html, kind) {
+    if (!el) return;
+    el.innerHTML = html;
+    el.classList.remove('error', 'success');
+    if (kind) el.classList.add(kind);
+    el.style.display = 'block';
+  }
+
+  function attachStatusLinkActions(statusEl) {
+    if (!statusEl) return;
+    const copyBtn = statusEl.querySelector('[data-copy-link]');
+    const urlEl = statusEl.querySelector('[data-published-url]');
+    if (copyBtn && urlEl && !copyBtn.dataset.bound) {
+      copyBtn.dataset.bound = '1';
+      copyBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const url = urlEl.getAttribute('data-published-url') || urlEl.textContent || '';
+        if (!url) return;
+        try {
+          await navigator.clipboard.writeText(url);
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 1200);
+        } catch (_e2) {
+          // fallback
+          const ta = document.createElement('textarea');
+          ta.value = url;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 1200);
+        }
+      });
+    }
+  }
+
+  function isTokenExpired(token) {
+    if (!token) return true;
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return true;
+      let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (base64.length % 4) base64 += '=';
+      const payload = JSON.parse(atob(base64));
+      const now = Math.floor(Date.now() / 1000);
+      return payload.exp ? payload.exp < now : true;
+    } catch (_e) {
+      return true;
+    }
+  }
+
+  function getAccessToken() {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) return null;
+      if (isTokenExpired(token)) return null;
+      return token;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  async function safeJsonResponse(resp) {
+    const raw = await resp.text();
+    if (!raw) return { raw: '', json: null };
+    try {
+      return { raw, json: JSON.parse(raw) };
+    } catch (_e) {
+      return { raw, json: null };
+    }
+  }
+
   async function initPublishAndSocial(data) {
     // Elements
     const templateSelect = document.getElementById('blog-template-select');
@@ -489,9 +562,16 @@
           if (!lastTemplateHtml) {
             await renderPreview();
           }
+          const statusValue = statusSelect ? statusSelect.value : 'draft';
+          const token = getAccessToken();
+          const headers = { 'Content-Type': 'application/json' };
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+
           const resp = await fetch('/api/blog/publish', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             credentials: 'include',
             body: JSON.stringify({
               title: titleInput ? titleInput.value : generatedTitle,
@@ -502,19 +582,73 @@
               excerpt: lastExcerpt,
               meta_description: metaInput ? metaInput.value : generatedMeta,
               keywords: keywordsInput ? keywordsInput.value : generatedKeywords,
-              status: statusSelect ? statusSelect.value : 'draft',
+              status: statusValue,
             }),
           });
-          const json = await resp.json();
-          if (!resp.ok || !json?.success) {
-            throw new Error(json?.error || 'Publish failed');
+
+          const { raw, json } = await safeJsonResponse(resp);
+
+          if (resp.status === 401) {
+            const redirect = encodeURIComponent('/tools/ai-content-writer');
+            setStatusHtml(
+              publishStatus,
+              `Please <a href="/login?redirect=${redirect}" class="text-primary-700 font-semibold underline">login</a> to publish.`,
+              'error'
+            );
+            return;
           }
-          const slug = json.post?.slug || (slugInput ? slugInput.value : '');
-          setStatus(
-            publishStatus,
-            `Published! View: /blog/${slug}`,
-            'success'
-          );
+
+          if (!resp.ok || !json?.success) {
+            const errMsg =
+              json?.error ||
+              json?.message ||
+              json?.details ||
+              (raw ? raw.slice(0, 200) : null) ||
+              `Publish failed (HTTP ${resp.status})`;
+            throw new Error(errMsg);
+          }
+
+          const publishedSlug = json.post?.slug || (slugInput ? slugInput.value : '');
+          const safeSlug = encodeURIComponent(String(publishedSlug || '').trim());
+
+          if (statusValue === 'published') {
+            const fullUrl = `${window.location.origin}/blog/${safeSlug}`;
+            setStatusHtml(
+              publishStatus,
+              `
+                <div class="font-semibold mb-1">Published to Blog</div>
+                <div class="text-sm break-all mb-2">
+                  <a class="underline" href="/blog/${safeSlug}" data-published-url="${fullUrl}">${fullUrl}</a>
+                </div>
+                <div class="flex items-center gap-2">
+                  <a class="px-3 py-1.5 rounded-lg bg-white border border-green-200 text-sm font-semibold" href="/blog/${safeSlug}">Open</a>
+                  <button class="px-3 py-1.5 rounded-lg bg-white border border-green-200 text-sm font-semibold" type="button" data-copy-link="1">Copy link</button>
+                </div>
+              `.trim(),
+              'success'
+            );
+            attachStatusLinkActions(publishStatus);
+            publishStatus?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+          } else {
+            const fullUrl = `${window.location.origin}/my-blogs`;
+            setStatusHtml(
+              publishStatus,
+              `
+                <div class="font-semibold mb-1">Saved as Draft</div>
+                <div class="text-sm mb-2">You can find it here:</div>
+                <div class="text-sm break-all mb-2">
+                  <a class="underline" href="/my-blogs" data-published-url="${fullUrl}">${fullUrl}</a>
+                </div>
+                <div class="flex items-center gap-2">
+                  <a class="px-3 py-1.5 rounded-lg bg-white border border-green-200 text-sm font-semibold" href="/my-blogs">Open My Blogs</a>
+                  <button class="px-3 py-1.5 rounded-lg bg-white border border-green-200 text-sm font-semibold" type="button" data-copy-link="1">Copy link</button>
+                </div>
+              `.trim(),
+              'success'
+            );
+            attachStatusLinkActions(publishStatus);
+            publishStatus?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+          }
         } catch (err) {
           setStatus(publishStatus, err.message || 'Publish failed', 'error');
         }
