@@ -225,20 +225,22 @@ async function generateContent(options) {
           ? 'Write bilingual content: Tamil first, then English translation for each paragraph.'
           : 'Write the full content in English only.';
 
+    const safeWordCount = Math.max(100, Math.min(3000, Number(word_count) || 500));
+
     const systemText = `You are an expert content writer.
 Task: Produce a high-quality ${content_type}.
 Tone: ${tone}
-Target length: ~${word_count} words.
+Target length: ~${safeWordCount} words.
 ${languageRule}
 
 Output MUST be valid JSON only. Do not include markdown fences, explanations, or extra text.`;
 
-    const userText = `Topic/prompt:\n${prompt}\n\nRequirements:\n- include_title: ${include_title}\n- include_meta: ${include_meta}\n\nReturn JSON with shape:\n{\n  \"success\": true,\n  \"content\": {\"title\": \"\", \"meta_description\": \"\", \"keywords\": \"\", \"content\": \"\"},\n  \"metadata\": {\"word_count\": ${word_count}, \"language\": \"${language}\", \"content_type\": \"${content_type}\", \"model\": \"gemini-2.5-flash\"}\n}\n\nRules:\n- If include_title is false, set title to empty string.\n- If include_meta is false, set meta_description and keywords to empty string.\n- content should use paragraphs separated by blank lines.`;
+    const userText = `Topic/prompt:\n${prompt}\n\nRequirements:\n- include_title: ${include_title}\n- include_meta: ${include_meta}\n\nReturn JSON with shape:\n{\n  \"success\": true,\n  \"content\": {\"title\": \"\", \"meta_description\": \"\", \"keywords\": \"\", \"content\": \"\"},\n  \"metadata\": {\"word_count\": ${safeWordCount}, \"language\": \"${language}\", \"content_type\": \"${content_type}\", \"model\": \"gemini-2.5-flash\"}\n}\n\nRules:\n- If include_title is false, set title to empty string.\n- If include_meta is false, set meta_description and keywords to empty string.\n- content should use paragraphs separated by blank lines.`;
 
     // Try with schema first; if schema causes provider-side failure, fall back to plain JSON mime type.
     let result;
     try {
-      result = await geminiGenerate(systemText, userText, schema, chooseMaxOutputTokens(word_count));
+      result = await geminiGenerate(systemText, userText, schema, chooseMaxOutputTokens(safeWordCount));
     } catch (e) {
       const msg = String(e?.message || '');
       const details = e?.details ? String(e.details) : '';
@@ -254,16 +256,16 @@ Output MUST be valid JSON only. Do not include markdown fences, explanations, or
 
       if (looksLikeSchemaIssue) {
         console.warn('[AI-WRITER] Schema mode failed, retrying without responseSchema:', { msg, details });
-        result = await geminiGenerate(systemText, userText, null, chooseMaxOutputTokens(word_count));
+        result = await geminiGenerate(systemText, userText, null, chooseMaxOutputTokens(safeWordCount));
       } else {
         // Truncation: retry once with smaller target + explicit brevity constraints.
-        const retryWordCount = Math.min(300, Math.max(120, Number(word_count) || 300));
+        const retryWordCount = Math.min(300, Math.max(120, safeWordCount || 300));
         const retryTokens = chooseMaxOutputTokens(retryWordCount);
 
         const retrySystemText = `${systemText}\n\nIMPORTANT: Keep the response compact so JSON is not truncated. Aim for ~${retryWordCount} words max.`;
         const retryUserText = `Topic/prompt:\n${prompt}\n\nHard limits:\n- Keep content under ~${retryWordCount} words.\n- Keep JSON under ~12,000 characters.\n\nRequirements:\n- include_title: ${include_title}\n- include_meta: ${include_meta}\n\nReturn JSON with shape:\n{\n  \"success\": true,\n  \"content\": {\"title\": \"\", \"meta_description\": \"\", \"keywords\": \"\", \"content\": \"\"},\n  \"metadata\": {\"word_count\": ${retryWordCount}, \"language\": \"${language}\", \"content_type\": \"${content_type}\", \"model\": \"gemini-2.5-flash\"}\n}\n\nRules:\n- If include_title is false, set title to empty string.\n- If include_meta is false, set meta_description and keywords to empty string.\n- content should use paragraphs separated by blank lines.`;
 
-        console.warn('[AI-WRITER] Gemini output truncated; retrying with shorter target length', { word_count, retryWordCount, retryTokens });
+        console.warn('[AI-WRITER] Gemini output truncated; retrying with shorter target length', { word_count: safeWordCount, retryWordCount, retryTokens });
         result = await geminiGenerate(retrySystemText, retryUserText, schema, retryTokens);
       }
     }
@@ -619,12 +621,113 @@ Return JSON with shape:
   return result;
 }
 
+/**
+ * Generate catchy, realistic event name suggestions (Tamil/English/Bilingual).
+ * @param {Object} options
+ * @returns {Promise<Object>}
+ */
+async function generateEventNames(options) {
+  const {
+    language = 'tamil', // tamil | english | bilingual
+    event_type = 'Community event',
+    audience = '',
+    location = '',
+    date = '',
+    theme = '',
+    tone = 'professional', // professional | casual | academic | creative | persuasive
+    count = 10,
+    keywords = '',
+  } = options || {};
+
+  const safeCount = Math.max(3, Math.min(20, Number(count) || 10));
+  const languageRule =
+    String(language).toLowerCase() === 'tamil'
+      ? 'All suggestions must be in Tamil (தமிழ்) only.'
+      : String(language).toLowerCase() === 'bilingual'
+        ? 'For each suggestion, provide Tamil name first and an English name as a secondary field.'
+        : 'All suggestions must be in English only.';
+
+  const schema = {
+    type: 'object',
+    properties: {
+      success: { type: 'boolean' },
+      suggestions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            english_name: { type: 'string' },
+            tagline: { type: 'string' },
+            reason: { type: 'string' },
+          },
+          required: ['name'],
+        },
+      },
+      metadata: {
+        type: 'object',
+        properties: {
+          language: { type: 'string' },
+          tone: { type: 'string' },
+          model: { type: 'string' },
+          count: { type: 'integer' },
+        },
+        required: ['language', 'tone', 'model', 'count'],
+      },
+    },
+    required: ['success', 'suggestions', 'metadata'],
+  };
+
+  const systemText = `You are a branding assistant for events.
+Task: Suggest ${safeCount} catchy, realistic event names.
+Tone: ${tone}
+${languageRule}
+
+Rules:
+- Names must feel realistic (like real event titles).
+- Avoid childish names unless tone=creative.
+- Avoid repeats and near-duplicates.
+- Keep names concise (2-6 words typical).
+- Return ONLY valid JSON. No markdown, no extra text.`;
+
+  const userText = `Event details:
+- event_type: ${event_type}
+- audience: ${audience}
+- location: ${location}
+- date: ${date}
+- theme: ${theme}
+- keywords: ${keywords}
+
+Return JSON:
+{
+  "success": true,
+  "suggestions": [
+    {"name":"...", "english_name":"...", "tagline":"...", "reason":"..."}
+  ],
+  "metadata": {"language":"${language}", "tone":"${tone}", "model":"gemini-2.5-flash", "count": ${safeCount}}
+}
+
+Notes:
+- Only include english_name when language=bilingual (otherwise set to empty string).
+- tagline/reason can be empty strings, but name must be non-empty.`;
+
+  const result = await geminiGenerate(systemText, userText, schema, 2048);
+  if (!result || result.success !== true) {
+    throw createServiceError('Event name generation failed', `Invalid AI response: ${JSON.stringify(result).slice(0, 400)}`);
+  }
+  result.metadata = result.metadata || {};
+  result.metadata.model = result.metadata.model || 'gemini-2.5-flash';
+  result.metadata.count = Number(result.metadata.count || safeCount);
+  return result;
+}
+
 module.exports = {
   healthCheck,
   generateContent,
   improveContent,
   translateContent,
   renderBlogTemplate,
-  generateSocialVariants
+  generateSocialVariants,
+  generateEventNames
 };
 

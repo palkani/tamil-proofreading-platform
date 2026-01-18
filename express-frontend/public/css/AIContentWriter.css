@@ -292,6 +292,50 @@
   gap: 10px;
 }
 
+.btn-sm {
+  padding: 10px 14px;
+  font-size: 14px;
+  border-radius: 12px;
+}
+
+.result-card {
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.result-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.result-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(30, 58, 138, 0.1);
+  color: var(--primary);
+  font-weight: 800;
+  font-size: 13px;
+  border: 1px solid rgba(30, 58, 138, 0.18);
+}
+
 .btn-generate {
   width: 100%;
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);

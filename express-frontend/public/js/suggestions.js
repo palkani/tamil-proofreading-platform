@@ -10,6 +10,7 @@ class SuggestionsPanel {
     // emptyState controls what we show when suggestions.length === 0
     // - 'idle': initial guidance before analysis
     // - 'no-issues': analysis completed and no corrections found
+    // - 'resolved': user applied/ignored all suggestions for this run
     this.emptyState = 'idle';
   }
 
@@ -55,6 +56,9 @@ class SuggestionsPanel {
   removeSuggestion(id) {
     this.suggestions = this.suggestions.filter(s => s.id !== id);
     this.handledIds.add(id);
+    if (this.suggestions.length === 0 && this.handledIds.size > 0) {
+      this.emptyState = 'resolved';
+    }
     this.render();
   }
 
@@ -68,7 +72,13 @@ class SuggestionsPanel {
     // Update summary
     const total = this.suggestions.length;
     if (total === 0) {
-      this.summary.textContent = this.emptyState === 'no-issues' ? 'Looks solid!' : 'No suggestions yet';
+      if (this.emptyState === 'resolved') {
+        this.summary.textContent = 'All set!';
+      } else if (this.emptyState === 'no-issues') {
+        this.summary.textContent = 'Looks solid!';
+      } else {
+        this.summary.textContent = 'No suggestions yet';
+      }
       this.acceptAllBtn.classList.add('hidden');
     } else {
       this.summary.textContent = `${total} suggestion${total > 1 ? 's' : ''} found`;
@@ -79,7 +89,7 @@ class SuggestionsPanel {
     this.container.innerHTML = '';
 
     if (total === 0) {
-      if (this.emptyState === 'no-issues') {
+      if (this.emptyState === 'resolved') {
         this.container.innerHTML = `
           <div class="text-center py-12">
             <div class="mx-auto mb-4 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
@@ -87,7 +97,18 @@ class SuggestionsPanel {
                 <path stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/>
               </svg>
             </div>
-            <p class="text-base font-semibold text-gray-900">Looks solid! Keep writing—ProofTamilwill help fine-tune as you go</p>
+            <p class="text-base font-semibold text-gray-900">All set! You’ve applied all suggestions. Keep writing—ProofTamil will help fine-tune as you go</p>
+          </div>
+        `;
+      } else if (this.emptyState === 'no-issues') {
+        this.container.innerHTML = `
+          <div class="text-center py-12">
+            <div class="mx-auto mb-4 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+              <svg class="w-7 h-7 text-green-700" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/>
+              </svg>
+            </div>
+            <p class="text-base font-semibold text-gray-900">Looks solid! Keep writing—ProofTamil will help fine-tune as you go</p>
           </div>
         `;
       } else {

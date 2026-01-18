@@ -1636,7 +1636,7 @@ class HomeEditor {
                 <path stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/>
               </svg>
             </div>
-            <p class="text-sm font-semibold text-gray-900">Looks solid! Keep writing—ProofTamilwill help fine-tune as you go</p>
+            <p class="text-sm font-semibold text-gray-900">Looks solid! Keep writing—ProofTamil will help fine-tune as you go</p>
           </div>
         `;
       } else {

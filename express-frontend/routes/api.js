@@ -988,6 +988,25 @@ router.post('/ai-content-writer/social-variants', async (req, res) => {
   }
 });
 
+// Event name suggester (Tamil tool) - generate catchy event name ideas
+router.post('/event-name-suggester/suggest', async (req, res) => {
+  try {
+    if (!contentWriterService || typeof contentWriterService.generateEventNames !== 'function') {
+      return res.status(503).json({
+        error: 'Event Name Suggester service is not available',
+      });
+    }
+    const result = await contentWriterService.generateEventNames(req.body);
+    return res.json(result);
+  } catch (error) {
+    console.error('[EVENT-NAMES] Suggest error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.message || 'Event name suggestion failed',
+      details: error.details || error.response?.data?.error || error.message,
+    });
+  }
+});
+
 // Improve content endpoint
 router.post('/ai-content-writer/improve-content', async (req, res) => {
   try {

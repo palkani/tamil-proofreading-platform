@@ -359,6 +359,8 @@ class WorkspaceController {
 
     // AI submission result tracking (prevents multiple concurrent poll loops / SSE streams)
     this.analysisSeq = 0;
+    // Prevents the AI panel from immediately resetting to the idle state after the user applies suggestions.
+    this.suppressAutoAnalyzeUntil = 0;
     this.activeEventSource = null;
     
     // PART D: Prefix cache for suggestions
@@ -3222,6 +3224,12 @@ class WorkspaceController {
     
     console.log('[AI] 🚀 autoAnalyze() called with text length:', text.length);
     console.log('[AI] 📋 Full text:', text.substring(0, 200));
+
+    // If user just applied suggestions, don't immediately re-run analysis (it clears the panel).
+    if (this.suppressAutoAnalyzeUntil && Date.now() < this.suppressAutoAnalyzeUntil) {
+      console.log('[AI] ⏸️ Suppressing autoAnalyze right after applying suggestions');
+      return;
+    }
     
     // Skip if text is empty
     if (!text || text.length === 0) {
@@ -3892,6 +3900,13 @@ class WorkspaceController {
       }
       this.suggestionsPanel.removeSuggestion(suggestion.id);
     });
+
+    // Keep the "All set" empty-state visible and avoid immediately clearing it via a scheduled autoAnalyze.
+    if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
+      this.suggestionsPanel.setEmptyState('resolved');
+    }
+    this.lastAnalyzedText = this.getEditorText().trim();
+    this.suppressAutoAnalyzeUntil = Date.now() + 1500;
 
     this.updateAcceptedCount();
     this.showNotification('All suggestions applied!', 'success');

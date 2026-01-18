@@ -79,6 +79,17 @@ router.get('/tools/ai-content-writer', (req, res) => {
   });
 });
 
+// Event Name Suggester Tool page - accessible to everyone
+router.get('/tools/event-name-suggester', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('eventNameSuggesterTool') || getSeoData('home');
+  res.render('pages/event-name-suggester', {
+    title: 'Event Name Suggester - Catchy Tamil & English Event Names | ProofTamil',
+    seo: seo,
+    user: user
+  });
+});
+
 // Blog (public) - hosted posts
 router.get('/blog', async (req, res) => {
   const user = getCurrentUser(req);

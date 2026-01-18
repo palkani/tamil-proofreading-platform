@@ -72,9 +72,15 @@
     const language = document.getElementById('language-select').value;
     const contentType = document.getElementById('content-type-select').value;
     const tone = document.getElementById('tone-select').value;
-    const wordCount = parseInt(document.getElementById('word-count-select').value);
+    const wordCountRaw = (document.getElementById('word-count-select')?.value || '').trim();
+    const wordCount = parseInt(wordCountRaw, 10);
     const includeTitle = document.getElementById('include-title-checkbox').checked;
     const includeMeta = document.getElementById('include-meta-checkbox').checked;
+    
+    if (!Number.isFinite(wordCount) || wordCount < 100 || wordCount > 3000) {
+      showError('Please enter a valid word count between 100 and 3000');
+      return;
+    }
 
     setLoading(true);
     hideError();
@@ -379,12 +385,8 @@
     const previewEl = document.getElementById('blog-preview');
     const readingTimeEl = document.getElementById('blog-reading-time');
 
-    const socialBtn = document.getElementById('social-generate-btn');
-    const socialStatus = document.getElementById('social-status');
-    const durationSelect = document.getElementById('reels-duration-select');
-    const linkedinOut = document.getElementById('linkedin-output');
-    const facebookOut = document.getElementById('facebook-output');
-    const reelsOut = document.getElementById('reels-output');
+    // Social variants are a premium feature; UI is currently disabled.
+    // Keep the code paths for later release.
 
     // Inputs from generated content
     const language = data?.metadata?.language || document.getElementById('language-select')?.value || 'tamil';
@@ -519,66 +521,7 @@
       });
     }
 
-    // Copy buttons (social)
-    document.querySelectorAll('[data-copy-target]').forEach((btn) => {
-      if (btn.dataset.bound) return;
-      btn.dataset.bound = '1';
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        const id = btn.getAttribute('data-copy-target');
-        const el = id ? document.getElementById(id) : null;
-        if (!el) return;
-        try {
-          await navigator.clipboard.writeText(el.value || '');
-          alert('Copied!');
-        } catch (_e2) {
-          alert('Copy failed');
-        }
-      });
-    });
-
-    if (socialBtn && !socialBtn.dataset.bound) {
-      socialBtn.dataset.bound = '1';
-      socialBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        setStatus(socialStatus, 'Generating social variants...', null);
-        try {
-          const duration = Number(durationSelect ? durationSelect.value : 30) || 30;
-          const resp = await fetch('/api/ai-content-writer/social-variants', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: titleInput ? titleInput.value : generatedTitle,
-              content: generatedContent,
-              language,
-              tone,
-              reels_duration_seconds: duration,
-            }),
-          });
-          const json = await resp.json();
-          if (!resp.ok || !json?.success) {
-            throw new Error(json?.error || 'Social variant generation failed');
-          }
-          if (linkedinOut) linkedinOut.value = json.variants?.linkedin?.text || '';
-          if (facebookOut) facebookOut.value = json.variants?.facebook?.text || '';
-          if (reelsOut) {
-            const r = json.variants?.instagram_reels || {};
-            reelsOut.value =
-              `Duration: ${r.duration_seconds || duration}s\n\n` +
-              `Hook:\n${r.hook || ''}\n\n` +
-              `Scene beats:\n${(r.scene_beats || []).map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\n` +
-              `Voiceover:\n${r.voiceover_script || ''}\n\n` +
-              `On-screen text:\n${(r.on_screen_text || []).map((x, i) => `${i + 1}. ${x}`).join('\n')}\n\n` +
-              `Caption:\n${r.caption || ''}\n\n` +
-              `Hashtags:\n${(r.hashtags || []).join(' ')}`;
-          }
-          setStatus(socialStatus, 'Social variants generated.', 'success');
-          setTimeout(() => { if (socialStatus) socialStatus.style.display = 'none'; }, 1200);
-        } catch (err) {
-          setStatus(socialStatus, err.message || 'Social variant generation failed', 'error');
-        }
-      });
-    }
+    // NOTE: Social variants code intentionally disabled (premium feature).
   }
 
   function formatContent(content) {
