@@ -17,6 +17,8 @@ Allow: /register
 Allow: /tools/ocr
 Allow: /tools/converter
 Allow: /tools/ai-content-writer
+Allow: /tools/event-name-suggester
+Allow: /blog
 
 # Disallow private/authenticated pages from indexing
 Disallow: /dashboard

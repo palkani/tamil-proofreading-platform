@@ -197,6 +197,11 @@ router.get('/free-tamil-editor', (req, res) => {
   });
 });
 
+// SEO-friendly aliases (redirect to canonical landing page)
+router.get(['/tamil-typing', '/tamil-editor', '/tanglish-to-tamil'], (req, res) => {
+  return res.redirect(301, '/free-tamil-editor');
+});
+
 // Login page - redirect authenticated users to drafts
 router.get('/login', (req, res) => {
   if (req.user) {

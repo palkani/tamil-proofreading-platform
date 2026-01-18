@@ -4,7 +4,7 @@ const seoConfig = {
   home: {
     title: 'ProofTamil - Free Tamil Grammar Checker & AI Proofreading Tool Online',
     description: 'Free Tamil proofreading tool with AI-powered grammar checker, spell check, and writing correction. Check Tamil grammar online free, fix spelling errors, and improve Tamil writing instantly. Best Tamil AI writing assistant - no download needed!',
-    keywords: 'tamil proofreading tool, tamil proofreader online, tamil grammar checker, tamil grammar corrector, tamil spell checker, tamil spell check online, tamil writing assistant, tamil writing correction tool, tamil AI grammar checker, tamil grammar correction online, correct tamil grammar, fix tamil spelling, check tamil grammar free, tamil proofreading free',
+    keywords: 'tamil editor, tamil typing, tanglish to tamil, phonetic tamil typing, tamil typing tool, tamil editor online, tamil proofreading tool, tamil proofreader online, tamil grammar checker, tamil grammar corrector, tamil spell checker, tamil spell check online, tamil writing assistant, tamil writing correction tool, tamil AI grammar checker, tamil grammar correction online, correct tamil grammar, fix tamil spelling, check tamil grammar free, tamil proofreading free',
     canonical: BASE_URL + '/',
     ogTitle: 'ProofTamil - Free Tamil Grammar Checker & AI Proofreading Tool',
     ogDescription: 'Free Tamil grammar checker with AI proofreading. Check and correct Tamil grammar, spelling, and writing online. Instant results - no download required!',
@@ -32,9 +32,9 @@ const seoConfig = {
   },
 
   freeTamilEditor: {
-    title: 'Free Tamil Editor Online - Tamil Grammar & Spell Check | ProofTamil',
-    description: 'Free Tamil editor online for fast Tamil editing and proofreading. Fix Tamil grammar and spelling mistakes instantly, rewrite sentences, and improve Tamil writing—100% free, no download.',
-    keywords: 'free tamil editor, free tamil editing, tamil editor online free, tamil editing online, tamil proofreading free, tamil grammar check free, tamil spell check free, tamil sentence correction, tamil writing correction, tamil grammar corrector, tamil proofread online, edit tamil text online, tamil text editor',
+    title: 'Free Tamil Editor & Tamil Typing Tool Online (Tanglish to Tamil) | ProofTamil',
+    description: 'Free Tamil editor online for Tamil typing + proofreading. Type in Tanglish (phonetic) to get Tamil, paste Tamil text, and instantly fix grammar and spelling—100% free, no download.',
+    keywords: 'tamil typing, tamil typing tool, tanglish to tamil, phonetic tamil typing, tamil editor, free tamil editor, free tamil editing, tamil editor online free, tamil editing online, tamil proofreading free, tamil grammar check free, tamil spell check free, tamil sentence correction, tamil writing correction, tamil grammar corrector, tamil proofread online, edit tamil text online, tamil text editor',
     canonical: BASE_URL + '/free-tamil-editor',
     ogTitle: 'Free Tamil Editor Online - ProofTamil',
     ogDescription: 'Edit Tamil text online for free. AI Tamil grammar checker + spell check to improve your writing instantly.',
@@ -69,6 +69,16 @@ const seoConfig = {
     canonical: BASE_URL + '/tools/ai-content-writer',
     ogTitle: 'AI Tamil Content Writer - ProofTamil',
     ogDescription: 'Generate Tamil blogs, essays, and articles with AI in seconds.',
+    pageType: 'tool'
+  },
+
+  eventNameSuggesterTool: {
+    title: 'Event Name Suggester - Catchy Tamil & English Event Names | ProofTamil',
+    description: 'Generate catchy, realistic event names in Tamil, English, or bilingual style. Provide event type, theme, audience, and get ready-to-use name ideas with taglines.',
+    keywords: 'event name generator tamil, tamil event name suggester, event name ideas tamil, catchy event names tamil, ai event name generator, event branding tamil',
+    canonical: BASE_URL + '/tools/event-name-suggester',
+    ogTitle: 'Event Name Suggester - ProofTamil',
+    ogDescription: 'Get catchy Tamil/English event name ideas with taglines using AI.',
     pageType: 'tool'
   },
 
