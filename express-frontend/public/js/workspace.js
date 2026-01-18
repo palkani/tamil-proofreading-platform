@@ -3436,8 +3436,40 @@ class WorkspaceController {
           
           console.log('[AI Debug] Mapping suggestion:', { original, corrected, reason, type: result.type });
           
+          // Use a stable ID so duplicates don't render repeatedly (and Apply/Ignore stays consistent).
+          const normalizeComparable = (s) => {
+            try {
+              return String(s || '')
+                .normalize('NFC')
+                .replace(/[\u200B-\u200D\uFEFF]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .replace(/^[\"'“”‘’«»‹›「」『』『』《》〈〉「」『』ʻʼ’‘‚‛„‟\u2018\u2019\u201C\u201D\u201E\u2039\u203A\u00AB\u00BB\u201A\u201B]+/, '')
+                .replace(/[\"'“”‘’«»‹›「」『』『』《》〈〉「」『』ʻʼ’‘‚‛„‟\u2018\u2019\u201C\u201D\u201E\u2039\u203A\u00AB\u00BB\u201A\u201B]+$/, '')
+                .trim();
+            } catch (_e) {
+              return String(s || '').replace(/\s+/g, ' ').trim();
+            }
+          };
+          const hashString = (str) => {
+            let h = 2166136261;
+            const s = String(str || '');
+            for (let i = 0; i < s.length; i++) {
+              h ^= s.charCodeAt(i);
+              h = Math.imul(h, 16777619);
+            }
+            return (h >>> 0).toString(16);
+          };
+          const startIdxForKey =
+            result.start_index ??
+            result.startIndex ??
+            result.StartIndex ??
+            '';
+          const stableKey = `${normalizeComparable(result.type || result.Type || 'grammar').toLowerCase()}|${normalizeComparable(original)}|${normalizeComparable(corrected)}|${normalizeComparable(reason)}|${startIdxForKey}`;
+          const stableId = `gemini-${hashString(stableKey)}`;
+
           return {
-            id: `gemini-${result.id || index}-${Date.now()}`,
+            id: stableId,
             title: reason || 'Grammar Suggestion',
             description: reason,
             type: result.type || result.Type || 'grammar',
@@ -3461,9 +3493,22 @@ class WorkspaceController {
             }
           };
         });
+
+      // Final guard: dedupe identical suggestions (backend can sometimes repeat items)
+      const dedupedGeminiSuggestions = (() => {
+        const seen = new Set();
+        const out = [];
+        for (const s of geminiSuggestions) {
+          if (!s || !s.id) continue;
+          if (seen.has(s.id)) continue;
+          seen.add(s.id);
+          out.push(s);
+        }
+        return out;
+      })();
       
-      console.log('[AI Debug] Mapped suggestions:', geminiSuggestions.length, 'items');
-      console.log('[AI Debug] Mapped suggestions data:', JSON.stringify(geminiSuggestions, null, 2));
+      console.log('[AI Debug] Mapped suggestions:', dedupedGeminiSuggestions.length, 'items');
+      console.log('[AI Debug] Mapped suggestions data:', JSON.stringify(dedupedGeminiSuggestions, null, 2));
       
       if (!this.suggestionsPanel) {
         console.error('[AI Debug] ❌ Cannot add suggestions - suggestionsPanel is null!');
@@ -3474,9 +3519,9 @@ class WorkspaceController {
       this.suggestionsPanel.clearSuggestions();
       console.log('[AI Debug] Cleared suggestions panel');
       
-      if (geminiSuggestions.length > 0) {
-        this.suggestionsPanel.addSuggestions(geminiSuggestions);
-        console.log('[AI Debug] Added', geminiSuggestions.length, 'suggestions to panel');
+      if (dedupedGeminiSuggestions.length > 0) {
+        this.suggestionsPanel.addSuggestions(dedupedGeminiSuggestions);
+        console.log('[AI Debug] Added', dedupedGeminiSuggestions.length, 'suggestions to panel');
         console.log('[AI Debug] Panel suggestions count after add:', this.suggestionsPanel.suggestions.length);
       } else {
         console.warn('[AI Debug] ⚠️ No suggestions to add (all filtered out or empty response)');
@@ -3484,7 +3529,7 @@ class WorkspaceController {
       
       // Highlight spelling mistakes in editor
       if (this.editor && typeof this.editor.highlightSpellingMistakes === 'function') {
-        this.editor.highlightSpellingMistakes(geminiSuggestions);
+        this.editor.highlightSpellingMistakes(dedupedGeminiSuggestions);
       }
       
       console.log('[AI Debug] Final panel suggestions count:', this.suggestionsPanel.suggestions.length);
@@ -3496,13 +3541,13 @@ class WorkspaceController {
         return;
       }
 
-      if (geminiSuggestions.length === 0) {
+      if (dedupedGeminiSuggestions.length === 0) {
         if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
           this.suggestionsPanel.setEmptyState('no-issues');
         }
         this.updateAnalysisStatus('no-issues');
       } else {
-        this.updateAnalysisStatus('complete', geminiSuggestions.length);
+        this.updateAnalysisStatus('complete', dedupedGeminiSuggestions.length);
       }
     } catch (error) {
       if (error.name === 'AbortError') {

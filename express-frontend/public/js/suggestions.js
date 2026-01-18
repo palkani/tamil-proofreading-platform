@@ -14,8 +14,58 @@ class SuggestionsPanel {
     this.emptyState = 'idle';
   }
 
+  normalizeComparable(s) {
+    try {
+      return String(s || '')
+        .normalize('NFC')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/^[\"'“”‘’«»‹›「」『』『』《》〈〉「」『』ʻʼ’‘‚‛„‟\u2018\u2019\u201C\u201D\u201E\u2039\u203A\u00AB\u00BB\u201A\u201B]+/, '')
+        .replace(/[\"'“”‘’«»‹›「」『』『』《》〈〉「」『』ʻʼ’‘‚‛„‟\u2018\u2019\u201C\u201D\u201E\u2039\u203A\u00AB\u00BB\u201A\u201B]+$/, '')
+        .trim();
+    } catch (_e) {
+      return String(s || '').replace(/\s+/g, ' ').trim();
+    }
+  }
+
+  hashString(str) {
+    // FNV-1a (fast + stable, good enough for IDs)
+    let h = 2166136261;
+    const s = String(str || '');
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16);
+  }
+
+  stableKeyFromSuggestion(s) {
+    const type = this.normalizeComparable(s?.type || 'grammar').toLowerCase();
+    const title = this.normalizeComparable(s?.title || '');
+    const desc = this.normalizeComparable(s?.description || '');
+    const src = this.normalizeComparable(s?.sourceText || '');
+    const prev = this.normalizeComparable(s?.preview || '');
+    return `${type}|${title}|${desc}|${src}|${prev}`;
+  }
+
+  dedupeSuggestions(list) {
+    if (!Array.isArray(list)) return [];
+    const seen = new Set();
+    const out = [];
+    for (const s of list) {
+      if (!s) continue;
+      const key = this.stableKeyFromSuggestion(s);
+      const stableId = s.id || `sugg-${this.hashString(key)}`;
+      if (seen.has(stableId)) continue;
+      seen.add(stableId);
+      out.push({ ...s, id: stableId });
+    }
+    return out;
+  }
+
   setSuggestions(suggestions) {
-    this.suggestions = suggestions || [];
+    this.suggestions = this.dedupeSuggestions(suggestions || []);
     this.emptyState = this.suggestions.length ? 'idle' : this.emptyState;
     this.render();
   }
@@ -28,11 +78,12 @@ class SuggestionsPanel {
       return;
     }
     
-    // Filter out already handled suggestions
-    const filtered = newSuggestions.filter(s => !this.handledIds.has(s.id));
+    // Ensure stable IDs + dedupe, then filter out already handled suggestions
+    const normalized = this.dedupeSuggestions(newSuggestions);
+    const filtered = normalized.filter(s => !this.handledIds.has(s.id));
     console.log('[SuggestionsPanel] After filtering handledIds:', filtered.length, 'items remain');
     
-    this.suggestions = [...this.suggestions, ...filtered];
+    this.suggestions = this.dedupeSuggestions([...this.suggestions, ...filtered]);
     console.log('[SuggestionsPanel] Total suggestions now:', this.suggestions.length);
     if (this.suggestions.length > 0) {
       this.emptyState = 'idle';

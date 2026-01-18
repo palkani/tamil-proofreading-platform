@@ -1372,15 +1372,40 @@ class HomeEditor {
 
   extractSuggestionsFromPayload(payload) {
     // 1) GoTamil-style corrections from SSE stream handler (preferred)
+    const hashString = (str) => {
+      let h = 2166136261;
+      const s = String(str || '');
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return (h >>> 0).toString(16);
+    };
+
     if (Array.isArray(payload?.corrections)) {
-      return payload.corrections.map((c, index) => ({
-        id: index,
-        original: c.originalText || c.original || '',
-        corrected: c.correction || c.corrected || '',
-        reason: c.reason || '',
-        type: c.type || 'grammar',
-        alternatives: [],
-      }));
+      const mapped = payload.corrections.map((c, index) => {
+        const original = c.originalText || c.original || '';
+        const corrected = c.correction || c.corrected || '';
+        const reason = c.reason || '';
+        const type = c.type || 'grammar';
+        const start = c.start_index ?? c.startIndex ?? c.start ?? '';
+        const key = `${normalizeComparable(type).toLowerCase()}|${normalizeComparable(original)}|${normalizeComparable(corrected)}|${normalizeComparable(reason)}|${start}`;
+        return {
+          id: `home-${hashString(key) || index}`,
+          original,
+          corrected,
+          reason,
+          type,
+          alternatives: [],
+        };
+      });
+      const seen = new Set();
+      return mapped.filter((s) => {
+        if (!s?.id) return false;
+        if (seen.has(s.id)) return false;
+        seen.add(s.id);
+        return true;
+      });
     }
 
     // 2) Raw suggestions stored on submission (stringified JSON)
@@ -1402,7 +1427,7 @@ class HomeEditor {
       }
     };
 
-    return list
+    const mapped = list
       .map((item, index) => ({
       id: index,
       original: item.original || item.originalText || '',
@@ -1415,6 +1440,20 @@ class HomeEditor {
         const o = normalizeComparable(s.original);
         const c = normalizeComparable(s.corrected);
         return o && c && o !== c;
+      });
+
+    // Dedupe repeated suggestions (same original/corrected/type/reason)
+    const seen = new Set();
+    return mapped
+      .map((s, idx) => {
+        const key = `${normalizeComparable(s.type).toLowerCase()}|${normalizeComparable(s.original)}|${normalizeComparable(s.corrected)}|${normalizeComparable(s.reason)}`;
+        return { ...s, id: `home-${hashString(key) || idx}` };
+      })
+      .filter((s) => {
+        if (!s?.id) return false;
+        if (seen.has(s.id)) return false;
+        seen.add(s.id);
+        return true;
       });
   }
   
