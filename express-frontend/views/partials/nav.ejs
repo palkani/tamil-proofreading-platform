@@ -10,11 +10,6 @@
           </a>
         </div>
         <div class="hidden sm:ml-8 sm:flex sm:space-x-4">
-          <!-- Public nav -->
-          <a href="/blog" class="<%= active === 'blog' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
-            Blog
-          </a>
-
           <% if (user && user.email) { %>
             <a href="/dashboard" class="<%= active === 'dashboard' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
               Dashboard
@@ -44,6 +39,9 @@
       <div class="flex items-center gap-4">
         <% if (user && user.email) { %>
           <!-- Authenticated User Menu -->
+          <a href="/blog" class="<%= active === 'blog' ? 'text-primary-600 font-semibold' : 'text-primary-600 hover:opacity-80' %> inline-flex items-center px-3 py-2 text-sm font-medium transition-opacity">
+            Blog
+          </a>
           <a href="/contact" class="<%= active === 'contact' ? 'text-primary-600 font-semibold' : 'text-primary-600 hover:opacity-80' %> inline-flex items-center px-3 py-2 text-sm font-medium transition-opacity">
             Contact
           </a>
@@ -60,6 +58,9 @@
           </button>
         <% } else { %>
           <!-- Unauthenticated User - Show Login/Signup Links -->
+          <a href="/blog" class="<%= active === 'blog' ? 'text-primary-600 font-semibold' : 'text-primary-600 hover:opacity-80' %> inline-flex items-center px-3 py-2 text-sm font-medium transition-opacity">
+            Blog
+          </a>
           <a href="/contact" class="<%= active === 'contact' ? 'text-primary-600 font-semibold' : 'text-primary-600 hover:opacity-80' %> inline-flex items-center px-3 py-2 text-sm font-medium transition-opacity">
             Contact
           </a>
