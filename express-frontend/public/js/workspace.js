@@ -679,10 +679,19 @@ class WorkspaceController {
       }
     }
 
-    // Prevent duplicate requests
+    // Prevent duplicate requests (same query already in-flight)
     if (this.fetchingSuggestions && this.currentFetchQuery === query) {
       console.log('[IME] Already fetching for query:', query);
       return [];
+    }
+
+    // IMPORTANT UX FIX:
+    // Do NOT abort in-flight suggest requests. Aborts show as "failed" (red X) in DevTools.
+    // Instead, allow only one in-flight request and queue the latest token.
+    if (this.fetchingSuggestions && this.currentFetchQuery && this.currentFetchQuery !== query) {
+      this._imePending = { q: query, mode, limit };
+      // Don't clear the dropdown/UI while typing; keep current suggestions until the next completes.
+      return this.currentSuggestions || [];
     }
 
     // Set fetching state + request sequencing (prevents stale responses overwriting the UI)
@@ -697,19 +706,12 @@ class WorkspaceController {
       
       console.log('[IME] Fetching suggestions for:', query, 'from:', url);
 
-      // Create abort controller
-      if (this.translitAbort) {
-        this.translitAbort.abort();
-      }
-      this.translitAbort = new AbortController();
-
       // Fetch from API
       // IMPORTANT: Don't use apiFetch here - this endpoint doesn't require auth
       // Using regular fetch prevents auth redirects that might interfere with suggestions
       const response = await fetch(url, {
         method: 'GET',
         cache: 'no-store',
-        signal: this.translitAbort.signal,
         headers: {
           'Accept': 'application/json',
         },
@@ -867,6 +869,19 @@ class WorkspaceController {
       // Reset fetching state
       this.fetchingSuggestions = false;
       this.currentFetchQuery = null;
+
+      // If user kept typing while we were fetching, run once more for the latest queued token.
+      const pending = this._imePending;
+      this._imePending = null;
+      if (pending && pending.q && pending.q !== query) {
+        setTimeout(() => {
+          try {
+            this.fetchRunnerSuggestions(pending);
+          } catch (_e) {
+            // ignore
+          }
+        }, 0);
+      }
     }
   }
 
@@ -4433,18 +4448,34 @@ if (typeof window.USE_TIPTAP_EDITOR === 'undefined') {
 // Global TipTap editor instance
 let tiptapWorkspaceEditor = null;
 
-function getTipTapTokenBeforeCaret() {
+function getTipTapTokenAroundCaret() {
   if (!window.USE_TIPTAP_EDITOR || !tiptapWorkspaceEditor) return null;
   try {
-    const { from } = tiptapWorkspaceEditor.state.selection;
-    const textBefore = tiptapWorkspaceEditor.state.doc.textBetween(0, from, '\n', '\n');
-    const match = textBefore.match(/[A-Za-z]+$/);
-    if (!match) return null;
-    const token = match[0];
+    const { state } = tiptapWorkspaceEditor;
+    const sel = state.selection;
+    if (!sel || !sel.$from) return null;
+    const $from = sel.$from;
+    const parent = $from.parent;
+    if (!parent || !parent.isTextblock) return null;
+
+    const offset = $from.parentOffset || 0;
+    const text = parent.textBetween(0, parent.content.size, '\n', '\n') || '';
+    if (!text) return null;
+
+    const before = text.slice(0, offset);
+    const after = text.slice(offset);
+    const left = (before.match(/([A-Za-z]+)$/) || [])[1] || '';
+    const right = (after.match(/^([A-Za-z]+)/) || [])[1] || '';
+    const token = left + right;
+    if (!token) return null;
+
+    const startOff = offset - left.length;
+    const endOff = offset + right.length;
+    const base = $from.start(); // absolute doc pos where this textblock starts
     return {
       token,
-      fromPos: from - token.length,
-      toPos: from,
+      fromPos: base + startOff,
+      toPos: base + endOff,
     };
   } catch (e) {
     return null;
@@ -4453,7 +4484,7 @@ function getTipTapTokenBeforeCaret() {
 
 function replaceTipTapTokenAtCaret(replacement, appendSpace = false) {
   if (!window.USE_TIPTAP_EDITOR || !tiptapWorkspaceEditor) return false;
-  const info = getTipTapTokenBeforeCaret();
+  const info = getTipTapTokenAroundCaret();
   if (!info || !info.token) return false;
   const token = info.token;
   if (!/^[A-Za-z]+$/.test(token)) return false;
