@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
-const { redirectIfAuth, getCurrentUser } = require('../middleware/auth');
+const { redirectIfAuth, getCurrentUser, requireAuth } = require('../middleware/auth');
 const { getSeoData } = require('../config/seo');
 // Build backend API URL (matches api/auth proxy)
 function getBackendApiUrl() {
@@ -295,6 +295,53 @@ ${items}
   } catch (e) {
     res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
     return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>ProofTamil Blog</title><link>${baseUrl}/blog</link><description>Blog feed temporarily unavailable</description></channel></rss>`);
+  }
+});
+
+// My Blogs (protected) - list current user's posts (draft + published)
+router.get('/my-blogs', requireAuth, async (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('myBlogs') || getSeoData('home');
+  try {
+    const headers = {};
+    if (req.headers.cookie) headers.cookie = req.headers.cookie;
+    if (req.headers.authorization) headers.authorization = req.headers.authorization;
+
+    const backendRes = await axios.get(`${BACKEND_URL}/blog/me/posts`, {
+      params: { limit: 200 },
+      headers,
+      withCredentials: true,
+      timeout: 10000,
+      validateStatus: () => true,
+    });
+
+    if (backendRes.status < 200 || backendRes.status >= 300) {
+      const msg = backendRes.data?.error || `HTTP ${backendRes.status}`;
+      return res.render('pages/my-blogs', {
+        title: seo.title,
+        seo,
+        user,
+        posts: [],
+        error: msg,
+      });
+    }
+
+    const posts = backendRes.data?.posts || [];
+    return res.render('pages/my-blogs', {
+      title: seo.title,
+      seo,
+      user,
+      posts,
+      error: null,
+    });
+  } catch (e) {
+    return res.render('pages/my-blogs', {
+      title: seo.title,
+      seo,
+      user,
+      posts: [],
+      error: e.message || 'Failed to load your posts',
+    });
   }
 });
 

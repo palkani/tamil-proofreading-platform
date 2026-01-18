@@ -1,0 +1,85 @@
+<%- include('../partials/header') %>
+
+<%- include('../partials/nav', { active: 'myBlogs', user: user || null }) %>
+
+<main class="max-w-6xl mx-auto px-6 py-12">
+  <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
+    <div>
+      <h1 class="text-4xl font-extrabold text-gray-900 tracking-tight">My Blogs</h1>
+      <p class="mt-2 text-gray-600">
+        Manage your drafts and published posts.
+      </p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="/tools/ai-content-writer" class="inline-flex items-center px-5 py-2.5 rounded-full bg-primary-600 text-white font-semibold shadow-lg shadow-primary-600/20 hover:shadow-xl transition">
+        + New Post
+      </a>
+      <a href="/blog" class="inline-flex items-center px-4 py-2.5 rounded-full border border-gray-200 bg-white text-gray-700 hover:border-primary-500 hover:shadow-sm transition">
+        View Public Blog →
+      </a>
+    </div>
+  </div>
+
+  <% if (error) { %>
+    <div class="border border-red-200 bg-red-50 rounded-xl p-4 text-red-700">
+      <div class="font-semibold">Failed to load your blog posts</div>
+      <div class="text-sm mt-1"><%= error %></div>
+    </div>
+  <% } %>
+
+  <% if (!error && (!posts || posts.length === 0)) { %>
+    <div class="border border-gray-200 bg-white rounded-2xl p-8 text-center">
+      <div class="text-gray-900 font-semibold">No posts yet</div>
+      <div class="text-gray-600 text-sm mt-2">Create your first Tamil blog post with the AI Content Writer.</div>
+      <div class="mt-4">
+        <a href="/tools/ai-content-writer" class="inline-flex items-center px-5 py-2.5 rounded-full bg-primary-600 text-white font-semibold shadow-lg shadow-primary-600/20 hover:shadow-xl transition">
+          Create a post
+        </a>
+      </div>
+    </div>
+  <% } %>
+
+  <% if (posts && posts.length > 0) { %>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <% posts.forEach((p) => { %>
+        <div class="bg-white rounded-2xl border border-gray-200 hover:border-primary-500 hover:shadow-md transition-all p-6">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-xs text-gray-500 mb-2">
+                <% if (p.status === 'published') { %>
+                  Published
+                <% } else { %>
+                  Draft
+                <% } %>
+                •
+                <%= new Date(p.updated_at || p.created_at).toLocaleDateString() %>
+              </div>
+              <h2 class="text-xl font-bold text-gray-900 line-clamp-2"><%= p.title %></h2>
+              <p class="mt-3 text-gray-600 line-clamp-3">
+                <%= (p.excerpt || p.meta_description || (p.content_text || '').slice(0, 180)) %><%= (p.content_text || '').length > 180 ? '…' : '' %>
+              </p>
+              <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+                <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700"><%= (p.language || 'tamil') %></span>
+                <span class="px-2 py-0.5 rounded bg-blue-50 text-primary-700"><%= p.slug %></span>
+              </div>
+            </div>
+            <div class="flex flex-col items-end gap-2">
+              <span class="text-xs px-2 py-1 rounded-full <%= p.status === 'published' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700' %> font-semibold whitespace-nowrap">
+                <%= p.status === 'published' ? 'Published' : 'Draft' %>
+              </span>
+              <% if (p.status === 'published') { %>
+                <a href="/blog/<%= p.slug %>" class="text-sm font-semibold text-primary-600 hover:text-primary-700">Open</a>
+              <% } else { %>
+                <span class="text-sm font-semibold text-gray-400">Not public</span>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+</main>
+
+<%- include('../partials/footer') %>
+
+
