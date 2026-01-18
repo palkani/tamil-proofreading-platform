@@ -16,6 +16,7 @@
   const ogDescription = typeof seo !== 'undefined' && seo.ogDescription ? seo.ogDescription : seoDescription;
   const noIndex = typeof seo !== 'undefined' && seo.noIndex ? true : false;
   const pageType = typeof seo !== 'undefined' && seo.pageType ? seo.pageType : 'website';
+  const ogType = pageType === 'blogPost' ? 'article' : 'website';
   %>
   
   <!-- Primary Meta Tags - Optimized for Tamil Grammar Checker & Proofreading Keywords -->
@@ -42,7 +43,7 @@
   </script>
   
   <!-- Open Graph / Facebook -->
-  <meta property="og:type" content="website">
+  <meta property="og:type" content="<%= ogType %>">
   <meta property="og:url" content="<%= canonicalUrl %>">
   <meta property="og:title" content="<%= ogTitle %>">
   <meta property="og:description" content="<%= ogDescription %>">
@@ -51,6 +52,11 @@
   <meta property="og:locale:alternate" content="en_US">
   <meta property="og:image" content="<%= baseUrl %>/images/tamil-logo.svg">
   <meta property="og:image:alt" content="ProofTamil - Free Tamil Grammar Checker and Proofreading Tool">
+  <% if (typeof seo !== 'undefined' && seo.article) { %>
+  <% if (seo.article.publishedTime) { %><meta property="article:published_time" content="<%= seo.article.publishedTime %>"><% } %>
+  <% if (seo.article.modifiedTime) { %><meta property="article:modified_time" content="<%= seo.article.modifiedTime %>"><% } %>
+  <% if (seo.article.section) { %><meta property="article:section" content="<%= seo.article.section %>"><% } %>
+  <% } %>
   
   <!-- Twitter -->
   <meta name="twitter:card" content="summary">
@@ -61,6 +67,10 @@
   
   <!-- Canonical URL -->
   <link rel="canonical" href="<%= canonicalUrl %>">
+
+  <% if (pageType === 'blogIndex' || pageType === 'blogPost') { %>
+  <link rel="alternate" type="application/rss+xml" title="ProofTamil Blog RSS" href="<%= baseUrl %>/blog/rss.xml">
+  <% } %>
   
   <!-- Alternate Languages -->
   <link rel="alternate" hreflang="ta" href="<%= canonicalUrl %>">
@@ -247,6 +257,10 @@
     }
   }
   </script>
+  <% } %>
+
+  <% if (typeof seo !== 'undefined' && seo.jsonLd) { %>
+  <script type="application/ld+json"><%- seo.jsonLd %></script>
   <% } %>
   
   <% if (pageType === 'article' || pageType === 'howToUse') { %>

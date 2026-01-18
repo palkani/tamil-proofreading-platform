@@ -93,8 +93,13 @@ router.get('/tools/event-name-suggester', (req, res) => {
 // Blog (public) - hosted posts
 router.get('/blog', async (req, res) => {
   const user = getCurrentUser(req);
-  const seo = getSeoData('blog') || getSeoData('home');
   const page = Number(req.query.page || 1) || 1;
+  const seoBase = getSeoData('blog') || getSeoData('home');
+  const seo = {
+    ...seoBase,
+    canonical: `https://prooftamil.com/blog${page > 1 ? `?page=${page}` : ''}`,
+    pageType: 'blogIndex',
+  };
   try {
     const backendRes = await axios.get(`${BACKEND_URL}/blog/posts`, {
       params: { page, limit: 12 },
@@ -118,6 +123,8 @@ router.get('/blog', async (req, res) => {
       user,
       posts,
       error: null,
+      page,
+      limit: 12,
     });
   } catch (e) {
     return res.render('pages/blog-index', {
@@ -126,13 +133,15 @@ router.get('/blog', async (req, res) => {
       user,
       posts: [],
       error: e.message || 'Failed to load posts',
+      page,
+      limit: 12,
     });
   }
 });
 
 router.get('/blog/:slug', async (req, res) => {
   const user = getCurrentUser(req);
-  const seo = getSeoData('blogPost') || getSeoData('home');
+  const seoBase = getSeoData('blogPost') || getSeoData('home');
   const slug = String(req.params.slug || '').trim();
   try {
     const backendRes = await axios.get(`${BACKEND_URL}/blog/posts/${encodeURIComponent(slug)}`, {
@@ -162,12 +171,53 @@ router.get('/blog/:slug', async (req, res) => {
     if (!post) {
       return res.render('pages/blog-post', {
         title: 'Blog | ProofTamil',
-        seo,
+        seo: seoBase,
         user,
         post: null,
         error: 'Invalid backend response',
       });
     }
+
+    const canonical = `https://prooftamil.com/blog/${encodeURIComponent(post.slug || slug)}`;
+    const desc =
+      (post.meta_description && String(post.meta_description).trim()) ||
+      (post.excerpt && String(post.excerpt).trim()) ||
+      String(post.content_text || '').trim().slice(0, 160);
+    const keywords = [post.keywords, seoBase.keywords].filter(Boolean).join(', ');
+    const publishedIso = post.published_at ? new Date(post.published_at).toISOString() : null;
+    const modifiedIso = post.updated_at ? new Date(post.updated_at).toISOString() : (post.created_at ? new Date(post.created_at).toISOString() : null);
+
+    const jsonLdObj = {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": post.title,
+      "description": desc,
+      "inLanguage": (post.language || "tamil") === "tamil" ? "ta" : "en",
+      "mainEntityOfPage": { "@type": "WebPage", "@id": canonical },
+      "url": canonical,
+      "datePublished": publishedIso || undefined,
+      "dateModified": modifiedIso || undefined,
+      "author": { "@type": "Organization", "name": "ProofTamil" },
+      "publisher": { "@type": "Organization", "name": "ProofTamil", "logo": { "@type": "ImageObject", "url": "https://prooftamil.com/images/tamil-logo.svg" } },
+    };
+
+    const seo = {
+      ...seoBase,
+      title: `${post.title} | ProofTamil`,
+      ogTitle: post.title,
+      description: desc,
+      ogDescription: desc,
+      keywords,
+      canonical,
+      pageType: 'blogPost',
+      article: {
+        publishedTime: publishedIso,
+        modifiedTime: modifiedIso,
+        section: 'Blog',
+      },
+      jsonLd: JSON.stringify(jsonLdObj),
+    };
+
     return res.render('pages/blog-post', {
       title: `${post.title} | ProofTamil`,
       seo,
@@ -178,11 +228,73 @@ router.get('/blog/:slug', async (req, res) => {
   } catch (e) {
     return res.render('pages/blog-post', {
       title: 'Blog | ProofTamil',
-      seo,
+      seo: seoBase,
       user,
       post: null,
       error: e.message || 'Failed to load post',
     });
+  }
+});
+
+// RSS feed for blog (public)
+router.get('/blog/rss.xml', async (req, res) => {
+  const baseUrl = 'https://prooftamil.com';
+  try {
+    const backendRes = await axios.get(`${BACKEND_URL}/blog/posts`, {
+      params: { page: 1, limit: 50 },
+      timeout: 10000,
+      validateStatus: () => true,
+    });
+    const posts = backendRes.status >= 200 && backendRes.status < 300 ? (backendRes.data?.posts || []) : [];
+
+    const escapeXml = (s) =>
+      String(s || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&apos;');
+
+    const items = posts
+      .filter((p) => p && p.slug && p.title)
+      .map((p) => {
+        const link = `${baseUrl}/blog/${encodeURIComponent(p.slug)}`;
+        const pub = p.published_at || p.created_at;
+        const pubDate = pub ? new Date(pub).toUTCString() : new Date().toUTCString();
+        const desc =
+          (p.meta_description && String(p.meta_description).trim()) ||
+          (p.excerpt && String(p.excerpt).trim()) ||
+          String(p.content_text || '').trim().slice(0, 200);
+        return `
+          <item>
+            <title>${escapeXml(p.title)}</title>
+            <link>${escapeXml(link)}</link>
+            <guid isPermaLink="true">${escapeXml(link)}</guid>
+            <pubDate>${escapeXml(pubDate)}</pubDate>
+            <description>${escapeXml(desc)}</description>
+          </item>
+        `.trim();
+      })
+      .join('\n');
+
+    const rss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>ProofTamil Blog</title>
+    <link>${baseUrl}/blog</link>
+    <description>Tamil writing tips, proofreading examples, and AI-assisted workflows.</description>
+    <language>ta</language>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+${items}
+  </channel>
+</rss>`;
+
+    res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=1800, stale-while-revalidate=86400');
+    return res.send(rss);
+  } catch (e) {
+    res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
+    return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>ProofTamil Blog</title><link>${baseUrl}/blog</link><description>Blog feed temporarily unavailable</description></channel></rss>`);
   }
 });
 

@@ -36,13 +36,17 @@
         <% } %>
       </header>
 
-      <!-- Render safe text version by default -->
+      <!-- Render sanitized HTML when available (better SEO: headings/lists), fallback to text paragraphs -->
       <section class="prose prose-lg max-w-none tamil-text">
-        <% (post.content_text || '').split(/\\n\\n+/).forEach((para) => { %>
-          <% if (para && para.trim()) { %>
-            <p><%= para.trim() %></p>
-          <% } %>
-        <% }) %>
+        <% if (post.content_html && String(post.content_html).trim()) { %>
+          <%- post.content_html %>
+        <% } else { %>
+          <% (post.content_text || '').split(/\\n\\n+/).forEach((para) => { %>
+            <% if (para && para.trim()) { %>
+              <p><%= para.trim() %></p>
+            <% } %>
+          <% }) %>
+        <% } %>
       </section>
 
       <% if (post.keywords) { %>

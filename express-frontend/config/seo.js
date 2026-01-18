@@ -82,6 +82,27 @@ const seoConfig = {
     pageType: 'tool'
   },
 
+  blog: {
+    title: 'Tamil Writing Blog - ProofTamil (Tips, Examples, Proofreading)',
+    description: 'Read Tamil writing tips, proofreading examples, and AI-assisted workflows. Learn Tamil grammar, spelling, and style with practical examples.',
+    keywords: 'tamil blog, tamil writing tips, tamil grammar tips, tamil proofreading examples, tamil spelling tips, tamil editor tips, tanglish to tamil tips',
+    canonical: BASE_URL + '/blog',
+    ogTitle: 'Tamil Writing Blog - ProofTamil',
+    ogDescription: 'Tamil writing tips, proofreading examples, and AI-assisted workflows.',
+    pageType: 'blogIndex'
+  },
+
+  blogPost: {
+    // NOTE: blog post pages override these dynamically in routes/index.js
+    title: 'Blog Post | ProofTamil',
+    description: 'Tamil writing tips and proofreading examples from ProofTamil.',
+    keywords: 'tamil blog, tamil writing, tamil proofreading, tamil grammar checker',
+    canonical: BASE_URL + '/blog',
+    ogTitle: 'Blog Post | ProofTamil',
+    ogDescription: 'Tamil writing tips and proofreading examples from ProofTamil.',
+    pageType: 'blogPost'
+  },
+
   login: {
     title: 'Login - Tamil Grammar Checker & Proofreading Tool | ProofTamil',
     description: 'Login to ProofTamil - Free Tamil proofreader online. Access your saved drafts, personalized grammar suggestions, and AI-powered Tamil writing assistance.',
