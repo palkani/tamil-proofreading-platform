@@ -320,6 +320,45 @@ func (h *Handlers) BlogListMyPosts(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "posts": posts})
 }
 
+// Protected: delete a post owned by the current user (soft delete).
+func (h *Handlers) BlogDeletePost(c *gin.Context) {
+	userID, ok := getUserIDFromContext(c)
+	if !ok || userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	idStr := c.Param("id")
+	id64, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil || id64 == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid id"})
+		return
+	}
+	postID := uint(id64)
+
+	var post models.BlogPost
+	if err := h.db.First(&post, postID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load post"})
+		return
+	}
+
+	if post.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+		return
+	}
+
+	if err := h.db.Delete(&post).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete post"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
 func (h *Handlers) ensureUniqueSlug(base string, excludeID uint) (string, error) {
 	base = slugify(base)
 	if base == "" {

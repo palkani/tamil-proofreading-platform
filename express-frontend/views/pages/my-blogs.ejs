@@ -42,7 +42,7 @@
   <% if (posts && posts.length > 0) { %>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <% posts.forEach((p) => { %>
-        <div class="bg-white rounded-2xl border border-gray-200 hover:border-primary-500 hover:shadow-md transition-all p-6">
+        <div class="bg-white rounded-2xl border border-gray-200 hover:border-primary-500 hover:shadow-md transition-all p-6" data-post-card="1" data-post-id="<%= p.id %>">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="text-xs text-gray-500 mb-2">
@@ -72,6 +72,15 @@
               <% } else { %>
                 <span class="text-sm font-semibold text-gray-400">Not public</span>
               <% } %>
+              <button
+                type="button"
+                class="mt-1 text-sm font-semibold text-red-600 hover:text-red-700"
+                data-delete-post="1"
+                data-post-id="<%= p.id %>"
+                data-post-title="<%= (p.title || '').replace(/\"/g, '&quot;') %>"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
@@ -79,6 +88,71 @@
     </div>
   <% } %>
 </main>
+
+<script>
+  (function() {
+    function getAccessToken() {
+      try { return localStorage.getItem('access_token'); } catch { return null; }
+    }
+
+    async function deletePostById(id, title) {
+      const ok = window.confirm(`Delete this blog post?\n\n${title || ''}\n\nThis cannot be undone.`);
+      if (!ok) return;
+
+      const token = getAccessToken();
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const resp = await fetch(`/api/blog/posts/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers,
+        credentials: 'include',
+      });
+
+      const raw = await resp.text();
+      let json = null;
+      try { json = raw ? JSON.parse(raw) : null; } catch {}
+
+      if (resp.status === 401) {
+        const redirect = encodeURIComponent('/my-blogs');
+        window.location.href = `/login?redirect=${redirect}`;
+        return;
+      }
+
+      if (!resp.ok || !json?.success) {
+        const msg = json?.error || json?.message || raw || `Delete failed (HTTP ${resp.status})`;
+        throw new Error(msg);
+      }
+
+      // Remove card from DOM
+      const card = document.querySelector(`[data-post-card="1"][data-post-id="${CSS.escape(String(id))}"]`);
+      if (card) card.remove();
+
+      // If no cards left, reload to show empty-state block.
+      const remaining = document.querySelectorAll('[data-post-card="1"]').length;
+      if (remaining === 0) window.location.reload();
+    }
+
+    document.addEventListener('click', async (e) => {
+      const btn = e.target && e.target.closest && e.target.closest('[data-delete-post="1"]');
+      if (!btn) return;
+      const id = btn.getAttribute('data-post-id');
+      const title = btn.getAttribute('data-post-title') || '';
+      if (!id) return;
+      btn.disabled = true;
+      const oldText = btn.textContent;
+      btn.textContent = 'Deleting...';
+      try {
+        await deletePostById(id, title);
+      } catch (err) {
+        console.error(err);
+        alert(err.message || 'Failed to delete post');
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
+    });
+  })();
+</script>
 
 <%- include('../partials/footer') %>
 

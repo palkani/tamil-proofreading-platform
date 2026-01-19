@@ -1148,6 +1148,38 @@ router.post('/blog/publish', async (req, res) => {
   }
 });
 
+// Delete a blog post by id (requires auth cookies/Authorization)
+router.delete('/blog/posts/:id', async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      return res.status(400).json({ error: 'Invalid id' });
+    }
+
+    const url = `${BACKEND_URL}/blog/posts/${encodeURIComponent(id)}`;
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    if (req.headers.authorization) {
+      headers.Authorization = req.headers.authorization;
+    }
+    if (req.headers.cookie) {
+      headers.cookie = req.headers.cookie; // forward httpOnly cookies
+    }
+
+    const backendRes = await axios.delete(url, {
+      headers,
+      withCredentials: true,
+      validateStatus: () => true,
+    });
+
+    return res.status(backendRes.status).json(backendRes.data);
+  } catch (error) {
+    console.error('[BLOG-DELETE] error:', error.message);
+    return res.status(502).json({ error: 'Blog delete failed', details: error.message });
+  }
+});
+
 // ============= END BLOG PUBLISH API =============
 
 // CRITICAL: IME suggestions endpoint MUST be before router.all('/*') catch-all

@@ -209,6 +209,7 @@ func main() {
 		// Blog (protected)
 		protected.POST("/blog/posts", h.BlogCreatePost)
 		protected.PUT("/blog/posts/:id", h.BlogUpdatePost)
+		protected.DELETE("/blog/posts/:id", h.BlogDeletePost)
 		protected.GET("/blog/me/posts", h.BlogListMyPosts)
 		protected.POST("/contact", h.SubmitContactMessage)
 		protected.POST("/payments/create", h.CreatePayment)
