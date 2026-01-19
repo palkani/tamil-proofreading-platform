@@ -2,28 +2,6 @@
 (function () {
   const $ = (id) => document.getElementById(id);
 
-  function setTab(tab) {
-    const proofBtn = $('home-ai-tab-proofread');
-    const writerBtn = $('home-ai-tab-writer');
-    const proofPane = $('home-suggestions-container');
-    const writerPane = $('home-writer-container');
-    if (!proofBtn || !writerBtn || !proofPane || !writerPane) return;
-
-    const isWriter = tab === 'writer';
-    proofPane.classList.toggle('hidden', isWriter);
-    writerPane.classList.toggle('hidden', !isWriter);
-
-    proofBtn.classList.toggle('bg-white', !isWriter);
-    proofBtn.classList.toggle('shadow-sm', !isWriter);
-    proofBtn.classList.toggle('text-gray-900', !isWriter);
-    proofBtn.classList.toggle('text-gray-700', isWriter);
-
-    writerBtn.classList.toggle('bg-white', isWriter);
-    writerBtn.classList.toggle('shadow-sm', isWriter);
-    writerBtn.classList.toggle('text-gray-900', isWriter);
-    writerBtn.classList.toggle('text-gray-700', !isWriter);
-  }
-
   function showStatus(msg, kind) {
     const el = $('home-writer-status');
     if (!el) return;
@@ -116,14 +94,6 @@
   }
 
   function init() {
-    const proofBtn = $('home-ai-tab-proofread');
-    const writerBtn = $('home-ai-tab-writer');
-    if (proofBtn) proofBtn.addEventListener('click', () => setTab('proofread'));
-    if (writerBtn) writerBtn.addEventListener('click', () => setTab('writer'));
-
-    // Default to AI Content Writer on the Home page (promo placement)
-    setTab('writer');
-
     const genBtn = $('home-writer-generate');
     if (genBtn) genBtn.addEventListener('click', generate);
 
