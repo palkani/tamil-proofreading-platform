@@ -121,6 +121,9 @@
     if (proofBtn) proofBtn.addEventListener('click', () => setTab('proofread'));
     if (writerBtn) writerBtn.addEventListener('click', () => setTab('writer'));
 
+    // Default to AI Content Writer on the Home page (promo placement)
+    setTab('writer');
+
     const genBtn = $('home-writer-generate');
     if (genBtn) genBtn.addEventListener('click', generate);
 

@@ -365,11 +365,15 @@
 
               <!-- Tabs -->
               <div class="px-6 py-3 border-b border-gray-200 bg-white">
+                <div class="mb-3">
+                  <div class="text-sm font-semibold text-gray-900">New: AI Content Writer (Home demo)</div>
+                  <div class="text-xs text-gray-600">Generate a 200‑word blog draft instantly — no setup.</div>
+                </div>
                 <div class="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
-                  <button type="button" id="home-ai-tab-proofread" class="px-3 py-2 text-sm font-semibold rounded-lg bg-white text-gray-900 shadow-sm">
+                  <button type="button" id="home-ai-tab-proofread" class="px-3 py-2 text-sm font-semibold rounded-lg text-gray-700 hover:text-gray-900">
                     Proofreading
                   </button>
-                  <button type="button" id="home-ai-tab-writer" class="px-3 py-2 text-sm font-semibold rounded-lg text-gray-700 hover:text-gray-900">
+                  <button type="button" id="home-ai-tab-writer" class="px-3 py-2 text-sm font-semibold rounded-lg bg-white text-gray-900 shadow-sm">
                     AI Content Writer
                   </button>
                 </div>
@@ -377,14 +381,14 @@
 
               <div class="p-6 flex-1 overflow-auto">
                 <!-- Proofreading -->
-                <div id="home-suggestions-container" class="text-center text-gray-600">
+                <div id="home-suggestions-container" class="text-center text-gray-600 hidden">
                   <p class="text-base mb-2">📝 Paste Tamil text to get proofreading suggestions</p>
                   <p class="text-base mb-2">💡 Type English words to get Tamil IME suggestions</p>
                   <p class="text-base">✨ Suggestions appear automatically</p>
                 </div>
 
                 <!-- AI Content Writer (mini taste) -->
-                <div id="home-writer-container" class="hidden">
+                <div id="home-writer-container">
                   <div class="mb-4">
                     <div class="text-sm font-semibold text-gray-900 mb-1">Generate a short blog draft</div>
                     <div class="text-xs text-gray-600">Try it here, then open the full tool for templates + publishing.</div>
