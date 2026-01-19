@@ -12,6 +12,7 @@ import (
 
 	"tamil-proofreading-platform/backend/internal/config"
 	"tamil-proofreading-platform/backend/internal/handlers"
+	"tamil-proofreading-platform/backend/internal/migrations"
 	"tamil-proofreading-platform/backend/internal/middleware"
 	"tamil-proofreading-platform/backend/internal/models"
 	"tamil-proofreading-platform/backend/internal/translit"
@@ -104,6 +105,7 @@ func main() {
 		// Only run migrations if SKIP_MIGRATIONS is not set to "true"
 		// In production, set SKIP_MIGRATIONS=true to avoid running migrations on every deploy
 		skipMigrations := os.Getenv("SKIP_MIGRATIONS")
+		skipSchemaFixes := os.Getenv("SKIP_SCHEMA_FIXES")
 		if skipMigrations == "true" {
 			log.Printf("[INFO] Skipping database migrations (SKIP_MIGRATIONS=true)")
 		} else {
@@ -128,6 +130,19 @@ func main() {
 				log.Printf("[ERROR] Database migration failed: %v", err)
 			} else {
 				log.Printf("[SUCCESS] Database migrations completed")
+			}
+		}
+
+		// IMPORTANT: AutoMigrate often won't widen column types. Ensure large-text
+		// columns for blog posts are wide enough to prevent partial content saves.
+		// This is safe/idempotent and typically runs quickly.
+		if skipSchemaFixes == "true" {
+			log.Printf("[INFO] Skipping schema fixes (SKIP_SCHEMA_FIXES=true)")
+		} else {
+			if err := migrations.EnsureBlogPostTextColumns(db); err != nil {
+				log.Printf("[WARN] BlogPost schema fix did not complete: %v", err)
+			} else {
+				log.Printf("[SUCCESS] BlogPost schema verified (text columns)")
 			}
 		}
 	}
