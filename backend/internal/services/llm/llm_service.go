@@ -2,12 +2,14 @@ package llm
 
 import (
         "context"
+	"crypto/sha256"
         "encoding/json"
         "errors"
         "fmt"
         "log"
         "os"
         "strings"
+	"sync"
         "time"
 
         "tamil-proofreading-platform/backend/internal/models"
@@ -22,6 +24,7 @@ type LLMService struct {
         googleAPIKey string
         anthropicKey string
         nlpService   *nlp.TamilNLPService
+	proofreadCache *proofreadCache
 }
 
 type ProofreadResult struct {
@@ -60,6 +63,7 @@ func NewLLMService(openAIKey, googleKey, anthropicKey string, nlpService *nlp.Ta
                 googleAPIKey: strings.TrimSpace(googleKey),
                 anthropicKey: strings.TrimSpace(anthropicKey),
                 nlpService:   nlpService,
+		proofreadCache: newProofreadCache(5 * time.Minute),
         }
 }
 
@@ -126,8 +130,9 @@ var promptInjectionPhrases = []string{
 func (s *LLMService) selectOptimalModel(text string, wordCount int) models.ModelType {
         charCount := len(text)
         
-        // Use flash-lite for short, simple texts (faster response)
-        if charCount < 200 || wordCount < 50 {
+	// Latency-first: most interactive submits are short/medium.
+	// Use flash-lite for <= ~200 words, or generally small payloads.
+	if wordCount <= 250 || charCount <= 1500 {
                 log.Printf("[MODEL-SELECT] Using flash-lite (chars=%d, words=%d)", charCount, wordCount)
                 return models.ModelType(models.ModelGeminiFlashLite)
         }
@@ -140,13 +145,74 @@ func (s *LLMService) selectOptimalModel(text string, wordCount int) models.Model
 func maxOutputTokensForProofread(wordCount int, charCount int) int {
         // Latency lever: smaller max tokens -> faster decoding.
         switch {
-        case charCount < 600 && wordCount < 120:
-                return 1024
-        case charCount < 2000 && wordCount < 400:
-                return 2048
+	case charCount < 800 && wordCount <= 150:
+		return 512
+	case charCount < 1800 && wordCount <= 300:
+		return 768
+	case charCount < 3500 && wordCount <= 700:
+		return 1536
         default:
-                return 4096
+		return 2048
         }
+}
+
+type proofreadCacheEntry struct {
+	value     *ProofreadResult
+	expiresAt time.Time
+}
+
+type proofreadCache struct {
+	ttl time.Duration
+	mu  sync.RWMutex
+	m   map[string]proofreadCacheEntry
+}
+
+func newProofreadCache(ttl time.Duration) *proofreadCache {
+	return &proofreadCache{
+		ttl: ttl,
+		m:   make(map[string]proofreadCacheEntry, 256),
+	}
+}
+
+func (c *proofreadCache) get(key string) (*ProofreadResult, bool) {
+	if c == nil {
+		return nil, false
+	}
+	now := time.Now()
+	c.mu.RLock()
+	entry, ok := c.m[key]
+	c.mu.RUnlock()
+	if !ok {
+		return nil, false
+	}
+	if now.After(entry.expiresAt) {
+		c.mu.Lock()
+		delete(c.m, key)
+		c.mu.Unlock()
+		return nil, false
+	}
+	return entry.value, true
+}
+
+func (c *proofreadCache) set(key string, val *ProofreadResult) {
+	if c == nil || val == nil {
+		return
+	}
+	c.mu.Lock()
+	// simple size guard to avoid unbounded growth
+	if len(c.m) > 2000 {
+		for k := range c.m {
+			delete(c.m, k)
+			break
+		}
+	}
+	c.m[key] = proofreadCacheEntry{value: val, expiresAt: time.Now().Add(c.ttl)}
+	c.mu.Unlock()
+}
+
+func proofreadCacheKey(cleaned string, includeAlternatives bool, model models.ModelType, maxTokens int) string {
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s|alt=%t|model=%s|maxt=%d", cleaned, includeAlternatives, string(model), maxTokens)))
+	return fmt.Sprintf("%x", h[:])
 }
 
 func normalizeComparable(s string) string {
@@ -279,6 +345,13 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
         selectedModel := s.selectOptimalModel(cleaned, wordCount)
         maxTokens := maxOutputTokensForProofread(wordCount, len(cleaned))
 
+	// Fast path cache: identical inputs within TTL return instantly.
+	if cached, ok := s.proofreadCache.get(proofreadCacheKey(cleaned, includeAlternatives, selectedModel, maxTokens)); ok && cached != nil {
+		out := *cached
+		out.ProcessingTime = time.Since(start).Seconds()
+		return &out, nil
+	}
+
         // Use the Gemini API with the selected model
         content, err := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey, maxTokens)
         if err != nil {
@@ -307,14 +380,16 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
         }
         suggestions = fillSuggestionIndices(cleaned, suggestions)
 
-        return &ProofreadResult{
+	out := &ProofreadResult{
                 CorrectedText:  corrected,
                 Suggestions:    suggestions,
                 Changes:        changes,
                 Alternatives:   alternatives,
                 ModelUsed:      selectedModel,
                 ProcessingTime: time.Since(start).Seconds(),
-        }, nil
+	}
+	s.proofreadCache.set(proofreadCacheKey(cleaned, includeAlternatives, selectedModel, maxTokens), out)
+	return out, nil
 }
 
 func (s *LLMService) Proofread(ctx context.Context, text string, requestID string) (*ProofreadResult, error) {
@@ -837,5 +912,7 @@ func (s *LLMService) proofreadWithAnthropic(ctx context.Context, cleaned string,
 
 // ProofreadText is the main method called by handlers - wraps Proofread for backward compatibility
 func (s *LLMService) ProofreadText(ctx context.Context, text string, wordCount int, includeAlternatives bool, requestID string) (*ProofreadResult, error) {
-        return s.Proofread(ctx, text, requestID)
+	// Latency-first path used by the homepage/demo submit (save_draft=false).
+	// Avoid the multi-provider fallback pipeline here; it's better to be fast.
+	return s.ProofreadWithGoogle(ctx, text, requestID, includeAlternatives)
 }

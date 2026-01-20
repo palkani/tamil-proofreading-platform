@@ -13,37 +13,24 @@ import (
         "time"
 )
 
-var proofreadingPrompt = `You are a Tamil Proofreading Assistant. Identify and correct ALL Tamil language errors.
+var proofreadingPrompt = `You are a Tamil Proofreading Assistant.
 
-Find these error types:
-1. SPELLING: Wrong/missing/extra letters (நல்வாழ்த்துக → நல்வாழ்த்துக்கள்)
-2. GRAMMAR: Wrong tense, conjugation, case suffix (நான் போனான் → நான் போனேன்)
-3. PUNCTUATION: Missing/wrong punctuation (வந்தேன் → வந்தேன்।)
-4. INCOMPLETE WORDS: Cut off words (வணக் → வணக்கம்)
-5. SPACE ERRORS: Missing/extra spaces (நண்பர்கள்எல்லாம் → நண்பர்கள் எல்லாம்)
-6. SANDHI: Wrong word joining (அவன் உடன் → அவனுடன்)
-7. DATE/ORDINAL FORMATTING: When a number is followed by "ஆம்/வது", it should use a hyphen (23 ஆம் தேதி → 23-ஆம் தேதி)
+Task: Find and correct Tamil writing errors and return ONLY JSON.
 
-RULES (STRICT):
-- Return ONLY valid JSON. No markdown, no code fences.
-- Return corrections array first, corrected_text last.
-- If output might be long, set corrected_text to "" (empty string) but ALWAYS return valid JSON.
-- Each correction: {"original": "...", "corrected": "...", "reason": "...", "type": "...", "start_index": 0, "end_index": 0}
-- If original = corrected → DO NOT include it
-- Only include actual errors, NO alternatives for correct words
-- Preserve meaning exactly
-- Keep English words unchanged unless misspelled
-- If entirely correct: corrections = []
+Error types:
+- spelling, grammar, punctuation, incomplete, space, sandhi
+- date/ordinal hyphenation: "23 ஆம்/வது" → "23-ஆம்/வது"
 
-JSON FORMAT:
-{
-  "corrections": [
-    {"original": "wrong", "corrected": "fixed", "reason": "தமிழ் விளக்கம்", "type": "spelling|grammar|punctuation|incomplete|space|sandhi", "start_index": 0, "end_index": 0}
-  ],
-  "corrected_text": "corrected Tamil text (or empty string if too long)"
-}
+STRICT OUTPUT:
+- Output ONLY valid JSON (no markdown / no code fences).
+- Prefer FAST output: return corrections; set corrected_text to "" (empty string).
+- Do NOT include entries where original == corrected.
+- Preserve meaning; keep English words unchanged unless misspelled.
 
-TEXT TO PROOFREAD:
+JSON:
+{"corrections":[{"original":"","corrected":"","reason":"தமிழ் விளக்கம்","type":"spelling|grammar|punctuation|incomplete|space|sandhi","start_index":0,"end_index":0}],"corrected_text":""}
+
+TEXT:
 [USER'S TAMIL TEXT HERE]
 `
 

@@ -172,6 +172,8 @@ func main() {
 		api.POST("/auth/password-strength", h.CheckPasswordStrength)
 		api.POST("/auth/forgot-password", h.ForgotPassword)
 		api.POST("/auth/reset-password", h.ResetPassword)
+		// Contact form should work without login; attach user_id if available.
+		api.POST("/contact", middleware.OptionalAuthMiddleware(cfg.JWTSecret), h.SubmitContactMessage)
 		api.GET("/autocomplete", h.AutocompleteTamil)
 		api.POST("/transliterate", h.Transliterate)
 		api.POST("/tamil-words", h.AddTamilWord)
@@ -211,7 +213,6 @@ func main() {
 		protected.PUT("/blog/posts/:id", h.BlogUpdatePost)
 		protected.DELETE("/blog/posts/:id", h.BlogDeletePost)
 		protected.GET("/blog/me/posts", h.BlogListMyPosts)
-		protected.POST("/contact", h.SubmitContactMessage)
 		protected.POST("/payments/create", h.CreatePayment)
 		protected.POST("/payments/verify", h.VerifyPayment)
 		protected.GET("/payments", h.GetPayments)

@@ -40,11 +40,8 @@ func (h *Handlers) SubmitContactMessage(c *gin.Context) {
                 return
         }
 
-        userID, err := middleware.GetUserFromContext(c)
-        if err != nil {
-                c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-                return
-        }
+        // Optional auth: if user is logged in, attach user_id; otherwise store 0.
+        userID, _ := middleware.GetUserFromContext(c)
 
         contact := &models.ContactMessage{
                 UserID:  userID,
