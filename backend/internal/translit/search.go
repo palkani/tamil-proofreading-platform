@@ -102,6 +102,32 @@ func GetSuggestions(input string) []Suggestion {
                 return []Suggestion{}
         }
 
+        // Common-word overrides for high-confidence everyday terms where
+        // users expect Google-eTamil-style results.
+        // NOTE: Keep these minimal and high-signal; they should only correct
+        // clearly wrong/undesirable top results from the generic lexicon ranking.
+        // Example: "therkku" (south) should prefer "தெற்கு" over "தெருக்கு".
+        commonOverride := map[string]string{
+                "therkku": "தெற்கு",
+                "therku":  "தெற்கு",
+                "therkk":  "தெற்கு", // user may pause before typing the last vowel
+        }
+        if fixed, ok := commonOverride[key]; ok && fixed != "" {
+                // Still include other results as fallback, but ensure the expected word is top.
+                rest := GetSuggestionsFromKeyNoOverride(key)
+                out := []Suggestion{{Word: fixed, Score: 1.01}}
+                for _, s := range rest {
+                        if s.Word == fixed {
+                                continue
+                        }
+                        out = append(out, s)
+                        if len(out) >= 5 {
+                                break
+                        }
+                }
+                return out
+        }
+
         var candidates []Entry
 
         // Try exact match first
@@ -180,5 +206,62 @@ func GetSuggestions(input string) []Suggestion {
                 suggestions = suggestions[:5]
         }
 
+        return suggestions
+}
+
+// GetSuggestionsFromKeyNoOverride runs the normal lexicon-based scoring without
+// applying the commonOverride map above. This avoids recursion when we prepend
+// an override candidate.
+func GetSuggestionsFromKeyNoOverride(key string) []Suggestion {
+        // key is assumed normalized + non-empty
+        var candidates []Entry
+
+        if entries, exists := exactMap[key]; exists {
+                candidates = entries
+        } else if entries, exists := prefixMap[key]; exists {
+                candidates = entries
+        } else {
+                maxDist := 2
+                if len(key) > 6 {
+                        maxDist = 3
+                }
+                allEntries := getAllEntries()
+                candidates = fuzzyMatch(key, allEntries, maxDist)
+        }
+
+        if len(candidates) == 0 {
+                return []Suggestion{}
+        }
+
+        type scoredEntry struct {
+                entry Entry
+                score float64
+        }
+        var scored []scoredEntry
+        for _, candidate := range candidates {
+                simScore := phoneticSimilarity(key, normalize(candidate.Phonetic))
+                freqScore := float64(candidate.Frequency) / float64(maxFreq)
+                finalScore := 0.7*simScore + 0.3*freqScore
+                if simScore < 0.5 {
+                        finalScore = 0.5*simScore + 0.5*freqScore
+                }
+                scored = append(scored, scoredEntry{entry: candidate, score: finalScore})
+        }
+
+        sort.Slice(scored, func(i, j int) bool {
+                if math.Abs(scored[i].score-scored[j].score) < 0.01 {
+                        return scored[i].entry.Frequency > scored[j].entry.Frequency
+                }
+                return scored[i].score > scored[j].score
+        })
+
+        var suggestions []Suggestion
+        for _, s := range scored {
+                suggestions = append(suggestions, Suggestion{Word: s.entry.Tamil, Score: s.score})
+        }
+        suggestions = deduplicateSuggestions(suggestions)
+        if len(suggestions) > 5 {
+                suggestions = suggestions[:5]
+        }
         return suggestions
 }
