@@ -90,6 +90,17 @@ router.get('/tools/event-name-suggester', (req, res) => {
   });
 });
 
+// Font Converter Tool page - accessible to everyone
+router.get('/tools/font-converter', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('fontConverterTool') || getSeoData('home');
+  res.render('pages/font-converter', {
+    title: 'Tamil Font Converter - Bamini / TSCII to Unicode | ProofTamil',
+    seo,
+    user,
+  });
+});
+
 // Blog (public) - hosted posts
 router.get('/blog', async (req, res) => {
   const user = getCurrentUser(req);

@@ -195,6 +195,7 @@ app.get('/sitemap.xml', (req, res) => {
     { url: '/blog', priority: '0.85', changefreq: 'weekly' },
     { url: '/tools/ocr', priority: '0.85', changefreq: 'weekly' },
     { url: '/tools/converter', priority: '0.85', changefreq: 'weekly' },
+    { url: '/tools/font-converter', priority: '0.85', changefreq: 'weekly' },
     { url: '/tools/ai-content-writer', priority: '0.8', changefreq: 'weekly' },
     { url: '/tools/event-name-suggester', priority: '0.75', changefreq: 'weekly' },
     { url: '/contact', priority: '0.7', changefreq: 'monthly' },
