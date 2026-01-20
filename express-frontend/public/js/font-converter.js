@@ -15,6 +15,8 @@
     clear: $('fc-clear'),
     copy: $('fc-copy'),
     download: $('fc-download'),
+    preview: $('fc-preview'),
+    previewHint: $('fc-preview-hint'),
   };
 
   const state = {
@@ -326,6 +328,38 @@
       }
 
       els.output.value = out;
+
+      // Preview behavior:
+      // - Unicode: show normally with Tamil font stack.
+      // - Legacy (Bamini/TSCII): attempt to render using the legacy font name (if installed)
+      if (els.preview) {
+        els.preview.textContent = out;
+      }
+      if (els.previewHint) {
+        els.previewHint.textContent = '';
+      }
+
+      if (els.preview) {
+        if (toEnc === 'bamini') {
+          els.preview.style.fontFamily = 'Bamini, monospace';
+          if (els.previewHint) {
+            els.previewHint.textContent =
+              'Bamini output is legacy-encoded text. It will look correct only if the Bamini font is installed on your device (or in Word/Photoshop with Bamini selected).';
+          }
+        } else if (toEnc === 'tscii') {
+          els.preview.style.fontFamily = 'TSCII, monospace';
+          if (els.previewHint) {
+            els.previewHint.textContent =
+              'TSCII output is legacy-encoded text. It will look correct only if a compatible TSCII font is installed.';
+          }
+        } else {
+          els.preview.style.fontFamily = '';
+          if (els.previewHint) {
+            els.previewHint.textContent = 'Unicode preview (works everywhere).';
+          }
+        }
+      }
+
       setStatus(`Converted ${fromEnc.toUpperCase()} → ${toEnc.toUpperCase()}`, 'success');
     } catch (e) {
       console.error(e);
