@@ -3550,7 +3550,7 @@ class WorkspaceController {
       case 'error':
         summaryEl.innerHTML = `
           <div class="text-sm text-red-600">
-            Analysis failed. Click "Check with Gemini AI" to retry.
+            AI temporarily unavailable. Your text is safe — try again in a moment.
           </div>
         `;
         break;

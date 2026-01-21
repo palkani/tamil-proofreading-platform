@@ -222,7 +222,17 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	if !saveDraft {
 		result, err := h.llmService.ProofreadText(c.Request.Context(), req.Text, wordCount, req.IncludeAlternatives, requestID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "request_id": requestID})
+			// NEVER hard-fail inline submit due to AI/provider errors.
+			// Keep a stable, success-shaped response so the UI can continue gracefully.
+			c.Header("Cache-Control", "no-store, max-age=0")
+			c.Header("Pragma", "no-cache")
+			c.Header("Expires", "0")
+			c.JSON(http.StatusOK, gin.H{
+				"success":     true,
+				"request_id":  requestID,
+				"corrections": []any{},
+				"message":     "AI temporarily unavailable. Please try again.",
+			})
 			return
 		}
 		auditlog.Info(c, "submission.inline_completed", map[string]any{
@@ -373,27 +383,38 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, req
 			"error":         err.Error(),
 		})
 
-		// Update submission with error
+		// NEVER hard-fail drafts due to AI/provider errors.
+		// Mark completed with empty suggestions so clients always get a result event.
+		updates := map[string]interface{}{
+			"status":          models.StatusCompleted,
+			"proofread_text":  text,
+			"suggestions":     "[]",
+			"alternatives":    "[]",
+			"processing_time": 0,
+			"error":           err.Error(),
+		}
 		if updateErr := h.db.Model(&models.Submission{}).
 			Where("id = ?", submissionID).
-			Updates(map[string]interface{}{
-				"status": models.StatusFailed,
-				"error":  err.Error(),
-			}).Error; updateErr != nil {
-			log.Printf("Error updating submission with error status: %v", updateErr)
+			Updates(updates).Error; updateErr != nil {
+			log.Printf("Error updating submission after AI failure: %v", updateErr)
+		}
+
+		var updated models.Submission
+		if loadErr := h.db.First(&updated, submissionID).Error; loadErr != nil {
+			log.Printf("Error loading submission after AI failure %d: %v", submissionID, loadErr)
 		}
 
 		h.streamHub.broadcast(submissionID, submissionEvent{
 			Event: "status",
-			Data:  gin.H{"status": models.StatusFailed, "request_id": requestID},
+			Data:  gin.H{"status": models.StatusCompleted, "request_id": requestID},
 		})
 		h.streamHub.broadcast(submissionID, submissionEvent{
-			Event: "failure",
-			Data:  gin.H{"message": err.Error(), "request_id": requestID},
+			Event: "result",
+			Data:  gin.H{"success": true, "submission": updated, "request_id": requestID, "corrections": []any{}, "message": "AI temporarily unavailable. Please try again."},
 		})
 		h.streamHub.broadcast(submissionID, submissionEvent{
 			Event: "end",
-			Data:  gin.H{"status": models.StatusFailed, "request_id": requestID},
+			Data:  gin.H{"status": models.StatusCompleted, "request_id": requestID},
 		})
 		return
 	}
@@ -725,7 +746,14 @@ func (h *Handlers) StreamSubmission(c *gin.Context) {
 	}
 
 	if submission.Status == models.StatusFailed {
-		c.SSEvent("failure", gin.H{"message": submission.Error, "request_id": submission.RequestID})
+		// Never fail the client stream; send an empty result so UI can continue.
+		c.SSEvent("result", gin.H{
+			"success":     true,
+			"submission":  submission,
+			"request_id":  submission.RequestID,
+			"corrections": []any{},
+			"message":     "AI temporarily unavailable. Please try again.",
+		})
 		c.SSEvent("end", gin.H{"status": submission.Status, "request_id": submission.RequestID})
 		flusher.Flush()
 		return
