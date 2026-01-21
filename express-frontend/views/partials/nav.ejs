@@ -10,9 +10,6 @@
         </div>
         <div class="hidden sm:ml-8 sm:flex sm:space-x-4">
           <% if (user && user.email) { %>
-            <a href="/dashboard" class="<%= active === 'dashboard' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
-              Dashboard
-            </a>
             <a href="/drafts" id="my-drafts-link" class="<%= active === 'drafts' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
               My Drafts
             </a>
@@ -21,9 +18,6 @@
             </a>
             <a href="/workspace" id="nav-workspace-link" class="<%= active === 'workspace' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
               Workspace
-            </a>
-            <a href="/archive" class="<%= active === 'archive' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
-              Archive
             </a>
             <% if (user.role === 'admin' || user.email === 'prooftamil@gmail.com') { %>
             <a href="/analytics" class="<%= active === 'analytics' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">

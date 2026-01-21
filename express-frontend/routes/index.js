@@ -432,14 +432,9 @@ router.get('/api/config/google-client-id', (req, res) => {
   });
 });
 
-// Dashboard page - client-side auth only
+// Dashboard removed: redirect to Drafts
 router.get('/dashboard', (req, res) => {
-  const seo = getSeoData('dashboard');
-  res.render('pages/dashboard', { 
-    title: seo.title,
-    seo: seo,
-    user: req.user
-  });
+  return res.redirect(302, '/drafts');
 });
 
 // Account page - client-side auth only
@@ -474,14 +469,9 @@ router.get('/analytics', (req, res) => {
   });
 });
 
-// Archive page - client-side auth only
+// Archive removed: redirect to Drafts
 router.get('/archive', (req, res) => {
-  const seo = getSeoData('archive');
-  res.render('pages/archive', { 
-    title: seo.title,
-    seo: seo,
-    user: req.user
-  });
+  return res.redirect(302, '/drafts');
 });
 
 // Drafts page - client-side auth only

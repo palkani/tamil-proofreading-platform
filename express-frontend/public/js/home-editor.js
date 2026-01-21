@@ -792,8 +792,9 @@ class HomeEditor {
     const caretInfo = getEnglishTokenAtCaret(this.editor);
     const lastWord = caretInfo?.token || '';
 
-    // Only show for English words >= 2 chars
-    if (!lastWord || !/^[a-z]+$/i.test(lastWord) || lastWord.length < 2) {
+    // Show suggestions per-keystroke while typing an English token.
+    // Backend now supports 1-letter queries, so allow length >= 1.
+    if (!lastWord || !/^[a-z]+$/i.test(lastWord) || lastWord.length < 1) {
       this.autocompleteBox.classList.add('hidden');
       return;
     }
@@ -821,7 +822,7 @@ class HomeEditor {
 
     console.log('[AUTOCOMPLETE] Fetching suggestions for:', lastWord);
 
-    // Debounced API call
+    // Debounced API call (fast enough to feel "per letter" without spamming)
     if (this.translitTimeout) clearTimeout(this.translitTimeout);
     this.translitTimeout = setTimeout(async () => {
       try {
@@ -840,7 +841,7 @@ class HomeEditor {
       } catch (err) {
         console.error('[AUTOCOMPLETE] Fetch error:', err);
       }
-    }, 300); // 300ms debounce
+    }, lastWord.length <= 2 ? 60 : 90);
   }
 
   updateSuggestionHighlight() {

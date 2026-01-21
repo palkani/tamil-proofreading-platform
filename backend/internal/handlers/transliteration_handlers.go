@@ -123,7 +123,9 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 		}
 	}
 
-	if len(q) < 2 {
+	// Allow per-letter IME suggestions (n -> na -> nam -> ...).
+	// Keep empty query fast-path.
+	if len(q) < 1 {
 		c.JSON(http.StatusOK, TransliterateSuggestResponse{
 			Success:     true,
 			Query:       q,

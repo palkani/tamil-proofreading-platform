@@ -1457,8 +1457,10 @@ class WorkspaceController {
     // Store token BEFORE debounce
     this.lastFetchToken = token;
     
-    // Debounce the fetch to prevent duplicate calls
-    console.log('[IME] ⏳ Setting up debounce for token:', token, 'delay: 200ms');
+    // Debounce the fetch to keep UI responsive while still updating per-keystroke.
+    // Goal: suggestions should update for each letter typed (n -> na -> nam -> ...).
+    const debounceMs = token.length <= 2 ? 60 : 90;
+    console.log('[IME] ⏳ Setting up debounce for token:', token, 'delay:', debounceMs + 'ms');
     this.suggestDebounce = setTimeout(() => {
       console.log('[IME] ⏰ Debounce timer fired for token:', token);
       
@@ -3049,7 +3051,7 @@ class WorkspaceController {
       } else {
         this.handleEditorChange();
       }
-    }, 300); // 300ms delay - enough to prevent duplicate fetch but short enough for next word
+    }, 300); // guard window after replacement
   }
 
   replaceLastWord(word, replacement) {
