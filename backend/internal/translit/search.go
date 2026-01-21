@@ -111,6 +111,12 @@ func GetSuggestions(input string) []Suggestion {
                 "therkku": "தெற்கு",
                 "therku":  "தெற்கு",
                 "therkk":  "தெற்கு", // user may pause before typing the last vowel
+                // Very common function words
+                "enna":    "என்ன",
+                "namma":   "நம்ம",
+                "enathu":  "எனது",
+                "enadu":   "எனது",
+                "enadhu":  "எனது",
         }
         if fixed, ok := commonOverride[key]; ok && fixed != "" {
                 // Still include other results as fallback, but ensure the expected word is top.
@@ -160,19 +166,46 @@ func GetSuggestions(input string) []Suggestion {
         var scored []scoredEntry
 
         for _, candidate := range candidates {
+                phon := normalize(candidate.Phonetic)
                 // Phonetic similarity score (0-1)
-                simScore := phoneticSimilarity(key, normalize(candidate.Phonetic))
+                simScore := phoneticSimilarity(key, phon)
 
                 // Frequency score (0-1)
                 freqScore := float64(candidate.Frequency) / float64(maxFreq)
 
-                // Combined score: 70% similarity, 30% frequency
-                finalScore := 0.7*simScore + 0.3*freqScore
+                // Rank principle: "perfect/close phonetic match" must beat generic high-frequency short words.
+                // This makes inputs like "enna" prefer "என்ன" over "என".
+                dist := levenshteinDistance(key, phon)
+                lenDelta := len(key) - len(phon)
+                if lenDelta < 0 {
+                        lenDelta = -lenDelta
+                }
 
-                // Boost score slightly if it's a close fuzzy match
-                if simScore < 0.5 {
-                        // For fuzzy matches, increase weight of frequency
-                        finalScore = 0.5*simScore + 0.5*freqScore
+                // Filter obvious low-quality matches for longer inputs.
+                // This helps ensure we show meaningful words for inputs like "enathu".
+                if len(key) >= 6 {
+                        if dist > 2 && simScore < 0.55 {
+                                continue
+                        }
+                } else if len(key) >= 4 {
+                        if dist > 3 && simScore < 0.45 {
+                                continue
+                        }
+                }
+                // Similarity-dominant score with small frequency influence
+                finalScore := 0.85*simScore + 0.15*freqScore
+                // Penalize edit distance + length mismatch (helps avoid short common words ranking too high)
+                finalScore -= 0.08 * float64(dist)
+                finalScore -= 0.03 * float64(lenDelta)
+                // Strong boost for exact phonetic match (ensures exact match is at the top)
+                if phon == key {
+                        finalScore += 0.60
+                }
+                if finalScore < 0 {
+                        finalScore = 0
+                }
+                if finalScore > 1.5 {
+                        finalScore = 1.5
                 }
 
                 scored = append(scored, scoredEntry{
@@ -239,11 +272,36 @@ func GetSuggestionsFromKeyNoOverride(key string) []Suggestion {
         }
         var scored []scoredEntry
         for _, candidate := range candidates {
-                simScore := phoneticSimilarity(key, normalize(candidate.Phonetic))
+                phon := normalize(candidate.Phonetic)
+                simScore := phoneticSimilarity(key, phon)
                 freqScore := float64(candidate.Frequency) / float64(maxFreq)
-                finalScore := 0.7*simScore + 0.3*freqScore
-                if simScore < 0.5 {
-                        finalScore = 0.5*simScore + 0.5*freqScore
+                dist := levenshteinDistance(key, phon)
+                lenDelta := len(key) - len(phon)
+                if lenDelta < 0 {
+                        lenDelta = -lenDelta
+                }
+
+                if len(key) >= 6 {
+                        if dist > 2 && simScore < 0.55 {
+                                continue
+                        }
+                } else if len(key) >= 4 {
+                        if dist > 3 && simScore < 0.45 {
+                                continue
+                        }
+                }
+
+                finalScore := 0.85*simScore + 0.15*freqScore
+                finalScore -= 0.08 * float64(dist)
+                finalScore -= 0.03 * float64(lenDelta)
+                if phon == key {
+                        finalScore += 0.60
+                }
+                if finalScore < 0 {
+                        finalScore = 0
+                }
+                if finalScore > 1.5 {
+                        finalScore = 1.5
                 }
                 scored = append(scored, scoredEntry{entry: candidate, score: finalScore})
         }
