@@ -1,6 +1,7 @@
 package handlers
 
 import (
+        "log"
         "net/http"
         "strings"
 
@@ -57,6 +58,20 @@ func (h *Handlers) SubmitContactMessage(c *gin.Context) {
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save message"})
                 return
         }
+
+	// Best-effort email notification (non-blocking).
+	if h.emailService != nil {
+		fromEmail := email
+		subj := subject
+		msg := message
+		go func() {
+			if err := h.emailService.SendContactEmail(fromEmail, subj, msg); err != nil {
+				// Do not fail the request; DB save already succeeded.
+                                // Log only. (Avoid using request context inside goroutine)
+                                log.Printf("[CONTACT] SendContactEmail failed: %v", err)
+			}
+		}()
+	}
 
         c.JSON(http.StatusCreated, gin.H{"status": "received"})
 }

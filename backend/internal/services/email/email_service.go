@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
 	"net/http"
+	"net/smtp"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -14,6 +18,15 @@ type EmailService struct {
 	apiKey    string
 	fromEmail string
 	fromName  string
+
+	// SMTP (SendGrid) configuration
+	smtpHost string
+	smtpPort int
+	smtpUser string
+	smtpPass string
+
+	// Contact notification destination
+	contactTo string
 }
 
 type ResendEmailRequest struct {
@@ -38,15 +51,70 @@ func NewEmailService() *EmailService {
 		fromName = "ProofTamil"
 	}
 
+	// SendGrid SMTP defaults
+	smtpHost := strings.TrimSpace(os.Getenv("SENDGRID_SMTP_HOST"))
+	if smtpHost == "" {
+		smtpHost = "smtp.sendgrid.net"
+	}
+	smtpPort := 587
+	if v := strings.TrimSpace(os.Getenv("SENDGRID_SMTP_PORT")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 65535 {
+			smtpPort = n
+		}
+	}
+	smtpUser := strings.TrimSpace(os.Getenv("SENDGRID_SMTP_USER"))
+	if smtpUser == "" {
+		// SendGrid recommends username "apikey" with the API key as password.
+		smtpUser = "apikey"
+	}
+	smtpPass := strings.TrimSpace(os.Getenv("SENDGRID_SMTP_PASSWORD"))
+
+	contactTo := strings.TrimSpace(os.Getenv("CONTACT_TO_EMAIL"))
+	if contactTo == "" {
+		contactTo = "prooftamil@gmail.com"
+	}
+
 	return &EmailService{
 		apiKey:    apiKey,
 		fromEmail: fromEmail,
 		fromName:  fromName,
+		smtpHost:  smtpHost,
+		smtpPort:  smtpPort,
+		smtpUser:  smtpUser,
+		smtpPass:  smtpPass,
+		contactTo: contactTo,
 	}
 }
 
 func (s *EmailService) IsConfigured() bool {
 	return s.apiKey != ""
+}
+
+func (s *EmailService) smtpConfigured() bool {
+	return strings.TrimSpace(s.smtpHost) != "" && s.smtpPort > 0 && strings.TrimSpace(s.smtpUser) != "" && strings.TrimSpace(s.smtpPass) != ""
+}
+
+func (s *EmailService) sendSMTP(to, subject, htmlBody string) error {
+	if !s.smtpConfigured() {
+		log.Printf("[EMAIL] SMTP not configured, skipping email to: %s", to)
+		return nil
+	}
+
+	from := fmt.Sprintf("%s <%s>", s.fromName, s.fromEmail)
+	addr := fmt.Sprintf("%s:%d", s.smtpHost, s.smtpPort)
+	auth := smtp.PlainAuth("", s.smtpUser, s.smtpPass, s.smtpHost)
+
+	// Minimal RFC 5322 message with HTML body.
+	var msg strings.Builder
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
+	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	msg.WriteString("MIME-Version: 1.0\r\n")
+	msg.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
+	msg.WriteString("\r\n")
+	msg.WriteString(htmlBody)
+
+	return smtp.SendMail(addr, auth, s.fromEmail, []string{to}, []byte(msg.String()))
 }
 
 func (s *EmailService) SendEmail(to, subject, htmlBody string) error {
@@ -137,4 +205,35 @@ func (s *EmailService) SendVerificationEmail(to, otp string) error {
 `, otp)
 
 	return s.SendEmail(to, subject, htmlBody)
+}
+
+// SendContactEmail sends a notification for contact-form submissions.
+// Uses SendGrid SMTP when configured; otherwise, it will no-op.
+func (s *EmailService) SendContactEmail(fromUserEmail, subject, message string) error {
+	to := strings.TrimSpace(s.contactTo)
+	if to == "" {
+		to = "prooftamil@gmail.com"
+	}
+
+	safeFrom := strings.TrimSpace(fromUserEmail)
+	if safeFrom == "" {
+		safeFrom = "(unknown)"
+	}
+	safeSubject := strings.TrimSpace(subject)
+	if safeSubject == "" {
+		safeSubject = "(no subject)"
+	}
+	safeMessage := strings.TrimSpace(message)
+
+	emailSubject := fmt.Sprintf("New Contact Message: %s", safeSubject)
+	htmlBody := fmt.Sprintf(`
+<div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.5;">
+  <h2 style="margin: 0 0 12px 0;">New Contact Form Message</h2>
+  <p style="margin: 0 0 8px 0;"><strong>From:</strong> %s</p>
+  <p style="margin: 0 0 8px 0;"><strong>Subject:</strong> %s</p>
+  <div style="margin-top: 12px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; white-space: pre-wrap;">%s</div>
+</div>
+`, html.EscapeString(safeFrom), html.EscapeString(safeSubject), html.EscapeString(safeMessage))
+
+	return s.sendSMTP(to, emailSubject, htmlBody)
 }
