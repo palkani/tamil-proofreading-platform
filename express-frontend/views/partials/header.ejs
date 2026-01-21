@@ -101,6 +101,9 @@
   <link rel="preload" href="/css/output.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="/css/output.css"></noscript>
   <link rel="preload" href="/images/tamil-logo.svg" as="image">
+
+  <!-- Console logger wrapper (keeps production console clean) -->
+  <script defer src="/js/logger.js"></script>
   
   <% if (pageType === 'home' || (typeof seo !== 'undefined' && seo.includeStructuredData) || typeof seo === 'undefined') { %>
   <!-- Structured Data - WebApplication (Home page only) -->

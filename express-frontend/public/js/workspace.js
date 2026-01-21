@@ -1777,83 +1777,13 @@ class WorkspaceController {
       })(i, cleanText, suggestion);
       
       item.addEventListener('click', selectHandler);
-      
-      // Also handle mousedown for touch devices only
-      // For regular mouse clicks, the click handler will work fine
-      // The isSelectingSuggestion flag will prevent double-firing
-      const mousedownHandler = ((index, suggestionText) => {
-        return (e) => {
-          // Only handle mousedown on touch devices to avoid double-firing with click
-          // The isSelectingSuggestion flag in selectSuggestionWithText will prevent duplicates
-          e.preventDefault();
-          e.stopPropagation();
-          console.log('[IME] Mousedown on suggestion', index + 1, ':', suggestionText, 'index:', index);
-          
-          // CRITICAL: Restore currentTokenInfo from dataset if it was cleared
-          if (!this.currentTokenInfo) {
-            const tokenStart = e.currentTarget.dataset.tokenStart;
-            const tokenEnd = e.currentTarget.dataset.tokenEnd;
-            const token = e.currentTarget.dataset.token;
-            if (tokenStart && tokenEnd && token) {
-              this.currentTokenInfo = {
-                token: token,
-                start: parseInt(tokenStart, 10),
-                end: parseInt(tokenEnd, 10)
-              };
-              console.log('[IME] Restored currentTokenInfo from dataset (mousedown):', this.currentTokenInfo);
-            }
-          }
-          
-          let finalText = suggestionText;
-          if (this.currentSuggestions && this.currentSuggestions[index]) {
-            finalText = this.currentSuggestions[index].text || this.currentSuggestions[index].word || suggestionText;
-          } else {
-            const datasetText = e.currentTarget.dataset.suggestionText;
-            if (datasetText) finalText = datasetText;
-          }
-          
-          // The isSelectingSuggestion flag will prevent this from running if click already fired
-          this.selectSuggestionWithText(index, finalText);
-        };
-      })(i, cleanText);
-      
-      item.addEventListener('mousedown', mousedownHandler);
-      
-      // Also handle touch events for mobile/touchpad
-      const touchHandler = ((index, suggestionText) => {
-        return (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          console.log('[IME] Touch end on suggestion', index + 1, ':', suggestionText, 'index:', index);
-          
-          // CRITICAL: Restore currentTokenInfo from dataset if it was cleared
-          if (!this.currentTokenInfo) {
-            const tokenStart = e.currentTarget.dataset.tokenStart;
-            const tokenEnd = e.currentTarget.dataset.tokenEnd;
-            const token = e.currentTarget.dataset.token;
-            if (tokenStart && tokenEnd && token) {
-              this.currentTokenInfo = {
-                token: token,
-                start: parseInt(tokenStart, 10),
-                end: parseInt(tokenEnd, 10)
-              };
-              console.log('[IME] Restored currentTokenInfo from dataset (touch):', this.currentTokenInfo);
-            }
-          }
-          
-          let finalText = suggestionText;
-          if (this.currentSuggestions && this.currentSuggestions[index]) {
-            finalText = this.currentSuggestions[index].text || this.currentSuggestions[index].word || suggestionText;
-          } else {
-            const datasetText = e.currentTarget.dataset.suggestionText;
-            if (datasetText) finalText = datasetText;
-          }
-          
-          this.selectSuggestionWithText(index, finalText);
-        };
-      })(i, cleanText);
-      
-      item.addEventListener('touchend', touchHandler);
+
+      // Prevent pointer-down from moving the caret before we commit (mouse + touch).
+      // IMPORTANT: Do NOT commit on mousedown/touchend; committing should happen once on click.
+      item.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
       
       // Hover handler to update active index with purple highlight
       item.addEventListener('mouseenter', () => {
@@ -2466,7 +2396,7 @@ class WorkspaceController {
    * Hide the suggestions dropdown
    */
   hideSuggestions() {
-    console.log('[IME] hideSuggestions called');
+    window.logger?.debug?.('[IME] hideSuggestions called');
     const dropdown = document.getElementById('tamil-suggestions-dropdown');
     if (dropdown) {
       // Force hide with multiple methods to ensure it's hidden
@@ -2474,7 +2404,7 @@ class WorkspaceController {
       dropdown.style.visibility = 'hidden';
       dropdown.style.opacity = '0';
       dropdown.classList.add('hidden');
-      console.log('[IME] ✅ Dropdown hidden');
+      window.logger?.debug?.('[IME] ✅ Dropdown hidden');
     }
     this.translitDropdownOpen = false;
     this.imeActive = false;
@@ -2483,7 +2413,7 @@ class WorkspaceController {
     // CRITICAL: Clear currentTokenInfo when hiding suggestions to prevent stale state
     // This prevents the "Token at stored position is no longer Latin" error
     if (this.currentTokenInfo) {
-      console.log('[IME] Clearing currentTokenInfo when hiding suggestions');
+      window.logger?.debug?.('[IME] Clearing currentTokenInfo when hiding suggestions');
       this.currentTokenInfo = null;
     }
   }
@@ -2573,7 +2503,7 @@ class WorkspaceController {
       // Reset flag after a short delay to allow replacement to complete
       setTimeout(() => {
         this.isSelectingSuggestion = false;
-      }, 100);
+      }, 300);
     }
   }
 
@@ -2582,11 +2512,11 @@ class WorkspaceController {
    * @param {number} index - Index of the suggestion to select
    */
   selectSuggestion(index) {
-    console.log('[IME] selectSuggestion called with index:', index, 'currentSuggestions length:', this.currentSuggestions ? this.currentSuggestions.length : 0);
+    window.logger?.debug?.('[IME] selectSuggestion called with index:', index, 'currentSuggestions length:', this.currentSuggestions ? this.currentSuggestions.length : 0);
     
     // Validate index and suggestions array
     if (!this.currentSuggestions || !Array.isArray(this.currentSuggestions) || this.currentSuggestions.length === 0) {
-      console.error('[IME] Invalid suggestions array:', {
+      window.logger?.error?.('[IME] Invalid suggestions array:', {
         hasSuggestions: !!this.currentSuggestions,
         isArray: Array.isArray(this.currentSuggestions),
         length: this.currentSuggestions ? this.currentSuggestions.length : 0
@@ -2596,13 +2526,13 @@ class WorkspaceController {
     }
     
     if (index < 0 || index >= this.currentSuggestions.length) {
-      console.error('[IME] Invalid suggestion index:', index, 'valid range: 0 to', this.currentSuggestions.length - 1);
+      window.logger?.error?.('[IME] Invalid suggestion index:', index, 'valid range: 0 to', this.currentSuggestions.length - 1);
       this.hideSuggestions();
       return;
     }
     
     if (!this.currentSuggestions[index]) {
-      console.error('[IME] Suggestion at index', index, 'is undefined:', this.currentSuggestions);
+      window.logger?.error?.('[IME] Suggestion at index', index, 'is undefined:', this.currentSuggestions);
       this.hideSuggestions();
       return;
     }
@@ -2615,7 +2545,7 @@ class WorkspaceController {
       return;
     }
 
-    console.log('[IME] Selecting suggestion:', tamilText, 'at index:', index);
+    window.logger?.debug?.('[IME] Selecting suggestion:', tamilText, 'at index:', index);
     
     // Use the internal method
     this.performReplacement(tamilText);
@@ -2626,14 +2556,14 @@ class WorkspaceController {
    * @param {string} tamilText - The Tamil text to insert
    */
   performReplacement(tamilText) {
-      console.log('[IME] performReplacement called with text:', tamilText);
-      console.log('[IME] currentTokenInfo available:', !!this.currentTokenInfo, this.currentTokenInfo);
+      window.logger?.debug?.('[IME] performReplacement called with text:', tamilText);
+      window.logger?.debug?.('[IME] currentTokenInfo available:', !!this.currentTokenInfo, this.currentTokenInfo);
       
       // CRITICAL: Use stored tokenInfo from when suggestions were fetched (when token was Latin)
       // Don't get fresh token info as it might already be Tamil after previous selection
       if (!this.currentTokenInfo) {
-        console.warn('[IME] ⚠️ currentTokenInfo is null! This should not happen if tokenInfo was stored in dataset.');
-        console.warn('[IME] Attempting fallback: getting token from current cursor position...');
+        window.logger?.warn?.('[IME] ⚠️ currentTokenInfo is null! This should not happen if tokenInfo was stored in dataset.');
+        window.logger?.warn?.('[IME] Attempting fallback: getting token from current cursor position...');
         
         // Fallback: try to get current token info
         const text = this.getEditorText() || '';
@@ -2643,23 +2573,23 @@ class WorkspaceController {
         
         // Only proceed if token is Latin (getTokenAtCaret now only returns Latin tokens)
         if (!token || !/^[a-zA-Z]+$/.test(token)) {
-          console.error('[IME] ❌ No stored tokenInfo and current token is not Latin, cannot replace');
-          console.error('[IME] Current token:', token, 'isLatin:', /^[a-zA-Z]+$/.test(token || ''));
-          console.error('[IME] Cursor position:', caretPos, 'Text around cursor:', text.substring(Math.max(0, caretPos - 10), Math.min(text.length, caretPos + 10)));
+          window.logger?.error?.('[IME] ❌ No stored tokenInfo and current token is not Latin, cannot replace');
+          window.logger?.error?.('[IME] Current token:', token, 'isLatin:', /^[a-zA-Z]+$/.test(token || ''));
+          window.logger?.error?.('[IME] Cursor position:', caretPos, 'Text around cursor:', text.substring(Math.max(0, caretPos - 10), Math.min(text.length, caretPos + 10)));
           this.hideSuggestions();
           return;
         }
         
         // Store it for replacement
         this.currentTokenInfo = { token, start, end };
-        console.log('[IME] ✅ Fallback: Stored tokenInfo from cursor:', this.currentTokenInfo);
+        window.logger?.debug?.('[IME] ✅ Fallback: Stored tokenInfo from cursor:', this.currentTokenInfo);
       } else {
-        console.log('[IME] ✅ Using stored currentTokenInfo:', this.currentTokenInfo);
+        window.logger?.debug?.('[IME] ✅ Using stored currentTokenInfo:', this.currentTokenInfo);
       }
 
       // Verify stored token is Latin - CRITICAL: Only replace if token is Latin
       if (this.currentTokenInfo.token && !/^[a-zA-Z]+$/.test(this.currentTokenInfo.token)) {
-        console.warn('[IME] Stored token is not Latin:', this.currentTokenInfo.token);
+        window.logger?.warn?.('[IME] Stored token is not Latin:', this.currentTokenInfo.token);
         this.hideSuggestions();
         this.currentTokenInfo = null;
         return;
@@ -2998,7 +2928,7 @@ class WorkspaceController {
     }
 
     if (!this.currentTokenInfo || !replacement) {
-      console.warn("[IME] replaceTokenAtCaret: missing tokenInfo or replacement", {
+      window.logger?.warn?.("[IME] replaceTokenAtCaret: missing tokenInfo or replacement", {
         hasTokenInfo: !!this.currentTokenInfo,
         hasReplacement: !!replacement
       });
@@ -3009,7 +2939,7 @@ class WorkspaceController {
     
     // CRITICAL FIX: Check bounds to prevent errors
     if (start < 0 || end > text.length || start > end) {
-      console.warn("[IME] replaceTokenAtCaret: invalid token positions", {
+      window.logger?.warn?.("[IME] replaceTokenAtCaret: invalid token positions", {
         start,
         end,
         textLength: text.length
@@ -3028,7 +2958,7 @@ class WorkspaceController {
     
     // STRICT CHECK: Only allow replacement if token is still Latin
     if (!isStillLatin) {
-      console.warn("[IME] replaceTokenAtCaret: Current token is not Latin, skipping replacement to prevent junk words", {
+      window.logger?.warn?.("[IME] replaceTokenAtCaret: Current token is not Latin, skipping replacement to prevent junk words", {
         expected: token,
         found: currentToken,
         start,
@@ -3043,7 +2973,7 @@ class WorkspaceController {
     
     // Additional safety: if token doesn't match and doesn't start with stored token, be cautious
     if (!isExactMatch && !startsWithToken && currentToken.length > token.length + 3) {
-      console.warn("[IME] replaceTokenAtCaret: Token mismatch detected, but still Latin - proceeding with caution", {
+      window.logger?.warn?.("[IME] replaceTokenAtCaret: Token mismatch detected, but still Latin - proceeding with caution", {
         expected: token,
         found: currentToken
       });
@@ -3055,15 +2985,15 @@ class WorkspaceController {
     if (isStillLatin && currentToken.length > token.length) {
       // User continued typing - use the extended token
       actualEnd = start + currentToken.length;
-      console.log("[IME] User extended token, using extended end position:", actualEnd);
+      window.logger?.debug?.("[IME] User extended token, using extended end position:", actualEnd);
     }
     
     // CRITICAL: Only replace the Latin token, don't add to it
     const replacementText = replacement + (appendSpace ? ' ' : '');
     const newText = text.slice(0, start) + replacementText + text.slice(actualEnd);
-    console.log("[IME] Replacing token at position", start, "-", actualEnd, ":", currentToken, "with:", replacementText);
-    console.log("[IME] Text before replacement:", text.substring(Math.max(0, start - 10), Math.min(text.length, actualEnd + 10)));
-    console.log("[IME] Text after replacement:", newText.substring(Math.max(0, start - 10), Math.min(newText.length, start + replacementText.length + 10)));
+    window.logger?.debug?.("[IME] Replacing token at position", start, "-", actualEnd, ":", currentToken, "with:", replacementText);
+    window.logger?.debug?.("[IME] Text before replacement:", text.substring(Math.max(0, start - 10), Math.min(text.length, actualEnd + 10)));
+    window.logger?.debug?.("[IME] Text after replacement:", newText.substring(Math.max(0, start - 10), Math.min(newText.length, start + replacementText.length + 10)));
     
     // CRITICAL: Clear currentTokenInfo BEFORE replacement to prevent race conditions
     // This ensures that if performReplacement is called again, it won't use stale tokenInfo
@@ -3110,10 +3040,10 @@ class WorkspaceController {
     // Reset immediately after a brief delay to allow next word suggestions
     setTimeout(() => {
       this.justReplacedToken = false;
-      console.log('[IME] ✅ Flag cleared, suggestions can be fetched again');
+      window.logger?.debug?.('[IME] ✅ Flag cleared, suggestions can be fetched again');
       
       // Manually trigger editor change AFTER flag is cleared to allow new suggestions for next word
-      console.log("[IME] Manually triggering editor change after token replacement");
+      window.logger?.debug?.("[IME] Manually triggering editor change after token replacement");
       if (this.editor && this.editor.onChange) {
         this.editor.onChange();
       } else {
