@@ -94,7 +94,7 @@ func (s *EmailService) smtpConfigured() bool {
 	return strings.TrimSpace(s.smtpHost) != "" && s.smtpPort > 0 && strings.TrimSpace(s.smtpUser) != "" && strings.TrimSpace(s.smtpPass) != ""
 }
 
-func (s *EmailService) sendSMTP(to, subject, htmlBody string) error {
+func (s *EmailService) sendSMTP(to, subject, htmlBody string, replyTo string) error {
 	if !s.smtpConfigured() {
 		log.Printf("[EMAIL] SMTP not configured, skipping email to: %s (set SENDGRID_SMTP_PASSWORD; host=%s port=%d user=%s)",
 			to, s.smtpHost, s.smtpPort, s.smtpUser)
@@ -110,6 +110,9 @@ func (s *EmailService) sendSMTP(to, subject, htmlBody string) error {
 	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	if strings.TrimSpace(replyTo) != "" {
+		msg.WriteString(fmt.Sprintf("Reply-To: %s\r\n", strings.TrimSpace(replyTo)))
+	}
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
 	msg.WriteString("\r\n")
@@ -232,15 +235,18 @@ func (s *EmailService) SendContactEmail(fromUserEmail, subject, message string) 
 	}
 	safeMessage := strings.TrimSpace(message)
 
-	emailSubject := fmt.Sprintf("New Contact Message: %s", safeSubject)
-	htmlBody := fmt.Sprintf(`
-<div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.5;">
-  <h2 style="margin: 0 0 12px 0;">New Contact Form Message</h2>
-  <p style="margin: 0 0 8px 0;"><strong>From:</strong> %s</p>
-  <p style="margin: 0 0 8px 0;"><strong>Subject:</strong> %s</p>
-  <div style="margin-top: 12px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; white-space: pre-wrap;">%s</div>
-</div>
-`, html.EscapeString(safeFrom), html.EscapeString(safeSubject), html.EscapeString(safeMessage))
+	// Use exactly what the user typed as the email subject.
+	emailSubject := safeSubject
+	// Keep the email body as the message content (with minimal wrapping).
+	htmlBody := fmt.Sprintf(
+		`<div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.6; white-space: pre-wrap;">%s</div>`,
+		html.EscapeString(safeMessage),
+	)
 
-	return s.sendSMTP(to, emailSubject, htmlBody)
+	// Set Reply-To so you can reply directly to the user's email from Gmail.
+	replyTo := ""
+	if safeFrom != "(unknown)" {
+		replyTo = safeFrom
+	}
+	return s.sendSMTP(to, emailSubject, htmlBody, replyTo)
 }
