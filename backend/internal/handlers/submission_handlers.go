@@ -32,6 +32,8 @@ var htmlTagRegex = regexp.MustCompile("<[^>]+>")
 var scriptTagRegex = regexp.MustCompile(`(?is)<script.*?>.*?</script>`)
 var eventAttrRegex = regexp.MustCompile(`(?i)\s+on[a-z]+\s*=\s*(".*?"|'.*?')`)
 var javascriptProtoRegex = regexp.MustCompile(`(?i)javascript:`)
+// Go regexp (RE2) supports \x{....} for Unicode code points (not \u....).
+var tamilCharRegex = regexp.MustCompile(`[\x{0B80}-\x{0BFF}]`)
 
 // storedSuggestion matches the JSON objects stored in Submission.Suggestions.
 // Note: Some engines return start/end indexes as 0 even when a correction exists.
@@ -213,6 +215,21 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		return
 	}
 
+	// Fast path: if there are no Tamil characters, don't call AI.
+	// This improves latency and avoids unnecessary provider calls.
+	if !tamilCharRegex.MatchString(req.Text) {
+		c.Header("Cache-Control", "no-store, max-age=0")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+		c.JSON(http.StatusOK, gin.H{
+			"success":     true,
+			"request_id":  requestID,
+			"corrections": []any{},
+			"message":     "No Tamil text detected.",
+		})
+		return
+	}
+
 	saveDraft := true
 	if req.SaveDraft != nil {
 		saveDraft = *req.SaveDraft
@@ -220,7 +237,9 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 
 	// For inline analysis (demo/homepage), no auth required
 	if !saveDraft {
-		result, err := h.llmService.ProofreadText(c.Request.Context(), req.Text, wordCount, req.IncludeAlternatives, requestID)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 25*time.Second)
+		defer cancel()
+		result, err := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID)
 		if err != nil {
 			// NEVER hard-fail inline submit due to AI/provider errors.
 			// Keep a stable, success-shaped response so the UI can continue gracefully.
@@ -300,9 +319,41 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	// Save submission to database
 	if err := h.db.Create(submission).Error; err != nil {
 		log.Printf("Error creating submission: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to create submission",
-			"details": err.Error(),
+		// If we can't save the draft, fall back to inline proofread so the user still gets suggestions.
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 25*time.Second)
+		defer cancel()
+		result, perr := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID)
+		if perr != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success":     true,
+				"request_id":  requestID,
+				"corrections": []any{},
+				"message":     "Draft save temporarily unavailable. Please try again.",
+			})
+			return
+		}
+		type correction struct {
+			BlockID      string `json:"blockId"`
+			OriginalText string `json:"originalText"`
+			Correction   string `json:"correction"`
+			Reason       string `json:"reason"`
+			Type         string `json:"type"`
+		}
+		corrections := []correction{}
+		for _, s := range result.Suggestions {
+			corrections = append(corrections, correction{
+				BlockID:      "0",
+				OriginalText: s.Original,
+				Correction:   s.Corrected,
+				Reason:       s.Reason,
+				Type:         s.Type,
+			})
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success":     true,
+			"request_id":  requestID,
+			"corrections": corrections,
+			"message":     "Draft save temporarily unavailable. Showing inline suggestions.",
 		})
 		return
 	}
@@ -374,8 +425,10 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, req
 		Data:  gin.H{"status": models.StatusProcessing},
 	})
 
-	// Process with LLM service
-	result, err := h.llmService.ProofreadText(ctx, text, wordCount, includeAlternatives, requestID)
+	// Process with LLM service (hard timeout so the job can't hang indefinitely)
+	ctx2, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+	result, err := h.llmService.ProofreadText(ctx2, text, wordCount, includeAlternatives, requestID)
 	if err != nil {
 		log.Printf("Error processing submission %d (request_id=%s): %v", submissionID, requestID, err)
 		auditlog.LogStandalone(auditlog.LevelWarn, "submission.processing_failed", requestID, map[string]any{
