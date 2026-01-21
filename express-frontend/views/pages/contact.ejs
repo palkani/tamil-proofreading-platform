@@ -28,8 +28,13 @@
             name="email"
             required
             placeholder="your@email.com"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+            value="<%= (user && user.email) ? user.email : '' %>"
+            <%= (user && user.email) ? 'readonly aria-readonly=\"true\"' : '' %>
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none transition <%= (user && user.email) ? 'bg-gray-50 text-gray-700 cursor-not-allowed' : 'focus:ring-2 focus:ring-primary-500 focus:border-transparent' %>"
           />
+          <% if (user && user.email) { %>
+            <p class="mt-1 text-xs text-gray-500">You’re signed in. We’ll use your account email.</p>
+          <% } %>
         </div>
 
         <!-- Subject Field -->
