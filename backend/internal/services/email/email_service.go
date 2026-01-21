@@ -96,7 +96,8 @@ func (s *EmailService) smtpConfigured() bool {
 
 func (s *EmailService) sendSMTP(to, subject, htmlBody string) error {
 	if !s.smtpConfigured() {
-		log.Printf("[EMAIL] SMTP not configured, skipping email to: %s", to)
+		log.Printf("[EMAIL] SMTP not configured, skipping email to: %s (set SENDGRID_SMTP_PASSWORD; host=%s port=%d user=%s)",
+			to, s.smtpHost, s.smtpPort, s.smtpUser)
 		return nil
 	}
 
@@ -114,7 +115,13 @@ func (s *EmailService) sendSMTP(to, subject, htmlBody string) error {
 	msg.WriteString("\r\n")
 	msg.WriteString(htmlBody)
 
-	return smtp.SendMail(addr, auth, s.fromEmail, []string{to}, []byte(msg.String()))
+	log.Printf("[EMAIL] Sending SMTP email (provider=sendgrid host=%s port=%d from=%s to=%s subject=%q)", s.smtpHost, s.smtpPort, s.fromEmail, to, subject)
+	if err := smtp.SendMail(addr, auth, s.fromEmail, []string{to}, []byte(msg.String())); err != nil {
+		log.Printf("[EMAIL] SMTP send failed: %v", err)
+		return err
+	}
+	log.Printf("[EMAIL] SMTP email sent successfully to: %s", to)
+	return nil
 }
 
 func (s *EmailService) SendEmail(to, subject, htmlBody string) error {
