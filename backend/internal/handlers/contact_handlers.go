@@ -40,11 +40,14 @@ func (h *Handlers) SubmitContactMessage(c *gin.Context) {
                 return
         }
 
-        // Optional auth: if user is logged in, attach user_id; otherwise store 0.
-        userID, _ := middleware.GetUserFromContext(c)
+        // Optional auth: if user is logged in, attach user_id; otherwise store NULL.
+        var userIDPtr *uint
+        if uid, err := middleware.GetUserFromContext(c); err == nil && uid != 0 {
+                userIDPtr = &uid
+        }
 
         contact := &models.ContactMessage{
-                UserID:  userID,
+                UserID:  userIDPtr,
                 Email:   email,
                 Subject: subject,
                 Message: message,

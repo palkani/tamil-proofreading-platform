@@ -144,6 +144,11 @@ func main() {
 			} else {
 				log.Printf("[SUCCESS] BlogPost schema verified (text columns)")
 			}
+			if err := migrations.EnsureContactMessageUserIDNullable(db); err != nil {
+				log.Printf("[WARN] ContactMessage schema fix did not complete: %v", err)
+			} else {
+				log.Printf("[SUCCESS] ContactMessage schema verified (user_id nullable)")
+			}
 		}
 	}
 

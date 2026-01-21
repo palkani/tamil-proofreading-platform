@@ -50,10 +50,10 @@ type Submission struct {
 
 type ContactMessage struct {
         ID        uint      `gorm:"primaryKey" json:"id"`
-        UserID    uint      `gorm:"index" json:"user_id"`
+        UserID    *uint     `gorm:"index" json:"user_id,omitempty"`
         Email     string    `gorm:"size:160;not null" json:"email"`
         Subject   string    `gorm:"size:255;not null" json:"subject"`
         Message   string    `gorm:"type:text;not null" json:"message"`
         CreatedAt time.Time `json:"created_at"`
-        User      User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+        User      *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
