@@ -27,12 +27,21 @@ type LLMService struct {
 	proofreadCache *proofreadCache
 }
 
+type GeminiTokenPlan struct {
+	Model          models.ModelType
+	PromptTokens   int
+	MaxOutputTokens int
+}
+
 type ProofreadResult struct {
         CorrectedText  string           `json:"corrected_text"`
         Suggestions    []Suggestion     `json:"suggestions"`
         Changes        []Change         `json:"changes"`
         Alternatives   []string         `json:"alternatives"`
         ModelUsed      models.ModelType `json:"model_used"`
+        PromptTokens   int              `json:"prompt_tokens,omitempty"`
+        OutputTokens   int              `json:"output_tokens,omitempty"`
+        TotalTokens    int              `json:"total_tokens,omitempty"`
         ProcessingTime float64          `json:"processing_time"`
 }
 
@@ -321,7 +330,7 @@ func detectChangesFromText(original, corrected string) []Suggestion {
         return suggestions
 }
 
-func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, requestID string, includeAlternatives bool) (*ProofreadResult, error) {
+func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, requestID string, includeAlternatives bool, maxOutputTokensCap int) (*ProofreadResult, error) {
         start := time.Now()
 
         if text == "" {
@@ -344,6 +353,9 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
         wordCount := s.nlpService.CountWords(cleaned)
         selectedModel := s.selectOptimalModel(cleaned, wordCount)
         maxTokens := maxOutputTokensForProofread(wordCount, len(cleaned))
+        if maxOutputTokensCap > 0 && maxOutputTokensCap < maxTokens {
+                maxTokens = maxOutputTokensCap
+        }
 
 	// Fast path cache: identical inputs within TTL return instantly.
 	if cached, ok := s.proofreadCache.get(proofreadCacheKey(cleaned, includeAlternatives, selectedModel, maxTokens)); ok && cached != nil {
@@ -353,7 +365,7 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
 	}
 
         // Use the Gemini API with the selected model
-        content, err := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey, maxTokens)
+        content, geminiResp, err := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey, maxTokens)
         if err != nil {
                 log.Printf("gemini proofread error (request_id=%s): %v", requestID, err)
                 return nil, err
@@ -386,10 +398,59 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
                 Changes:        changes,
                 Alternatives:   alternatives,
                 ModelUsed:      selectedModel,
+                PromptTokens:   geminiRespUsage(geminiResp, "prompt"),
+                OutputTokens:   geminiRespUsage(geminiResp, "candidates"),
+                TotalTokens:    geminiRespUsage(geminiResp, "total"),
                 ProcessingTime: time.Since(start).Seconds(),
 	}
 	s.proofreadCache.set(proofreadCacheKey(cleaned, includeAlternatives, selectedModel, maxTokens), out)
 	return out, nil
+}
+
+func (s *LLMService) BuildGeminiTokenPlan(ctx context.Context, text string, wordCount int, includeAlternatives bool, requestID string) (*GeminiTokenPlan, error) {
+	if strings.TrimSpace(s.googleAPIKey) == "" {
+		return nil, fmt.Errorf("Gemini AI not configured: missing GOOGLE_GENAI_API_KEY (or AI_INTEGRATIONS_GEMINI_API_KEY)")
+	}
+	cleaned := s.nlpService.Preprocess(text)
+	cleaned = sanitizeUserInput(cleaned)
+	wordCount2 := s.nlpService.CountWords(cleaned)
+	if wordCount2 > 0 {
+		wordCount = wordCount2
+	}
+	selectedModel := s.selectOptimalModel(cleaned, wordCount)
+	maxTokens := maxOutputTokensForProofread(wordCount, len(cleaned))
+	prompt := buildProofreadPrompt(cleaned)
+	// CountTokens is typically very fast; still respect ctx by early abort if cancelled.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+	promptTokens, err := CallGeminiCountTokens(prompt, string(selectedModel), s.googleAPIKey)
+	if err != nil {
+		return nil, err
+	}
+	return &GeminiTokenPlan{
+		Model:           selectedModel,
+		PromptTokens:    promptTokens,
+		MaxOutputTokens: maxTokens,
+	}, nil
+}
+
+func geminiRespUsage(resp *GeminiResponse, which string) int {
+        if resp == nil || resp.UsageMetadata == nil {
+                return 0
+        }
+        switch which {
+        case "prompt":
+                return resp.UsageMetadata.PromptTokenCount
+        case "candidates":
+                return resp.UsageMetadata.CandidatesTokenCount
+        case "total":
+                return resp.UsageMetadata.TotalTokenCount
+        default:
+                return 0
+        }
 }
 
 func (s *LLMService) Proofread(ctx context.Context, text string, requestID string) (*ProofreadResult, error) {
@@ -439,13 +500,18 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
                 content    string
                 err        error
                 geminiUsed string
+                geminiMeta *GeminiResponse
         )
         for _, m := range geminiModelCandidates {
                 if strings.TrimSpace(m) == "" {
                         continue
                 }
                 geminiUsed = m
-                content, err = CallGeminiProofread(cleaned, m, s.googleAPIKey, maxTokens)
+                var meta *GeminiResponse
+                content, meta, err = CallGeminiProofread(cleaned, m, s.googleAPIKey, maxTokens)
+                if err == nil {
+                        geminiMeta = meta
+                }
                 if err == nil {
                         break
                 }
@@ -537,6 +603,9 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
                 Changes:        changes,
                 Alternatives:   alternatives,
                 ModelUsed:      models.ModelType(geminiUsed),
+                PromptTokens:   geminiRespUsage(geminiMeta, "prompt"),
+                OutputTokens:   geminiRespUsage(geminiMeta, "candidates"),
+                TotalTokens:    geminiRespUsage(geminiMeta, "total"),
                 ProcessingTime: time.Since(start).Seconds(),
         }, nil
 }
@@ -911,8 +980,8 @@ func (s *LLMService) proofreadWithAnthropic(ctx context.Context, cleaned string,
 }
 
 // ProofreadText is the main method called by handlers - wraps Proofread for backward compatibility
-func (s *LLMService) ProofreadText(ctx context.Context, text string, wordCount int, includeAlternatives bool, requestID string) (*ProofreadResult, error) {
+func (s *LLMService) ProofreadText(ctx context.Context, text string, wordCount int, includeAlternatives bool, requestID string, maxOutputTokensCap int) (*ProofreadResult, error) {
 	// Latency-first path used by the homepage/demo submit (save_draft=false).
 	// Avoid the multi-provider fallback pipeline here; it's better to be fast.
-	return s.ProofreadWithGoogle(ctx, text, requestID, includeAlternatives)
+	return s.ProofreadWithGoogle(ctx, text, requestID, includeAlternatives, maxOutputTokensCap)
 }

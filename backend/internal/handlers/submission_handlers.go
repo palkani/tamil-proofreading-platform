@@ -251,7 +251,7 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	if !saveDraft {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), proofreadTimeoutFor(wordCount, len(req.Text)))
 		defer cancel()
-		result, err := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID)
+		result, err := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID, 0)
 		if err != nil {
 			// NEVER hard-fail inline submit due to AI/provider errors.
 			// Keep a stable, success-shaped response so the UI can continue gracefully.
@@ -310,6 +310,74 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		return
 	}
 
+	// Daily Gemini token usage limit.
+	// Enforced only for authenticated, draft-saving submits (Workspace).
+	const dailyTokenLimit = 2000
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+	var usedToday int
+	if err := h.db.Model(&models.Usage{}).
+		Where("user_id = ? AND date >= ? AND date < ?", userID, startOfDay, endOfDay).
+		Select("COALESCE(SUM(token_count), 0)").
+		Scan(&usedToday).Error; err != nil {
+		// Do not block the user if usage lookup fails (best-effort limit).
+		log.Printf("Error checking daily usage: %v", err)
+		usedToday = 0
+	}
+	remaining := dailyTokenLimit - usedToday
+	if remaining < 0 {
+		remaining = 0
+	}
+	if remaining == 0 {
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":      "daily_limit_exceeded",
+			"message":    "You are exceeded your limit for the day.",
+			"limit":      dailyTokenLimit,
+			"used":       usedToday,
+			"remaining":  remaining,
+			"request_id": requestID,
+		})
+		return
+	}
+
+	// Compute prompt token count (Gemini countTokens) so we can cap output tokens
+	// and guarantee we never exceed the remaining daily quota.
+	ctxPlan, cancelPlan := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancelPlan()
+	plan, planErr := h.llmService.BuildGeminiTokenPlan(ctxPlan, req.Text, wordCount, req.IncludeAlternatives, requestID)
+	// Fallback: if countTokens fails, use a conservative estimate so we still enforce a limit.
+	promptTokens := 0
+	maxOutputTokens := 768
+	if planErr == nil && plan != nil {
+		promptTokens = plan.PromptTokens
+		maxOutputTokens = plan.MaxOutputTokens
+	} else {
+		// Conservative heuristic: Tamil tends to tokenize more densely than English.
+		// This is only used when countTokens is unavailable.
+		runes := len([]rune(req.Text))
+		promptTokens = (runes / 2) + 300
+	}
+
+	// Minimum output budget needed for JSON corrections envelope.
+	const minOutputTokens = 128
+	capOutput := remaining - promptTokens
+	if capOutput > maxOutputTokens {
+		capOutput = maxOutputTokens
+	}
+	if capOutput < minOutputTokens {
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":      "daily_limit_exceeded",
+			"message":    "You are exceeded your limit for the day.",
+			"limit":      dailyTokenLimit,
+			"used":       usedToday,
+			"remaining":  remaining,
+			"request_id": requestID,
+		})
+		return
+	}
+	reservedTokens := promptTokens + capOutput
+
 	// Determine model to use
 	modelType := h.selectModel(wordCount)
 
@@ -334,7 +402,7 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		// If we can't save the draft, fall back to inline proofread so the user still gets suggestions.
 		ctx, cancel := context.WithTimeout(c.Request.Context(), proofreadTimeoutFor(wordCount, len(req.Text)))
 		defer cancel()
-		result, perr := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID)
+		result, perr := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID, capOutput)
 		if perr != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success":     true,
@@ -384,23 +452,23 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		"word_count":    wordCount,
 	})
 
-	// Start proofreading process immediately in background
-	go h.processSubmission(context.Background(), submission.ID, requestID, req.Text, wordCount, modelType, req.IncludeAlternatives)
+	// Reserve tokens up-front so quota enforcement is strict and consistent.
+	// We'll update this to actual usageMetadata.totalTokenCount after Gemini completes.
+	usage := &models.Usage{
+		UserID:       userID,
+		WordCount:    wordCount,
+		TokenCount:   reservedTokens,
+		ModelUsed:    modelType,
+		SubmissionID: &submission.ID,
+		Date:         time.Now(),
+	}
+	if err := h.db.Create(usage).Error; err != nil {
+		log.Printf("Error creating usage record: %v", err)
+		// Don't fail submission if usage tracking fails; quota is best-effort in this scenario.
+	}
 
-	// Record usage asynchronously (non-blocking)
-	go func() {
-		usage := &models.Usage{
-			UserID:       userID,
-			WordCount:    wordCount,
-			ModelUsed:    modelType,
-			SubmissionID: &submission.ID,
-			Date:         time.Now(),
-		}
-		if err := h.db.Create(usage).Error; err != nil {
-			log.Printf("Error creating usage record: %v", err)
-			// Don't fail submission if usage tracking fails
-		}
-	}()
+	// Start proofreading process immediately in background
+	go h.processSubmission(context.Background(), submission.ID, requestID, req.Text, wordCount, modelType, req.IncludeAlternatives, capOutput, usage.ID)
 
 	// Return success response immediately with the created submission record
 	c.JSON(http.StatusAccepted, gin.H{
@@ -411,11 +479,17 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		"corrections": []any{},
 		"message":    "Submission received, proofreading started...",
 		"request_id": requestID,
+		"quota": gin.H{
+			"limit":     dailyTokenLimit,
+			"used":      usedToday,
+			"reserved":  reservedTokens,
+			"remaining": remaining,
+		},
 	})
 }
 
 // processSubmission processes the text submission asynchronously
-func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, requestID, text string, wordCount int, modelType models.ModelType, includeAlternatives bool) {
+func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, requestID, text string, wordCount int, modelType models.ModelType, includeAlternatives bool, maxOutputTokensCap int, usageID uint) {
 	log.Printf("Starting proofreading for submission ID: %d (request_id=%s)", submissionID, requestID)
 	auditlog.LogStandalone(auditlog.LevelInfo, "submission.processing_started", requestID, map[string]any{
 		"submission_id": submissionID,
@@ -440,7 +514,7 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, req
 	// Process with LLM service (hard timeout so the job can't hang indefinitely)
 	ctx2, cancel := context.WithTimeout(ctx, proofreadTimeoutFor(wordCount, len(text)))
 	defer cancel()
-	result, err := h.llmService.ProofreadText(ctx2, text, wordCount, includeAlternatives, requestID)
+	result, err := h.llmService.ProofreadText(ctx2, text, wordCount, includeAlternatives, requestID, maxOutputTokensCap)
 	if err != nil {
 		log.Printf("Error processing submission %d (request_id=%s): %v", submissionID, requestID, err)
 		auditlog.LogStandalone(auditlog.LevelWarn, "submission.processing_failed", requestID, map[string]any{
@@ -482,6 +556,17 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, req
 			Data:  gin.H{"status": models.StatusCompleted, "request_id": requestID},
 		})
 		return
+	}
+
+	// Best-effort: update reserved usage with actual Gemini token usage if available.
+	if usageID != 0 && result != nil && result.TotalTokens > 0 {
+		if err := h.db.Model(&models.Usage{}).
+			Where("id = ?", usageID).
+			Updates(map[string]any{
+				"token_count": result.TotalTokens,
+			}).Error; err != nil {
+			log.Printf("Error updating usage token_count: %v", err)
+		}
 	}
 
 	// Serialize suggestions to JSON

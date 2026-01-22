@@ -62,9 +62,17 @@ function clearAuthTokens() {
   // Clear cookies - clear both refresh token cookie names for compatibility
   // Backend uses 'proof_refresh_token', but we also clear 'refresh_token' for safety
   const cookieOptions = 'path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-  document.cookie = `access_token=; ${cookieOptions}`;
-  document.cookie = `refresh_token=; ${cookieOptions}`;
-  document.cookie = `proof_refresh_token=; ${cookieOptions}`;
+  const clearCookie = (name) => {
+    // Host-only
+    document.cookie = `${name}=; ${cookieOptions}`;
+    // Best-effort domain clears (works only when allowed by current host)
+    document.cookie = `${name}=; ${cookieOptions}; domain=prooftamil.com`;
+    document.cookie = `${name}=; ${cookieOptions}; domain=.prooftamil.com`;
+    document.cookie = `${name}=; ${cookieOptions}; domain=www.prooftamil.com`;
+  };
+  clearCookie('access_token');
+  clearCookie('refresh_token');
+  clearCookie('proof_refresh_token');
   
   console.log('[AUTH] All tokens cleared from storage');
 }
@@ -86,7 +94,14 @@ function storeAccessToken(token) {
   localStorage.setItem('access_token', token);
   
   // Store in cookie (non-HTTP-only for client-side access)
-  document.cookie = `access_token=${token}; path=/; SameSite=Lax; Max-Age=900`;
+  const cookieBase = `path=/; SameSite=Lax; Max-Age=900`;
+  // Always set a host-only cookie
+  document.cookie = `access_token=${token}; ${cookieBase}`;
+  // Best-effort domain cookies so auth works consistently across www/apex/subdomains.
+  // Some browsers/hosts may reject some variants; that's ok.
+  document.cookie = `access_token=${token}; ${cookieBase}; domain=prooftamil.com`;
+  document.cookie = `access_token=${token}; ${cookieBase}; domain=.prooftamil.com`;
+  document.cookie = `access_token=${token}; ${cookieBase}; domain=www.prooftamil.com`;
   
   console.log('[AUTH] Access token stored successfully');
 }

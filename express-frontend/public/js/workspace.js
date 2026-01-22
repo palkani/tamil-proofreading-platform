@@ -3261,6 +3261,20 @@ class WorkspaceController {
         console.warn('[AI] ⚠️ Response was not valid JSON:', raw?.slice?.(0, 200));
         data = { error: 'invalid_json', raw: raw?.slice?.(0, 300) };
       }
+
+      // Daily limit handling
+      if (response.status === 429) {
+        const remaining = (data && typeof data.remaining === 'number') ? data.remaining : null;
+        const msgBase = String(data?.message || 'You are exceeded your limit for the day.').trim();
+        const msg = remaining !== null ? `${msgBase} (Remaining tokens today: ${remaining})` : msgBase;
+        this.updateAnalysisStatus('');
+        if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
+          this.suggestionsPanel.setEmptyState('idle');
+        }
+        this.showNotification(msg, 'warning');
+        return;
+      }
+
       console.log('[AI] ✅ API response data keys:', Object.keys(data));
       if (response.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
         const submissionId = data.submission?.id;

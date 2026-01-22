@@ -42,6 +42,11 @@ type GeminiResponse struct {
                         } `json:"parts"`
                 } `json:"content"`
         } `json:"candidates"`
+        UsageMetadata *struct {
+                PromptTokenCount     int `json:"promptTokenCount"`
+                CandidatesTokenCount int `json:"candidatesTokenCount"`
+                TotalTokenCount      int `json:"totalTokenCount"`
+        } `json:"usageMetadata"`
 }
 
 // Reusable HTTP client with connection pooling for better performance
@@ -56,16 +61,20 @@ var geminiClient = &http.Client{
 
 // CallGeminiProofread calls Gemini with the proofreading prompt.
 // maxOutputTokens is a latency lever: smaller outputs return faster.
-func CallGeminiProofread(userText string, model string, apiKey string, maxOutputTokens int) (string, error) {
+func buildProofreadPrompt(userText string) string {
+        // Build final prompt - CRITICAL: Replace the actual placeholder in the prompt template
+        return strings.Replace(proofreadingPrompt, "[USER'S TAMIL TEXT HERE]", userText, 1)
+}
+
+func CallGeminiProofread(userText string, model string, apiKey string, maxOutputTokens int) (string, *GeminiResponse, error) {
         if apiKey == "" {
-                return "", &ProviderError{Provider: "gemini", Message: "API key not provided", Retryable: false}
+                return "", nil, &ProviderError{Provider: "gemini", Message: "API key not provided", Retryable: false}
         }
 
         startTime := time.Now()
         log.Printf("[GEMINI] Starting with model: %s, text length: %d", model, len(userText))
 
-        // Build final prompt - CRITICAL: Replace the actual placeholder in the prompt template
-        finalPrompt := strings.Replace(proofreadingPrompt, "[USER'S TAMIL TEXT HERE]", userText, 1)
+        finalPrompt := buildProofreadPrompt(userText)
         promptBuildTime := time.Since(startTime)
 
         // Gemini API Endpoint
@@ -104,7 +113,7 @@ func CallGeminiProofread(userText string, model string, apiKey string, maxOutput
         req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
         if err != nil {
                 log.Printf("[GEMINI] Request build error: %v", err)
-                return "", err
+                return "", nil, err
         }
 
         req.Header.Set("Content-Type", "application/json")
@@ -113,7 +122,7 @@ func CallGeminiProofread(userText string, model string, apiKey string, maxOutput
         resp, err := geminiClient.Do(req)
         if err != nil {
                 log.Printf("[GEMINI] Request error after %v: %v", time.Since(apiStartTime), err)
-                return "", err
+                return "", nil, err
         }
         defer resp.Body.Close()
 
@@ -124,7 +133,7 @@ func CallGeminiProofread(userText string, model string, apiKey string, maxOutput
         bodyBytes, err := io.ReadAll(resp.Body)
         if err != nil {
                 log.Printf("[GEMINI] Error reading response body: %v", err)
-                return "", err
+                return "", nil, err
         }
 
         if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -133,7 +142,7 @@ func CallGeminiProofread(userText string, model string, apiKey string, maxOutput
                         msg = msg[:600]
                 }
                 retryable := resp.StatusCode == 429 || resp.StatusCode == 408 || resp.StatusCode >= 500
-                return "", &ProviderError{Provider: "gemini", StatusCode: resp.StatusCode, Message: msg, Retryable: retryable}
+                return "", nil, &ProviderError{Provider: "gemini", StatusCode: resp.StatusCode, Message: msg, Retryable: retryable}
         }
 
         if strings.TrimSpace(os.Getenv("GEMINI_DEBUG")) != "" {
@@ -150,24 +159,70 @@ func CallGeminiProofread(userText string, model string, apiKey string, maxOutput
         var geminiResp GeminiResponse
         if err := json.Unmarshal(bodyBytes, &geminiResp); err != nil {
                 log.Printf("[GEMINI] JSON parse error: %v", err)
-                return "", err
+                return "", nil, err
         }
 
         // Extract final text
         if len(geminiResp.Candidates) == 0 {
                 log.Printf("[GEMINI] No candidates in response")
-                return "", &ProviderError{Provider: "gemini", StatusCode: resp.StatusCode, Message: "no candidates returned", Retryable: true}
+                return "", nil, &ProviderError{Provider: "gemini", StatusCode: resp.StatusCode, Message: "no candidates returned", Retryable: true}
         }
 
         if len(geminiResp.Candidates[0].Content.Parts) == 0 {
                 log.Printf("[GEMINI] No parts in candidates")
-                return "", fmt.Errorf("no content returned from Gemini")
+                return "", nil, fmt.Errorf("no content returned from Gemini")
         }
 
         result := geminiResp.Candidates[0].Content.Parts[0].Text
         totalTime := time.Since(startTime)
         log.Printf("[GEMINI] SUCCESS - Total time: %v, API time: %v, Result length: %d", totalTime, apiTime, len(result))
-        return result, nil
+        return result, &geminiResp, nil
+}
+
+func CallGeminiCountTokens(prompt string, model string, apiKey string) (int, error) {
+        if apiKey == "" {
+                return 0, &ProviderError{Provider: "gemini", Message: "API key not provided", Retryable: false}
+        }
+        url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:countTokens?key=%s", model, apiKey)
+        payload := map[string]interface{}{
+                "contents": []map[string]interface{}{
+                        {
+                                "parts": []map[string]string{
+                                        {"text": prompt},
+                                },
+                        },
+                },
+        }
+        jsonBody, _ := json.Marshal(payload)
+        req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
+        if err != nil {
+                return 0, err
+        }
+        req.Header.Set("Content-Type", "application/json")
+        resp, err := geminiClient.Do(req)
+        if err != nil {
+                return 0, err
+        }
+        defer resp.Body.Close()
+        bodyBytes, err := io.ReadAll(resp.Body)
+        if err != nil {
+                return 0, err
+        }
+        if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+                msg := strings.TrimSpace(string(bodyBytes))
+                if len(msg) > 600 {
+                        msg = msg[:600]
+                }
+                retryable := resp.StatusCode == 429 || resp.StatusCode == 408 || resp.StatusCode >= 500
+                return 0, &ProviderError{Provider: "gemini", StatusCode: resp.StatusCode, Message: msg, Retryable: retryable}
+        }
+        var out struct {
+                TotalTokens int `json:"totalTokens"`
+        }
+        if err := json.Unmarshal(bodyBytes, &out); err != nil {
+                return 0, err
+        }
+        return out.TotalTokens, nil
 }
 
 var transliterationPrompt = `You are a Tamil Transliteration Engine.

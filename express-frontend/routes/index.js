@@ -474,10 +474,15 @@ router.get('/archive', (req, res) => {
   return res.redirect(302, '/drafts');
 });
 
-// Drafts page - client-side auth only
-router.get('/drafts', (req, res) => {
+// Drafts page - MUST be protected (never show drafts when logged out / expired)
+router.get('/drafts', requireAuth, (req, res) => {
   try {
-    const user = getCurrentUser(req) || null; // Ensure user is null if not set, not undefined
+    // Prevent browser caching/back-button showing drafts after logout.
+    res.set('Cache-Control', 'no-store, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
+    const user = getCurrentUser(req) || null;
     const seo = getSeoData('drafts');
     res.render('pages/drafts', { 
       title: seo.title || 'My Drafts',
