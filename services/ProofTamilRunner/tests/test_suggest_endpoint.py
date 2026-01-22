@@ -2,16 +2,36 @@
 Integration tests for the suggest API endpoint.
 """
 
+import os
+import importlib
 import pytest
 from fastapi.testclient import TestClient
-from app.main import app
 
-client = TestClient(app)
+def setup_app():
+    # Use a deterministic auth config for tests
+    os.environ["API_KEY"] = "demo-key"
+    os.environ["API_KEY_SECRET"] = "demo-secret"
+    os.environ["CLIENT_ID"] = "demo-client"
+    os.environ["RATE_LIMIT_PER_MIN"] = "1000"
+    import app.core.config as config
+    importlib.reload(config)
+    import app.core.security as security
+    importlib.reload(security)
+    import app.middleware.auth as authmw
+    importlib.reload(authmw)
+    import app.main as main
+    importlib.reload(main)
+    return main.app
+
+
+AUTH_HEADERS = {"X-Client-Id": "demo-client", "X-API-Key": "demo-key"}
 
 
 def test_suggest_endpoint_basic():
     """Test basic suggest endpoint functionality."""
-    response = client.get("/transliterate/suggest?q=m&limit=5")
+    app = setup_app()
+    client = TestClient(app)
+    response = client.get("/transliterate/suggest?q=m&limit=5", headers=AUTH_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
@@ -22,12 +42,14 @@ def test_suggest_endpoint_basic():
 
 def test_suggest_endpoint_with_mode():
     """Test suggest endpoint with mode parameter."""
-    response = client.get("/transliterate/suggest?q=m&limit=5&mode=smart")
+    app = setup_app()
+    client = TestClient(app)
+    response = client.get("/transliterate/suggest?q=m&limit=5&mode=smart", headers=AUTH_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
 
-    response_strict = client.get("/transliterate/suggest?q=m&limit=5&mode=strict")
+    response_strict = client.get("/transliterate/suggest?q=m&limit=5&mode=strict", headers=AUTH_HEADERS)
     assert response_strict.status_code == 200
     data_strict = response_strict.json()
     assert data_strict["success"] is True
@@ -35,8 +57,11 @@ def test_suggest_endpoint_with_mode():
 
 def test_suggest_endpoint_with_context():
     """Test suggest endpoint with context."""
+    app = setup_app()
+    client = TestClient(app)
     response = client.get(
-        "/transliterate/suggest?q=m&limit=5&context=என்&cursor=2"
+        "/transliterate/suggest?q=m&limit=5&context=என்&cursor=2",
+        headers=AUTH_HEADERS,
     )
     assert response.status_code == 200
     data = response.json()
@@ -46,29 +71,39 @@ def test_suggest_endpoint_with_context():
 
 def test_suggest_endpoint_validation_q_too_long():
     """Test validation for q too long."""
+    app = setup_app()
+    client = TestClient(app)
     long_q = "a" * 41
-    response = client.get(f"/transliterate/suggest?q={long_q}")
-    assert response.status_code == 400
+    response = client.get(f"/transliterate/suggest?q={long_q}", headers=AUTH_HEADERS)
+    # FastAPI validation error (query param constraints)
+    assert response.status_code == 422
 
 
 def test_suggest_endpoint_validation_limit_invalid():
     """Test validation for invalid limit."""
-    response = client.get("/transliterate/suggest?q=m&limit=0")
-    assert response.status_code == 400
+    app = setup_app()
+    client = TestClient(app)
+    response = client.get("/transliterate/suggest?q=m&limit=0", headers=AUTH_HEADERS)
+    # FastAPI validation error (query param constraints)
+    assert response.status_code == 422
 
-    response = client.get("/transliterate/suggest?q=m&limit=21")
-    assert response.status_code == 400
+    response = client.get("/transliterate/suggest?q=m&limit=21", headers=AUTH_HEADERS)
+    assert response.status_code == 422
 
 
 def test_suggest_endpoint_validation_mode_invalid():
     """Test validation for invalid mode."""
-    response = client.get("/transliterate/suggest?q=m&mode=invalid")
+    app = setup_app()
+    client = TestClient(app)
+    response = client.get("/transliterate/suggest?q=m&mode=invalid", headers=AUTH_HEADERS)
     assert response.status_code == 422  # FastAPI validation error
 
 
 def test_suggest_endpoint_response_format():
     """Test response format matches expected schema."""
-    response = client.get("/transliterate/suggest?q=m&limit=3")
+    app = setup_app()
+    client = TestClient(app)
+    response = client.get("/transliterate/suggest?q=m&limit=3", headers=AUTH_HEADERS)
     assert response.status_code == 200
     data = response.json()
 
@@ -88,7 +123,9 @@ def test_suggest_endpoint_response_format():
 
 def test_suggest_endpoint_meta_diagnostics():
     """Test that meta contains diagnostics."""
-    response = client.get("/transliterate/suggest?q=m&limit=5")
+    app = setup_app()
+    client = TestClient(app)
+    response = client.get("/transliterate/suggest?q=m&limit=5", headers=AUTH_HEADERS)
     assert response.status_code == 200
     data = response.json()
 
