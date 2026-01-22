@@ -367,11 +367,15 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	}
 	if capOutput < minOutputTokens {
 		c.JSON(http.StatusTooManyRequests, gin.H{
-			"error":      "daily_limit_exceeded",
-			"message":    "You are exceeded your limit for the day.",
+			// Not a full-day exhaustion: the *current request* cannot fit within remaining tokens.
+			"error":      "quota_insufficient_for_request",
+			"message":    "This text is too large for your remaining token budget today. Please try a shorter text or come back tomorrow.",
 			"limit":      dailyTokenLimit,
 			"used":       usedToday,
 			"remaining":  remaining,
+			"required":   promptTokens + minOutputTokens,
+			"prompt":     promptTokens,
+			"min_output": minOutputTokens,
 			"request_id": requestID,
 		})
 		return

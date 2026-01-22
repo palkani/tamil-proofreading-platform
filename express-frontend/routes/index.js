@@ -14,6 +14,16 @@ function getBackendApiUrl() {
 
 const BACKEND_URL = getBackendApiUrl();
 
+// Demo banner should only show in development / explicit demo deployments.
+// NOTE: keep false by default in production.
+function isDemoModeEnabled() {
+  const v = String(process.env.DEMO_MODE || '').toLowerCase().trim();
+  if (v === '1' || v === 'true' || v === 'yes') return true;
+  if (process.env.NODE_ENV && process.env.NODE_ENV.toLowerCase() === 'production') return false;
+  // Default: enabled in non-production environments.
+  return process.env.NODE_ENV !== 'production';
+}
+
 // Homepage - accessible to everyone
 // IMPORTANT: This route should NEVER redirect - it's the landing page
 router.get('/', (req, res) => {
@@ -393,7 +403,8 @@ router.get('/login', (req, res) => {
     seo: seo,
     error: req.query.error || null,
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
-    redirectTo: req.query.redirect || '/drafts'
+    redirectTo: req.query.redirect || '/drafts',
+    demoMode: isDemoModeEnabled(),
   });
 });
 
@@ -418,7 +429,8 @@ router.get('/register', (req, res) => {
     title: seo.title,
     seo: seo,
     googleClientId: GOOGLE_CLIENT_ID,
-    redirectTo: req.query.redirect || '/drafts'
+    redirectTo: req.query.redirect || '/drafts',
+    demoMode: isDemoModeEnabled(),
   });
 });
 

@@ -68,6 +68,42 @@
       window.location.replace(isSafeInternalPath(dest) ? dest : '/drafts');
     }
   })();
+
+  // If we were redirected here because the access token expired but a refresh token exists,
+  // attempt a silent refresh once and bounce back to the requested page.
+  (function autoRefreshIfRequested() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const shouldRefresh = params.get('refresh') === '1';
+      if (!shouldRefresh) return;
+
+      const rawRedirect = params.get('redirect') || '/drafts';
+      const isSafeInternal =
+        rawRedirect &&
+        rawRedirect.startsWith('/') &&
+        !rawRedirect.startsWith('//') &&
+        !rawRedirect.includes('://');
+      const target = isSafeInternal ? rawRedirect : '/drafts';
+
+      // Remove refresh flag to prevent loops if refresh fails.
+      params.delete('refresh');
+      const cleaned = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+      window.history.replaceState({}, document.title, cleaned);
+
+      if (!window.authUtils || typeof window.authUtils.refreshAccessToken !== 'function') return;
+
+      // Try to refresh; if successful, auth-utils will store the token.
+      window.authUtils.refreshAccessToken().then((t) => {
+        if (t) {
+          window.location.replace(target);
+        }
+      }).catch(() => {
+        // Stay on login page; user can sign in manually.
+      });
+    } catch (_e) {
+      // ignore
+    }
+  })();
 </script>
 <input type="hidden" id="google-client-id" value="<%= googleClientId || '' %>">
 
@@ -150,11 +186,13 @@
         </p>
       </div>
 
-      <div class="mt-8 pt-6 border-t border-gray-200">
-        <p class="text-xs text-center text-gray-500">
-          ℹ️ <strong>Demo Mode:</strong> Any email and password will work for testing
-        </p>
-      </div>
+      <% if (demoMode) { %>
+        <div class="mt-8 pt-6 border-t border-gray-200">
+          <p class="text-xs text-center text-gray-500">
+            ℹ️ <strong>Demo Mode:</strong> Any email and password will work for testing
+          </p>
+        </div>
+      <% } %>
     </div>
 
     <div class="mt-8 text-center text-sm text-gray-500">

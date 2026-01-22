@@ -3265,8 +3265,10 @@ class WorkspaceController {
       // Daily limit handling
       if (response.status === 429) {
         const remaining = (data && typeof data.remaining === 'number') ? data.remaining : null;
-        const msgBase = String(data?.message || 'You are exceeded your limit for the day.').trim();
-        const msg = remaining !== null ? `${msgBase} (Remaining tokens today: ${remaining})` : msgBase;
+        const code = String(data?.error || '').trim();
+        const msgBase = String(data?.message || 'Request blocked.').trim();
+        const showRemaining = remaining !== null && (code === 'daily_limit_exceeded' || code === 'quota_insufficient_for_request');
+        const msg = showRemaining ? `${msgBase} (Remaining tokens today: ${remaining})` : msgBase;
         this.updateAnalysisStatus('');
         if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
           this.suggestionsPanel.setEmptyState('idle');

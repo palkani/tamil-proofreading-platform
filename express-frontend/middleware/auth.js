@@ -118,6 +118,11 @@ function requireAuth(req, res, next) {
   }
 
   const redirectParam = encodeURIComponent(req.originalUrl || '/dashboard');
+  // If we have a refresh token (session is refreshable) but access token is expired,
+  // send user to login with an auto-refresh hint to avoid redirect loops.
+  if (req.authRefreshable) {
+    return res.redirect(`/login?redirect=${redirectParam}&refresh=1`);
+  }
   res.redirect(`/login?redirect=${redirectParam}`);
 }
 
