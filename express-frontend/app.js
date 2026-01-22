@@ -138,6 +138,21 @@ app.get('/js/home-editor.js', (req, res, next) => {
   next();
 });
 
+// Special handling for transliterator-runner.js - no cache to ensure latest version
+app.get('/js/transliterator-runner.js', (req, res, next) => {
+  // Force no caching - multiple headers for maximum compatibility
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Last-Modified': new Date().toUTCString(),
+    'ETag': false,
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.removeHeader('ETag');
+  next();
+});
+
 // Also add no-cache for all JS files in development
 if (process.env.NODE_ENV !== 'production') {
   app.get('/js/*.js', (req, res, next) => {
@@ -165,7 +180,7 @@ app.use(
         const isFont = /\.(woff2|woff|ttf|otf)$/.test(path);
 
         if (isJs) {
-          if (path.endsWith('/js/workspace.js') || path.endsWith('/js/home-editor.js')) {
+          if (path.endsWith('/js/workspace.js') || path.endsWith('/js/home-editor.js') || path.endsWith('/js/transliterator-runner.js')) {
             // Allow caching but require revalidation
             res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
           } else {

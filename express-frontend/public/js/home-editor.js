@@ -246,9 +246,14 @@ class HomeEditor {
     this.currentSuggestions = [];
     this.currentCaretInfo = null;
     this.activeSuggestionIndex = 0;
+    // Guard against double-commit (mobile taps + click, multiple listeners, etc.)
+    this.isSelectingSuggestion = false;
     // Prevent dropdown re-opening immediately after a selection (Google-IME style)
     this.justReplacedUntil = 0;
     this.lastReplacedToken = '';
+
+    // Transliteration V2 feature flag (if enabled, we must avoid attaching legacy V1 IME handlers)
+    this.translitV2Enabled = !!(window.TRANS_SUGGEST_V2 && window.TransliterationTypeahead && window.HomeEditorAdapter && this.editor);
     
     // Tamil conversion dictionary (simplified version)
     this.tamilDict = {
@@ -279,7 +284,7 @@ class HomeEditor {
 
     // Transliteration V2 (feature-flagged)
     const editorEl = this.editor;
-    if (window.TRANS_SUGGEST_V2 && window.TransliterationTypeahead && window.HomeEditorAdapter && editorEl) {
+    if (this.translitV2Enabled && editorEl) {
       this.translitTypeahead = new window.TransliterationTypeahead(
         new window.HomeEditorAdapter(editorEl),
         {
@@ -479,26 +484,28 @@ class HomeEditor {
       });
     }
     
-    // Handle keyboard for IME dropdown (arrow navigation + selection)
-    this.editor.addEventListener('keydown', (e) => {
-      const key = e.key;
-      // Only intercept keys when dropdown is visible
-      const dropdownOpen = this.autocompleteBox && !this.autocompleteBox.classList.contains('hidden');
-      if (!dropdownOpen) return;
+    if (!this.translitV2Enabled) {
+      // Handle keyboard for IME dropdown (arrow navigation + selection)
+      this.editor.addEventListener('keydown', (e) => {
+        const key = e.key;
+        // Only intercept keys when dropdown is visible
+        const dropdownOpen = this.autocompleteBox && !this.autocompleteBox.classList.contains('hidden');
+        if (!dropdownOpen) return;
 
-      const handledKeys = new Set([
-        'ArrowDown',
-        'ArrowUp',
-        'Enter',
-        'Tab',
-        'Escape',
-        ' ',
-      ]);
+        const handledKeys = new Set([
+          'ArrowDown',
+          'ArrowUp',
+          'Enter',
+          'Tab',
+          'Escape',
+          ' ',
+        ]);
 
-      if (handledKeys.has(key) || /^[1-5]$/.test(key)) {
-        this.handleKeyDown(e);
-      }
-    });
+        if (handledKeys.has(key) || /^[1-5]$/.test(key)) {
+          this.handleKeyDown(e);
+        }
+      });
+    }
     // Hard cap: prevent inserting more words once limit is reached (typing + paste)
     this.editor.addEventListener('beforeinput', (e) => {
       try {
@@ -528,7 +535,9 @@ class HomeEditor {
     });
     this.editor.addEventListener('input', () => {
       this.handleInput();
-      this.showAutocomplete();
+      if (!this.translitV2Enabled) {
+        this.showAutocomplete();
+      }
     });
     this.editor.addEventListener('paste', (e) => this.handlePaste(e));
 
@@ -867,11 +876,30 @@ class HomeEditor {
       console.error('[AUTOCOMPLETE] Dropdown element not found!');
       return;
     }
-    
-    if (!suggestions?.length) {
-      this.autocompleteBox.classList.remove('hidden');
+
+    // Normalize + filter out empty/duplicate words (prevents "blank rows" + meaningless duplicates)
+    const cleaned = (() => {
+      const seen = new Set();
+      const out = [];
+      for (const item of (suggestions || [])) {
+        const w = normalizeTamilWord(typeof item === 'string' ? item : (item.word || item.ta || item.text || item.suggestion || item.value || item));
+        if (!w) continue;
+        const key = w.normalize ? w.normalize('NFC') : w;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(w);
+        if (out.length >= 5) break;
+      }
+      return out;
+    })();
+
+    if (!cleaned.length) {
+      // Never show an "empty background" dropdown — just close it.
+      this.autocompleteBox.classList.add('hidden');
       const container = this.autocompleteList || this.autocompleteBox.querySelector('#home-autocomplete-list');
-      if (container) container.innerHTML = `<div class="p-3 text-sm text-gray-500">No suggestions found</div>`;
+      if (container) container.innerHTML = '';
+      this.currentSuggestions = [];
+      this.currentCaretInfo = null;
       return;
     }
 
@@ -882,10 +910,11 @@ class HomeEditor {
         return;
       }
 
-      container.innerHTML = suggestions
-        .slice(0, 5)
-        .map((item, idx) => {
-          const tamilWord = typeof item === 'string' ? item : normalizeTamilWord(item.word || item);
+      // Ensure the data we insert matches what we render.
+      this.currentSuggestions = cleaned;
+
+      container.innerHTML = cleaned
+        .map((tamilWord, idx) => {
           const active = idx === (this.activeSuggestionIndex || 0);
           return `
           <button type="button"
@@ -901,7 +930,7 @@ class HomeEditor {
         })
         .join('');
 
-      console.log('[AUTOCOMPLETE] Showing dropdown with', suggestions.length, 'suggestions');
+      console.log('[AUTOCOMPLETE] Showing dropdown with', cleaned.length, 'suggestions');
       this.positionAutocomplete();
       this.autocompleteBox.classList.remove('hidden');
 
@@ -910,9 +939,11 @@ class HomeEditor {
         // Prevent mousedown from moving the caret before we read caretInfo
         btn.addEventListener('pointerdown', (e) => {
           e.preventDefault();
+          e.stopPropagation();
         });
         btn.addEventListener('click', (e) => {
           e.preventDefault();
+          e.stopPropagation();
           const idx = Number(btn.getAttribute('data-index') || '0');
           this.activeSuggestionIndex = Number.isFinite(idx) ? idx : 0;
           this.updateSuggestionHighlight();
@@ -929,7 +960,10 @@ class HomeEditor {
   }
 
   insertSuggestion(index, appendSpace = false) {
+    if (this.isSelectingSuggestion) return;
     if (!this.currentSuggestions?.[index]) return;
+    this.isSelectingSuggestion = true;
+    setTimeout(() => { this.isSelectingSuggestion = false; }, 320);
     
     const suggestion = this.currentSuggestions[index];
     const tamilWord = normalizeTamilWord(suggestion);

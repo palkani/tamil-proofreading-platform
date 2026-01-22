@@ -3745,6 +3745,12 @@ class WorkspaceController {
       return;
     }
 
+    // Paste can trigger multiple editor-change events. We already queue exactly one
+    // `autoAnalyze()` in `queuePasteAnalyze()`, so skip scheduling a second one here.
+    if (this.pasteSuppressUntil && Date.now() < this.pasteSuppressUntil) {
+      return;
+    }
+
     this.saveTimeout = setTimeout(() => {
       // Unify "save" with proofreading submit to avoid double /api/submit calls.
       // This will only run when text meets MIN_SUBMIT_WORDS and contains Tamil.

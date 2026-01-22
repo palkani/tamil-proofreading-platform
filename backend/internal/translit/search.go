@@ -126,6 +126,10 @@ func GetSuggestions(input string) []Suggestion {
                         if s.Word == fixed {
                                 continue
                         }
+                        // Drop very low-confidence tail suggestions for longer inputs.
+                        if len(key) >= 4 && s.Score < 0.45 {
+                                continue
+                        }
                         out = append(out, s)
                         if len(out) >= 5 {
                                 break
@@ -234,6 +238,9 @@ func GetSuggestions(input string) []Suggestion {
 
         suggestions = deduplicateSuggestions(suggestions)
 
+        // Filter out low-quality/meaningless suggestions for longer inputs.
+        suggestions = filterByRelativeScore(key, suggestions)
+
         // Return top 5
         if len(suggestions) > 5 {
                 suggestions = suggestions[:5]
@@ -318,8 +325,50 @@ func GetSuggestionsFromKeyNoOverride(key string) []Suggestion {
                 suggestions = append(suggestions, Suggestion{Word: s.entry.Tamil, Score: s.score})
         }
         suggestions = deduplicateSuggestions(suggestions)
+        suggestions = filterByRelativeScore(key, suggestions)
         if len(suggestions) > 5 {
                 suggestions = suggestions[:5]
         }
         return suggestions
+}
+
+// filterByRelativeScore drops the "long tail" of low-confidence suggestions.
+// This is intentionally conservative and only kicks in for longer Latin inputs,
+// where users expect meaningful Tamil words rather than fuzzy near-misses.
+func filterByRelativeScore(key string, suggestions []Suggestion) []Suggestion {
+        if len(suggestions) == 0 {
+                return suggestions
+        }
+        if len(key) < 4 {
+                return suggestions
+        }
+
+        top := suggestions[0].Score
+        // Absolute floor (more strict for longer keys)
+        absMin := 0.45
+        if len(key) >= 6 {
+                absMin = 0.55
+        }
+        // Relative floor vs top score
+        relMin := top * 0.65
+        if relMin < absMin {
+                relMin = absMin
+        }
+
+        out := make([]Suggestion, 0, len(suggestions))
+        for i, s := range suggestions {
+                // Always keep the top suggestion.
+                if i == 0 {
+                        out = append(out, s)
+                        continue
+                }
+                if s.Score >= relMin {
+                        out = append(out, s)
+                }
+        }
+        // Never return empty if we had at least one candidate.
+        if len(out) == 0 {
+                return suggestions[:1]
+        }
+        return out
 }
