@@ -2929,15 +2929,34 @@ class WorkspaceController {
       return;
     }
 
-    if (!this.currentTokenInfo || !replacement) {
+    if (!replacement) {
       window.logger?.warn?.("[IME] replaceTokenAtCaret: missing tokenInfo or replacement", {
         hasTokenInfo: !!this.currentTokenInfo,
         hasReplacement: !!replacement
       });
       return;
     }
-    const { token, start, end } = this.currentTokenInfo;
     const text = this.getEditorText() || '';
+
+    // Prefer a fresh token read at commit-time (prevents partial replacements when tokenInfo is stale)
+    // Fallback to stored token info if we can't read caret/token now.
+    let tokenInfo = null;
+    try {
+      const caretPos =
+        (this.editor && typeof this.editor.getCursorPosition === 'function' && this.editor.getCursorPosition()) ||
+        text.length;
+      tokenInfo = getTokenAtCaret(text, caretPos);
+    } catch (_e) {
+      tokenInfo = null;
+    }
+    if (!tokenInfo || !tokenInfo.token || !/^[a-zA-Z]+$/.test(tokenInfo.token)) {
+      tokenInfo = this.currentTokenInfo;
+    }
+    if (!tokenInfo || !tokenInfo.token) {
+      return;
+    }
+
+    let { token, start, end } = tokenInfo;
     
     // CRITICAL FIX: Check bounds to prevent errors
     if (start < 0 || end > text.length || start > end) {
@@ -2950,6 +2969,9 @@ class WorkspaceController {
     }
     
     // Get current token at position (might have changed if user continued typing)
+    // Expand to cover full Latin run (handles caret in middle + stale end)
+    while (start > 0 && /[A-Za-z]/.test(text.charAt(start - 1))) start--;
+    while (end < text.length && /[A-Za-z]/.test(text.charAt(end))) end++;
     const currentToken = text.slice(start, end);
     
     // CRITICAL: Only replace if current token is still Latin (English word)
@@ -2981,14 +3003,8 @@ class WorkspaceController {
       });
     }
     
-    // Use the stored end position, but if user typed more, use current end
-    // Calculate actual end position: use stored end or find where Latin token ends
-    let actualEnd = end;
-    if (isStillLatin && currentToken.length > token.length) {
-      // User continued typing - use the extended token
-      actualEnd = start + currentToken.length;
-      window.logger?.debug?.("[IME] User extended token, using extended end position:", actualEnd);
-    }
+    // End is already expanded to full Latin run.
+    const actualEnd = end;
     
     // CRITICAL: Only replace the Latin token, don't add to it
     const replacementText = replacement + (appendSpace ? ' ' : '');

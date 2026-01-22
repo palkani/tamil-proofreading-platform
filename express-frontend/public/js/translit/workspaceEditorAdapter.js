@@ -52,21 +52,60 @@
       if (!sel || sel.rangeCount === 0) return;
       const range = sel.getRangeAt(0);
       try {
-        const endOffset = range.endOffset;
-        const tokenLen = end - start;
-        range.setStart(range.endContainer, Math.max(0, endOffset - tokenLen));
-        range.deleteContents();
-        const node = document.createTextNode(replacement);
-        range.insertNode(node);
-        range.setStartAfter(node);
-        range.setEndAfter(node);
+        // Replace the full Latin token around the caret, not just "endOffset - tokenLen".
+        // This avoids partial replacements when caret moved or offsets are stale.
+        let container = range.endContainer;
+        let offset = range.endOffset;
+
+        // Ensure we operate on a text node
+        if (container && container.nodeType !== Node.TEXT_NODE) {
+          // Try to drill into a text node if possible
+          const tn = container.childNodes && container.childNodes.length ? container.childNodes[0] : null;
+          if (tn && tn.nodeType === Node.TEXT_NODE) {
+            container = tn;
+            offset = Math.min(offset, (tn.nodeValue || '').length);
+          }
+        }
+        if (!container || container.nodeType !== Node.TEXT_NODE) {
+          throw new Error('no_text_node');
+        }
+
+        const text = container.nodeValue || '';
+        let left = offset;
+        let right = offset;
+        while (left > 0 && /[A-Za-z]/.test(text.charAt(left - 1))) left--;
+        while (right < text.length && /[A-Za-z]/.test(text.charAt(right))) right++;
+
+        // If there is no Latin token around caret, fall back to the original tokenLen heuristic.
+        if (left === right) {
+          const endOffset = offset;
+          const tokenLen = Math.max(0, (end - start) || 0);
+          left = Math.max(0, endOffset - tokenLen);
+          right = endOffset;
+        }
+
+        const newText = text.slice(0, left) + replacement + text.slice(right);
+        container.nodeValue = newText;
+
+        // Place caret after inserted replacement
+        const caretPos = Math.min(left + String(replacement || '').length, (container.nodeValue || '').length);
+        const newRange = document.createRange();
+        newRange.setStart(container, caretPos);
+        newRange.collapse(true);
         sel.removeAllRanges();
-        sel.addRange(range);
+        sel.addRange(newRange);
       } catch (err) {
         // Fallback: replace last token in textContent
         const text = this.editorEl.textContent || '';
-        const newText = text.slice(0, text.length - (end - start)) + replacement;
-        this.editorEl.textContent = newText;
+        // Replace last Latin run at end (best-effort)
+        const m = text.match(/([A-Za-z]+)\s*$/);
+        if (m && m.index != null) {
+          const newText = text.slice(0, m.index) + replacement;
+          this.editorEl.textContent = newText;
+        } else {
+          const newText = text + replacement;
+          this.editorEl.textContent = newText;
+        }
       }
     }
   }

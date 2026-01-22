@@ -967,7 +967,8 @@ class HomeEditor {
     
     const suggestion = this.currentSuggestions[index];
     const tamilWord = normalizeTamilWord(suggestion);
-    let caretInfo = this.currentCaretInfo || getEnglishTokenAtCaret(this.editor);
+    // Prefer a fresh caret read at click-time; fall back to cached caretInfo if focus moved.
+    let caretInfo = getEnglishTokenAtCaret(this.editor) || this.currentCaretInfo;
     if (!caretInfo) return;
 
     // Ensure we operate on a text node and a Latin token
@@ -998,7 +999,8 @@ class HomeEditor {
       }
     }
 
-    // If user continued typing, extend end to cover the full Latin run
+    // Expand to cover the full Latin run (handles stale caretInfo + caret-in-middle cases)
+    while (start > 0 && /[A-Za-z]/.test(text.charAt(start - 1))) start--;
     let actualEnd = end;
     while (actualEnd < text.length && /[A-Za-z]/.test(text.charAt(actualEnd))) actualEnd++;
 

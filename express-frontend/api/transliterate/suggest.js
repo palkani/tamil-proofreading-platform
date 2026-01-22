@@ -22,6 +22,23 @@ module.exports = async function handler(req, res) {
     tamil: ['தமிழ்'],
     vanakkam: ['வணக்கம்'],
   };
+
+  // Strict overrides: for some extremely common tokens, upstream transliteration quality
+  // can include junk / half-words. For these, return only the expected word(s).
+  // This keeps the IME UX clean and avoids confusing "invalid" Tamil outputs.
+  const STRICT_OVERRIDES = {
+    // Very common function words
+    enna: ['என்ன'],
+    namma: ['நம்ம'],
+    // எனது (my)
+    enathu: ['எனது'],
+    enadu: ['எனது'],
+    enadhu: ['எனது'],
+    // South
+    therkku: ['தெற்கு'],
+    therku: ['தெற்கு'],
+    therkk: ['தெற்கு'],
+  };
   const target = `${base.replace(/\/+$/, '')}/api/v1/transliterate/suggest?q=${encodeURIComponent(
     q
   )}&limit=${encodeURIComponent(limit)}&mode=${encodeURIComponent(mode)}`;
@@ -64,6 +81,20 @@ module.exports = async function handler(req, res) {
     // Post-process suggestions to enforce canonical outputs for some inputs.
     try {
       const nq = normalizeQuery(q);
+      const strict = STRICT_OVERRIDES[nq];
+      if (strict && strict.length) {
+        const only = strict
+          .filter(Boolean)
+          .map((w) => ({ word: w, ta: w, score: 0.99, label: 'Recommended', usage: 'Both', reason: 'Canonical override' }));
+        const out = (data && typeof data === 'object') ? data : {};
+        out.success = true;
+        out.query = q;
+        out.suggestions = only;
+        // Keep meta if present
+        if (out.meta === undefined) out.meta = null;
+        return res.status(status).json(out);
+      }
+
       const forced = CANONICAL_OVERRIDES[nq];
       if (forced && data && typeof data === 'object') {
         const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
@@ -78,12 +109,13 @@ module.exports = async function handler(req, res) {
             const bumped = {
               ...item,
               word: item.word || w,
+              ta: item.ta || w,
               score: Math.max(Number(item.score || 0) || 0, 0.99),
             };
             next.splice(idx, 1);
             next.unshift(bumped);
           } else {
-            next.unshift({ word: w, score: 0.99 });
+            next.unshift({ word: w, ta: w, score: 0.99 });
           }
         }
 
@@ -93,6 +125,31 @@ module.exports = async function handler(req, res) {
       }
     } catch (e) {
       // non-fatal: never break proxy on enrichment
+    }
+
+    // Normalize + dedupe + drop empty words (prevents "blank rows" and repeated junk)
+    try {
+      if (data && typeof data === 'object' && Array.isArray(data.suggestions)) {
+        const seen = new Set();
+        const cleaned = [];
+        for (const s of data.suggestions) {
+          const w = String((s && (s.word || s.ta || s.text || s.suggestion)) || '').trim();
+          if (!w) continue;
+          const key = w.normalize ? w.normalize('NFC') : w;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          cleaned.push({
+            ...((typeof s === 'object' && s) ? s : {}),
+            word: w,
+            ta: w,
+            score: typeof s?.score === 'number' ? s.score : (Number(s?.score) || 0),
+          });
+          if (cleaned.length >= Number(limit) || 8) break;
+        }
+        data.suggestions = cleaned;
+      }
+    } catch (_e) {
+      // non-fatal
     }
 
     res.status(status).send(data);
