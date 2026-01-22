@@ -35,6 +35,18 @@ var javascriptProtoRegex = regexp.MustCompile(`(?i)javascript:`)
 // Go regexp (RE2) supports \x{....} for Unicode code points (not \u....).
 var tamilCharRegex = regexp.MustCompile(`[\x{0B80}-\x{0BFF}]`)
 
+func proofreadTimeoutFor(wordCount int, textLen int) time.Duration {
+	// Keep interactive submits fast, but allow long-form pastes (like transcripts) enough time.
+	switch {
+	case wordCount <= 250 && textLen <= 1500:
+		return 25 * time.Second
+	case wordCount <= 800 && textLen <= 6000:
+		return 45 * time.Second
+	default:
+		return 75 * time.Second
+	}
+}
+
 // storedSuggestion matches the JSON objects stored in Submission.Suggestions.
 // Note: Some engines return start/end indexes as 0 even when a correction exists.
 type storedSuggestion struct {
@@ -237,7 +249,7 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 
 	// For inline analysis (demo/homepage), no auth required
 	if !saveDraft {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 25*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), proofreadTimeoutFor(wordCount, len(req.Text)))
 		defer cancel()
 		result, err := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID)
 		if err != nil {
@@ -320,7 +332,7 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	if err := h.db.Create(submission).Error; err != nil {
 		log.Printf("Error creating submission: %v", err)
 		// If we can't save the draft, fall back to inline proofread so the user still gets suggestions.
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 25*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), proofreadTimeoutFor(wordCount, len(req.Text)))
 		defer cancel()
 		result, perr := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID)
 		if perr != nil {
@@ -426,7 +438,7 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, req
 	})
 
 	// Process with LLM service (hard timeout so the job can't hang indefinitely)
-	ctx2, cancel := context.WithTimeout(ctx, 25*time.Second)
+	ctx2, cancel := context.WithTimeout(ctx, proofreadTimeoutFor(wordCount, len(text)))
 	defer cancel()
 	result, err := h.llmService.ProofreadText(ctx2, text, wordCount, includeAlternatives, requestID)
 	if err != nil {

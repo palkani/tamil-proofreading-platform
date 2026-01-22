@@ -3488,6 +3488,23 @@ class WorkspaceController {
         return;
       }
 
+      // If backend reports an AI error but still returns success-shaped payload (empty corrections),
+      // DO NOT show "Looks solid!" — surface the real message.
+      const backendMsg = String(data?.message || data?.submission?.error || '').trim();
+      if (dedupedGeminiSuggestions.length === 0 && backendMsg) {
+        const isAiIssue =
+          /temporarily unavailable|not configured|missing|timeout|provider|gemini|ai/i.test(backendMsg) ||
+          !!data?.submission?.error;
+        if (isAiIssue) {
+          if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
+            this.suggestionsPanel.setEmptyState('idle');
+          }
+          this.updateAnalysisStatus('error');
+          this.showNotification(backendMsg, 'error');
+          return;
+        }
+      }
+
       if (dedupedGeminiSuggestions.length === 0) {
         if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
           this.suggestionsPanel.setEmptyState('no-issues');

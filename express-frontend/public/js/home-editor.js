@@ -1585,6 +1585,13 @@ class HomeEditor {
           const resultPayload = await this.awaitSubmissionResult(submissionId);
           const suggestions = this.extractSuggestionsFromPayload(resultPayload);
           console.log('[HomeEditor] SSE suggestions:', suggestions.length, suggestions);
+          const backendMsg = String(resultPayload?.message || resultPayload?.submission?.error || '').trim();
+          if (!suggestions.length && backendMsg && /temporarily unavailable|not configured|missing|timeout|provider|gemini|ai/i.test(backendMsg)) {
+            this.emptyState = 'idle';
+            this.showError(backendMsg);
+            this.lastAnalyzedText = text;
+            return;
+          }
           this.emptyState = suggestions.length ? 'idle' : 'no-issues';
           this.displaySuggestions(suggestions);
           this.lastAnalyzedText = text;
@@ -1598,8 +1605,14 @@ class HomeEditor {
       // Non-async (or SSE failed): best-effort extraction from current payload
       const suggestions = this.extractSuggestionsFromPayload(data);
       console.log('[HomeEditor] Immediate suggestions:', suggestions.length, suggestions);
-      this.emptyState = suggestions.length ? 'idle' : 'no-issues';
-      this.displaySuggestions(suggestions);
+      const backendMsg = String(data?.message || data?.submission?.error || '').trim();
+      if (!suggestions.length && backendMsg && /temporarily unavailable|not configured|missing|timeout|provider|gemini|ai/i.test(backendMsg)) {
+        this.emptyState = 'idle';
+        this.showError(backendMsg);
+      } else {
+        this.emptyState = suggestions.length ? 'idle' : 'no-issues';
+        this.displaySuggestions(suggestions);
+      }
       // Only now mark the text as analyzed successfully (prevents missing triggers on quick edits)
       this.lastAnalyzedText = text;
       
@@ -1651,12 +1664,13 @@ class HomeEditor {
     `;
   }
   
-  showError() {
+  showError(message) {
     if (!this.suggestionsContainer) return;
     
+    const msg = String(message || '').trim();
     this.suggestionsContainer.innerHTML = `
       <div class="text-center text-gray-500 py-8">
-        <p class="text-sm text-red-600">Analysis failed. Please try again.</p>
+        <p class="text-sm text-red-600">${msg || 'Analysis failed. Please try again.'}</p>
       </div>
     `;
   }
