@@ -21,6 +21,7 @@ module.exports = async function handler(req, res) {
     const s = String(w || '')
       .replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰²³]/g, '') // superscripts
       .replace(/\u200c|\u200d/g, '') // ZWJ/ZWNJ
+      .replace(/\s+/g, '') // suggestions should be single tokens
       .trim();
     return s.normalize ? s.normalize('NFC') : s;
   }
@@ -42,7 +43,15 @@ module.exports = async function handler(req, res) {
       if (i === 0 && DEP_VOWELS.has(ch)) return false;
       if (prev) {
         if (DEP_VOWELS.has(prev) && DEP_VOWELS.has(ch)) return false;
-        if (DEP_VOWELS.has(prev) && INDEP_VOWELS.has(ch)) return false;
+        if (DEP_VOWELS.has(prev) && INDEP_VOWELS.has(ch)) {
+          // Allow a small loanword-friendly exception:
+          // Aksharamukha can emit sequences like "...ரி" + "எ" + "ந..." for English words
+          // (e.g., friend -> "ஃப்ரிஎந்த்"). If the independent vowel is followed by a consonant,
+          // treat it as a new syllable boundary instead of rejecting the entire candidate.
+          const next = i + 1 < s.length ? s[i + 1] : '';
+          if (!next) return false; // end-of-word like "முஉ" is still garbage
+          if (DEP_VOWELS.has(next) || INDEP_VOWELS.has(next)) return false;
+        }
         if (INDEP_VOWELS.has(prev) && DEP_VOWELS.has(ch)) return false;
         if (prev === PULLI && ch === PULLI) return false;
       }
@@ -102,6 +111,30 @@ module.exports = async function handler(req, res) {
     }
 
     rescored.sort((a, b) => (b.score - a.score) || (a.word.length - b.word.length) || a.word.localeCompare(b.word));
+
+    // Fallback: for some English loanwords, strict Tamil orthography rules can reject all
+    // candidates (even though they are Tamil-script and users expect *something* like Google IME).
+    // If strict filtering yields nothing, accept Tamil-block tokens that have no Latin/digits,
+    // then score them by rank/length.
+    if (!rescored.length && qLen >= 4) {
+      const loose = [];
+      for (let i = 0; i < (suggestions || []).length; i++) {
+        const s = suggestions[i];
+        const w = String(s?.word || '').trim();
+        if (!w) continue;
+        if (!TAMIL_BLOCK_RE.test(w)) continue;
+        if (/[A-Za-z0-9]/.test(w)) continue;
+        if (w.length < 2 || w.length > maxLen) continue;
+        const upstream = Number.isFinite(s.score) ? s.score : 0;
+        const rankBase = 1.0 - i * 0.08;
+        let final = Math.max(upstream, rankBase);
+        final -= 0.02 * Math.abs(w.length - qLen);
+        final = Math.max(0, Math.min(1, final));
+        loose.push({ word: w, score: +final.toFixed(2) });
+      }
+      loose.sort((a, b) => (b.score - a.score) || (a.word.length - b.word.length) || a.word.localeCompare(b.word));
+      rescored.push(...loose);
+    }
 
     // normalize scores so top is 1.0 (competitor-style), keep relative spacing
     const top = rescored[0]?.score || 0;
