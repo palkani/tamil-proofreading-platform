@@ -79,10 +79,14 @@
       const match = preText.match(/[A-Za-z]+$/);
       if (!match || match[0].length < 2) return null;
       const token = match[0];
+      // Snapshot selection so click/tap on the dropdown doesn't lose caret position.
+      // Without this, we can end up APPENDING the Tamil word instead of replacing the English token.
+      const selection = (this.adapter && this.adapter.captureSelection) ? this.adapter.captureSelection() : null;
       return {
         token,
         start: preText.length - token.length,
         end: preText.length,
+        selection,
       };
     }
 
@@ -260,6 +264,15 @@
       if (!el) return;
       const ta = el.querySelector('.font-semibold')?.textContent || '';
       if (!ta) return;
+      // Restore editor focus + caret before we mutate content (clicking the dropdown can steal focus).
+      try {
+        if (this.adapter && this.adapter.focus) this.adapter.focus();
+        if (info && info.selection && this.adapter && this.adapter.restoreSelection) {
+          this.adapter.restoreSelection(info.selection);
+        }
+      } catch (_e) {
+        // non-fatal
+      }
       this.adapter.replaceRange(info.start, info.end, ta + ' ');
       this.closeDropdown();
 

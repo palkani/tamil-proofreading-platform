@@ -352,6 +352,14 @@ class WorkspaceController {
     this.isSelectingSuggestion = false; // Flag to prevent duplicate selection calls
     this.justReplacedToken = false; // Flag to prevent fetching suggestions immediately after replacement
 
+    // Transliteration V2 (shared module). If enabled, we must NOT run legacy IME dropdown/commit logic.
+    this.translitV2Enabled = !!(
+      window.TRANS_SUGGEST_V2 &&
+      window.TransliterationTypeahead &&
+      window.WorkspaceEditorAdapter
+    );
+    this.translitTypeahead = null;
+
     // Paste gating: ensure only ONE /api/submit happens per paste action
     this.pasteAnalyzeTimeout = null;
     this.pasteSuppressUntil = 0; // suppress secondary autoAnalyze triggers from handleEditorChange
@@ -957,6 +965,21 @@ class WorkspaceController {
       } catch (e) {
         console.warn('[TipTap Migration] switchWorkspaceEditor failed (non-fatal):', e?.message);
       }
+
+      // If Transliteration V2 is enabled, attach it to the ProseMirror surface (and do not use legacy IME).
+      try {
+        if (this.translitV2Enabled && !this.translitTypeahead) {
+          const pm = document.querySelector('#tiptap-workspace-editor .ProseMirror');
+          if (pm) {
+            this.translitTypeahead = new window.TransliterationTypeahead(
+              new window.WorkspaceEditorAdapter(pm),
+              { getMode: () => this.getMode() }
+            );
+          }
+        }
+      } catch (_e) {
+        // non-fatal
+      }
       return;
     }
 
@@ -1246,6 +1269,26 @@ class WorkspaceController {
         // Navigate to the drafts page instead of showing in workspace
         window.location.href = '/drafts';
       });
+
+      // If Transliteration V2 is enabled, attach it to the legacy editor and disable legacy IME UI.
+      try {
+        if (this.translitV2Enabled && !this.translitTypeahead) {
+          this.translitTypeahead = new window.TransliterationTypeahead(
+            new window.WorkspaceEditorAdapter(editorElement),
+            { getMode: () => this.getMode() }
+          );
+        }
+        if (this.translitTypeahead) {
+          // Remove any legacy dropdown that might have been created before V2 kicked in.
+          const legacy = document.getElementById('tamil-suggestions-dropdown');
+          if (legacy && legacy.parentNode) legacy.parentNode.removeChild(legacy);
+          this.clearGhostText && this.clearGhostText();
+          this.clearTranslitSuggestions && this.clearTranslitSuggestions();
+          this.imeActive = false;
+        }
+      } catch (_e) {
+        // non-fatal
+      }
     }
 
     // Translate English to Tamil button
@@ -1307,9 +1350,22 @@ class WorkspaceController {
     this.updateWordCount();
     this.scheduleSave();
 
-    // If Transliteration V2 is active, do NOT run legacy transliteration fetch/render.
-    // V2 handles dropdown + commit on its own, and running both causes duplicates/flakiness.
-    if (this.translitTypeahead) {
+    // If Transliteration V2 is active, skip ONLY the legacy IME suggest/commit logic.
+    // Keep AI proofreading working as before.
+    const v2 = !!this.translitTypeahead;
+    if (v2) {
+      const textNow = this.getEditorText() || '';
+      const hasTamil = /[\u0B80-\u0BFF]/.test(textNow);
+      if (hasTamil) {
+        if (this.pasteSuppressUntil && Date.now() < this.pasteSuppressUntil) {
+          console.log('[AI] 📋 Skipping handleEditorChange-triggered analysis (paste gate active)');
+          return;
+        }
+        if (this.analysisTimeout) clearTimeout(this.analysisTimeout);
+        this.analysisTimeout = setTimeout(() => {
+          this.autoAnalyze();
+        }, 2000);
+      }
       return;
     }
     
@@ -2644,6 +2700,11 @@ class WorkspaceController {
 
   // Keyboard navigation handler
   handleKeyDown(e) {
+    // Transliteration V2 handles its own keybindings (Space/Enter/Arrows) via the adapter.
+    // If we also intercept here, we can double-commit and duplicate insertions.
+    if (this.translitTypeahead) {
+      return false;
+    }
     // Always allow typing to proceed - don't block editor change events
     // Only intercept when IME is active and we have suggestions
     if (!this.imeActive || !this.currentSuggestions || this.currentSuggestions.length === 0) {

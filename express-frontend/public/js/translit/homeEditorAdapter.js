@@ -47,6 +47,46 @@
       return { top: r.bottom, bottom: r.bottom, left: r.left };
     }
 
+    focus() {
+      try {
+        this.editorEl && this.editorEl.focus && this.editorEl.focus();
+      } catch (_e) {}
+    }
+
+    captureSelection() {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return null;
+      const r = sel.getRangeAt(0);
+      if (!r) return null;
+      if (this.editorEl && !this.editorEl.contains(r.startContainer)) return null;
+      return {
+        sc: r.startContainer,
+        so: r.startOffset,
+        ec: r.endContainer,
+        eo: r.endOffset,
+      };
+    }
+
+    restoreSelection(snapshot) {
+      try {
+        if (!snapshot) return false;
+        const { sc, so, ec, eo } = snapshot;
+        if (!sc || !ec) return false;
+        if (this.editorEl && (!this.editorEl.contains(sc) || !this.editorEl.contains(ec))) return false;
+        const range = document.createRange();
+        const scLen = sc.nodeType === Node.TEXT_NODE ? (sc.nodeValue || '').length : (sc.childNodes ? sc.childNodes.length : 0);
+        const ecLen = ec.nodeType === Node.TEXT_NODE ? (ec.nodeValue || '').length : (ec.childNodes ? ec.childNodes.length : 0);
+        range.setStart(sc, Math.min(Math.max(0, so || 0), scLen));
+        range.setEnd(ec, Math.min(Math.max(0, eo || 0), ecLen));
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        return true;
+      } catch (_e) {
+        return false;
+      }
+    }
+
     replaceRange(start, end, replacement) {
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) return;
