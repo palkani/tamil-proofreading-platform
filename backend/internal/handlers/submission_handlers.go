@@ -279,23 +279,37 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 			"word_count": wordCount,
 		})
 
-		// Map to required corrections format
+		// Map to required corrections format (stable schema)
 		type correction struct {
 			BlockID      string `json:"blockId"`
 			OriginalText string `json:"originalText"`
 			Correction   string `json:"correction"`
 			Reason       string `json:"reason"`
 			Type         string `json:"type"`
+			StartIndex   int    `json:"start_index"`
+			EndIndex     int    `json:"end_index"`
 		}
 		corrections := []correction{}
 		blockID := "0"
+		used := []usedRange{}
 		for _, s := range result.Suggestions {
+			// best-effort indices
+			startIdx := s.StartIndex
+			endIdx := s.EndIndex
+			if startIdx <= 0 || endIdx <= 0 || startIdx >= endIdx {
+				startIdx, endIdx = findFirstUnusedOccurrence(req.Text, s.Original, used)
+			}
+			if startIdx > 0 && endIdx > startIdx {
+				used = append(used, usedRange{Start: startIdx, End: endIdx})
+			}
 			corrections = append(corrections, correction{
 				BlockID:      blockID,
 				OriginalText: s.Original,
 				Correction:   s.Corrected,
 				Reason:       s.Reason,
 				Type:         s.Type,
+				StartIndex:   startIdx,
+				EndIndex:     endIdx,
 			})
 		}
 
