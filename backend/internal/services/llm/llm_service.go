@@ -165,6 +165,20 @@ func maxOutputTokensForProofread(wordCount int, charCount int) int {
         }
 }
 
+func isLikelyTruncatedJSON(s string) bool {
+	t := strings.TrimSpace(s)
+	if t == "" {
+		return false
+	}
+	// Heuristics: starts with '{' but doesn't end with '}' or ends mid-string/array/object.
+	if strings.HasPrefix(t, "{") && !strings.HasSuffix(t, "}") {
+		return true
+	}
+	// If JSON unmarshal failed with "unexpected end" we won't have error here; this is a cheap check
+	// used before retrying Gemini.
+	return false
+}
+
 type proofreadCacheEntry struct {
 	value     *ProofreadResult
 	expiresAt time.Time
@@ -377,8 +391,53 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
 
         corrected, suggestions, changes, alternatives, ok := parseProofreadJSON(content)
         if !ok {
-                log.Printf("failed to parse gemini response (request_id=%s): %s", requestID, content)
-                return nil, fmt.Errorf("failed to parse Gemini response")
+                // If Gemini output is truncated (most common cause), do ONE retry with a larger
+                // maxOutputTokens so we actually receive the full JSON and can parse it.
+                // This preserves "never breaks" while still prioritizing Gemini quality.
+                retryMax := maxTokens
+                if isLikelyTruncatedJSON(content) {
+                        retryMax = maxTokens * 2
+                        if retryMax < 2048 {
+                                retryMax = 2048
+                        }
+                        if retryMax > 8192 {
+                                retryMax = 8192
+                        }
+                }
+                if retryMax > maxTokens {
+                        log.Printf("[GEMINI-RETRY] Parse failed; retrying with higher maxOutputTokens=%d (was %d) (request_id=%s)", retryMax, maxTokens, requestID)
+                        if content2, geminiResp2, err2 := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey, retryMax); err2 == nil && strings.TrimSpace(content2) != "" {
+                                if corrected2, suggestions2, changes2, alternatives2, ok2 := parseProofreadJSON(content2); ok2 {
+                                        corrected, suggestions, changes, alternatives = corrected2, suggestions2, changes2, alternatives2
+                                        geminiResp = geminiResp2
+                                        ok = true
+                                }
+                        }
+                }
+        }
+        if !ok {
+                // Final safety net: never break submit. Return best-effort corrected_text or original.
+                clipped := content
+                if len(clipped) > 600 {
+                        clipped = clipped[:600] + "..."
+                }
+                log.Printf("[GEMINI-PARSE-FAIL] (request_id=%s) Unable to parse after retry. content=%s", requestID, clipped)
+                if best, ok2 := extractCorrectedTextBestEffort(content); ok2 {
+                        corrected = best
+                } else {
+                        corrected = cleaned
+                }
+                return &ProofreadResult{
+                        CorrectedText:  corrected,
+                        Suggestions:    []Suggestion{},
+                        Changes:        []Change{},
+                        Alternatives:   []string{},
+                        ModelUsed:      selectedModel,
+                        PromptTokens:   geminiRespUsage(geminiResp, "prompt"),
+                        OutputTokens:   geminiRespUsage(geminiResp, "candidates"),
+                        TotalTokens:    geminiRespUsage(geminiResp, "total"),
+                        ProcessingTime: time.Since(start).Seconds(),
+                }, nil
         }
 
         if corrected == "" {
@@ -637,7 +696,29 @@ func parseProofreadJSON(raw string) (string, []Suggestion, []Change, []string, b
 
         var data any
         if err := json.Unmarshal([]byte(cleaned), &data); err != nil {
-                log.Printf("[PARSE-ERROR] JSON unmarshal failed: %v, cleaned text: %q", err, cleaned)
+                // Common failure mode: Gemini returns truncated JSON (cut mid-object).
+                // Try a best-effort repair by dropping the last partial correction object and
+                // closing the top-level structure.
+                if repaired, ok := repairProofreadJSON(cleaned); ok {
+                        var data2 any
+                        if err2 := json.Unmarshal([]byte(repaired), &data2); err2 == nil {
+                                corrected, suggestions, changes, alternatives := extractFromInterface(data2)
+                                ok2 := corrected != "" || len(suggestions) > 0 || len(changes) > 0 || len(alternatives) > 0
+                                if ok2 {
+                                        log.Printf("[PARSE-RECOVER] Repaired truncated JSON (len=%d -> %d)", len(cleaned), len(repaired))
+                                        return corrected, suggestions, changes, alternatives, true
+                                }
+                        } else {
+                                log.Printf("[PARSE-RECOVER-ERROR] Repair attempt JSON unmarshal failed: %v", err2)
+                        }
+                }
+
+                // Don't log gigantic payloads; they can be large and contain user content.
+                clipped := cleaned
+                if len(clipped) > 600 {
+                        clipped = clipped[:600] + "..."
+                }
+                log.Printf("[PARSE-ERROR] JSON unmarshal failed: %v, cleaned text: %q", err, clipped)
                 return "", nil, nil, nil, false
         }
 
@@ -646,6 +727,90 @@ func parseProofreadJSON(raw string) (string, []Suggestion, []Change, []string, b
         return corrected, suggestions, changes, alternatives, ok
 }
 
+// repairProofreadJSON tries to salvage a partially truncated JSON response by:
+// - finding the "corrections" array
+// - keeping only fully closed correction objects
+// - closing the array and top-level object
+// This is intentionally conservative: it may drop the final partial correction, but never invents content.
+func repairProofreadJSON(cleaned string) (string, bool) {
+        s := strings.TrimSpace(cleaned)
+        if s == "" {
+                return "", false
+        }
+        // Ensure we start at an object.
+        if idx := strings.Index(s, "{"); idx >= 0 {
+                s = s[idx:]
+        } else {
+                return "", false
+        }
+        // Must contain corrections array key.
+        k := strings.Index(s, "\"corrections\"")
+        if k < 0 {
+                return "", false
+        }
+        // Find array open after the key.
+        arrOpenRel := strings.Index(s[k:], "[")
+        if arrOpenRel < 0 {
+                return "", false
+        }
+        arrOpen := k + arrOpenRel
+
+        // Scan inside the array to find the last fully closed object boundary.
+        inString := false
+        escaped := false
+        braceDepth := 0
+        startedObj := false
+        lastGoodEnd := -1
+        for i := arrOpen + 1; i < len(s); i++ {
+                ch := s[i]
+                if inString {
+                        if escaped {
+                                escaped = false
+                                continue
+                        }
+                        if ch == '\\' {
+                                escaped = true
+                                continue
+                        }
+                        if ch == '"' {
+                                inString = false
+                        }
+                        continue
+                }
+                // not in string
+                if ch == '"' {
+                        inString = true
+                        continue
+                }
+                if ch == '{' {
+                        braceDepth++
+                        startedObj = true
+                        continue
+                }
+                if ch == '}' && braceDepth > 0 {
+                        braceDepth--
+                        if braceDepth == 0 && startedObj {
+                                lastGoodEnd = i
+                        }
+                        continue
+                }
+        }
+        if lastGoodEnd < 0 {
+            return "", false
+        }
+
+        // Keep array content up to the end of the last fully closed object.
+        inside := strings.TrimSpace(s[arrOpen+1 : lastGoodEnd+1])
+        inside = strings.TrimRight(inside, ", \n\r\t")
+
+        // Rebuild minimal JSON shape.
+        out := s[:arrOpen+1] + inside + "]"
+        if !strings.Contains(out, "\"corrected_text\"") {
+                out += ",\"corrected_text\":\"\""
+        }
+        out += "}"
+        return out, true
+}
 func extractCorrectedTextBestEffort(raw string) (string, bool) {
         cleaned := stripCodeFence(raw)
         idx := strings.Index(cleaned, "\"corrected_text\"")
