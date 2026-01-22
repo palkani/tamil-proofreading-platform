@@ -191,7 +191,7 @@ Provide title and description in TAMIL language only.`
 });
 
 // English to Tamil Translation with Gemini AI
-// This endpoint translates English text to Tamil and provides grammar corrections
+// Pure translation only: returns translated Tamil text (no proofreading pass after)
 router.post('/gemini/translate', async (req, res) => {
   try {
     const { text } = req.body;
@@ -214,32 +214,23 @@ router.post('/gemini/translate', async (req, res) => {
       {
         systemInstruction: {
           parts: [{
-            text: `You are an expert English to Tamil translator. Translate the given English text to proper, grammatically correct Tamil.
+            text: `You are an expert English to Tamil translator.
 
 TRANSLATION RULES:
-1. Use formal, literary Tamil (செந்தமிழ்) when appropriate
+1. Preserve the meaning and tone of the original text
 2. Preserve the meaning and tone of the original text
-3. Use proper Tamil grammar and sentence structure
+3. Use natural Tamil grammar and sentence structure
 4. For technical terms, provide the Tamil equivalent if available
 5. Maintain paragraph structure
 
 OUTPUT FORMAT (MANDATORY JSON):
 {
-  "translated_text": "The complete Tamil translation",
-  "suggestions": [
-    {
-      "original": "original English phrase",
-      "translated": "Tamil translation",
-      "alternative": "alternative Tamil phrasing (optional)",
-      "note": "explanation in Tamil about the translation choice"
-    }
-  ]
+  "translated_text": "The complete Tamil translation"
 }
 
 RULES:
 - ALWAYS respond with valid JSON only
-- Include key phrase translations in suggestions array
-- Provide alternatives for important translations`
+- Do NOT include any extra keys besides "translated_text"`
           }]
         },
         contents: [{
@@ -249,7 +240,7 @@ RULES:
           }]
         }],
         generationConfig: {
-          temperature: 0.3,
+          temperature: 0.2,
           topP: 0.8,
           maxOutputTokens: 2048,
           responseMimeType: "application/json"
@@ -271,7 +262,7 @@ RULES:
       result = JSON.parse(aiText.trim());
     } catch (parseErr) {
       console.error('[TRANSLATE] JSON parse error:', parseErr.message);
-      result = { translated_text: aiText, suggestions: [] };
+      result = { translated_text: aiText };
     }
 
     console.log('[TRANSLATE] Translation complete:', result.translated_text?.substring(0, 50) + '...');
@@ -280,7 +271,6 @@ RULES:
       success: true,
       original_text: text,
       translated_text: result.translated_text || '',
-      suggestions: result.suggestions || [],
       model_used: 'gemini-2.5-flash'
     });
 

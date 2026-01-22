@@ -106,6 +106,18 @@
 <%- include('../partials/nav', { active: 'home', user: user || null }) %>
 
 <div class="min-h-screen bg-white">
+  <!-- Beta banner -->
+  <div class="bg-yellow-50 border-b border-yellow-200">
+    <div class="max-w-7xl mx-auto px-6 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-center gap-2 text-center">
+      <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-extrabold tracking-wide bg-yellow-400 text-yellow-950">
+        BETA
+      </span>
+      <span class="text-sm text-yellow-950">
+        We’re in Beta. Full release is coming after we integrate <span class="font-semibold">Gemini Pro</span>.
+      </span>
+    </div>
+  </div>
+
   <!-- Hero Section -->
   <section class="relative bg-gradient-to-b from-blue-50 via-white to-white py-20 md:py-32">
     <div class="max-w-7xl mx-auto px-6 text-center">
@@ -164,13 +176,23 @@
                 <span class="text-xs text-gray-500" id="home-char-count">0 / 200 words</span>
               </div>
               <!-- Mode selector (match Workspace behavior) -->
-              <div class="bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-3">
-                <label for="home-mode-select" class="text-sm text-gray-700">Mode:</label>
-                <select id="home-mode-select" class="toolbar-select">
+              <div class="bg-white border-b border-gray-200 px-6 py-2 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+                <div class="flex items-center gap-3">
+                  <label for="home-mode-select" class="text-sm text-gray-700">Tamil style:</label>
+                  <select id="home-mode-select" class="toolbar-select">
                   <option value="spoken">Spoken Tamil</option>
                   <option value="formal">Written / Formal</option>
                   <option value="academic">Academic / Article</option>
-                </select>
+                  </select>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <label class="inline-flex items-center gap-2 text-sm text-gray-700 select-none" for="home-proofread-toggle">
+                    <input id="home-proofread-toggle" type="checkbox" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500" checked />
+                    <span class="font-medium">AI proofreading</span>
+                  </label>
+                  <span class="text-xs text-gray-500">(turn off for pure transliteration/translation only)</span>
+                </div>
               </div>
               <!-- Toolbar (same behavior as Workspace; home never saves drafts) -->
               <div class="home-toolbar bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-1 overflow-x-auto">

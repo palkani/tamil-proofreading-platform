@@ -394,6 +394,20 @@ class HomeEditor {
       });
     }
 
+    // Proofreading toggle: when OFF, we never call /api/submit automatically.
+    this.proofreadToggle = document.getElementById('home-proofread-toggle');
+    this.proofreadingEnabled = this.proofreadToggle ? !!this.proofreadToggle.checked : true;
+    if (this.proofreadToggle) {
+      this.proofreadToggle.addEventListener('change', () => {
+        this.proofreadingEnabled = !!this.proofreadToggle.checked;
+        // Cancel any pending analysis timer when turned off.
+        if (!this.proofreadingEnabled && this.analysisTimeout) {
+          clearTimeout(this.analysisTimeout);
+          this.analysisTimeout = null;
+        }
+      });
+    }
+
     // Translate English → Tamil (match Workspace behavior; do not save drafts)
     if (this.translateBtn) {
       this.translateBtn.addEventListener('click', async (e) => {
@@ -414,51 +428,17 @@ class HomeEditor {
         this.translateBtn.innerHTML = 'Submitting...';
 
         try {
+          // Always use the dedicated translation endpoint (pure output).
+          // IMPORTANT: Do NOT trigger proofreading automatically after translation.
           const response = await apiFetch(
-            '/api/submit',
+            '/api/gemini/translate',
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text, save_draft: false }),
+              body: JSON.stringify({ text }),
             },
             false
           );
-
-          if (response.status === 401) {
-            // Anonymous home-page fallback: use Gemini translate proxy (does not require auth)
-            const gem = await apiFetch(
-              '/api/gemini/translate',
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text }),
-              },
-              false
-            );
-            const rawGem = await gem.text();
-            let dataGem = null;
-            try {
-              dataGem = rawGem ? JSON.parse(rawGem) : null;
-            } catch (e2) {
-              // ignore
-            }
-            if (!gem.ok) {
-              const msg =
-                (dataGem && (dataGem.error || dataGem.message || dataGem.details)) ||
-                (rawGem && rawGem.trim().slice(0, 300)) ||
-                `HTTP ${gem.status}`;
-              throw new Error(msg);
-            }
-            if (dataGem && (dataGem.translated_text || dataGem.translated)) {
-              this.editor.textContent = dataGem.translated_text || dataGem.translated;
-              this.moveCursorToEnd();
-              this.updateWordCount();
-              this.scheduleAutoAnalysis();
-            } else {
-              alert('No translation returned. Please try again.');
-            }
-            return;
-          }
 
           const raw = await response.text();
           let data = null;
@@ -476,11 +456,16 @@ class HomeEditor {
             throw new Error(msg);
           }
 
-          if (data && data.translated_text) {
-            this.editor.textContent = data.translated_text;
+          const translated =
+            (data && (data.translated_text || data.translated)) ||
+            '';
+
+          if (translated) {
+            // Prevent any immediate scheduled analysis caused by DOM updates.
+            this._suppressScheduledAnalysisUntil = Date.now() + 2000;
+            this.editor.textContent = translated;
             this.moveCursorToEnd();
             this.updateWordCount();
-            this.scheduleAutoAnalysis();
           } else {
             alert('No translation returned. Please try again.');
           }
@@ -1293,6 +1278,9 @@ class HomeEditor {
   }
   
   scheduleAutoAnalysis() {
+    if (!this.proofreadingEnabled) {
+      return;
+    }
     if (this._suppressScheduledAnalysisUntil && Date.now() < this._suppressScheduledAnalysisUntil) {
       return;
     }
