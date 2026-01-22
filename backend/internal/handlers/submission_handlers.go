@@ -313,74 +313,94 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	// Daily Gemini token usage limit.
 	// Enforced only for authenticated, draft-saving submits (Workspace).
 	const dailyTokenLimit = 2000
+
+	// Admin bypass: do not enforce daily quota for the admin email(s) or admin role.
+	// This allows you to demo/test freely without hitting limits.
+	isAdminBypass := false
+	{
+		var u models.User
+		if err := h.db.Select("email", "role").First(&u, userID).Error; err == nil {
+			email := strings.ToLower(strings.TrimSpace(u.Email))
+			if u.Role == models.RoleAdmin || email == "palkani.r@gmail.com" || email == "prooftamil@gmail.com" {
+				isAdminBypass = true
+			}
+		}
+	}
 	now := time.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
-	var usedToday int
-	if err := h.db.Model(&models.Usage{}).
-		Where("user_id = ? AND date >= ? AND date < ?", userID, startOfDay, endOfDay).
-		Select("COALESCE(SUM(token_count), 0)").
-		Scan(&usedToday).Error; err != nil {
-		// Do not block the user if usage lookup fails (best-effort limit).
-		log.Printf("Error checking daily usage: %v", err)
-		usedToday = 0
-	}
-	remaining := dailyTokenLimit - usedToday
-	if remaining < 0 {
-		remaining = 0
-	}
-	if remaining == 0 {
-		c.JSON(http.StatusTooManyRequests, gin.H{
-			"error":      "daily_limit_exceeded",
-			"message":    "You are exceeded your limit for the day.",
-			"limit":      dailyTokenLimit,
-			"used":       usedToday,
-			"remaining":  remaining,
-			"request_id": requestID,
-		})
-		return
-	}
 
-	// Compute prompt token count (Gemini countTokens) so we can cap output tokens
-	// and guarantee we never exceed the remaining daily quota.
-	ctxPlan, cancelPlan := context.WithTimeout(c.Request.Context(), 10*time.Second)
-	defer cancelPlan()
-	plan, planErr := h.llmService.BuildGeminiTokenPlan(ctxPlan, req.Text, wordCount, req.IncludeAlternatives, requestID)
-	// Fallback: if countTokens fails, use a conservative estimate so we still enforce a limit.
-	promptTokens := 0
-	maxOutputTokens := 768
-	if planErr == nil && plan != nil {
-		promptTokens = plan.PromptTokens
-		maxOutputTokens = plan.MaxOutputTokens
-	} else {
-		// Conservative heuristic: Tamil tends to tokenize more densely than English.
-		// This is only used when countTokens is unavailable.
-		runes := len([]rune(req.Text))
-		promptTokens = (runes / 2) + 300
-	}
+	usedToday := 0
+	remaining := dailyTokenLimit
+	capOutput := 0
+	reservedTokens := 0
 
-	// Minimum output budget needed for JSON corrections envelope.
-	const minOutputTokens = 128
-	capOutput := remaining - promptTokens
-	if capOutput > maxOutputTokens {
-		capOutput = maxOutputTokens
+	if !isAdminBypass {
+		if err := h.db.Model(&models.Usage{}).
+			Where("user_id = ? AND date >= ? AND date < ?", userID, startOfDay, endOfDay).
+			Select("COALESCE(SUM(token_count), 0)").
+			Scan(&usedToday).Error; err != nil {
+			// Do not block the user if usage lookup fails (best-effort limit).
+			log.Printf("Error checking daily usage: %v", err)
+			usedToday = 0
+		}
+		remaining = dailyTokenLimit - usedToday
+		if remaining < 0 {
+			remaining = 0
+		}
+		if remaining == 0 {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":      "daily_limit_exceeded",
+				"message":    "You are exceeded your limit for the day.",
+				"limit":      dailyTokenLimit,
+				"used":       usedToday,
+				"remaining":  remaining,
+				"request_id": requestID,
+			})
+			return
+		}
+
+		// Compute prompt token count (Gemini countTokens) so we can cap output tokens
+		// and guarantee we never exceed the remaining daily quota.
+		ctxPlan, cancelPlan := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancelPlan()
+		plan, planErr := h.llmService.BuildGeminiTokenPlan(ctxPlan, req.Text, wordCount, req.IncludeAlternatives, requestID)
+		// Fallback: if countTokens fails, use a conservative estimate so we still enforce a limit.
+		promptTokens := 0
+		maxOutputTokens := 768
+		if planErr == nil && plan != nil {
+			promptTokens = plan.PromptTokens
+			maxOutputTokens = plan.MaxOutputTokens
+		} else {
+			// Conservative heuristic: Tamil tends to tokenize more densely than English.
+			// This is only used when countTokens is unavailable.
+			runes := len([]rune(req.Text))
+			promptTokens = (runes / 2) + 300
+		}
+
+		// Minimum output budget needed for JSON corrections envelope.
+		const minOutputTokens = 128
+		capOutput = remaining - promptTokens
+		if capOutput > maxOutputTokens {
+			capOutput = maxOutputTokens
+		}
+		if capOutput < minOutputTokens {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				// Not a full-day exhaustion: the *current request* cannot fit within remaining tokens.
+				"error":      "quota_insufficient_for_request",
+				"message":    "This text is too large for your remaining token budget today. Please try a shorter text or come back tomorrow.",
+				"limit":      dailyTokenLimit,
+				"used":       usedToday,
+				"remaining":  remaining,
+				"required":   promptTokens + minOutputTokens,
+				"prompt":     promptTokens,
+				"min_output": minOutputTokens,
+				"request_id": requestID,
+			})
+			return
+		}
+		reservedTokens = promptTokens + capOutput
 	}
-	if capOutput < minOutputTokens {
-		c.JSON(http.StatusTooManyRequests, gin.H{
-			// Not a full-day exhaustion: the *current request* cannot fit within remaining tokens.
-			"error":      "quota_insufficient_for_request",
-			"message":    "This text is too large for your remaining token budget today. Please try a shorter text or come back tomorrow.",
-			"limit":      dailyTokenLimit,
-			"used":       usedToday,
-			"remaining":  remaining,
-			"required":   promptTokens + minOutputTokens,
-			"prompt":     promptTokens,
-			"min_output": minOutputTokens,
-			"request_id": requestID,
-		})
-		return
-	}
-	reservedTokens := promptTokens + capOutput
 
 	// Determine model to use
 	modelType := h.selectModel(wordCount)

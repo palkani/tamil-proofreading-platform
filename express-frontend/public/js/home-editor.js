@@ -14,6 +14,8 @@ function isTokenExpired(token) {
   }
 }
 
+console.log('[HomeEditorJS] ✅ Loaded version v20260122a (normalizeComparable fix + paste double-submit fix)');
+
 // Unified API helper for all /api calls
 // Use centralized auth-utils.apiFetch if available, with fallback
 // CRITICAL: Default to requireAuth = false for homepage to allow unauthenticated usage
@@ -1206,6 +1208,9 @@ class HomeEditor {
     // Paste should trigger analysis immediately (no "lost" debounce on delete → paste flows)
     // Also reset lastAnalyzedText so re-pasting different content always triggers a request.
     this.lastAnalyzedText = '';
+    // Prevent double-submit: paste triggers an input event which also schedules analysis.
+    // We suppress the debounced path briefly and run exactly once on next tick.
+    this._suppressScheduledAnalysisUntil = Date.now() + 1200;
     // Run on next tick so the DOM insertText has applied.
     setTimeout(() => this.autoAnalyze(), 0);
   }
@@ -1288,6 +1293,9 @@ class HomeEditor {
   }
   
   scheduleAutoAnalysis() {
+    if (this._suppressScheduledAnalysisUntil && Date.now() < this._suppressScheduledAnalysisUntil) {
+      return;
+    }
     // Clear existing timeout
     if (this.analysisTimeout) {
       clearTimeout(this.analysisTimeout);
@@ -1373,6 +1381,21 @@ class HomeEditor {
 
   extractSuggestionsFromPayload(payload) {
     // 1) GoTamil-style corrections from SSE stream handler (preferred)
+    const normalizeComparable = (s) => {
+      try {
+        return String(s || '')
+          .normalize('NFC')
+          .replace(/[\u200B-\u200D\uFEFF]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .replace(/^[\"'“”‘’«»‹›「」『』『』《》〈〉「」『』ʻʼ’‘‚‛„‟\u2018\u2019\u201C\u201D\u201E\u2039\u203A\u00AB\u00BB\u201A\u201B]+/, '')
+          .replace(/[\"'“”‘’«»‹›「」『』『』《》〈〉「」『』ʻʼ’‘‚‛„‟\u2018\u2019\u201C\u201D\u201E\u2039\u203A\u00AB\u00BB\u201A\u201B]+$/, '')
+          .trim();
+      } catch (_e) {
+        return String(s || '').replace(/\s+/g, ' ').trim();
+      }
+    };
+
     const hashString = (str) => {
       let h = 2166136261;
       const s = String(str || '');
@@ -1412,21 +1435,6 @@ class HomeEditor {
     // 2) Raw suggestions stored on submission (stringified JSON)
     const raw = payload?.submission?.suggestions ?? payload?.submission?.corrections ?? payload?.suggestions ?? payload?.corrections;
     const list = this.normalizeRawSuggestions(raw);
-
-    const normalizeComparable = (s) => {
-      try {
-        return String(s || '')
-          .normalize('NFC')
-          .replace(/[\u200B-\u200D\uFEFF]/g, '')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .replace(/^[\"'“”‘’«»‹›「」『』『』《》〈〉「」『』ʻʼ’‘‚‛„‟\u2018\u2019\u201C\u201D\u201E\u2039\u203A\u00AB\u00BB\u201A\u201B]+/, '')
-          .replace(/[\"'“”‘’«»‹›「」『』『』《》〈〉「」『』ʻʼ’‘‚‛„‟\u2018\u2019\u201C\u201D\u201E\u2039\u203A\u00AB\u00BB\u201A\u201B]+$/, '')
-          .trim();
-      } catch (_e) {
-        return String(s || '').replace(/\s+/g, ' ').trim();
-      }
-    };
 
     const mapped = list
       .map((item, index) => ({

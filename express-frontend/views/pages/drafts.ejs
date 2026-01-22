@@ -83,40 +83,12 @@
   
   // Now run the async function - properly structured
   (async function() {
-    // Re-validate auth on BFCache restore / expired sessions.
-    // If user is logged out/expired, do NOT show cached drafts.
-    async function enforceAuthenticated() {
-      try {
-        const res = await fetch('/api/v1/whoami', { credentials: 'include', cache: 'no-store' });
-        if (!res.ok) throw new Error(`whoami_${res.status}`);
-        const data = await res.json().catch(() => ({}));
-        if (!data || data.success !== true) throw new Error('whoami_invalid');
-        return true;
-      } catch (_e) {
-        try {
-          if (window.authUtils && window.authUtils.clearAuthTokens) {
-            window.authUtils.clearAuthTokens();
-          } else {
-            localStorage.removeItem('access_token');
-            document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-            document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-            document.cookie = 'proof_refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-          }
-        } catch (_e2) {}
-        const redirectParam = encodeURIComponent('/drafts');
-        window.location.replace(`/login?redirect=${redirectParam}`);
-        return false;
-      }
-    }
-
+    // BFCache safety: if user presses back after logout, force a reload so server-side auth check runs.
     window.addEventListener('pageshow', (event) => {
       if (event && event.persisted) {
-        enforceAuthenticated();
+        try { window.location.reload(); } catch (_e) {}
       }
     });
-
-    const okAuth = await enforceAuthenticated();
-    if (!okAuth) return;
 
     // First, check if we have a token in URL (from OAuth redirect)
     const urlParams = new URLSearchParams(window.location.search);
@@ -242,6 +214,7 @@
         localStorage.removeItem('access_token');
         document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
         document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        document.cookie = 'proof_refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
       }
 
       // Clear any rendered drafts immediately (avoid showing stale drafts while redirecting)

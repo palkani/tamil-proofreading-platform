@@ -3093,6 +3093,13 @@ class WorkspaceController {
   }
 
   scheduleSubmitThrottled(text) {
+    // IMPORTANT: Disable legacy background submit calls.
+    // We already run `autoAnalyze()` which calls `/api/submit` (save_draft:true) and updates the AI Assistant.
+    // The legacy path calls `/api/submit` with save_draft:false and does NOT update the UI, causing:
+    // - double submit calls
+    // - confusing network traces (200/200) where suggestions exist but panel appears unchanged
+    return;
+
     if (this.suppressSubmitUntil && Date.now() < this.suppressSubmitUntil) {
       if (this.DEBUG_IME) console.debug('[SUBMIT] skipped (suppressed after paste)');
       return;
@@ -3364,8 +3371,22 @@ class WorkspaceController {
         // This removes "duplicate" suggestions where both look the same to the user
         // but may differ only by whitespace/quotes/zero-width chars.
         .filter(result => {
-          const original = result.original || result.originalText || result.Original || result.sourceText || '';
-          const corrected = result.corrected || result.correction || result.Corrected || result.suggestedText || '';
+          const original =
+            result.original ||
+            result.originalText ||
+            result.original_text ||
+            result.Original ||
+            result.sourceText ||
+            '';
+          const corrected =
+            result.corrected ||
+            result.correction ||
+            result.correctionText ||
+            result.correction_text ||
+            result.Correction ||
+            result.Corrected ||
+            result.suggestedText ||
+            '';
           const normalizeComparable = (s) => {
             try {
               return String(s || '')
@@ -3393,8 +3414,20 @@ class WorkspaceController {
         })
         .map((result, index) => {
           // Map backend fields to frontend expected format
-          const original = result.original || result.originalText || result.Original || '';
-          const corrected = result.corrected || result.correction || result.Corrected || '';
+          const original =
+            result.original ||
+            result.originalText ||
+            result.original_text ||
+            result.Original ||
+            '';
+          const corrected =
+            result.corrected ||
+            result.correction ||
+            result.correctionText ||
+            result.correction_text ||
+            result.Correction ||
+            result.Corrected ||
+            '';
           const reason = result.reason || result.description || result.title || result.Reason || '';
           
           console.log('[AI Debug] Mapping suggestion:', { original, corrected, reason, type: result.type });
@@ -3456,6 +3489,40 @@ class WorkspaceController {
             }
           };
         });
+
+      // If everything got filtered out but backend sent items, show a best-effort rendering
+      // so users can still see what the API returned (even if it looks like a "no-op" after normalization).
+      if (geminiSuggestions.length === 0 && Array.isArray(corrections) && corrections.length > 0) {
+        const fallback = corrections.map((result, idx) => {
+          const original =
+            result.original ||
+            result.originalText ||
+            result.original_text ||
+            result.Original ||
+            '';
+          const corrected =
+            result.corrected ||
+            result.correction ||
+            result.correctionText ||
+            result.correction_text ||
+            result.Correction ||
+            result.Corrected ||
+            '';
+          const reason = result.reason || result.description || result.title || result.Reason || '';
+          const type = result.type || result.Type || 'grammar';
+          return {
+            id: `gemini-fallback-${idx}-${Date.now()}`,
+            title: reason || 'Suggestion',
+            description: reason || '',
+            type,
+            preview: original && corrected ? `${original} → ${corrected}` : (corrected || original || ''),
+            sourceText: original || '',
+            onApply: null,
+            onIgnore: () => {},
+          };
+        });
+        geminiSuggestions.push(...fallback);
+      }
 
       // Final guard: dedupe identical suggestions (backend can sometimes repeat items)
       const dedupedGeminiSuggestions = (() => {

@@ -45,6 +45,11 @@ router.get('/', (req, res) => {
   });
 });
 
+// Legacy /home URL: permanently redirect to canonical homepage for SEO
+router.get('/home', (req, res) => {
+  return res.redirect(301, '/');
+});
+
 // How to Use page - accessible to everyone
 router.get('/how-to-use', (req, res) => {
   const user = getCurrentUser(req);
@@ -322,6 +327,12 @@ ${items}
 // My Blogs (protected) - list current user's posts (draft + published)
 router.get('/my-blogs', requireAuth, async (req, res) => {
   const user = getCurrentUser(req);
+  // Restrict My Blogs to admin-only as requested.
+  // Only allow the specified admin email (and prooftamil@gmail.com as a safe fallback).
+  const allowed = ['palkani.r@gmail.com', 'prooftamil@gmail.com'];
+  if (!user || !user.email || !allowed.includes(String(user.email).toLowerCase())) {
+    return res.redirect(302, '/drafts');
+  }
   const seo = getSeoData('myBlogs') || getSeoData('home');
   try {
     const headers = {};

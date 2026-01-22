@@ -107,7 +107,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
     if (process.env.NODE_ENV !== 'production') {
       return;
     }
-    if (filePath.endsWith('/js/workspace.js')) {
+    if (filePath.endsWith('/js/workspace.js') || filePath.endsWith('/js/home-editor.js')) {
       res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
       return;
     }
