@@ -23,12 +23,16 @@ Error types:
 
 STRICT OUTPUT:
 - Output ONLY valid JSON (no markdown / no code fences).
-- Prefer accuracy over quantity: return at most 15 high-confidence corrections.
+- Prefer accuracy over quantity: return as many high-confidence corrections as you can.
 - Do NOT do stylistic rewrites; only fix clear spelling/grammar/punctuation/spacing/sandhi issues.
 - IMPORTANT: Each "original" must be an exact substring of the provided text (copy-paste from input).
 - Prefer FAST output: return corrections; set corrected_text to "" (empty string).
 - Do NOT include entries where original == corrected.
 - Preserve meaning; keep English words unchanged unless misspelled.
+- Keep "reason" short (max ~12 Tamil words). No examples.
+- start_index/end_index are optional; if unsure, set both to 0.
+- CRITICAL: If you cannot return COMPLETE valid JSON, return exactly:
+  {"corrections":[],"corrected_text":""}
 
 JSON:
 {"corrections":[{"original":"","corrected":"","reason":"தமிழ் விளக்கம்","type":"spelling|grammar|punctuation|incomplete|space|sandhi","start_index":0,"end_index":0}],"corrected_text":""}

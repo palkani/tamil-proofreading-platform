@@ -155,13 +155,13 @@ func maxOutputTokensForProofread(wordCount int, charCount int) int {
         // Latency lever: smaller max tokens -> faster decoding.
         switch {
 	case charCount < 800 && wordCount <= 150:
-		return 512
+		return 1024
 	case charCount < 1800 && wordCount <= 300:
-		return 768
-	case charCount < 3500 && wordCount <= 700:
-		return 1536
-        default:
 		return 2048
+	case charCount < 3500 && wordCount <= 700:
+		return 4096
+        default:
+		return 8192
         }
 }
 
