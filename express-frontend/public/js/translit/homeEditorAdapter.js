@@ -88,56 +88,65 @@
     }
 
     replaceRange(start, end, replacement) {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return;
-      const range = sel.getRangeAt(0);
-      try {
-        // Replace the full Latin token around the caret, not just "endOffset - tokenLen".
-        let container = range.endContainer;
-        let offset = range.endOffset;
+      const root = this.editorEl;
+      if (!root) return;
 
-        if (container && container.nodeType !== Node.TEXT_NODE) {
-          const tn = container.childNodes && container.childNodes.length ? container.childNodes[0] : null;
-          if (tn && tn.nodeType === Node.TEXT_NODE) {
-            container = tn;
-            offset = Math.min(offset, (tn.nodeValue || '').length);
+      const clamp = (n, lo, hi) => Math.min(Math.max(n, lo), hi);
+      const totalTextLen = (root.textContent || '').length;
+      const absStart = clamp(Number(start || 0), 0, totalTextLen);
+      const absEnd = clamp(Number(end || 0), 0, totalTextLen);
+      if (absEnd < absStart) return;
+
+      const locate = (abs) => {
+        let remaining = abs;
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let node = walker.nextNode();
+        while (node) {
+          const len = (node.nodeValue || '').length;
+          if (remaining <= len) {
+            return { node, offset: remaining };
           }
+          remaining -= len;
+          node = walker.nextNode();
         }
-        if (!container || container.nodeType !== Node.TEXT_NODE) {
-          throw new Error('no_text_node');
+        // If we fell off the end, return last node end.
+        const last = (() => {
+          const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          let n = null;
+          let cur = w.nextNode();
+          while (cur) { n = cur; cur = w.nextNode(); }
+          return n;
+        })();
+        return last ? { node: last, offset: (last.nodeValue || '').length } : null;
+      };
+
+      try {
+        const a = locate(absStart);
+        const b = locate(absEnd);
+        if (!a || !b || !a.node || !b.node) throw new Error('locate_failed');
+
+        const range = document.createRange();
+        range.setStart(a.node, clamp(a.offset, 0, (a.node.nodeValue || '').length));
+        range.setEnd(b.node, clamp(b.offset, 0, (b.node.nodeValue || '').length));
+        range.deleteContents();
+        const textNode = document.createTextNode(String(replacement || ''));
+        range.insertNode(textNode);
+
+        const sel = window.getSelection();
+        if (sel) {
+          const caret = document.createRange();
+          caret.setStart(textNode, (textNode.nodeValue || '').length);
+          caret.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(caret);
         }
-
-        const text = container.nodeValue || '';
-        let left = offset;
-        let right = offset;
-        while (left > 0 && /[A-Za-z]/.test(text.charAt(left - 1))) left--;
-        while (right < text.length && /[A-Za-z]/.test(text.charAt(right))) right++;
-
-        if (left === right) {
-          const endOffset = offset;
-          const tokenLen = Math.max(0, (end - start) || 0);
-          left = Math.max(0, endOffset - tokenLen);
-          right = endOffset;
-        }
-
-        container.nodeValue = text.slice(0, left) + replacement + text.slice(right);
-
-        const caretPos = Math.min(left + String(replacement || '').length, (container.nodeValue || '').length);
-        const newRange = document.createRange();
-        newRange.setStart(container, caretPos);
-        newRange.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(newRange);
-      } catch (err) {
-        // Fallback: replace last token in textContent
-        const text = this.editorEl.textContent || '';
+      } catch (_err) {
+        const text = root.textContent || '';
         const m = text.match(/([A-Za-z]+)\s*$/);
         if (m && m.index != null) {
-          const newText = text.slice(0, m.index) + replacement;
-          this.editorEl.textContent = newText;
+          root.textContent = text.slice(0, m.index) + String(replacement || '');
         } else {
-          const newText = text + replacement;
-          this.editorEl.textContent = newText;
+          root.textContent = text + String(replacement || '');
         }
       }
     }

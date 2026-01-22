@@ -88,63 +88,70 @@
     }
 
     replaceRange(start, end, replacement) {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return;
-      const range = sel.getRangeAt(0);
-      try {
-        // Replace the full Latin token around the caret, not just "endOffset - tokenLen".
-        // This avoids partial replacements when caret moved or offsets are stale.
-        let container = range.endContainer;
-        let offset = range.endOffset;
+      // In contenteditable editors, a single "token" can span multiple text nodes (formatting, <div>, etc.).
+      // Use absolute character offsets (from getTextBeforeCaret) to replace across the full editor.
+      const root = this.editorEl;
+      if (!root) return;
 
-        // Ensure we operate on a text node
-        if (container && container.nodeType !== Node.TEXT_NODE) {
-          // Try to drill into a text node if possible
-          const tn = container.childNodes && container.childNodes.length ? container.childNodes[0] : null;
-          if (tn && tn.nodeType === Node.TEXT_NODE) {
-            container = tn;
-            offset = Math.min(offset, (tn.nodeValue || '').length);
+      const clamp = (n, lo, hi) => Math.min(Math.max(n, lo), hi);
+      const totalTextLen = (root.textContent || '').length;
+      const absStart = clamp(Number(start || 0), 0, totalTextLen);
+      const absEnd = clamp(Number(end || 0), 0, totalTextLen);
+      if (absEnd < absStart) return;
+
+      // Map absolute offsets -> { node, offset } in the DOM text nodes.
+      const locate = (abs) => {
+        let remaining = abs;
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let node = walker.nextNode();
+        while (node) {
+          const len = (node.nodeValue || '').length;
+          if (remaining <= len) {
+            return { node, offset: remaining };
           }
+          remaining -= len;
+          node = walker.nextNode();
         }
-        if (!container || container.nodeType !== Node.TEXT_NODE) {
-          throw new Error('no_text_node');
-        }
+        // If we fell off the end, return last node end.
+        const last = (() => {
+          const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          let n = null;
+          let cur = w.nextNode();
+          while (cur) { n = cur; cur = w.nextNode(); }
+          return n;
+        })();
+        return last ? { node: last, offset: (last.nodeValue || '').length } : null;
+      };
 
-        const text = container.nodeValue || '';
-        let left = offset;
-        let right = offset;
-        while (left > 0 && /[A-Za-z]/.test(text.charAt(left - 1))) left--;
-        while (right < text.length && /[A-Za-z]/.test(text.charAt(right))) right++;
+      try {
+        const a = locate(absStart);
+        const b = locate(absEnd);
+        if (!a || !b || !a.node || !b.node) throw new Error('locate_failed');
 
-        // If there is no Latin token around caret, fall back to the original tokenLen heuristic.
-        if (left === right) {
-          const endOffset = offset;
-          const tokenLen = Math.max(0, (end - start) || 0);
-          left = Math.max(0, endOffset - tokenLen);
-          right = endOffset;
-        }
-
-        const newText = text.slice(0, left) + replacement + text.slice(right);
-        container.nodeValue = newText;
+        const range = document.createRange();
+        range.setStart(a.node, clamp(a.offset, 0, (a.node.nodeValue || '').length));
+        range.setEnd(b.node, clamp(b.offset, 0, (b.node.nodeValue || '').length));
+        range.deleteContents();
+        const textNode = document.createTextNode(String(replacement || ''));
+        range.insertNode(textNode);
 
         // Place caret after inserted replacement
-        const caretPos = Math.min(left + String(replacement || '').length, (container.nodeValue || '').length);
-        const newRange = document.createRange();
-        newRange.setStart(container, caretPos);
-        newRange.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(newRange);
-      } catch (err) {
-        // Fallback: replace last token in textContent
-        const text = this.editorEl.textContent || '';
-        // Replace last Latin run at end (best-effort)
+        const sel = window.getSelection();
+        if (sel) {
+          const caret = document.createRange();
+          caret.setStart(textNode, (textNode.nodeValue || '').length);
+          caret.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(caret);
+        }
+      } catch (_err) {
+        // Last-resort fallback: replace the last Latin token at end of textContent.
+        const text = root.textContent || '';
         const m = text.match(/([A-Za-z]+)\s*$/);
         if (m && m.index != null) {
-          const newText = text.slice(0, m.index) + replacement;
-          this.editorEl.textContent = newText;
+          root.textContent = text.slice(0, m.index) + String(replacement || '');
         } else {
-          const newText = text + replacement;
-          this.editorEl.textContent = newText;
+          root.textContent = text + String(replacement || '');
         }
       }
     }
