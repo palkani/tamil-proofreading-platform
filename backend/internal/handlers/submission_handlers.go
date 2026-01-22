@@ -136,6 +136,12 @@ func buildCorrectionsForSubmission(sub models.Submission) []gin.H {
 		orig := s.Original
 		corr := s.Corrected
 
+		// Hard validation: suggestion must be grounded in the original text.
+		// If the model hallucinated an "original" span that doesn't exist, drop it.
+		if orig == "" || !strings.Contains(sub.OriginalText, orig) {
+			continue
+		}
+
 		oNorm := normalizeComparableText(orig)
 		cNorm := normalizeComparableText(corr)
 		if oNorm == "" || cNorm == "" || oNorm == cNorm {
@@ -149,9 +155,11 @@ func buildCorrectionsForSubmission(sub models.Submission) []gin.H {
 		if startIdx <= 0 || endIdx <= 0 || startIdx >= endIdx {
 			startIdx, endIdx = findFirstUnusedOccurrence(sub.OriginalText, orig, used)
 		}
-		if startIdx > 0 && endIdx > startIdx {
-			used = append(used, usedRange{Start: startIdx, End: endIdx})
+		// If we still couldn't find the span (should be rare due to Contains check), drop it.
+		if startIdx <= 0 || endIdx <= startIdx {
+			continue
 		}
+		used = append(used, usedRange{Start: startIdx, End: endIdx})
 
 		corrections = append(corrections, gin.H{
 			"blockId":      "0",

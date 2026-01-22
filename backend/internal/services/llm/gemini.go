@@ -23,6 +23,9 @@ Error types:
 
 STRICT OUTPUT:
 - Output ONLY valid JSON (no markdown / no code fences).
+- Prefer accuracy over quantity: return at most 15 high-confidence corrections.
+- Do NOT do stylistic rewrites; only fix clear spelling/grammar/punctuation/spacing/sandhi issues.
+- IMPORTANT: Each "original" must be an exact substring of the provided text (copy-paste from input).
 - Prefer FAST output: return corrections; set corrected_text to "" (empty string).
 - Do NOT include entries where original == corrected.
 - Preserve meaning; keep English words unchanged unless misspelled.

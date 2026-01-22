@@ -3,6 +3,7 @@ package translit
 import (
         "math"
         "sort"
+        "strings"
 )
 
 // levenshteinDistance calculates edit distance between two strings
@@ -185,6 +186,17 @@ func GetSuggestions(input string) []Suggestion {
                         lenDelta = -lenDelta
                 }
 
+                // High-signal quality gate:
+                // For longer inputs, drop candidates that are just a short prefix of the key.
+                // These often produce partial/invalid outputs (e.g., "enathu" -> "எநா", "எநாம்").
+                // Keep exact/prefix hits only when the phonetic is close in length.
+                if len(key) >= 5 && phon != "" && strings.HasPrefix(key, phon) {
+                        // Allow near-complete prefixes (off by <= 1) to support "pause before last vowel".
+                        if (len(key) - len(phon)) >= 2 {
+                                continue
+                        }
+                }
+
                 // Filter obvious low-quality matches for longer inputs.
                 // This helps ensure we show meaningful words for inputs like "enathu".
                 if len(key) >= 6 {
@@ -241,7 +253,7 @@ func GetSuggestions(input string) []Suggestion {
         // Filter out low-quality/meaningless suggestions for longer inputs.
         suggestions = filterByRelativeScore(key, suggestions)
 
-        // Return top 5
+        // Return top 5 (ranked; UI can choose how many to display)
         if len(suggestions) > 5 {
                 suggestions = suggestions[:5]
         }

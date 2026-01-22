@@ -3,7 +3,8 @@
 (function () {
   const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
   const DEBOUNCE_MS = 300;
-  const MAX = 8;
+  // UI policy: top 5 suggestions (ranked)
+  const MAX = 5;
   const DEBUG = typeof window !== 'undefined' && !!window.__TRANS_LIT_DEBUG__;
   const IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
   const HAS_RUNNER = typeof window !== 'undefined' && typeof window.transliterateViaRunner === 'function';
@@ -163,8 +164,28 @@
       const rect = this.adapter.getCaretRect() || this.adapter.getFallbackRect();
       if (!rect) return;
 
+      // Normalize + dedupe + drop empty words (prevents blank rows / repeated junk)
+      const cleaned = (() => {
+        const seen = new Set();
+        const out = [];
+        for (const it of (items || [])) {
+          const w = String(it?.word || '').trim();
+          if (!w) continue;
+          const key = w.normalize ? w.normalize('NFC') : w;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push({ ...it, word: w });
+          if (out.length >= MAX) break;
+        }
+        return out;
+      })();
+      if (!cleaned.length) {
+        this.closeDropdown();
+        return;
+      }
+
       const dropdown = document.createElement('div');
-      dropdown.className = 'translit-dropdown fixed bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-auto';
+      dropdown.className = 'translit-dropdown fixed bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden';
       dropdown.style.minWidth = '200px';
       const viewW = window.innerWidth || 360;
       const viewH = window.innerHeight || 640;
@@ -180,35 +201,50 @@
       dropdown.style.left = `${left}px`;
       dropdown.style.top = `${top}px`;
 
-      if (!items.length) {
-        const empty = document.createElement('div');
-        empty.className = 'px-3 py-2 text-sm text-gray-500';
-        empty.textContent = 'No suggestions found';
-        dropdown.appendChild(empty);
-      }
+      // Header (with close button)
+      const header = document.createElement('div');
+      header.className = 'flex items-center justify-between px-4 py-3 border-b border-gray-100';
+      header.innerHTML = `
+        <div class="text-sm font-semibold text-gray-900">Suggestions</div>
+        <button type="button" class="p-1 rounded-lg hover:bg-gray-100 text-gray-500" aria-label="Close suggestions">×</button>
+      `;
+      header.querySelector('button')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.closeDropdown();
+      });
+      dropdown.appendChild(header);
 
-      items.slice(0, MAX).forEach((s, idx) => {
+      cleaned.forEach((s, idx) => {
         const el = document.createElement('div');
         el.dataset.idx = idx;
-        el.className = 'px-3 py-2 flex flex-col gap-1 cursor-pointer hover:bg-purple-50 text-sm';
+        el.className = 'px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-purple-50 text-sm';
         el.innerHTML = `
-          <div class="flex items-center justify-between">
-            <span class="font-semibold text-gray-900">${s.word}</span>
-            <span class="text-xs text-gray-500">${Math.round((s.score || 0) * 100)}%</span>
-          </div>
-          <div class="text-xs text-gray-500 flex gap-2">
-            <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">${s.label || 'Suggested'}</span>
-            <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">${s.usage || 'Both'}</span>
-          </div>
-          ${s.reason ? `<div class="text-xs text-gray-500">${s.reason}</div>` : ''}
+          <span class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border ${idx === 0 ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-500 border-gray-200'}">${idx + 1}</span>
+          <span class="text-base font-semibold text-gray-900 flex-1">${s.word}</span>
         `;
         el.addEventListener('mouseenter', () => {
           this.activeIndex = idx;
           this.highlight(Array.from(dropdown.querySelectorAll('[data-idx]')));
         });
-        el.addEventListener('click', () => this.select(el, info));
+        el.addEventListener('pointerdown', (e) => {
+          // Prevent caret changes before we replace
+          e.preventDefault();
+          e.stopPropagation();
+        });
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.select(el, info);
+        });
         dropdown.appendChild(el);
       });
+
+      // Footer hint
+      const footer = document.createElement('div');
+      footer.className = 'px-4 py-3 text-xs text-gray-600 border-t bg-gray-50';
+      footer.innerHTML = 'Press <kbd class="mx-1 px-2 py-0.5 rounded-md border border-gray-300 bg-white text-gray-700 font-semibold">Space</kbd> to select first option';
+      dropdown.appendChild(footer);
 
       document.body.appendChild(dropdown);
       this.dropdown = dropdown;
@@ -226,6 +262,56 @@
       if (!ta) return;
       this.adapter.replaceRange(info.start, info.end, ta + ' ');
       this.closeDropdown();
+
+      // Anonymous-safe feedback (logged-in only): helps improve ranking over time.
+      // We intentionally do NOT send full text, only the token + chosen word + mode.
+      try {
+        const token = (info && info.token) ? String(info.token) : '';
+        if (!token) return;
+
+        const accessToken = (() => {
+          try { return localStorage.getItem('access_token') || ''; } catch (_e) { return ''; }
+        })();
+        if (!accessToken) return;
+
+        const isExpired = (t) => {
+          try {
+            const parts = String(t || '').split('.');
+            if (parts.length !== 3) return true;
+            let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) base64 += '=';
+            const payload = JSON.parse(atob(base64));
+            const now = Math.floor(Date.now() / 1000);
+            return payload.exp ? payload.exp < (now - 60) : true;
+          } catch (_e) {
+            return true;
+          }
+        };
+        if (isExpired(accessToken)) return;
+
+        const mode = (this.getMode && this.getMode()) ? String(this.getMode()) : 'spoken';
+        fetch('/api/v1/events/activity', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            event_type: 'suggestion_accept',
+            metadata: {
+              kind: 'translit',
+              token: token.toLowerCase(),
+              chosen: String(ta || ''),
+              mode,
+              path: (typeof window !== 'undefined' && window.location) ? window.location.pathname : '',
+            },
+          }),
+          keepalive: true,
+        }).catch(() => {});
+      } catch (_e) {
+        // non-fatal
+      }
     }
 
     closeDropdown() {

@@ -1306,6 +1306,12 @@ class WorkspaceController {
     
     this.updateWordCount();
     this.scheduleSave();
+
+    // If Transliteration V2 is active, do NOT run legacy transliteration fetch/render.
+    // V2 handles dropdown + commit on its own, and running both causes duplicates/flakiness.
+    if (this.translitTypeahead) {
+      return;
+    }
     
     // Extract token FIRST before using it
     const text = this.getEditorText() || '';

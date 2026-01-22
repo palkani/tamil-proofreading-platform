@@ -40,6 +40,8 @@
   <!-- Global injection of Google Client ID for browser usage (forces single source of truth) -->
   <script>
     window.GOOGLE_CLIENT_ID = "<%= process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '' %>";
+    // Enable unified transliteration IME V2 across pages (Home/Free Editor/Workspace)
+    window.TRANS_SUGGEST_V2 = true;
   </script>
 
   <!-- Microsoft Clarity -->

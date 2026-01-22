@@ -5,7 +5,8 @@ module.exports = async function handler(req, res) {
     process.env.RUNNER_BASE_URL ||
     'https://prooftamil-runner-991187041222.asia-south1.run.app';
 
-  const { q = '', limit = 8, mode = 'spoken' } = req.query || {};
+  // UI policy: keep top 5 suggestions (ranked).
+  const { q = '', limit = 5, mode = 'spoken' } = req.query || {};
 
   // Canonical overrides for critical common inputs when upstream runner quality varies.
   // These behave like Google Input Tools: guarantee top suggestion for certain tokens.
@@ -132,6 +133,7 @@ module.exports = async function handler(req, res) {
       if (data && typeof data === 'object' && Array.isArray(data.suggestions)) {
         const seen = new Set();
         const cleaned = [];
+        const lim = Math.max(1, Math.min(Number(limit) || 5, 5));
         for (const s of data.suggestions) {
           const w = String((s && (s.word || s.ta || s.text || s.suggestion)) || '').trim();
           if (!w) continue;
@@ -144,7 +146,7 @@ module.exports = async function handler(req, res) {
             ta: w,
             score: typeof s?.score === 'number' ? s.score : (Number(s?.score) || 0),
           });
-          if (cleaned.length >= Number(limit) || 8) break;
+          if (cleaned.length >= lim) break;
         }
         data.suggestions = cleaned;
       }
