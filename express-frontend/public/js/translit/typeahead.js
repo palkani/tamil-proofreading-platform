@@ -19,6 +19,7 @@
       this.dropdown = null;
       this.activeIndex = 0;
       this.latestToken = null;
+      this.latestInfo = null;
 
       this.handleInput = this.handleInput.bind(this);
       this.handleKeydown = this.handleKeydown.bind(this);
@@ -63,7 +64,9 @@
         this.highlight(items);
       } else if (['Enter', 'Tab', ' '].includes(e.key)) {
         e.preventDefault();
-        this.select(items[this.activeIndex]);
+        // Keyboard commit must use the latest token range + selection snapshot.
+        const info = this.latestInfo || this.getTokenInfo();
+        this.select(items[this.activeIndex], info, { addSpace: e.key === ' ' });
       } else if (e.key === 'Escape') {
         this.closeDropdown();
       }
@@ -98,6 +101,7 @@
       }
       if (this.latestToken === info.token) return;
       this.latestToken = info.token;
+      this.latestInfo = info;
 
       // cache
       const cached = this.cache.get(info.token);
@@ -260,10 +264,11 @@
       items.forEach((el, i) => el.classList.toggle('bg-purple-50', i === this.activeIndex));
     }
 
-    select(el, info) {
+    select(el, info, opts = {}) {
       if (!el) return;
       const ta = el.querySelector('.font-semibold')?.textContent || '';
       if (!ta) return;
+      if (!info || typeof info.start !== 'number' || typeof info.end !== 'number') return;
       // Restore editor focus + caret before we mutate content (clicking the dropdown can steal focus).
       try {
         if (this.adapter && this.adapter.focus) this.adapter.focus();
@@ -273,7 +278,8 @@
       } catch (_e) {
         // non-fatal
       }
-      this.adapter.replaceRange(info.start, info.end, ta + ' ');
+      const addSpace = opts && opts.addSpace === false ? false : true;
+      this.adapter.replaceRange(info.start, info.end, addSpace ? (ta + ' ') : ta);
       this.closeDropdown();
 
       // Anonymous-safe feedback (logged-in only): helps improve ranking over time.
