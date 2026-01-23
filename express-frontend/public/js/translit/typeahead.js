@@ -97,24 +97,40 @@
       const info = this.getTokenInfo();
       if (!info) {
         this.closeDropdown();
+        this.latestToken = null;
+        this.latestInfo = null;
         return;
       }
-      if (this.latestToken === info.token) return;
-      this.latestToken = info.token;
+      const mode = this.getMode() || 'spoken';
+      // Key by mode + token, so switching style reliably refreshes suggestions.
+      const key = `${mode}:${info.token}`;
+      if (this.latestToken === key) {
+        // Still update latestInfo; caret can move even if token is same.
+        this.latestInfo = info;
+        // If dropdown is closed, re-open from cache for consistent UX.
+        if (!this.dropdown) {
+          const cached = this.cache.get(key);
+          if (cached && Date.now() - cached.ts < CACHE_TTL_MS && cached.items?.length) {
+            this.renderDropdown(cached.items, info);
+          }
+        }
+        return;
+      }
+      this.latestToken = key;
       this.latestInfo = info;
 
       // cache
-      const cached = this.cache.get(info.token);
+      const cached = this.cache.get(key);
       if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
-        this.log('cache hit', info.token, cached.items.length);
+        this.log('cache hit', key, cached.items.length);
         this.renderDropdown(cached.items, info);
         return;
       }
 
       // abort inflight
+      // Only abort here (after debounce + cache miss), to reduce noisy "canceled" requests in DevTools.
       if (this.abortController) this.abortController.abort();
       this.abortController = new AbortController();
-      const mode = this.getMode() || 'spoken';
       if (IS_DEV) {
         console.debug("[TRANSLITERATOR] CALLING RUNNER", { text: info.token, mode, limit: MAX });
       }
@@ -131,7 +147,7 @@
         }
         const data = await window.transliterateViaRunner(info.token, mode, MAX, this.abortController.signal);
         const items = this.normalize(data);
-        this.cache.set(info.token, { items, ts: Date.now() });
+        this.cache.set(key, { items, ts: Date.now() });
         this.log('response', { status: 'ok', count: items.length });
         if (!items.length) {
           this.closeDropdown();

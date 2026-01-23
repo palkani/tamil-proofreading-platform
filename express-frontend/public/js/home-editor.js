@@ -1320,6 +1320,15 @@ class HomeEditor {
     if (this._suppressScheduledAnalysisUntil && Date.now() < this._suppressScheduledAnalysisUntil) {
       return;
     }
+    // Avoid unnecessary network calls for very short text.
+    // (We also guard inside autoAnalyze, but this prevents the /api/submit call from even starting.)
+    try {
+      const text = this.getPlainText();
+      const wc = this.countWords(text);
+      if (wc < 5 || text.length < 20) {
+        return;
+      }
+    } catch (_e) {}
     // Clear existing timeout
     if (this.analysisTimeout) {
       clearTimeout(this.analysisTimeout);
