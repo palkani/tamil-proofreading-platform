@@ -381,7 +381,51 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
         // Use the Gemini API with the selected model
         content, geminiResp, err := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey, maxTokens)
         if err != nil {
+                // Gemini overload is common; do a tiny backoff + retry once before falling back providers.
+                var pe *ProviderError
+                if errors.As(err, &pe) && pe.Provider == "gemini" && pe.StatusCode == 503 {
+                        log.Printf("[GEMINI-503] Model overloaded; retrying once after short backoff (request_id=%s)", requestID)
+                        // Respect ctx cancellation.
+                        select {
+                        case <-ctx.Done():
+                                // fallthrough to fallback decision below
+                        case <-time.After(350 * time.Millisecond):
+                        }
+                        // Retry with a slightly smaller output budget to increase chance of fast completion.
+                        retryMax := maxTokens
+                        if retryMax > 2048 {
+                                retryMax = 2048
+                        }
+                        if c2, r2, e2 := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey, retryMax); e2 == nil && strings.TrimSpace(c2) != "" {
+                                content, geminiResp, err = c2, r2, nil
+                        } else if e2 != nil {
+                                err = e2
+                        }
+                }
+        }
+        if err != nil {
                 log.Printf("gemini proofread error (request_id=%s): %v", requestID, err)
+
+                // Optional fallback: avoid user-visible "AI unavailable" by retrying with OpenAI/Anthropic
+                // for retryable failures (timeouts/429/5xx) when configured.
+                if shouldFallbackOn(err) {
+                        if s.openAIClient != nil {
+                                log.Printf("[FALLBACK-OPENAI] Using OpenAI because Gemini failed (request_id=%s)", requestID)
+                                if out, ferr := s.proofreadWithOpenAI(ctx, cleaned, requestID); ferr == nil {
+                                        return out, nil
+                                } else {
+                                        log.Printf("[FALLBACK-OPENAI-ERROR] (request_id=%s): %v", requestID, ferr)
+                                }
+                        }
+                        if strings.TrimSpace(s.anthropicKey) != "" {
+                                log.Printf("[FALLBACK-ANTHROPIC] Using Anthropic because Gemini failed (request_id=%s)", requestID)
+                                if out, ferr := s.proofreadWithAnthropic(ctx, cleaned, requestID); ferr == nil {
+                                        return out, nil
+                                } else {
+                                        log.Printf("[FALLBACK-ANTHROPIC-ERROR] (request_id=%s): %v", requestID, ferr)
+                                }
+                        }
+                }
                 return nil, err
         }
 
