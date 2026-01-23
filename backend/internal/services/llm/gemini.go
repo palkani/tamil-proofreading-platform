@@ -9,6 +9,7 @@ import (
         "log"
         "net/http"
         "os"
+	"regexp"
         "strings"
         "time"
 )
@@ -58,12 +59,23 @@ type GeminiResponse struct {
 
 // Reusable HTTP client with connection pooling for better performance
 var geminiClient = &http.Client{
-        Timeout: 25 * time.Second,
+	// NOTE: Do not set this too low. Large texts can legitimately take >25s for the first byte.
+	// We still bound overall work via upstream ctx timeouts (see proofreadTimeoutFor).
+	Timeout: 75 * time.Second,
         Transport: &http.Transport{
                 MaxIdleConns:        10,
                 MaxIdleConnsPerHost: 5,
                 IdleConnTimeout:     90 * time.Second,
         },
+}
+
+var geminiKeyRedactRe = regexp.MustCompile(`(?i)([?&]key=)[^&\s"]+`)
+
+func redactGeminiKey(s string) string {
+	if s == "" {
+		return s
+	}
+	return geminiKeyRedactRe.ReplaceAllString(s, `${1}[REDACTED]`)
 }
 
 // CallGeminiProofread calls Gemini with the proofreading prompt.
@@ -128,8 +140,10 @@ func CallGeminiProofread(userText string, model string, apiKey string, maxOutput
         apiStartTime := time.Now()
         resp, err := geminiClient.Do(req)
         if err != nil {
-                log.Printf("[GEMINI] Request error after %v: %v", time.Since(apiStartTime), err)
-                return "", nil, err
+		msg := redactGeminiKey(err.Error())
+		log.Printf("[GEMINI] Request error after %v: %s", time.Since(apiStartTime), msg)
+		// Wrap so we don't leak key via audit logs/handlers.
+		return "", nil, &ProviderError{Provider: "gemini", Message: msg, Retryable: true}
         }
         defer resp.Body.Close()
 
@@ -208,7 +222,8 @@ func CallGeminiCountTokens(prompt string, model string, apiKey string) (int, err
         req.Header.Set("Content-Type", "application/json")
         resp, err := geminiClient.Do(req)
         if err != nil {
-                return 0, err
+		// Wrap so we don't leak key via logs.
+		return 0, &ProviderError{Provider: "gemini", Message: redactGeminiKey(err.Error()), Retryable: true}
         }
         defer resp.Body.Close()
         bodyBytes, err := io.ReadAll(resp.Body)
