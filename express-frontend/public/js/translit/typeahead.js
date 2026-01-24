@@ -3,8 +3,8 @@
 (function () {
   const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
   const DEBOUNCE_MS = 300;
-  // UI policy: top 5 suggestions (ranked)
-  const MAX = 5;
+  // UI policy: Google-IME-like depth (show more options)
+  const MAX = 10;
   const DEBUG = typeof window !== 'undefined' && !!window.__TRANS_LIT_DEBUG__;
   const IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
   const HAS_RUNNER = typeof window !== 'undefined' && typeof window.transliterateViaRunner === 'function';
@@ -228,6 +228,8 @@
       const dropdown = document.createElement('div');
       dropdown.className = 'translit-dropdown fixed bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden';
       dropdown.style.minWidth = '200px';
+      dropdown.style.maxHeight = '360px';
+      dropdown.style.overflowY = 'auto';
       const viewW = window.innerWidth || 360;
       const viewH = window.innerHeight || 640;
       const left = Math.max(8, Math.min(rect.left, viewW - 220));

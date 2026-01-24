@@ -117,7 +117,7 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 	}
 	limitStr := strings.TrimSpace(c.Query("limit"))
 	// UI policy: top 5 suggestions (ranked)
-	limit := 5
+	limit := 10
 	if limitStr != "" {
 		// Keep external callers safe: cap to 5 even if they request more.
 		if v, err := strconv.Atoi(limitStr); err == nil && v > 0 {

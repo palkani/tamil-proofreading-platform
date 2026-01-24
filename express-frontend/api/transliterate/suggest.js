@@ -5,8 +5,8 @@ module.exports = async function handler(req, res) {
     process.env.RUNNER_BASE_URL ||
     'https://prooftamil-runner-991187041222.asia-south1.run.app';
 
-  // UI policy: keep top 5 suggestions (ranked).
-  const { q = '', limit = 5, mode = 'spoken' } = req.query || {};
+  // UI policy: Google-IME-like depth (ranked).
+  const { q = '', limit = 10, mode = 'spoken' } = req.query || {};
 
   // -----------------------
   // Quality firewall helpers
@@ -62,7 +62,7 @@ module.exports = async function handler(req, res) {
   function normalizeSuggestions(raw, lim) {
     const seen = new Set();
     const out = [];
-    const cap = Math.max(1, Math.min(Number(lim) || 5, 5));
+    const cap = Math.max(1, Math.min(Number(lim) || 10, 10));
     for (const s of Array.isArray(raw) ? raw : []) {
       const wordRaw = (typeof s === 'string')
         ? s
@@ -143,7 +143,7 @@ module.exports = async function handler(req, res) {
       const score = Math.max(0.3, Math.min(1, +(scaled.toFixed(2))));
       return { word: s.word, score: idx === 0 ? 1 : score };
     });
-    return out.slice(0, Math.max(1, Math.min(Number(limit) || 5, 5)));
+    return out.slice(0, Math.max(1, Math.min(Number(limit) || 10, 10)));
   }
 
   function respondOk(source, suggestions, meta = {}) {

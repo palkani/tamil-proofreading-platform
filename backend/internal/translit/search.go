@@ -253,9 +253,9 @@ func GetSuggestions(input string) []Suggestion {
         // Filter out low-quality/meaningless suggestions for longer inputs.
         suggestions = filterByRelativeScore(key, suggestions)
 
-        // Return top 5 (ranked; UI can choose how many to display)
-        if len(suggestions) > 5 {
-                suggestions = suggestions[:5]
+        // Return top 10 (ranked; UI can choose how many to display)
+        if len(suggestions) > 10 {
+                suggestions = suggestions[:10]
         }
 
         return suggestions
@@ -339,7 +339,7 @@ func GetSuggestionsFromKeyNoOverride(key string) []Suggestion {
         suggestions = deduplicateSuggestions(suggestions)
         suggestions = filterByRelativeScore(key, suggestions)
         if len(suggestions) > 5 {
-                suggestions = suggestions[:5]
+                suggestions = suggestions[:10]
         }
         return suggestions
 }
