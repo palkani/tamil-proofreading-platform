@@ -119,6 +119,9 @@ func main() {
 				&models.RefreshToken{},
 				&models.ContactMessage{},
 				&models.TamilWord{},
+				&models.TamilPhrase{},
+				&models.TamilBigram{},
+				&models.SuggestionAcceptEvent{},
 				&models.VisitEvent{},
 				&models.ActivityEvent{},
 				&models.DailyVisitStats{},
@@ -184,6 +187,8 @@ func main() {
 		api.POST("/tamil-words", h.AddTamilWord)
 		api.POST("/tamil-words/confirm", h.ConfirmTamilWord)
 		api.GET("/transliterate/suggest", h.TransliterateSuggest)
+		// Token-level acceptance logging for IME learning (optional auth)
+		api.POST("/transliterate/accept", middleware.OptionalAuthMiddleware(cfg.JWTSecret), h.TransliterateAccept)
 		api.POST("/validate", h.ValidateText)
 		// OCR proxy endpoints (backend -> OCR microservice). This lets Vercel only configure BACKEND_URL.
 		api.GET("/ocr/health", h.OCRHealth)
@@ -238,6 +243,8 @@ func main() {
 		admin.GET("/model-logs", h.AdminGetModelLogs)
 		admin.GET("/contact", h.AdminListContactMessages)
 		admin.GET("/analytics-dashboard", h.GetAnalyticsDashboard)
+		// IME learning aggregation endpoint (run periodically)
+		admin.POST("/ime/aggregate", h.AggregateIMEAccepts)
 	}
 
 	log.Printf("[SUCCESS] All routes registered")

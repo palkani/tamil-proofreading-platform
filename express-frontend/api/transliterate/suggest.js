@@ -1,9 +1,15 @@
 module.exports = async function handler(req, res) {
-  // Prefer env override; fallback to known good runner base.
-  const base =
-    process.env.TRANSLITERATOR_BASE_URL ||
-    process.env.RUNNER_BASE_URL ||
-    'https://prooftamil-runner-991187041222.asia-south1.run.app';
+  // Call the Go backend as the single entrypoint (it will proxy to Node suggest service,
+  // and fall back to Runner/local lexicon if needed).
+  // Accept both formats:
+  // - BACKEND_URL=https://.../api/v1
+  // - BACKEND_URL=https://... (we append /api/v1)
+  function getBackendApiUrl() {
+    const baseUrl = process.env.BACKEND_URL || 'http://localhost:8080';
+    if (baseUrl.endsWith('/api/v1')) return baseUrl;
+    return baseUrl.replace(/\/$/, '') + '/api/v1';
+  }
+  const base = getBackendApiUrl();
 
   // UI policy: Google-IME-like depth (ranked).
   const { q = '', limit = 10, mode = 'spoken' } = req.query || {};
@@ -205,25 +211,14 @@ module.exports = async function handler(req, res) {
     moli: ['மொழி', 'மொழியை', 'மொழியில்', 'மொழியால்', 'மொழிகள்', 'மொழியுடன்'],
     mozhi: ['மொழி', 'மொழியை', 'மொழியில்', 'மொழியால்', 'மொழிகள்', 'மொழியுடன்'],
   };
-  const target = `${base.replace(/\/+$/, '')}/api/v1/transliterate/suggest?q=${encodeURIComponent(
+  const target = `${base.replace(/\/+$/, '')}/transliterate/suggest?q=${encodeURIComponent(
     q
   )}&limit=${encodeURIComponent(limit)}&mode=${encodeURIComponent(mode)}`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
 
-  const headers = {
-    Accept: 'application/json',
-  };
-  const clientId = process.env.RUNNER_CLIENT_ID || 'prooftamil-frontend';
-  const apiKey = process.env.RUNNER_API_KEY;
-  headers['X-Client-Id'] = clientId;
-  if (apiKey) {
-    headers['X-API-Key'] = apiKey;
-    console.log('[Translit Proxy] Using X-API-Key header for client', clientId);
-  } else {
-    console.warn('[Translit Proxy] RUNNER_API_KEY not set; proceeding without X-API-Key');
-  }
+  const headers = { Accept: 'application/json' };
   // Never log secrets. (Cloud logs are long-lived and widely accessible.)
   console.log('[Translit Proxy] target:', target);
   console.log('[Translit Proxy] outbound headers:', {

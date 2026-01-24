@@ -1,14 +1,20 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"tamil-proofreading-platform/backend/internal/ime"
+	"tamil-proofreading-platform/backend/internal/models"
 	"tamil-proofreading-platform/backend/internal/translit"
+	"tamil-proofreading-platform/backend/internal/util/auditlog"
 
 	"github.com/gin-gonic/gin"
 )
@@ -108,6 +114,7 @@ func (h *Handlers) Transliterate(c *gin.Context) {
 func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
 	mode := strings.ToLower(strings.TrimSpace(c.Query("mode")))
+	prev := strings.TrimSpace(c.Query("prev"))
 	usageLabel := map[string]string{
 		"spoken":   "Spoken",
 		"formal":   "Written / Formal",
@@ -137,6 +144,28 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 			Suggestions: []map[string]interface{}{},
 		})
 		return
+	}
+
+	// Step 0: Try Node suggest service (primary) if configured.
+	if h.cfg != nil && strings.TrimSpace(h.cfg.SuggestServiceURL) != "" {
+		if out, ok := h.tryNodeSuggest(c, q, prev, mode, limit, usageLabel); ok {
+			c.JSON(http.StatusOK, out)
+			return
+		}
+	}
+
+	// Step 0.5: Fallback to Aksharamukha-backed IME service (Runner-style) if enabled.
+	if h.imeSvc != nil && h.imeEnabled {
+		ctx := c.Request.Context()
+		if reqID := c.GetString("request_id"); reqID != "" {
+			ctx = context.WithValue(ctx, "request_id", reqID)
+		}
+		cands, _ := h.imeSvc.Suggest(ctx, q, mode, limit)
+		if len(cands) > 0 {
+			mapped := mapCandidatesToSuggestResponse(q, usageLabel, cands)
+			c.JSON(http.StatusOK, mapped)
+			return
+		}
 	}
 
 	suggestions := translit.GetSuggestions(q)
@@ -182,6 +211,217 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 		Query:       q,
 		Suggestions: mapped,
 	})
+}
+
+type nodeSuggestResp struct {
+	Suggestions []struct {
+		Text  string  `json:"text"`
+		Score float64 `json:"score"`
+	} `json:"suggestions"`
+	Meta map[string]interface{} `json:"meta"`
+}
+
+func (h *Handlers) tryNodeSuggest(c *gin.Context, q, prev, mode string, limit int, usageLabel string) (TransliterateSuggestResponse, bool) {
+	base := strings.TrimSpace(h.cfg.SuggestServiceURL)
+	if base == "" {
+		return TransliterateSuggestResponse{}, false
+	}
+
+	u, err := url.Parse(base)
+	if err != nil {
+		return TransliterateSuggestResponse{}, false
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/api/suggest"
+	qs := u.Query()
+	qs.Set("q", q)
+	qs.Set("limit", strconv.Itoa(limit))
+	if mode != "" {
+		qs.Set("mode", mode)
+	}
+	if strings.TrimSpace(prev) != "" {
+		qs.Set("prev", prev)
+	}
+	u.RawQuery = qs.Encode()
+
+	client := &http.Client{Timeout: 250 * time.Millisecond}
+	req, _ := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, u.String(), nil)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil || resp == nil {
+		auditlog.Warn(c, "ime.node_suggest_error", map[string]any{"error": safeErr(err)})
+		return TransliterateSuggestResponse{}, false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		auditlog.Warn(c, "ime.node_suggest_status", map[string]any{"status": resp.StatusCode})
+		return TransliterateSuggestResponse{}, false
+	}
+
+	var parsed nodeSuggestResp
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		auditlog.Warn(c, "ime.node_suggest_decode_error", map[string]any{"error": safeErr(err)})
+		return TransliterateSuggestResponse{}, false
+	}
+	if len(parsed.Suggestions) == 0 {
+		return TransliterateSuggestResponse{}, false
+	}
+
+	// Convert scores to stable 0..1 scale (top=1.0)
+	max := 0.0
+	for _, s := range parsed.Suggestions {
+		if s.Score > max {
+			max = s.Score
+		}
+	}
+	mapped := make([]map[string]interface{}, 0, len(parsed.Suggestions))
+	for idx, s := range parsed.Suggestions {
+		word := strings.TrimSpace(s.Text)
+		if word == "" {
+			continue
+		}
+		sc := s.Score
+		if max > 0 {
+			sc = sc / max
+		}
+		// Round to 2 decimals for stable clients
+		sc = math.Round(sc*100) / 100
+		if idx == 0 {
+			sc = 1.0
+		}
+		mapped = append(mapped, map[string]interface{}{
+			"word":   word,
+			"ta":     word,
+			"score":  sc,
+			"rank":   idx + 1,
+			"label":  "Recommended",
+			"usage":  usageLabel,
+			"reason": "Corpus-ranked suggestion",
+		})
+		if len(mapped) >= limit {
+			break
+		}
+	}
+	if len(mapped) == 0 {
+		return TransliterateSuggestResponse{}, false
+	}
+
+	return TransliterateSuggestResponse{Success: true, Query: q, Suggestions: mapped}, true
+}
+
+func mapCandidatesToSuggestResponse(q, usageLabel string, cands []ime.Candidate) TransliterateSuggestResponse {
+	mapped := make([]map[string]interface{}, 0, len(cands))
+	max := 0.0
+	for _, c := range cands {
+		if c.Score > max {
+			max = c.Score
+		}
+	}
+	for idx, cnd := range cands {
+		word := strings.TrimSpace(cnd.Word)
+		if word == "" {
+			continue
+		}
+		sc := cnd.Score
+		if max > 0 {
+			sc = sc / max
+		}
+		sc = math.Round(sc*100) / 100
+		if idx == 0 {
+			sc = 1.0
+		}
+		mapped = append(mapped, map[string]interface{}{
+			"word":   word,
+			"ta":     word,
+			"score":  sc,
+			"rank":   idx + 1,
+			"label":  "Recommended",
+			"usage":  usageLabel,
+			"reason": "IME fallback suggestion",
+		})
+	}
+	return TransliterateSuggestResponse{Success: true, Query: q, Suggestions: mapped}
+}
+
+func safeErr(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+type TransliterateAcceptRequest struct {
+	Query    string  `json:"q" binding:"required"`
+	Selected string  `json:"selected" binding:"required"`
+	Prev     *string `json:"prev"`
+	Mode     string  `json:"mode"`
+}
+
+// TransliterateAccept records a token-level suggestion acceptance event.
+// Privacy: does NOT store full editor text.
+func (h *Handlers) TransliterateAccept(c *gin.Context) {
+	var req TransliterateAcceptRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"logged": false, "error": "Invalid request"})
+		return
+	}
+
+	q := strings.TrimSpace(req.Query)
+	selected := strings.TrimSpace(req.Selected)
+	if q == "" || selected == "" || len(q) > 60 || len(selected) > 200 {
+		c.JSON(http.StatusBadRequest, gin.H{"logged": false, "error": "Invalid values"})
+		return
+	}
+
+	mode := strings.TrimSpace(req.Mode)
+	if mode == "" {
+		mode = "spoken"
+	}
+
+	var uidPtr *uint
+	if v, ok := c.Get("user_id"); ok {
+		if uid, ok2 := v.(uint); ok2 && uid > 0 {
+			uidPtr = &uid
+		}
+	}
+
+	// DB optional: never break UX if DB is down.
+	if h.db == nil {
+		c.JSON(http.StatusOK, gin.H{"logged": false})
+		return
+	}
+
+	ev := models.SuggestionAcceptEvent{
+		UserID:    uidPtr,
+		Query:     q,
+		Selected:  selected,
+		Prev:      req.Prev,
+		Mode:      mode,
+		CreatedAt: time.Now(),
+	}
+	if err := h.db.Create(&ev).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"logged": false})
+		return
+	}
+
+	// Also log to the generic activity table (best-effort) for dashboard metrics.
+	if uidPtr != nil {
+		meta, _ := json.Marshal(map[string]any{
+			"q":        q,
+			"selected": selected,
+			"prev":     req.Prev,
+			"mode":     mode,
+		})
+		_ = h.db.Create(&models.ActivityEvent{
+			UserID:     *uidPtr,
+			EventType:  models.EventSuggestionAccept,
+			Metadata:   string(meta),
+			OccurredAt: time.Now(),
+		}).Error
+	}
+
+	c.JSON(http.StatusOK, gin.H{"logged": true})
 }
 
 // ValidateText handles POST /validate to return per-token Tamil suggestions
