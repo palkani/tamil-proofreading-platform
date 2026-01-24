@@ -333,6 +333,39 @@
       this.adapter.replaceRange(info.start, info.end, addSpace ? (ta + ' ') : ta);
       this.closeDropdown();
 
+      // Backend learning: always send token-level acceptance (anonymous-safe).
+      // This lets the backend build/repair its corpus over time (no full editor text).
+      try {
+        const token = (info && info.token) ? String(info.token) : '';
+        if (!token) return;
+
+        // Best-effort prev token (Tamil) for bigram boosting:
+        // Use the editor text BEFORE replacement range to find the last Tamil token.
+        let prev = null;
+        try {
+          const pre = this.adapter.getTextBeforeCaret ? String(this.adapter.getTextBeforeCaret() || '') : '';
+          const beforeToken = pre.slice(0, Math.max(0, pre.length - token.length));
+          const m = beforeToken.match(/[\u0B80-\u0BFF]+(?=\s*$)/);
+          if (m && m[0]) prev = m[0];
+        } catch (_e2) {}
+
+        const mode = (this.getMode && this.getMode()) ? String(this.getMode()) : 'spoken';
+        fetch('/api/v1/transliterate/accept', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            q: token.toLowerCase(),
+            selected: String(ta || ''),
+            prev,
+            mode,
+          }),
+          keepalive: true,
+        }).catch(() => {});
+      } catch (_e) {
+        // non-fatal
+      }
+
       // Anonymous-safe feedback (logged-in only): helps improve ranking over time.
       // We intentionally do NOT send full text, only the token + chosen word + mode.
       try {

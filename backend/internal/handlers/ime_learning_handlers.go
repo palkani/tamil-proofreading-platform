@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -21,6 +24,7 @@ func (h *Handlers) AggregateIMEAccepts(c *gin.Context) {
 	}
 
 	type Row struct {
+		Query    string
 		Selected string
 		Prev     *string
 		Mode     string
@@ -30,8 +34,8 @@ func (h *Handlers) AggregateIMEAccepts(c *gin.Context) {
 
 	// Aggregate all pending events. We delete them after a successful update to avoid double counting.
 	if err := h.db.Model(&models.SuggestionAcceptEvent{}).
-		Select("selected, prev, mode, COUNT(*) as cnt").
-		Group("selected, prev, mode").
+		Select("query, selected, prev, mode, COUNT(*) as cnt").
+		Group("query, selected, prev, mode").
 		Scan(&rows).Error; err != nil {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "error": "scan failed"})
 		return
@@ -46,6 +50,7 @@ func (h *Handlers) AggregateIMEAccepts(c *gin.Context) {
 	txErr := h.db.Transaction(func(tx *gorm.DB) error {
 		for _, r := range rows {
 			sel := strings.TrimSpace(r.Selected)
+			q := normalizeRomanToken(r.Query)
 			if sel == "" || r.Cnt <= 0 {
 				continue
 			}
@@ -61,14 +66,39 @@ func (h *Handlers) AggregateIMEAccepts(c *gin.Context) {
 				}
 			} else {
 				// Update all tamil_words rows matching tamil_text; also increment user_confirmed.
-				if err := tx.Model(&models.TamilWord{}).
+				res := tx.Model(&models.TamilWord{}).
 					Where("tamil_text = ?", sel).
 					Updates(map[string]any{
 						"frequency":      gorm.Expr("frequency + ?", r.Cnt),
 						"user_confirmed": gorm.Expr("user_confirmed + ?", r.Cnt),
 						"updated_at":     time.Now(),
-					}).Error; err != nil {
-					return err
+					})
+				if res.Error != nil {
+					return res.Error
+				}
+
+				// If the word doesn't exist in tamil_words yet, create a new row so the
+				// Node suggest service can load it into the in-memory index.
+				if res.RowsAffected == 0 && q != "" {
+					// tamil_words has a UNIQUE index on transliteration, so generate a stable unique key.
+					key := q + "_" + shortHash(sel)
+					obj := models.TamilWord{
+						TamilText:          sel,
+						Transliteration:    key,
+						AlternateSpellings: "[]",
+						Frequency:          int(r.Cnt),
+						Category:           models.CategoryCommon,
+						Meaning:            "",
+						Example:            "",
+						IsVerified:         false,
+						Source:             "user_accept",
+						UserConfirmed:      int(r.Cnt),
+					}
+					if err := tx.Create(&obj).Error; err != nil {
+						// Don't fail the whole batch if the unique key collides unexpectedly.
+						// Worst case: we still recorded the accept event and can retry next run.
+						continue
+					}
 				}
 			}
 
@@ -111,6 +141,25 @@ func (h *Handlers) AggregateIMEAccepts(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "processed": processed})
+}
+
+var romanTokenRe = regexp.MustCompile(`[^a-z']+`)
+
+func normalizeRomanToken(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return ""
+	}
+	s = romanTokenRe.ReplaceAllString(s, "")
+	if len(s) > 60 {
+		s = s[:60]
+	}
+	return s
+}
+
+func shortHash(s string) string {
+	sum := sha1.Sum([]byte(s))
+	return hex.EncodeToString(sum[:])[:8]
 }
 
 
