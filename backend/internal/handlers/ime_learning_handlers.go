@@ -23,6 +23,17 @@ func (h *Handlers) AggregateIMEAccepts(c *gin.Context) {
 		return
 	}
 
+	processed, err := h.aggregateIMEAccepts()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"ok": false, "error": "aggregation failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "processed": processed})
+}
+
+// aggregateIMEAccepts runs the aggregation logic and returns processed event count.
+// This is used by both HTTP endpoints and the internal background job.
+func (h *Handlers) aggregateIMEAccepts() (int, error) {
 	type Row struct {
 		Query    string
 		Selected string
@@ -37,13 +48,11 @@ func (h *Handlers) AggregateIMEAccepts(c *gin.Context) {
 		Select("query, selected, prev, mode, COUNT(*) as cnt").
 		Group("query, selected, prev, mode").
 		Scan(&rows).Error; err != nil {
-		c.JSON(http.StatusOK, gin.H{"ok": false, "error": "scan failed"})
-		return
+		return 0, err
 	}
 
 	if len(rows) == 0 {
-		c.JSON(http.StatusOK, gin.H{"ok": true, "processed": 0})
-		return
+		return 0, nil
 	}
 
 	processed := 0
@@ -136,11 +145,10 @@ func (h *Handlers) AggregateIMEAccepts(c *gin.Context) {
 	})
 
 	if txErr != nil {
-		c.JSON(http.StatusOK, gin.H{"ok": false, "error": "aggregation failed"})
-		return
+		return 0, txErr
 	}
 
-	c.JSON(http.StatusOK, gin.H{"ok": true, "processed": processed})
+	return processed, nil
 }
 
 var romanTokenRe = regexp.MustCompile(`[^a-z']+`)

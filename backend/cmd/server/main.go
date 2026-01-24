@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -245,6 +246,14 @@ func main() {
 		admin.GET("/analytics-dashboard", h.GetAnalyticsDashboard)
 		// IME learning aggregation endpoint (run periodically)
 		admin.POST("/ime/aggregate", h.AggregateIMEAccepts)
+	}
+
+	// Internal job endpoints (secured by shared secret; no user session required)
+	jobSecret := strings.TrimSpace(os.Getenv("IME_AGGREGATE_SECRET"))
+	internalJobs := api.Group("/internal")
+	internalJobs.Use(middleware.InternalJobSecretMiddleware(jobSecret))
+	{
+		internalJobs.POST("/ime/aggregate", h.AggregateIMEAccepts)
 	}
 
 	log.Printf("[SUCCESS] All routes registered")

@@ -66,6 +66,7 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	}
 
 	h.startArchiveCleanup()
+	h.startIMEAggregateJob()
 
 	return h
 }
