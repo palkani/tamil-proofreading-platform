@@ -132,7 +132,7 @@ func GetSuggestions(input string) []Suggestion {
                                 continue
                         }
                         out = append(out, s)
-                        if len(out) >= 5 {
+                        if len(out) >= 10 {
                                 break
                         }
                 }

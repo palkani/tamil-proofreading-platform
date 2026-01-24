@@ -1,32 +1,33 @@
 package handlers
 
 import (
-        "log"
-        "net/http"
-        "strconv"
-        "strings"
-        "time"
+	"log"
+	"math"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
-        "tamil-proofreading-platform/backend/internal/translit"
+	"tamil-proofreading-platform/backend/internal/translit"
 
-        "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
 )
 
 type TransliterateRequest struct {
-        Text string `json:"text" binding:"required"`
+	Text string `json:"text" binding:"required"`
 }
 
 type TransliterateResponse struct {
-        Success     bool                   `json:"success"`
-        Suggestions []translit.Suggestion  `json:"suggestions"`
-        Error       string                 `json:"error,omitempty"`
+	Success     bool                  `json:"success"`
+	Suggestions []translit.Suggestion `json:"suggestions"`
+	Error       string                `json:"error,omitempty"`
 }
 
 type TransliterateSuggestResponse struct {
-	Success     bool                      `json:"success"`
-	Query       string                    `json:"query"`
-	Suggestions []map[string]interface{}  `json:"suggestions"`
-	Error       string                    `json:"error,omitempty"`
+	Success     bool                     `json:"success"`
+	Query       string                   `json:"query"`
+	Suggestions []map[string]interface{} `json:"suggestions"`
+	Error       string                   `json:"error,omitempty"`
 }
 
 type ValidateRequest struct {
@@ -35,72 +36,72 @@ type ValidateRequest struct {
 }
 
 type ValidateTokenSuggestion struct {
-	Original    string                    `json:"original"`
-	Start       int                       `json:"start"`
-	End         int                       `json:"end"`
-	Category    string                    `json:"category"`
-	Severity    string                    `json:"severity"`
-	Suggestions []map[string]interface{}  `json:"suggestions"`
+	Original    string                   `json:"original"`
+	Start       int                      `json:"start"`
+	End         int                      `json:"end"`
+	Category    string                   `json:"category"`
+	Severity    string                   `json:"severity"`
+	Suggestions []map[string]interface{} `json:"suggestions"`
 }
 
 type ValidateResponse struct {
-	Success bool                     `json:"success"`
-	Summary map[string]interface{}   `json:"summary,omitempty"`
+	Success bool                      `json:"success"`
+	Summary map[string]interface{}    `json:"summary,omitempty"`
 	Tokens  []ValidateTokenSuggestion `json:"tokens"`
-	Error   string                   `json:"error,omitempty"`
+	Error   string                    `json:"error,omitempty"`
 }
 
 // Transliterate handles English to Tamil transliteration
 func (h *Handlers) Transliterate(c *gin.Context) {
-        log.Printf("[TRANSLIT-HANDLER] Received transliteration request")
+	log.Printf("[TRANSLIT-HANDLER] Received transliteration request")
 
-        var req TransliterateRequest
-        if err := c.ShouldBindJSON(&req); err != nil {
-                log.Printf("[TRANSLIT-HANDLER] ERROR: Invalid JSON: %v", err)
-                c.JSON(http.StatusBadRequest, TransliterateResponse{
-                        Success: false,
-                        Error:   "Invalid request format",
-                })
-                return
-        }
+	var req TransliterateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[TRANSLIT-HANDLER] ERROR: Invalid JSON: %v", err)
+		c.JSON(http.StatusBadRequest, TransliterateResponse{
+			Success: false,
+			Error:   "Invalid request format",
+		})
+		return
+	}
 
-        englishText := strings.TrimSpace(req.Text)
-        log.Printf("[TRANSLIT-HANDLER] Input text: %q (len=%d)", englishText, len(englishText))
+	englishText := strings.TrimSpace(req.Text)
+	log.Printf("[TRANSLIT-HANDLER] Input text: %q (len=%d)", englishText, len(englishText))
 
-        if englishText == "" {
-                log.Printf("[TRANSLIT-HANDLER] ERROR: Empty text")
-                c.JSON(http.StatusBadRequest, TransliterateResponse{
-                        Success: false,
-                        Error:   "Text is required",
-                })
-                return
-        }
+	if englishText == "" {
+		log.Printf("[TRANSLIT-HANDLER] ERROR: Empty text")
+		c.JSON(http.StatusBadRequest, TransliterateResponse{
+			Success: false,
+			Error:   "Text is required",
+		})
+		return
+	}
 
-        if len(englishText) > 40 {
-                log.Printf("[TRANSLIT-HANDLER] ERROR: Text too long: %d chars", len(englishText))
-                c.JSON(http.StatusBadRequest, TransliterateResponse{
-                        Success: false,
-                        Error:   "Text must be 40 characters or less",
-                })
-                return
-        }
+	if len(englishText) > 40 {
+		log.Printf("[TRANSLIT-HANDLER] ERROR: Text too long: %d chars", len(englishText))
+		c.JSON(http.StatusBadRequest, TransliterateResponse{
+			Success: false,
+			Error:   "Text must be 40 characters or less",
+		})
+		return
+	}
 
-        // Get in-memory transliteration suggestions
-        suggestions := translit.GetSuggestions(englishText)
-        if len(suggestions) == 0 {
-                log.Printf("[TRANSLIT-HANDLER] No suggestions found for %q", englishText)
-                c.JSON(http.StatusOK, TransliterateResponse{
-                        Success:     true,
-                        Suggestions: []translit.Suggestion{},
-                })
-                return
-        }
+	// Get in-memory transliteration suggestions
+	suggestions := translit.GetSuggestions(englishText)
+	if len(suggestions) == 0 {
+		log.Printf("[TRANSLIT-HANDLER] No suggestions found for %q", englishText)
+		c.JSON(http.StatusOK, TransliterateResponse{
+			Success:     true,
+			Suggestions: []translit.Suggestion{},
+		})
+		return
+	}
 
-        log.Printf("[TRANSLIT-HANDLER] SUCCESS: %d suggestions for %q", len(suggestions), englishText)
-        c.JSON(http.StatusOK, TransliterateResponse{
-                Success:     true,
-                Suggestions: suggestions,
-        })
+	log.Printf("[TRANSLIT-HANDLER] SUCCESS: %d suggestions for %q", len(suggestions), englishText)
+	c.JSON(http.StatusOK, TransliterateResponse{
+		Success:     true,
+		Suggestions: suggestions,
+	})
 }
 
 // TransliterateSuggest handles GET /transliterate/suggest?q=...
@@ -116,14 +117,14 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 		usageLabel = "Both"
 	}
 	limitStr := strings.TrimSpace(c.Query("limit"))
-	// UI policy: top 5 suggestions (ranked)
+	// UI policy: Google-IME-like depth (ranked). Default 10, allow up to 20.
 	limit := 10
 	if limitStr != "" {
-		// Keep external callers safe: cap to 5 even if they request more.
 		if v, err := strconv.Atoi(limitStr); err == nil && v > 0 {
-			if v < limit {
-				limit = v
+			if v > 20 {
+				v = 20
 			}
+			limit = v
 		}
 	}
 
@@ -143,10 +144,27 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 		suggestions = suggestions[:limit]
 	}
 
+	// Normalize scores so the top suggestion is always 1.0 (stable ranking for clients).
+	maxScore := 0.0
+	for _, s := range suggestions {
+		if s.Score > maxScore {
+			maxScore = s.Score
+		}
+	}
+	if maxScore > 0 {
+		for i := range suggestions {
+			suggestions[i].Score = math.Round((suggestions[i].Score/maxScore)*100) / 100
+			if i == 0 {
+				suggestions[i].Score = 1.0
+			}
+		}
+	}
+
 	// Map to rich metadata
 	mapped := make([]map[string]interface{}, 0, len(suggestions))
 	for idx, s := range suggestions {
 		mapped = append(mapped, map[string]interface{}{
+			"word":   s.Word,
 			"ta":     s.Word,
 			"score":  s.Score,
 			"rank":   idx + 1,
@@ -156,7 +174,8 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 		})
 	}
 
-	log.Printf("[SUGGEST] q=%q count=%d", q, len(suggestions))
+	// Avoid logging raw user tokens in production logs.
+	log.Printf("[SUGGEST] len=%d count=%d mode=%s", len(q), len(suggestions), mode)
 
 	c.JSON(http.StatusOK, TransliterateSuggestResponse{
 		Success:     true,
@@ -222,13 +241,13 @@ func (h *Handlers) ValidateText(c *gin.Context) {
 			mapped := make([]map[string]interface{}, 0, len(suggestions))
 			for idx, s := range suggestions {
 				mapped = append(mapped, map[string]interface{}{
-					"ta":     s.Word,
-					"score":  s.Score,
-					"reason": "Transliteration improvement",
+					"ta":      s.Word,
+					"score":   s.Score,
+					"reason":  "Transliteration improvement",
 					"example": "",
-					"usage":  usageLabel,
-					"label":  "Recommended",
-					"rank":   idx + 1,
+					"usage":   usageLabel,
+					"label":   "Recommended",
+					"rank":    idx + 1,
 				})
 			}
 
@@ -254,6 +273,6 @@ func (h *Handlers) ValidateText(c *gin.Context) {
 			"confidence":   "High",
 			"mode":         req.Mode,
 		},
-		Tokens:  tokens,
-        })
+		Tokens: tokens,
+	})
 }

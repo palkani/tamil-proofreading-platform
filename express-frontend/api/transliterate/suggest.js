@@ -197,6 +197,13 @@ module.exports = async function handler(req, res) {
     // Provide stable top-3 to match Google-IME-style UX.
     tamilan: ['தமிழன்', 'தமிழர்', 'தமிழ்'],
     tamilar: ['தமிழர்', 'தமிழன்', 'தமிழ்'],
+
+    // Google-IME-like variants for very common nouns
+    nanban: ['நண்பன்', 'நண்பா', 'நண்பனை', 'நண்பனே', 'நண்பர்', 'நண்பர்கள்', 'நண்பனுக்கு', 'நண்பனுடன்', 'நண்பனிடம்', 'நண்பனுடைய'],
+
+    // மொழி / mozhi: avoid invalid "மொலி"
+    moli: ['மொழி', 'மொழியை', 'மொழியில்', 'மொழியால்', 'மொழிகள்', 'மொழியுடன்'],
+    mozhi: ['மொழி', 'மொழியை', 'மொழியில்', 'மொழியால்', 'மொழிகள்', 'மொழியுடன்'],
   };
   const target = `${base.replace(/\/+$/, '')}/api/v1/transliterate/suggest?q=${encodeURIComponent(
     q
