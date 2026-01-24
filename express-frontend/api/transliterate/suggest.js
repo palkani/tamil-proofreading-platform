@@ -191,6 +191,12 @@ module.exports = async function handler(req, res) {
     // "enpathu" family (ranking like competitor: top-5 with descending scores)
     // Useful for "என்பது" vs "எண்பது" vs "எண்பத்து" etc.
     enpathu: ['என்பது', 'எண்பது', 'எண்பத்து', 'என்பத்து', 'எண்பது\u200c'],
+
+    // Common identity words
+    // "tamilan" is often intended as "தமிழன்" (Tamil person/man), but users may also want the base "தமிழ்".
+    // Provide stable top-3 to match Google-IME-style UX.
+    tamilan: ['தமிழன்', 'தமிழர்', 'தமிழ்'],
+    tamilar: ['தமிழர்', 'தமிழன்', 'தமிழ்'],
   };
   const target = `${base.replace(/\/+$/, '')}/api/v1/transliterate/suggest?q=${encodeURIComponent(
     q

@@ -20,6 +20,7 @@
       this.activeIndex = 0;
       this.latestToken = null;
       this.latestInfo = null;
+      this.docKeyHandler = null;
 
       this.handleInput = this.handleInput.bind(this);
       this.handleKeydown = this.handleKeydown.bind(this);
@@ -52,6 +53,8 @@
 
     handleKeydown(e) {
       if (!this.dropdown) return;
+      // Mark handled to prevent any other listeners from double-committing.
+      try { e.__translitHandled = true; } catch (_e) {}
       const items = Array.from(this.dropdown.querySelectorAll('[data-idx]'));
       if (!items.length) return;
       if (e.key === 'ArrowDown') {
@@ -274,6 +277,22 @@
       this.dropdown = dropdown;
       this.activeIndex = 0;
       this.highlight(Array.from(dropdown.querySelectorAll('[data-idx]')));
+
+      // IMPORTANT: If the user clicks/hovers the dropdown, the editor may lose focus.
+      // In that case, keydown events won't reach the editor. Capture keydowns at the document
+      // level while the dropdown is open so Space/Enter still commits the suggestion.
+      if (!this.docKeyHandler) {
+        this.docKeyHandler = (e) => {
+          if (!this.dropdown) return;
+          if (e.defaultPrevented) return;
+          if (e.__translitHandled) return;
+          // Only handle the keys we support, otherwise don't interfere with other shortcuts.
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Tab' || e.key === ' ' || e.key === 'Escape') {
+            this.handleKeydown(e);
+          }
+        };
+        document.addEventListener('keydown', this.docKeyHandler, true);
+      }
     }
 
     highlight(items) {
@@ -355,6 +374,10 @@
       }
       this.dropdown = null;
       this.activeIndex = 0;
+      if (this.docKeyHandler) {
+        try { document.removeEventListener('keydown', this.docKeyHandler, true); } catch (_e) {}
+        this.docKeyHandler = null;
+      }
     }
   }
 
