@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -354,9 +355,33 @@ func (h *Handlers) tryRunnerSuggest(c *gin.Context, q, prev, mode string, limit 
 	}
 	u.RawQuery = qs.Encode()
 
-	client := &http.Client{Timeout: 900 * time.Millisecond}
+	// Runner suggest can take >1s on cold starts and for longer tokens.
+	// If this timeout is too aggressive, we silently fall back to the local lexicon,
+	// which dramatically reduces suggestion quality (e.g., "amma" -> only "ஆ").
+	client := &http.Client{Timeout: 4 * time.Second}
 	req, _ := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, u.String(), nil)
 	req.Header.Set("Accept", "application/json")
+	// ProofTamilRunner requires auth headers on all endpoints except /health.
+	// Keep the same env var names as the IME client:
+	// - RUNNER_CLIENT_ID / CLIENT_ID
+	// - RUNNER_API_KEY / API_KEY
+	clientID := strings.TrimSpace(os.Getenv("RUNNER_CLIENT_ID"))
+	if clientID == "" {
+		clientID = strings.TrimSpace(os.Getenv("CLIENT_ID"))
+	}
+	if clientID == "" {
+		clientID = "prooftamil-backend"
+	}
+	apiKey := strings.TrimSpace(os.Getenv("RUNNER_API_KEY"))
+	if apiKey == "" {
+		apiKey = strings.TrimSpace(os.Getenv("API_KEY"))
+	}
+	if clientID != "" {
+		req.Header.Set("X-Client-Id", clientID)
+	}
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil || resp == nil {

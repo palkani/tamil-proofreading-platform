@@ -185,6 +185,8 @@ module.exports = async function handler(req, res) {
     // Very common function words
     enna: ['என்ன'],
     namma: ['நம்ம'],
+    // Very common kinship terms (avoid partial/junk outputs like "அம்ம")
+    amma: ['அம்மா', 'அம்மாவை', 'அம்மாவின்', 'அம்மாவுக்கு', 'அம்மாவுடன்', 'அம்மாவிடம்', 'அம்மாவுடைய', 'அம்மாக்கள்'],
     // எனது (my)
     enathu: ['எனது'],
     enadu: ['எனது'],
