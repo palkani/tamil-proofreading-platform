@@ -21,6 +21,8 @@
       this.latestToken = null;
       this.latestInfo = null;
       this.docKeyHandler = null;
+      this.currentKey = null;
+      this.requestSeq = 0;
 
       this.handleInput = this.handleInput.bind(this);
       this.handleKeydown = this.handleKeydown.bind(this);
@@ -102,11 +104,20 @@
         this.closeDropdown();
         this.latestToken = null;
         this.latestInfo = null;
+        this.currentKey = null;
         return;
       }
       const mode = this.getMode() || 'spoken';
       // Key by mode + token, so switching style reliably refreshes suggestions.
       const key = `${mode}:${info.token}`;
+
+      // If token changed, immediately close the old dropdown so stale suggestions never "overlap"
+      // while we fetch the new list.
+      if (this.currentKey && this.currentKey !== key) {
+        this.closeDropdown();
+      }
+      this.currentKey = key;
+
       if (this.latestToken === key) {
         // Still update latestInfo; caret can move even if token is same.
         this.latestInfo = info;
@@ -134,6 +145,7 @@
       // Only abort here (after debounce + cache miss), to reduce noisy "canceled" requests in DevTools.
       if (this.abortController) this.abortController.abort();
       this.abortController = new AbortController();
+      const seq = ++this.requestSeq;
       if (IS_DEV) {
         console.debug("[TRANSLITERATOR] CALLING RUNNER", { text: info.token, mode, limit: MAX });
       }
@@ -149,6 +161,8 @@
           return;
         }
         const data = await window.transliterateViaRunner(info.token, mode, MAX, this.abortController.signal);
+        // Ignore out-of-order responses (prevents stale dropdowns after rapid delete/retype).
+        if (seq !== this.requestSeq) return;
         const items = this.normalize(data);
         this.cache.set(key, { items, ts: Date.now() });
         this.log('response', { status: 'ok', count: items.length });

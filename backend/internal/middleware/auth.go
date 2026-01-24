@@ -24,9 +24,9 @@ type Claims struct {
 func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
-		// TEMP debug log
+		// Never log raw Authorization headers (can leak tokens in logs).
 		if authHeader != "" {
-			log.Printf("[AUTH] authorization header: %s", authHeader)
+			log.Printf("[AUTH] authorization header: <present>")
 		} else {
 			log.Printf("[AUTH] authorization header: <empty>")
 		}

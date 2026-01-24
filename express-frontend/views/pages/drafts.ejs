@@ -536,7 +536,11 @@
     }
     
     headers['Authorization'] = `Bearer ${accessToken}`;
-    console.log('[DRAFTS] ✅ Adding Authorization header with valid token');
+    try {
+      (window.logger && window.logger.debug)
+        ? window.logger.debug('[DRAFTS] Adding Authorization header with valid token')
+        : console.debug('[DRAFTS] Adding Authorization header with valid token');
+    } catch (_e) {}
     try {
       console.log('[DRAFTS] Token length:', accessToken.length);
       console.log('[DRAFTS] Token preview (first 50 chars):', accessToken.substring(0, 50));

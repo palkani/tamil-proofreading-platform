@@ -217,8 +217,13 @@ module.exports = async function handler(req, res) {
   } else {
     console.warn('[Translit Proxy] RUNNER_API_KEY not set; proceeding without X-API-Key');
   }
+  // Never log secrets. (Cloud logs are long-lived and widely accessible.)
   console.log('[Translit Proxy] target:', target);
-  console.log('[Translit Proxy] outbound headers:', headers);
+  console.log('[Translit Proxy] outbound headers:', {
+    Accept: headers.Accept,
+    'X-Client-Id': headers['X-Client-Id'],
+    'X-API-Key': headers['X-API-Key'] ? '[REDACTED]' : undefined,
+  });
 
   try {
     const resp = await fetch(target, {
