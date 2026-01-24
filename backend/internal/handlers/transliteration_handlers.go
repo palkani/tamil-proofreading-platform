@@ -154,7 +154,15 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 		}
 	}
 
-	// Step 0.5: Fallback to Aksharamukha-backed IME service (Runner-style) if enabled.
+	// Step 0.5: Fallback to ProofTamilRunner suggest API (production IME behavior).
+	if h.cfg != nil && strings.TrimSpace(h.cfg.TransliteratorBaseURL) != "" {
+		if out, ok := h.tryRunnerSuggest(c, q, prev, mode, limit, usageLabel); ok {
+			c.JSON(http.StatusOK, out)
+			return
+		}
+	}
+
+	// Step 0.6: Fallback to Aksharamukha-backed IME service (older IME path) if enabled.
 	if h.imeSvc != nil && h.imeEnabled {
 		ctx := c.Request.Context()
 		if reqID := c.GetString("request_id"); reqID != "" {
@@ -307,6 +315,107 @@ func (h *Handlers) tryNodeSuggest(c *gin.Context, q, prev, mode string, limit in
 		return TransliterateSuggestResponse{}, false
 	}
 
+	return TransliterateSuggestResponse{Success: true, Query: q, Suggestions: mapped}, true
+}
+
+type runnerSuggestResp struct {
+	Success     bool `json:"success"`
+	Suggestions []struct {
+		Word  string  `json:"word"`
+		Score float64 `json:"score"`
+	} `json:"suggestions"`
+	Meta map[string]interface{} `json:"meta"`
+}
+
+func (h *Handlers) tryRunnerSuggest(c *gin.Context, q, prev, mode string, limit int, usageLabel string) (TransliterateSuggestResponse, bool) {
+	base := strings.TrimSpace(h.cfg.TransliteratorBaseURL)
+	if base == "" {
+		return TransliterateSuggestResponse{}, false
+	}
+	base = strings.TrimRight(base, "/")
+	// Keep compatibility: runner exposes /api/v1/transliterate/suggest
+	if !strings.HasSuffix(base, "/api/v1") {
+		base = base + "/api/v1"
+	}
+
+	u, err := url.Parse(base)
+	if err != nil {
+		return TransliterateSuggestResponse{}, false
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/transliterate/suggest"
+	qs := u.Query()
+	qs.Set("q", q)
+	qs.Set("limit", strconv.Itoa(limit))
+	if mode != "" {
+		qs.Set("mode", mode)
+	}
+	if strings.TrimSpace(prev) != "" {
+		qs.Set("prev", prev)
+	}
+	u.RawQuery = qs.Encode()
+
+	client := &http.Client{Timeout: 900 * time.Millisecond}
+	req, _ := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, u.String(), nil)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil || resp == nil {
+		auditlog.Warn(c, "ime.runner_suggest_error", map[string]any{"error": safeErr(err)})
+		return TransliterateSuggestResponse{}, false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		auditlog.Warn(c, "ime.runner_suggest_status", map[string]any{"status": resp.StatusCode})
+		return TransliterateSuggestResponse{}, false
+	}
+
+	var parsed runnerSuggestResp
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		auditlog.Warn(c, "ime.runner_suggest_decode_error", map[string]any{"error": safeErr(err)})
+		return TransliterateSuggestResponse{}, false
+	}
+	if !parsed.Success || len(parsed.Suggestions) == 0 {
+		return TransliterateSuggestResponse{}, false
+	}
+
+	// Normalize scores so top=1.0 (stable for clients)
+	max := 0.0
+	for _, s := range parsed.Suggestions {
+		if s.Score > max {
+			max = s.Score
+		}
+	}
+	mapped := make([]map[string]interface{}, 0, len(parsed.Suggestions))
+	for idx, s := range parsed.Suggestions {
+		word := strings.TrimSpace(s.Word)
+		if word == "" {
+			continue
+		}
+		sc := s.Score
+		if max > 0 {
+			sc = sc / max
+		}
+		sc = math.Round(sc*100) / 100
+		if idx == 0 {
+			sc = 1.0
+		}
+		mapped = append(mapped, map[string]interface{}{
+			"word":   word,
+			"ta":     word,
+			"score":  sc,
+			"rank":   idx + 1,
+			"label":  "Recommended",
+			"usage":  usageLabel,
+			"reason": "Runner IME suggestion",
+		})
+		if len(mapped) >= limit {
+			break
+		}
+	}
+	if len(mapped) == 0 {
+		return TransliterateSuggestResponse{}, false
+	}
 	return TransliterateSuggestResponse{Success: true, Query: q, Suggestions: mapped}, true
 }
 
