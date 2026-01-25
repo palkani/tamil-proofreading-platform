@@ -1451,20 +1451,26 @@ class HomeEditor {
         const reason = c.reason || '';
         const type = c.type || 'grammar';
         const start = c.start_index ?? c.startIndex ?? c.start ?? '';
-        const key = `${normalizeComparable(type).toLowerCase()}|${normalizeComparable(original)}|${normalizeComparable(corrected)}|${normalizeComparable(reason)}|${start}`;
+        // Use unique key WITHOUT start position to detect true duplicates
+        const key = `${normalizeComparable(type).toLowerCase()}|${normalizeComparable(original)}|${normalizeComparable(corrected)}|${normalizeComparable(reason)}`;
         return {
           id: `home-${hashString(key) || index}`,
           original,
           corrected,
           reason,
           type,
+          start_index: start,
           alternatives: [],
         };
       });
+      // Deduplicate based on ID (which doesn't include position)
       const seen = new Set();
       return mapped.filter((s) => {
         if (!s?.id) return false;
-        if (seen.has(s.id)) return false;
+        if (seen.has(s.id)) {
+          console.log('[DEDUPE] Removing duplicate suggestion:', s.original, '→', s.corrected);
+          return false;
+        }
         seen.add(s.id);
         return true;
       });
