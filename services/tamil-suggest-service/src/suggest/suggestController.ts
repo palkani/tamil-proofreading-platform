@@ -4,10 +4,12 @@ import { expandPhonetic } from "./phoneticEngine.js";
 import { PrefixIndex } from "./prefixSearch.js";
 import { scoreCandidate, toSuggestion } from "./ranker.js";
 import { BigramRow, CorpusItem, Suggestion } from "./types.js";
+import { getBigramBoost, getPhraseBonus } from "./contextBoost.js";
 
 export type SuggestEngine = {
   index: PrefixIndex;
   bigramMap: Map<string, Map<string, number>>; // prev -> next -> freq
+  acceptanceMap?: Map<string, Map<string, number>>; // input -> selected -> count
   ready: boolean;
   source: string;
 };
@@ -17,13 +19,23 @@ export function registerSuggestRoutes(app: FastifyInstance, engine: SuggestEngin
     const t0 = performance.now();
     const qRaw = String((req.query as any)?.q ?? "");
     const prev = String((req.query as any)?.prev ?? "");
-    const limit = clampInt((req.query as any)?.limit, 10, 1, 20);
+    const limit = clampInt((req.query as any)?.limit, 5, 1, 10); // default 5, max 10
 
     const q = normalizeRoman(qRaw);
     if (!q) {
-      return reply.status(200).send({ suggestions: [], meta: { q: qRaw, limit, took_ms: 0, source: engine.source } });
+      return reply.status(200).send({ 
+        suggestions: [], 
+        meta: { 
+          q: qRaw, 
+          limit, 
+          took_ms: 0, 
+          source: engine.source,
+          usedLLM: false
+        } 
+      });
     }
 
+    // Phonetic expansion with beam search
     const phonetics = expandPhonetic(q, { maxCandidates: 20, beamWidth: 24 });
 
     // Prefix lookup and aggregate candidates
@@ -44,21 +56,40 @@ export function registerSuggestRoutes(app: FastifyInstance, engine: SuggestEngin
       if (pool.length >= 400) break;
     }
 
-    // Rank
-    const bigrams = prev ? engine.bigramMap.get(prev) : undefined;
+    // Enhanced ranking with 5-factor scoring
     const ranked: Suggestion[] = pool
       .map(({ item, phoneticScore }) => {
-        const bigramBoost = bigrams?.get(item.text) || 0;
-        const score = scoreCandidate({ phoneticScore, freq: item.frequency, bigramBoost });
-        return toSuggestion(item, score, { kind: item.kind });
+        // Calculate all scoring factors
+        const bigramBoost = prev ? getBigramBoost(item.text, prev, engine.bigramMap) : 0;
+        const phraseBonus = getPhraseBonus(item.text, item.kind);
+        const acceptanceBonus = 0; // TODO: Load from acceptanceMap if available
+        
+        // Apply production ranking formula
+        const score = scoreCandidate({ 
+          phoneticScore, 
+          freq: item.frequency, 
+          bigramBoost,
+          phraseBonus,
+          acceptanceBonus
+        });
+        
+        return toSuggestion(item, score, { 
+          kind: item.kind,
+          bigramBoost,
+          phraseBonus,
+          acceptanceBonus
+        });
       })
       .sort((a, b) => b.score - a.score || a.text.localeCompare(b.text, "ta"));
 
-    // Fallback: if corpus empty, return phonetic prefixes (still useful for diagnostics)
+    // Fallback: if corpus empty, return phonetic prefixes (diagnostic mode)
     const out =
       ranked.slice(0, limit).length > 0
         ? ranked.slice(0, limit)
-        : phonetics.slice(0, limit).map((p, idx) => ({ text: p.tamilPrefix, score: Math.round((p.phoneticScore * 100 - idx) * 100) / 100 }));
+        : phonetics.slice(0, limit).map((p, idx) => ({ 
+            text: p.tamilPrefix, 
+            score: Math.round((p.phoneticScore * 100 - idx) * 100) / 100 
+          }));
 
     const took = performance.now() - t0;
     return reply.status(200).send({
@@ -68,10 +99,11 @@ export function registerSuggestRoutes(app: FastifyInstance, engine: SuggestEngin
         q_raw: qRaw,
         prev: prev || undefined,
         limit,
-        phonetic_candidates: phonetics.length,
-        pool_size: pool.length,
+        branches: phonetics.length,
+        candidates: pool.length,
         source: engine.source,
         took_ms: Math.round(took * 100) / 100,
+        usedLLM: false // LLM disabled by default
       },
     });
   });
