@@ -33,8 +33,9 @@ WORKDIR /root/
 # Copy built binary from builder
 COPY --from=builder /app/server .
 
-# Copy lexicon/frequency data
+# Copy lexicon/frequency data + seed SQL
 COPY data ./data
+COPY backend/seed_corpus_minimal.sql ./seed_corpus_minimal.sql
 
 # Expose port
 EXPOSE 8080

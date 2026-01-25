@@ -16,6 +16,7 @@ import (
 	"tamil-proofreading-platform/backend/internal/migrations"
 	"tamil-proofreading-platform/backend/internal/middleware"
 	"tamil-proofreading-platform/backend/internal/models"
+	"tamil-proofreading-platform/backend/internal/suggest"
 	"tamil-proofreading-platform/backend/internal/translit"
 )
 
@@ -153,6 +154,13 @@ func main() {
 			} else {
 				log.Printf("[SUCCESS] ContactMessage schema verified (user_id nullable)")
 			}
+		}
+	}
+
+	// Optional: seed minimal corpus on startup if DB is empty (deployment convenience).
+	if db != nil && cfg.SeedCorpusOnStartup {
+		if err := suggest.SeedCorpusIfEmpty(db, cfg.SeedCorpusFile, cfg.SeedCorpusMinCount); err != nil {
+			log.Printf("[SEED] Corpus seed failed: %v", err)
 		}
 	}
 

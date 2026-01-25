@@ -52,6 +52,9 @@ type Config struct {
 	SuggestVowelCollapse      bool
 	RedisURL                  string
 	SuggestRedisTimeoutMS     int
+	SeedCorpusOnStartup       bool
+	SeedCorpusFile            string
+	SeedCorpusMinCount        int
 }
 
 func Load() *Config {
@@ -145,6 +148,9 @@ func Load() *Config {
 		SuggestVowelCollapse:   strings.ToLower(getEnv("SUGGEST_VOWEL_COLLAPSE", "false")) == "true",
 		RedisURL:               strings.TrimSpace(getEnv("REDIS_URL", "")),
 		SuggestRedisTimeoutMS:  getEnvAsInt("SUGGEST_REDIS_TIMEOUT_MS", 25),
+		SeedCorpusOnStartup:    strings.ToLower(getEnv("SEED_CORPUS_ON_STARTUP", "false")) == "true",
+		SeedCorpusFile:         strings.TrimSpace(getEnv("SEED_CORPUS_FILE", "/root/seed_corpus_minimal.sql")),
+		SeedCorpusMinCount:     getEnvAsInt("SEED_CORPUS_MIN_COUNT", 1),
 	}
 }
 
