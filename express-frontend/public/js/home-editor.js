@@ -1876,8 +1876,10 @@ class HomeEditor {
       return;
     }
     
-    // Highlight errors in editor
-    this.highlightErrorsInEditor(suggestions);
+    // CRITICAL FIX: DISABLE highlighting to prevent cursor/text manipulation
+    // Highlighting was causing reverse text by destroying DOM structure
+    // this.highlightErrorsInEditor(suggestions);
+    console.log('[DISPLAY] ⚠️ Highlighting DISABLED to prevent text manipulation');
     
     // Get current text to check if editor is empty
     const currentText = this.getPlainText().trim();
