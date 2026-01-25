@@ -771,9 +771,10 @@ func parseProofreadJSON(raw string) (string, []Suggestion, []Change, []string, b
                 return "", nil, nil, nil, false
         }
 
-        corrected, suggestions, changes, alternatives := extractFromInterface(data)
-        ok := corrected != "" || len(suggestions) > 0 || len(changes) > 0 || len(alternatives) > 0
-        return corrected, suggestions, changes, alternatives, ok
+	corrected, suggestions, changes, alternatives := extractFromInterface(data)
+	// Empty response is VALID - means no corrections needed
+	// Return ok=true as long as we successfully parsed the JSON
+	return corrected, suggestions, changes, alternatives, true
 }
 
 // repairProofreadJSON tries to salvage a partially truncated JSON response by:
@@ -1135,27 +1136,29 @@ func (s *LLMService) proofreadWithOpenAI(ctx context.Context, cleaned string, re
                 return nil, &ProviderError{Provider: "openai", Message: "no choices returned", Retryable: true}
         }
 
-        content := resp.Choices[0].Message.Content
-        corrected, suggestions, changes, alternatives, ok := parseProofreadJSON(content)
-        if !ok {
-                return nil, &ProviderError{Provider: "openai", Message: "failed to parse JSON", Retryable: true}
-        }
-        if corrected == "" {
-                corrected = cleaned
-        }
-        if len(suggestions) == 0 && corrected != cleaned {
-                suggestions = detectChangesFromText(cleaned, corrected)
-        }
-        suggestions = fillSuggestionIndices(cleaned, suggestions)
+	content := resp.Choices[0].Message.Content
+	corrected, suggestions, changes, alternatives, ok := parseProofreadJSON(content)
+	if !ok {
+		return nil, &ProviderError{Provider: "openai", Message: "failed to parse JSON", Retryable: true}
+	}
+	// Empty response is VALID - means no corrections needed
+	if corrected == "" {
+		corrected = cleaned
+	}
+	if len(suggestions) == 0 && corrected != cleaned {
+		suggestions = detectChangesFromText(cleaned, corrected)
+	}
+	suggestions = fillSuggestionIndices(cleaned, suggestions)
 
-        return &ProofreadResult{
-                CorrectedText:  corrected,
-                Suggestions:    suggestions,
-                Changes:        changes,
-                Alternatives:   alternatives,
-                ModelUsed:      models.ModelType(model),
-                ProcessingTime: time.Since(start).Seconds(),
-        }, nil
+	log.Printf("[OPENAI] SUCCESS - suggestions=%d latency=%.2fs", len(suggestions), time.Since(start).Seconds())
+	return &ProofreadResult{
+		CorrectedText:  corrected,
+		Suggestions:    suggestions,
+		Changes:        changes,
+		Alternatives:   alternatives,
+		ModelUsed:      models.ModelType(model),
+		ProcessingTime: time.Since(start).Seconds(),
+	}, nil
 }
 
 func (s *LLMService) proofreadWithAnthropic(ctx context.Context, cleaned string, requestID string) (*ProofreadResult, error) {
