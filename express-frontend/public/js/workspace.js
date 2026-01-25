@@ -102,9 +102,10 @@ function hasInvalidVowelSequence(word) {
 function cleanTamilSuggestions(rawSuggestions, tokenLatin) {
   if (!rawSuggestions || rawSuggestions.length === 0) return [];
   
-  // For short tokens (1-2 chars), limit to 3 chars max
-  // For longer tokens, allow up to 6 chars
-  const maxLen = tokenLatin.length <= 2 ? 3 : 6;
+  // RELAXED: Allow longer suggestions for better coverage
+  // For 1-2 char input: allow up to 5 chars (was 3)
+  // For 3+ char input: allow up to 10 chars (was 6)
+  const maxLen = tokenLatin.length <= 2 ? 5 : 10;
 
   return rawSuggestions.filter(s => {
     const w = (s.word || s.text || '').trim();
@@ -113,11 +114,19 @@ function cleanTamilSuggestions(rawSuggestions, tokenLatin) {
     // Reject Latin / digits (must be pure Tamil)
     if (/[A-Za-z0-9]/.test(w)) return false;
 
-    // Reject invalid vowel stacking
-    if (hasInvalidVowelSequence(w)) return false;
+    // RELAXED: Allow some vowel sequences (API might return valid compound words)
+    // Only reject if it's OBVIOUSLY invalid (more than 2 consecutive vowels)
+    const vowelSequenceCount = (w.match(/[ாிீுூெேைொோௌ]{3,}/g) || []).length;
+    if (vowelSequenceCount > 0) {
+      console.log('[IME] Rejected suggestion with 3+ consecutive vowels:', w);
+      return false;
+    }
 
-    // Reject too-long expansions for short input
-    if (w.length > maxLen) return false;
+    // RELAXED: Accept longer suggestions (up to maxLen)
+    if (w.length > maxLen) {
+      console.log('[IME] Rejected suggestion (too long):', w, 'length:', w.length, 'max:', maxLen);
+      return false;
+    }
 
     return true;
   });
@@ -2651,8 +2660,18 @@ class WorkspaceController {
    * @param {string} tamilText - The Tamil text to insert
    */
   performReplacement(tamilText) {
-      window.logger?.debug?.('[IME] performReplacement called with text:', tamilText);
-      window.logger?.debug?.('[IME] currentTokenInfo available:', !!this.currentTokenInfo, this.currentTokenInfo);
+      // CRITICAL: Prevent duplicate insertions
+      if (this.isInsertingSuggestion) {
+        console.log('[IME] ⚠️ Already inserting suggestion, ignoring duplicate call');
+        return;
+      }
+      
+      this.isInsertingSuggestion = true;
+      console.log('[IME] 🔒 Locked: Starting insertion of:', tamilText);
+      
+      try {
+        window.logger?.debug?.('[IME] performReplacement called with text:', tamilText);
+        window.logger?.debug?.('[IME] currentTokenInfo available:', !!this.currentTokenInfo, this.currentTokenInfo);
       
       // CRITICAL: Use stored tokenInfo from when suggestions were fetched (when token was Latin)
       // Don't get fresh token info as it might already be Tamil after previous selection
@@ -2727,6 +2746,14 @@ class WorkspaceController {
     this.isSelectingSuggestion = false; // Reset selection flag
     
     console.log('[IME] ✅ Replacement complete, cleared currentTokenInfo:', tokenInfoToClear);
+    
+    } finally {
+      // Unlock after a short delay to allow DOM updates
+      setTimeout(() => {
+        this.isInsertingSuggestion = false;
+        console.log('[IME] 🔓 Unlocked: Insertion complete');
+      }, 300);
+    }
   }
 
   // Keyboard navigation handler
