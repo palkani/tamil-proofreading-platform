@@ -3488,9 +3488,8 @@ class WorkspaceController {
       }
       
       const geminiSuggestions = corrections
-        // NO FILTERING - Trust Gemini's output completely
-        // .filter(result => { ... })  // REMOVED per user request
-        .map((result, index) => {
+        // Filter out invalid suggestions (must have valid original !== corrected)
+        .filter((result, index) => {
           const original =
             result.original ||
             result.originalText ||
