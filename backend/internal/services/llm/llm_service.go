@@ -1108,16 +1108,77 @@ func (s *LLMService) proofreadWithOpenAI(ctx context.Context, cleaned string, re
         // Use gpt-4o for better Tamil understanding (not mini)
         model := getEnvTrim("OPENAI_PROOFREAD_MODEL", "gpt-4o")
 
-        // CRITICAL FIX: Use SAME Tamil prompt as Gemini (better results)
-        // OpenAI 4o has good Tamil support with detailed instructions
-        sys := "நீங்கள் ஒரு தமிழ் மொழி நிபுணர், இலக்கண ஆசிரியர், மற்றும் சரிபார்ப்பாளர். அனைத்து பிழைகளையும் கண்டறிந்து திருத்தவும். ALWAYS return valid JSON format."
-        user := strings.Replace(proofreadingPrompt, "[USER'S TAMIL TEXT HERE]", cleaned, 1)
+        // CRITICAL: Use ENGLISH prompt for OpenAI (better comprehension than Tamil)
+        sys := `You are an expert Tamil language proofreader and grammar checker.
+
+Your task: Analyze Tamil text and identify ALL grammar, spelling, and style errors.
+
+CRITICAL RULES:
+1. You MUST find and report errors - do not return empty corrections
+2. Look for EVERY type of error listed below
+3. Be aggressive in finding mistakes - check thoroughly
+4. Return valid JSON only (no markdown, no code fences)
+
+ERROR CATEGORIES TO CHECK:
+
+1. SANDHI ERRORS (புணர்ச்சி பிழைகள்) - Most Common!
+   Example: "திமுக-விலேயே" → should be "திமுகவிலேயே" (remove hyphen)
+   Look for: Hyphens between words, incorrect word joining
+
+2. VERB-NUMBER AGREEMENT (வினை-எண் பொருந்தல்)
+   Example: "அவர்கள் வந்தான்" → should be "அவர்கள் வந்தார்கள்"
+   Look for: Plural subject with singular verb (and vice versa)
+
+3. SPELLING ERRORS (எழுத்துப் பிழைகள்)
+   Example: Wrong Tamil letters, incorrect vowel marks
+   
+4. வல்லினம் மெல்லினம் ERRORS
+   Example: Wrong consonant hardening/softening
+
+5. TENSE CONSISTENCY (காலம் ஒத்துழைப்பு)
+   Example: Mixing past and present tense incorrectly
+
+6. WORD SPLITTING/JOINING
+   Example: Words split incorrectly or joined incorrectly
+
+IMPORTANT EXAMPLES:
+
+✓ CORRECT: "திமுகவிலேயே" (no hyphen)
+✗ WRONG: "திமுக-விலேயே" (hyphen is error)
+
+✓ CORRECT: "உறுதிப்படுத்தியுள்ளன" (for things/events)
+✓ CORRECT: "உறுதிப்படுத்தியுள்ளனர்" (for people)
+
+OUTPUT FORMAT (strict JSON):
+{
+  "corrections": [
+    {
+      "original": "exact word or phrase with error",
+      "corrected": "corrected version",
+      "reason": "Brief explanation in Tamil or English",
+      "type": "sandhi|grammar|spelling|வல்லினம்|verb_agreement|tense",
+      "start_index": number,
+      "end_index": number
+    }
+  ],
+  "corrected_text": "Full corrected Tamil text here"
+}
+
+REMEMBER:
+- Find at least 1-2 errors in most texts (be thorough!)
+- Common error: Hyphens between Tamil words (sandhi error)
+- If truly no errors, corrections can be empty BUT corrected_text must equal original
+- Always return valid JSON
+- No markdown code fences
+- No explanatory text outside JSON`
+
+        user := fmt.Sprintf("%s\n\n=== TAMIL TEXT TO CHECK ===\n%s\n\n=== YOUR JSON RESPONSE ===", sys, cleaned)
 
         req := openai.ChatCompletionRequest{
                 Model:       model,
                 Temperature: 0.1,
                 Messages: []openai.ChatCompletionMessage{
-                        {Role: openai.ChatMessageRoleSystem, Content: sys},
+                        {Role: openai.ChatMessageRoleSystem, Content: "You are a Tamil proofreading expert. Always return valid JSON with corrections."},
                         {Role: openai.ChatMessageRoleUser, Content: user},
                 },
         }
