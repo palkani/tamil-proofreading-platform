@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -365,22 +365,10 @@
     }
   </style>
 </head>
-<body class="bg-gray-50" dir="ltr">
-  <style>
-    /* CRITICAL FIX: Force LTR for all text input and content editable */
-    body, html {
-      direction: ltr !important;
-      unicode-bidi: embed !important;
-    }
-    .ProseMirror, .ProseMirror *, 
-    [contenteditable], [contenteditable] *,
-    textarea, textarea *,
-    input[type="text"], input[type="text"] * {
-      direction: ltr !important;
-      unicode-bidi: normal !important;
-      text-align: left !important;
-    }
-  </style>
+<body class="bg-gray-50">
+  <!-- REMOVED: Global LTR CSS was CAUSING reverse text in contenteditable!
+       Browser's default bidirectional text handling is correct.
+       Workspace works perfectly with NO direction CSS at all. -->
   <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:text-gray-900 focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg">
     Skip to main content
   </a>
