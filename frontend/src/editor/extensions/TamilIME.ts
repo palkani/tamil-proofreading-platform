@@ -73,7 +73,10 @@ function commitIME(extension: any): boolean {
     return false;
   }
 
+  // CRITICAL FIX: Always get FRESH token at CURRENT cursor position
+  // Don't use stored positions - they might be stale if user typed fast!
   const currentToken = getTokenAtCaret(extension.editor.state);
+  
   if (!isLatinToken(currentToken.token)) {
     clearIMEState(extension);
     return false;
@@ -81,18 +84,22 @@ function commitIME(extension: any): boolean {
 
   const freshStart = currentToken.start;
   const freshEnd = currentToken.end;
+  
   if (freshStart < 0 || freshEnd < 0 || freshEnd <= freshStart) {
     clearIMEState(extension);
     return false;
   }
 
+  // Double-check the token at the fresh position matches what we expect
   const docText = extension.editor.state.doc.textBetween(0, extension.editor.state.doc.content.size, '\n', '\n');
   const tokenAtPosition = docText.slice(freshStart, freshEnd);
+  
   if (!isLatinToken(tokenAtPosition)) {
     clearIMEState(extension);
     return false;
   }
 
+  // Insert Tamil text at the CURRENT token position
   extension.editor
     .chain()
     .focus()
@@ -844,22 +851,19 @@ export const TamilIME = Extension.create<TamilIMEOptions, TamilIMEStorage>({
     // This prevents cancelling "mu" -> "mur" -> "muru" requests
     const previousToken = storage.token || '';
     const isTokenExtension = previousToken && token.startsWith(previousToken);
-    const isTokenContinuation = previousToken && token.length > previousToken.length && token.startsWith(previousToken);
     
-    // Only cancel if:
-    // 1. Token is completely different (not an extension)
-    // 2. AND we're not in the middle of a continuation (e.g., "mu" -> "mur" is OK, but "mu" -> "ka" should cancel)
-    if (storage.abortController && storage.token && storage.token !== token) {
-      if (!isTokenExtension && !isTokenContinuation) {
-        // Completely different token - cancel previous request
-        console.log('[TamilIME] ⚠️ Cancelling previous request for different token:', storage.token, '->', token);
-        storage.abortController.abort();
-        storage.abortController = null;
-        storage.fetching = false;
-      } else {
-        // Token is an extension - let previous request complete, but don't process its response
-        console.log('[TamilIME] Token extended from', storage.token, 'to', token, '- letting previous request complete');
-      }
+    // Cancel only if token changed significantly (not just 1-2 chars added)
+    const tokenLengthDiff = Math.abs(token.length - previousToken.length);
+    const shouldCancel = !isTokenExtension && tokenLengthDiff > 1;
+    
+    if (shouldCancel && storage.abortController && storage.token && storage.token !== token) {
+      console.log('[TamilIME] ⚠️ Cancelling previous request - significant token change:', storage.token, '->', token);
+      storage.abortController.abort();
+      storage.abortController = null;
+      storage.fetching = false;
+    } else if (storage.token && storage.token !== token) {
+      // Token changed but it's an extension - let previous request complete
+      console.log('[TamilIME] Token extended from', storage.token, 'to', token, '- not cancelling');
     }
 
     // Clear previous debounce
@@ -875,7 +879,7 @@ export const TamilIME = Extension.create<TamilIMEOptions, TamilIMEStorage>({
     storage.lastRequestId = (storage.lastRequestId || 0) + 1;
     const requestId = storage.lastRequestId;
 
-    // Debounced fetch with longer delay to reduce cancellations (500ms for better stability)
+    // Debounced fetch - reduced from 500ms to 200ms for faster response
     storage.debounce = setTimeout(async () => {
       // Check if token changed during debounce or request was cancelled
       const currentToken = storage.token;
@@ -1105,7 +1109,7 @@ export const TamilIME = Extension.create<TamilIMEOptions, TamilIMEStorage>({
         storage.fetching = false;
         storage.debounce = null;
       }
-    }, 500); // Increased debounce to 500ms to reduce cancellations and allow requests to complete
+    }, 200); // Reduced from 500ms to 200ms for better responsiveness
   },
 
 });
