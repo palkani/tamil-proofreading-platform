@@ -344,6 +344,7 @@ class WorkspaceController {
     // Track suggestion request ordering so stale responses can't overwrite newer ones
     this._imeRequestSeq = 0;
     this._imeLastAppliedSeq = 0;
+    this._imeAbortController = null;
     this.saveTimeout = null;
     this.autosaveAuthBlocked = false;
     this.loading = false;
@@ -733,14 +734,12 @@ class WorkspaceController {
       return [];
     }
 
-    // IMPORTANT UX FIX:
-    // Do NOT abort in-flight suggest requests. Aborts show as "failed" (red X) in DevTools.
-    // Instead, allow only one in-flight request and queue the latest token.
-    if (this.fetchingSuggestions && this.currentFetchQuery && this.currentFetchQuery !== query) {
-      this._imePending = { q: query, mode, limit };
-      // Don't clear the dropdown/UI while typing; keep current suggestions until the next completes.
-      return this.currentSuggestions || [];
+    // Abort in-flight request to avoid stale responses.
+    if (this._imeAbortController) {
+      try { this._imeAbortController.abort(); } catch (_e) {}
     }
+    const controller = new AbortController();
+    this._imeAbortController = controller;
 
     // Set fetching state + request sequencing (prevents stale responses overwriting the UI)
     const requestSeq = ++this._imeRequestSeq;
@@ -764,6 +763,7 @@ class WorkspaceController {
           'Accept': 'application/json',
         },
         credentials: 'same-origin', // Include cookies but don't require auth headers
+        signal: controller.signal,
       });
 
       // If the token has changed since this request started, ignore the result
@@ -1464,8 +1464,8 @@ class WorkspaceController {
     });
     
     // MINIMAL GUARDS: Only check if token exists and is Latin
-    // Allow single character tokens to trigger API calls
-    if (!token || token.length === 0) {
+    // Suggestions start from 2 characters
+    if (!token || token.length < 2) {
       console.log('[IME] ⚠️ Token is empty - no Latin characters found at cursor');
       // Clear suggestions if token is invalid
       if (this.lastFetchToken) {
@@ -1561,7 +1561,7 @@ class WorkspaceController {
     
     // Debounce the fetch to keep UI responsive while still updating per-keystroke.
     // Goal: suggestions should update for each letter typed (n -> na -> nam -> ...).
-    const debounceMs = token.length <= 2 ? 60 : 90;
+    const debounceMs = token.length <= 2 ? 90 : 120;
     console.log('[IME] ⏳ Setting up debounce for token:', token, 'delay:', debounceMs + 'ms');
     this.suggestDebounce = setTimeout(() => {
       console.log('[IME] ⏰ Debounce timer fired for token:', token);

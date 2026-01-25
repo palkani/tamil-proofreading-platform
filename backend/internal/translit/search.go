@@ -250,8 +250,9 @@ func GetSuggestions(input string) []Suggestion {
 
         suggestions = deduplicateSuggestions(suggestions)
 
-        // Filter out low-quality/meaningless suggestions for longer inputs.
-        suggestions = filterByRelativeScore(key, suggestions)
+	// Filter out low-quality/meaningless suggestions for longer inputs.
+	// Keep this permissive to avoid returning only 1 suggestion.
+	suggestions = filterByRelativeScore(key, suggestions)
 
         // Return top 10 (ranked; UI can choose how many to display)
         if len(suggestions) > 10 {
@@ -356,13 +357,13 @@ func filterByRelativeScore(key string, suggestions []Suggestion) []Suggestion {
         }
 
         top := suggestions[0].Score
-        // Absolute floor (more strict for longer keys)
-        absMin := 0.45
-        if len(key) >= 6 {
-                absMin = 0.55
-        }
-        // Relative floor vs top score
-        relMin := top * 0.65
+	// Absolute floor (more permissive for low-frequency words)
+	absMin := 0.35
+	if len(key) >= 6 {
+		absMin = 0.45
+	}
+	// Relative floor vs top score
+	relMin := top * 0.5
         if relMin < absMin {
                 relMin = absMin
         }

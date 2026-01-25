@@ -43,6 +43,15 @@ type Config struct {
 	OCRServiceURL             string
 	AdvancedSuggestURL        string // NEW: URL for advanced suggestion microservice
 	UseAdvancedSuggest        bool   // NEW: Feature flag to enable advanced suggestions
+	SuggestMinLen             int
+	SuggestTopK               int
+	SuggestCacheEntries       int
+	SuggestCacheTTLMS         int
+	SuggestTrieTopK           int
+	LexiconRefreshSec         int
+	SuggestVowelCollapse      bool
+	RedisURL                  string
+	SuggestRedisTimeoutMS     int
 }
 
 func Load() *Config {
@@ -127,6 +136,15 @@ func Load() *Config {
 		OCRServiceURL:          strings.TrimRight(getEnv("OCR_SERVICE_URL", ""), "/"),
 		AdvancedSuggestURL:     strings.TrimRight(getEnv("ADVANCED_SUGGEST_URL", ""), "/"),
 		UseAdvancedSuggest:     strings.ToLower(getEnv("USE_ADVANCED_SUGGEST", "false")) == "true",
+		SuggestMinLen:          getEnvAsInt("SUGGEST_MIN_LEN", 2),
+		SuggestTopK:            getEnvAsInt("SUGGEST_TOP_K", 5),
+		SuggestCacheEntries:    getEnvAsInt("SUGGEST_CACHE_ENTRIES", 200),
+		SuggestCacheTTLMS:      getEnvAsInt("SUGGEST_CACHE_TTL_MS", 120000),
+		SuggestTrieTopK:        getEnvAsInt("SUGGEST_TRIE_TOP_K", 25),
+		LexiconRefreshSec:      getEnvAsInt("LEXICON_REFRESH_SEC", 600),
+		SuggestVowelCollapse:   strings.ToLower(getEnv("SUGGEST_VOWEL_COLLAPSE", "false")) == "true",
+		RedisURL:               strings.TrimSpace(getEnv("REDIS_URL", "")),
+		SuggestRedisTimeoutMS:  getEnvAsInt("SUGGEST_REDIS_TIMEOUT_MS", 25),
 	}
 }
 

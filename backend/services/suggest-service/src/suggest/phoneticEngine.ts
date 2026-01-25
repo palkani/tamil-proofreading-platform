@@ -18,6 +18,7 @@ const RULES: Rule[] = [
   { pat: "dh", outs: [{ ta: "த", w: 0.75 }] },
   { pat: "sh", outs: [{ ta: "ஷ", w: 0.85 }, { ta: "ச", w: 0.6 }] },
   { pat: "ch", outs: [{ ta: "ச", w: 0.85 }] },
+  { pat: "s", outs: [{ ta: "ச", w: 0.8 }, { ta: "ஸ", w: 0.35 }] },
 
   // Vowels (independent vowels as prefixes; actual Tamil orthography needs combining signs)
   { pat: "aa", outs: [{ ta: "ஆ", w: 0.9 }] },

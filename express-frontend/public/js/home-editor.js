@@ -247,6 +247,10 @@ class HomeEditor {
     this.autocompleteList = document.getElementById('home-autocomplete-list');
     this.autocompleteCloseBtn = document.getElementById('home-autocomplete-close');
     this.autocompleteCache = {}; // Cache API responses
+    this.autocompleteCacheOrder = [];
+    this.autocompleteAbort = null;
+    this.autocompleteRequestId = 0;
+    this.autocompleteLastApplied = 0;
     this.previousText = ''; // Track previous text for space detection
     this.currentSuggestions = [];
     this.currentCaretInfo = null;
@@ -803,7 +807,7 @@ class HomeEditor {
 
     // Show suggestions per-keystroke while typing an English token.
     // Backend now supports 1-letter queries, so allow length >= 1.
-    if (!lastWord || !/^[a-z]+$/i.test(lastWord) || lastWord.length < 1) {
+    if (!lastWord || !/^[a-z]+$/i.test(lastWord) || lastWord.length < 2) {
       this.autocompleteBox.classList.add('hidden');
       return;
     }
@@ -833,9 +837,18 @@ class HomeEditor {
 
     // Debounced API call (fast enough to feel "per letter" without spamming)
     if (this.translitTimeout) clearTimeout(this.translitTimeout);
+    // Cancel previous in-flight request
+    if (this.autocompleteAbort) {
+      try { this.autocompleteAbort.abort(); } catch (_e) {}
+    }
+    const requestId = ++this.autocompleteRequestId;
+    const controller = new AbortController();
+    this.autocompleteAbort = controller;
     this.translitTimeout = setTimeout(async () => {
       try {
-        const suggestions = await callTransliterator(lastWord, mode, 8);
+        const suggestions = await callTransliterator(lastWord, mode, 8, controller.signal);
+        // Stale response guard
+        if (requestId < this.autocompleteRequestId) return;
         const normalized = (suggestions || [])
           .map((s) => ({
             word: normalizeTamilWord(s),
@@ -843,14 +856,24 @@ class HomeEditor {
           }))
           .filter(s => s.word);
         this.autocompleteCache[cacheKey] = normalized;
+        if (!this.autocompleteCacheOrder.includes(cacheKey)) {
+          this.autocompleteCacheOrder.push(cacheKey);
+          if (this.autocompleteCacheOrder.length > 50) {
+            const oldest = this.autocompleteCacheOrder.shift();
+            if (oldest) delete this.autocompleteCache[oldest];
+          }
+        }
         this.currentSuggestions = normalized;
         this.currentCaretInfo = caretInfo;
         this.activeSuggestionIndex = 0;
+        this.autocompleteLastApplied = requestId;
         this.renderSuggestions(normalized);
       } catch (err) {
-        console.error('[AUTOCOMPLETE] Fetch error:', err);
+        if (err?.name !== 'AbortError') {
+          console.error('[AUTOCOMPLETE] Fetch error:', err);
+        }
       }
-    }, lastWord.length <= 2 ? 60 : 90);
+    }, lastWord.length <= 2 ? 90 : 120);
   }
 
   updateSuggestionHighlight() {

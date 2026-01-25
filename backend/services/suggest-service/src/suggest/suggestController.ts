@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { normalizeRoman } from "./normalizer.js";
+import { LruCache } from "./cache.js";
 import { expandPhonetic } from "./phoneticEngine.js";
 import { PrefixIndex } from "./prefixSearch.js";
 import { scoreCandidate, toSuggestion } from "./ranker.js";
@@ -13,6 +14,13 @@ export type SuggestEngine = {
   ready: boolean;
   source: string;
 };
+
+const SUGGEST_CACHE_MAX = Number(process.env.SUGGEST_CACHE_MAX || 4000);
+const SUGGEST_CACHE_TTL_MS = Number(process.env.SUGGEST_CACHE_TTL_MS || 120_000);
+const suggestCache = new LruCache<Suggestion[]>({
+  maxEntries: SUGGEST_CACHE_MAX,
+  ttlMs: SUGGEST_CACHE_TTL_MS,
+});
 
 export function registerSuggestRoutes(app: FastifyInstance, engine: SuggestEngine) {
   app.get("/api/suggest", async (req, reply) => {
@@ -35,6 +43,27 @@ export function registerSuggestRoutes(app: FastifyInstance, engine: SuggestEngin
       });
     }
 
+    const cacheKey = `${q}|${prev}|${limit}`;
+    const cached = suggestCache.get(cacheKey);
+    if (cached) {
+      const took = performance.now() - t0;
+      return reply.status(200).send({
+        suggestions: cached,
+        meta: {
+          q,
+          q_raw: qRaw,
+          prev: prev || undefined,
+          limit,
+          branches: 0,
+          candidates: 0,
+          source: engine.source,
+          took_ms: Math.round(took * 100) / 100,
+          cached: true,
+          usedLLM: false,
+        },
+      });
+    }
+
     // Phonetic expansion with beam search
     const phonetics = expandPhonetic(q, { maxCandidates: 20, beamWidth: 24 });
 
@@ -43,7 +72,7 @@ export function registerSuggestRoutes(app: FastifyInstance, engine: SuggestEngin
     const seen = new Set<string>();
 
     // Early cap per phonetic branch keeps latency stable
-    const perBranchCap = 50;
+    const perBranchCap = 80;
     for (const p of phonetics) {
       const items = engine.index.lookupPrefix(p.tamilPrefix, perBranchCap);
       for (const it of items) {
@@ -51,9 +80,9 @@ export function registerSuggestRoutes(app: FastifyInstance, engine: SuggestEngin
         if (seen.has(k)) continue;
         seen.add(k);
         pool.push({ item: it, phoneticScore: p.phoneticScore });
-        if (pool.length >= 400) break;
+        if (pool.length >= 800) break;
       }
-      if (pool.length >= 400) break;
+      if (pool.length >= 800) break;
     }
 
     // Enhanced ranking with 5-factor scoring
@@ -90,6 +119,7 @@ export function registerSuggestRoutes(app: FastifyInstance, engine: SuggestEngin
             text: p.tamilPrefix, 
             score: Math.round((p.phoneticScore * 100 - idx) * 100) / 100 
           }));
+    suggestCache.set(cacheKey, out);
 
     const took = performance.now() - t0;
     return reply.status(200).send({
@@ -110,7 +140,7 @@ export function registerSuggestRoutes(app: FastifyInstance, engine: SuggestEngin
 }
 
 export function buildIndex(items: CorpusItem[]): PrefixIndex {
-  const idx = new PrefixIndex({ maxTopPerNode: 80 });
+  const idx = new PrefixIndex({ maxTopPerNode: 140 });
   for (const it of items) idx.insert(it);
   return idx;
 }

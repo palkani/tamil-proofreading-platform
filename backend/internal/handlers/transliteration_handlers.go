@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"math"
@@ -14,6 +13,7 @@ import (
 
 	"tamil-proofreading-platform/backend/internal/ime"
 	"tamil-proofreading-platform/backend/internal/models"
+	"tamil-proofreading-platform/backend/internal/suggest"
 	"tamil-proofreading-platform/backend/internal/translit"
 	"tamil-proofreading-platform/backend/internal/util/auditlog"
 
@@ -115,7 +115,6 @@ func (h *Handlers) Transliterate(c *gin.Context) {
 func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
 	mode := strings.ToLower(strings.TrimSpace(c.Query("mode")))
-	prev := strings.TrimSpace(c.Query("prev"))
 	usageLabel := map[string]string{
 		"spoken":   "Spoken",
 		"formal":   "Written / Formal",
@@ -147,32 +146,31 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 		return
 	}
 
-	// Step 0: Try Node suggest service (primary) if configured.
-	if h.cfg != nil && strings.TrimSpace(h.cfg.SuggestServiceURL) != "" {
-		if out, ok := h.tryNodeSuggest(c, q, prev, mode, limit, usageLabel); ok {
-			c.JSON(http.StatusOK, out)
-			return
-		}
-	}
-
-	// Step 0.5: Fallback to ProofTamilRunner suggest API (production IME behavior).
-	if h.cfg != nil && strings.TrimSpace(h.cfg.TransliteratorBaseURL) != "" {
-		if out, ok := h.tryRunnerSuggest(c, q, prev, mode, limit, usageLabel); ok {
-			c.JSON(http.StatusOK, out)
-			return
-		}
-	}
-
-	// Step 0.6: Fallback to Aksharamukha-backed IME service (older IME path) if enabled.
-	if h.imeSvc != nil && h.imeEnabled {
-		ctx := c.Request.Context()
-		if reqID := c.GetString("request_id"); reqID != "" {
-			ctx = context.WithValue(ctx, "request_id", reqID)
-		}
-		cands, _ := h.imeSvc.Suggest(ctx, q, mode, limit)
-		if len(cands) > 0 {
-			mapped := mapCandidatesToSuggestResponse(q, usageLabel, cands)
-			c.JSON(http.StatusOK, mapped)
+	// Step 0: Use in-process hybrid trie engine (no external calls).
+	if h.suggestEngine != nil {
+		out, err := h.suggestEngine.Suggest(c.Request.Context(), suggest.SuggestRequest{
+			Query: q,
+			UID:   strings.TrimSpace(c.Query("uid")),
+			Limit: limit,
+		})
+		if err == nil && out != nil {
+			mapped := make([]map[string]interface{}, 0, len(out.Suggestions))
+			for idx, s := range out.Suggestions {
+				mapped = append(mapped, map[string]interface{}{
+					"word":   s.Text,
+					"ta":     s.Text,
+					"score":  s.Score,
+					"rank":   idx + 1,
+					"label":  "Recommended",
+					"usage":  usageLabel,
+					"reason": "Hybrid trie suggestion",
+				})
+			}
+			c.JSON(http.StatusOK, TransliterateSuggestResponse{
+				Success:     true,
+				Query:       q,
+				Suggestions: mapped,
+			})
 			return
 		}
 	}

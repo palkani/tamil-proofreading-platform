@@ -14,6 +14,7 @@ import (
 	"tamil-proofreading-platform/backend/internal/services/llm"
 	"tamil-proofreading-platform/backend/internal/services/nlp"
 	"tamil-proofreading-platform/backend/internal/services/payment"
+	"tamil-proofreading-platform/backend/internal/suggest"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -32,6 +33,7 @@ type Handlers struct {
 	imeEnabled          bool
 	advancedClient      *ime.AdvancedClient // NEW: Advanced suggestion service
 	useAdvancedSuggest  bool                // NEW: Feature flag for advanced service
+	suggestEngine       *suggest.Engine
 }
 
 func New(db *gorm.DB, cfg *config.Config) *Handlers {
@@ -97,6 +99,25 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 		imeEnabled:         cfg.IMEEnabled,
 		advancedClient:     advancedClient,
 		useAdvancedSuggest: useAdvancedSuggest,
+	}
+
+	// Initialize in-process suggestion engine (Hybrid Trie + ID tables)
+	suggestEngine, err := suggest.NewEngine(db, suggest.EngineOptions{
+		MinLen:         cfg.SuggestMinLen,
+		LimitDefault:   cfg.SuggestTopK,
+		MaxTopPerNode:  cfg.SuggestTrieTopK,
+		CacheEntries:   cfg.SuggestCacheEntries,
+		CacheTTL:       time.Duration(cfg.SuggestCacheTTLMS) * time.Millisecond,
+		RefreshSec:     cfg.LexiconRefreshSec,
+		VowelCollapse:  cfg.SuggestVowelCollapse,
+		RedisURL:       cfg.RedisURL,
+		RedisTimeoutMs: cfg.SuggestRedisTimeoutMS,
+	})
+	if err != nil {
+		log.Printf("[SUGGEST] Failed to initialize suggest engine: %v", err)
+	} else {
+		h.suggestEngine = suggestEngine
+		log.Printf("[SUGGEST] In-process suggest engine ready (min_len=%d, top_k=%d)", cfg.SuggestMinLen, cfg.SuggestTopK)
 	}
 
 	h.startArchiveCleanup()

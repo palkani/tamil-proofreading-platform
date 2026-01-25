@@ -158,6 +158,8 @@ func main() {
 
 	// Initialize handlers
 	h := handlers.New(db, cfg)
+	router.GET("/healthz", h.SuggestHealth)
+	router.GET("/metrics-lite", h.SuggestMetrics)
 
 	// Frontend workspace served from Cloud Run to keep auth cookies on same host
 	router.GET("/workspace", h.WorkspacePage)
@@ -167,6 +169,8 @@ func main() {
 	{
 		api.GET("/whoami", h.WhoAmI) // diagnostic
 		api.GET("/ime/suggest", h.IMESuggest)
+		api.GET("/suggest", h.Suggest)
+		api.POST("/select", h.SuggestSelect)
 		// Public routes (rate-limited per IP)
 		api.Use(middleware.RateLimitMiddleware(90, time.Minute))
 		api.POST("/auth/register", h.Register)
