@@ -88,10 +88,11 @@ export default function RichTextEditor({
         },
       }),
       Strike,
-      TamilIME.configure({
-        enabled: tamilIMEEnabled,
-        autoCommitOnSpace: true,
-      }),
+      // CRITICAL FIX: COMPLETELY REMOVE TamilIME until reverse text bug is fixed
+      // TamilIME.configure({
+      //   enabled: tamilIMEEnabled,
+      //   autoCommitOnSpace: true,
+      // }),
       GrammarHighlighter,
     ];
 
@@ -619,7 +620,8 @@ export default function RichTextEditor({
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Tamil Toggle */}
+          {/* Tamil Toggle - HIDDEN until IME bug is fixed */}
+          {false && (
           <button
             type="button"
             onClick={() => {
@@ -635,6 +637,7 @@ export default function RichTextEditor({
           >
             <span className="text-base font-bold">தமிழ்</span>
           </button>
+          )}
           
           {/* Microphone - Voice Input */}
           <button
