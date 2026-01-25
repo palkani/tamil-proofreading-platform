@@ -63,6 +63,14 @@ func Load() *Config {
 		log.Printf("[CONFIG] WARNING: Gemini API key is empty - AI proofreading will fail")
 	}
 
+	// Check OpenAI key for fallback
+	openAIKey := getEnv("OPENAI_API_KEY", "")
+	if openAIKey != "" {
+		log.Printf("[CONFIG] OpenAI API key found: %s***%s (length: %d) - fallback enabled", openAIKey[:8], openAIKey[len(openAIKey)-4:], len(openAIKey))
+	} else {
+		log.Printf("[CONFIG] WARNING: OpenAI API key is empty - no fallback available for rate limits")
+	}
+
 	// IME / Transliterator configuration:
 	// - Runner (ProofTamilRunner) exposes API under /api/v1
 	// - If AKSHARA_URL isn't explicitly set, default to TRANSLITERATOR_BASE_URL + "/api/v1"

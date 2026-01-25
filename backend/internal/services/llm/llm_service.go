@@ -400,31 +400,39 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
                         }
                 }
         }
-        if err != nil {
-                log.Printf("gemini proofread error (request_id=%s): %v", requestID, err)
+	if err != nil {
+		log.Printf("gemini proofread error (request_id=%s): %v", requestID, err)
 
-                // Optional fallback: avoid user-visible "AI unavailable" by retrying with OpenAI/Anthropic
-                // for retryable failures (timeouts/429/5xx) when configured.
-                if shouldFallbackOn(err) {
-                        if s.openAIClient != nil {
-                                log.Printf("[FALLBACK-OPENAI] Using OpenAI because Gemini failed (request_id=%s)", requestID)
-                                if out, ferr := s.proofreadWithOpenAI(ctx, cleaned, requestID); ferr == nil {
-                                        return out, nil
-                                } else {
-                                        log.Printf("[FALLBACK-OPENAI-ERROR] (request_id=%s): %v", requestID, ferr)
-                                }
-                        }
-                        if strings.TrimSpace(s.anthropicKey) != "" {
-                                log.Printf("[FALLBACK-ANTHROPIC] Using Anthropic because Gemini failed (request_id=%s)", requestID)
-                                if out, ferr := s.proofreadWithAnthropic(ctx, cleaned, requestID); ferr == nil {
-                                        return out, nil
-                                } else {
-                                        log.Printf("[FALLBACK-ANTHROPIC-ERROR] (request_id=%s): %v", requestID, ferr)
-                                }
-                        }
-                }
-                return nil, err
-        }
+		// Optional fallback: avoid user-visible "AI unavailable" by retrying with OpenAI/Anthropic
+		// for retryable failures (timeouts/429/5xx) when configured.
+		shouldFallback := shouldFallbackOn(err)
+		log.Printf("[FALLBACK-CHECK] request_id=%s error=%v shouldFallback=%v hasOpenAI=%v hasAnthropic=%v", 
+			requestID, err, shouldFallback, s.openAIClient != nil, s.anthropicKey != "")
+		
+		if shouldFallback {
+			if s.openAIClient != nil {
+				log.Printf("[FALLBACK-OPENAI] Using OpenAI because Gemini failed (request_id=%s)", requestID)
+				if out, ferr := s.proofreadWithOpenAI(ctx, cleaned, requestID); ferr == nil {
+					return out, nil
+				} else {
+					log.Printf("[FALLBACK-OPENAI-ERROR] (request_id=%s): %v", requestID, ferr)
+				}
+			} else {
+				log.Printf("[FALLBACK-SKIP] OpenAI client is nil (request_id=%s)", requestID)
+			}
+			if strings.TrimSpace(s.anthropicKey) != "" {
+				log.Printf("[FALLBACK-ANTHROPIC] Using Anthropic because Gemini failed (request_id=%s)", requestID)
+				if out, ferr := s.proofreadWithAnthropic(ctx, cleaned, requestID); ferr == nil {
+					return out, nil
+				} else {
+					log.Printf("[FALLBACK-ANTHROPIC-ERROR] (request_id=%s): %v", requestID, ferr)
+				}
+			} else {
+				log.Printf("[FALLBACK-SKIP] Anthropic key is empty (request_id=%s)", requestID)
+			}
+		}
+		return nil, err
+	}
 
         if strings.TrimSpace(content) == "" {
                 return nil, fmt.Errorf("empty response from Gemini")
