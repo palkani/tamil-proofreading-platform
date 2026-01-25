@@ -1940,8 +1940,8 @@ class HomeEditor {
     // Re-render suggestions without the applied one
     this.displaySuggestions(updatedSuggestions);
     
-    // Schedule auto-analysis to get fresh suggestions
-    this.scheduleAutoAnalysis();
+    // DON'T call scheduleAutoAnalysis() here - it causes unnecessary API calls!
+    // User can manually trigger analysis if they want fresh suggestions.
   }
 
   replaceFirstOccurrence(text, search, replace) {
