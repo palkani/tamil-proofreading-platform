@@ -30,6 +30,37 @@ You MUST provide COMPREHENSIVE suggestions like a professional Tamil editor woul
    - காலம், வேற்றுமை, எண் பிழைகள்
    - தவறான வினைமுற்று அல்லது பெயர் வடிவங்கள்
    Example: "அவர்கள் வந்தான்" → "அவர்கள் வந்தார்கள்" (number agreement)
+   
+   ⚠️ TAMIL-SPECIFIC PHONETIC RULES (வல்லினம், மெல்லினம், இடையினம்):
+   
+   a) வல்லினம் (Hard consonants): க், ச், ட், த், ப், ற்
+   b) மெல்லினம் (Soft consonants): ங், ஞ், ண், ந், ம், ன்
+   c) இடையினம் (Medium consonants): ய், ர், ல், வ், ழ், ள்
+   
+   Check for PHONETIC TRANSFORMATION ERRORS:
+   
+   i) வல்லினம் மெல்லினமாதல் (Hard → Soft):
+      - After certain endings, hard consonants should soften
+      - Example: "பல் + காக்க" should be "பல்காக்க" NOT "பல்காக்க" (depending on context)
+      - Example: "என் + பேனா" → "என்பேனா" (ப் may change based on grammar)
+   
+   ii) மெல்லினம் வல்லினமாதல் (Soft → Hard):
+      - In compound words, soft may become hard
+      - Check if transformation is correct based on Tamil phonetic rules
+   
+   iii) இடையினம் மாற்றம் (Medium consonant changes):
+      - ய், ர், ல், வ், ழ், ள் transformations in compound words
+      - Example: "தமிழ் + மொழி" → "தமிழ்மொழி" (ழ் remains)
+   
+   iv) COMMON ERRORS to check:
+      - Wrong consonant after possessive: "என்னுடைய" (check if correct)
+      - Case marker errors: "அவனுக்கு" vs "அவனுக்கு" (க் vs ள் based on phonetics)
+      - Plural formation: "மரங்கள்" vs "மரங்கள்" (correct nasal based on word ending)
+   
+   v) EXAMPLES of phonetic errors:
+      ❌ "அவனுக்கு கொடு" → ✅ Check if "க்" is correct (might need "க்" or "ற்")
+      ❌ "பத்து பேர்" → ✅ Check phonetic sandhi (is ப் correct or should it be ம்?)
+      ❌ "எனது புத்தகம்" → ✅ Check if vowel/consonant junction is proper
 
 3. நிறுத்தக்குறிகள் (PUNCTUATION) - IMPORTANT!:
    ⚠️ ACTIVELY look for missing punctuation:
@@ -133,6 +164,12 @@ You MUST provide COMPREHENSIVE suggestions like a professional Tamil editor woul
 
 For news/political text like the input:
 
+GRAMMAR/PHONETIC examples:
+- "அவனுக்கு" → "அவனுக்கு" (check if க் is phonetically correct)
+- "பத்து மாணவர்கள்" → check if conjunction is proper
+- "என்னுடைய" → "எனது" (better form)
+- "அவர்கள் வந்தான்" → "அவர்கள் வந்தனர்" (number agreement)
+
 CLARITY examples:
 - "கூட்டணி மிகவும் வலுவாக உள்ளது" → "கூட்டணி அரசியல் ரீதியாக வலுவாக உள்ளது" 
   Reason: "தெளிவுக்காக - எந்த வகையில் வலுவானது என்பதை குறிப்பிடுதல்"
@@ -168,6 +205,7 @@ PUNCTUATION examples:
 📝 SUGGESTION TYPES - USE SPECIFIC TYPE:
 - "spelling" - தவறான எழுத்து
 - "grammar" - இலக்கண பிழை
+- "phonetic" - வல்லினம்/மெல்லினம்/இடையினம் மாற்றப் பிழை (phonetic transformation error)
 - "punctuation" - நிறுத்தக்குறி சேர்க்க/திருத்த வேண்டும்
 - "space" - இடைவெளி சேர்க்க/நீக்க வேண்டும்
 - "sandhi" - புணர்ச்சி (ONLY for missing spaces)
