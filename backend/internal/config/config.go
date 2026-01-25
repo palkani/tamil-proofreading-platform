@@ -41,6 +41,8 @@ type Config struct {
 	TransliteratorBaseURL     string
 	SuggestServiceURL         string
 	OCRServiceURL             string
+	AdvancedSuggestURL        string // NEW: URL for advanced suggestion microservice
+	UseAdvancedSuggest        bool   // NEW: Feature flag to enable advanced suggestions
 }
 
 func Load() *Config {
@@ -100,29 +102,31 @@ func Load() *Config {
 		JWTSecret:                 getEnv("JWT_SECRET", "change-this-secret-key-in-production"),
 		RefreshTokenSecret:        getEnv("REFRESH_TOKEN_SECRET", ""),
 		// Access tokens are short-lived (15m) to limit blast radius
-		AccessTokenTTLMinutes: getEnvAsInt("ACCESS_TOKEN_TTL_MINUTES", 15),
-		RefreshTokenTTLDays:   getEnvAsInt("REFRESH_TOKEN_TTL_DAYS", 7),
-		RefreshCookieKey:      refreshCookieKey,
-		OpenAIAPIKey:          getEnv("OPENAI_API_KEY", ""),
-		GoogleGenAIKey:        geminiKey,
-		AnthropicAPIKey:       getEnv("ANTHROPIC_API_KEY", ""),
-		StripeSecretKey:       getEnv("STRIPE_SECRET_KEY", ""),
-		StripeWebhookSecret:   getEnv("STRIPE_WEBHOOK_SECRET", ""),
-		RazorpayKeyID:         getEnv("RAZORPAY_KEY_ID", ""),
-		RazorpayKeySecret:     getEnv("RAZORPAY_KEY_SECRET", ""),
-		GoogleClientID:        getEnv("GOOGLE_CLIENT_ID", ""),
-		GoogleClientSecret:    getEnv("GOOGLE_CLIENT_SECRET", ""),
-		FacebookClientID:      getEnv("FACEBOOK_CLIENT_ID", ""),
-		FacebookClientSecret:  getEnv("FACEBOOK_CLIENT_SECRET", ""),
-		TwilioAccountSID:      getEnv("TWILIO_ACCOUNT_SID", ""),
-		TwilioAuthToken:       getEnv("TWILIO_AUTH_TOKEN", ""),
-		TwilioPhoneNumber:     getEnv("TWILIO_PHONE_NUMBER", ""),
-		AksharaURL:            aksharaURL,
-		IMEEnabled:            imeEnabled,
-		IMECacheEnabled:       strings.ToLower(getEnv("IME_CACHE_ENABLED", "true")) == "true",
-		TransliteratorBaseURL: transBase,
-		SuggestServiceURL:     strings.TrimRight(getEnv("SUGGEST_SERVICE_URL", ""), "/"),
-		OCRServiceURL:         strings.TrimRight(getEnv("OCR_SERVICE_URL", ""), "/"),
+		AccessTokenTTLMinutes:  getEnvAsInt("ACCESS_TOKEN_TTL_MINUTES", 15),
+		RefreshTokenTTLDays:    getEnvAsInt("REFRESH_TOKEN_TTL_DAYS", 7),
+		RefreshCookieKey:       refreshCookieKey,
+		OpenAIAPIKey:           getEnv("OPENAI_API_KEY", ""),
+		GoogleGenAIKey:         geminiKey,
+		AnthropicAPIKey:        getEnv("ANTHROPIC_API_KEY", ""),
+		StripeSecretKey:        getEnv("STRIPE_SECRET_KEY", ""),
+		StripeWebhookSecret:    getEnv("STRIPE_WEBHOOK_SECRET", ""),
+		RazorpayKeyID:          getEnv("RAZORPAY_KEY_ID", ""),
+		RazorpayKeySecret:      getEnv("RAZORPAY_KEY_SECRET", ""),
+		GoogleClientID:         getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret:     getEnv("GOOGLE_CLIENT_SECRET", ""),
+		FacebookClientID:       getEnv("FACEBOOK_CLIENT_ID", ""),
+		FacebookClientSecret:   getEnv("FACEBOOK_CLIENT_SECRET", ""),
+		TwilioAccountSID:       getEnv("TWILIO_ACCOUNT_SID", ""),
+		TwilioAuthToken:        getEnv("TWILIO_AUTH_TOKEN", ""),
+		TwilioPhoneNumber:      getEnv("TWILIO_PHONE_NUMBER", ""),
+		AksharaURL:             aksharaURL,
+		IMEEnabled:             imeEnabled,
+		IMECacheEnabled:        strings.ToLower(getEnv("IME_CACHE_ENABLED", "true")) == "true",
+		TransliteratorBaseURL:  transBase,
+		SuggestServiceURL:      strings.TrimRight(getEnv("SUGGEST_SERVICE_URL", ""), "/"),
+		OCRServiceURL:          strings.TrimRight(getEnv("OCR_SERVICE_URL", ""), "/"),
+		AdvancedSuggestURL:     strings.TrimRight(getEnv("ADVANCED_SUGGEST_URL", ""), "/"),
+		UseAdvancedSuggest:     strings.ToLower(getEnv("USE_ADVANCED_SUGGEST", "false")) == "true",
 	}
 }
 
