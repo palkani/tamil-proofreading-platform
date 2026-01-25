@@ -200,6 +200,12 @@ module.exports = async function handler(req, res) {
     // Useful for "என்பது" vs "எண்பது" vs "எண்பத்து" etc.
     enpathu: ['என்பது', 'எண்பது', 'எண்பத்து', 'என்பத்து', 'எண்பது\u200c'],
 
+    // Colloquial/spoken past tense patterns (-ichiya, -chiya question forms)
+    // padichiya -> படிச்சியா (did you study/read? - spoken Tamil)
+    padichiya: ['படிச்சியா', 'படிச்சிய', 'படித்தியா', 'படிச்சா', 'படிச்சீயா', 'படிச்சேன்', 'படிச்சான்', 'படிச்சாங்க'],
+    padicha: ['படிச்சா', 'படிச்ச', 'படித்தா', 'படிச்சான்', 'படிச்சாங்க'],
+    padichen: ['படிச்சேன்', 'படிச்சேனா', 'படித்தேன்'],
+
     // Common identity words
     // "tamilan" is often intended as "தமிழன்" (Tamil person/man), but users may also want the base "தமிழ்".
     // Provide stable top-3 to match Google-IME-style UX.

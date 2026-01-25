@@ -1,0 +1,36 @@
+steps:
+  # Build the seeder binary
+  - name: 'gcr.io/cloud-builders/go'
+    dir: 'backend'
+    args: ['build', '-o', 'seed_corpus', 'cmd/seed_ime_corpus/main.go']
+    env:
+      - 'CGO_ENABLED=0'
+      - 'GOOS=linux'
+  
+  # Run the seeder with comprehensive data
+  - name: 'gcr.io/cloud-builders/go'
+    dir: 'backend'
+    entrypoint: 'bash'
+    env:
+      - 'DATABASE_URL=${_DATABASE_URL}'
+      - 'SEED_DIR=../data'
+    script: |
+      #!/bin/bash
+      set -e
+      
+      echo "[CORPUS-SEED] Preparing seed files..."
+      
+      # Use comprehensive seed files
+      cp ../data/seed_words_comprehensive.tsv ../data/seed_words.tsv
+      cp ../data/seed_phrases_comprehensive.tsv ../data/seed_phrases.tsv
+      cp ../data/seed_bigrams_comprehensive.tsv ../data/seed_bigrams.tsv
+      
+      echo "[CORPUS-SEED] Running seeder..."
+      go run cmd/seed_ime_corpus/main.go
+      
+      echo "[CORPUS-SEED] ✓ Complete!"
+
+timeout: 300s
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'

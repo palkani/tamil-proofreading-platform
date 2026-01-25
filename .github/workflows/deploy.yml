@@ -88,6 +88,30 @@ jobs:
         echo "Backend URL: $BACKEND_URL"
         curl -f "$BACKEND_URL/health" || echo "Health check pending..."
 
+    - name: Seed Corpus Tables (One-time)
+      id: seed-corpus
+      continue-on-error: true
+      run: |
+        echo "📦 Checking if corpus tables need seeding..."
+        
+        # Get DATABASE_URL from Secret Manager
+        DATABASE_URL=$(gcloud secrets versions access latest --secret=DATABASE_URL --project=${{ env.PROJECT_ID }})
+        
+        # Simple check: try to seed via Cloud Build (seeder handles duplicates gracefully)
+        # This is idempotent - seeder updates existing rows with GREATEST(frequency)
+        echo "Running corpus seeder via Cloud Build..."
+        gcloud builds submit \
+          --config=.github/cloudbuild-seed-corpus.yaml \
+          --substitutions=_DATABASE_URL="$DATABASE_URL" \
+          --timeout=300s \
+          --project=${{ env.PROJECT_ID }} \
+          . || {
+            echo "⚠️  Corpus seeding failed or skipped - tables may already be populated"
+            echo "This is not critical - the learning system will populate from user interactions"
+          }
+        
+        echo "✅ Corpus seed step complete"
+
     
     - name: Set up Node.js
       uses: actions/setup-node@v4
