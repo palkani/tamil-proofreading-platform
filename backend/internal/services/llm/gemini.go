@@ -291,7 +291,7 @@ var proofreadingPrompt = `நீங்கள் ஒரு தமிழ் மொ
    தொடர்ந்து "சொன்னார்" என்று இருந்தால், "தெரிவித்தார்" பரிந்துரைக்க வேண்டாம்
 
 உள்ளீட்டு உரை:
-[பயனரின் தமிழ் உரை இங்கே]`
+[USER'S TAMIL TEXT HERE]`
 
 type GeminiResponse struct {
         Candidates []struct {
@@ -343,6 +343,13 @@ func CallGeminiProofread(userText string, model string, apiKey string, maxOutput
 
         startTime := time.Now()
         log.Printf("[GEMINI] Starting with model: %s, text length: %d", model, len(userText))
+        
+        // DEBUG: Log first 200 chars of user text
+        textPreview := userText
+        if len(textPreview) > 200 {
+                textPreview = textPreview[:200] + "..."
+        }
+        log.Printf("[GEMINI-DEBUG] User text preview: %q", textPreview)
 
         finalPrompt := buildProofreadPrompt(userText)
         promptBuildTime := time.Since(startTime)
