@@ -495,28 +495,28 @@ class HomeEditor {
     }
     
     if (!this.translitV2Enabled) {
-      // CRITICAL: Disable keyboard IME handlers - causes reverse text bug
+      // Re-enabled: Keyboard handlers are safe now that highlighting is disabled
       // Handle keyboard for IME dropdown (arrow navigation + selection)
-      // this.editor.addEventListener('keydown', (e) => {
-      //   const key = e.key;
-      //   // Only intercept keys when dropdown is visible
-      //   const dropdownOpen = this.autocompleteBox && !this.autocompleteBox.classList.contains('hidden');
-      //   if (!dropdownOpen) return;
-      //
-      //   const handledKeys = new Set([
-      //     'ArrowDown',
-      //     'ArrowUp',
-      //     'Enter',
-      //     'Tab',
-      //     'Escape',
-      //     ' ',
-      //   ]);
-      //
-      //   if (handledKeys.has(key) || /^[1-5]$/.test(key)) {
-      //     this.handleKeyDown(e);
-      //   }
-      // });
-      console.log('[HomeEditor] ⚠️ Keyboard IME handlers DISABLED');
+      this.editor.addEventListener('keydown', (e) => {
+        const key = e.key;
+        // Only intercept keys when dropdown is visible
+        const dropdownOpen = this.autocompleteBox && !this.autocompleteBox.classList.contains('hidden');
+        if (!dropdownOpen) return;
+
+        const handledKeys = new Set([
+          'ArrowDown',
+          'ArrowUp',
+          'Enter',
+          'Tab',
+          'Escape',
+          ' ',
+        ]);
+
+        if (handledKeys.has(key) || /^[1-5]$/.test(key)) {
+          this.handleKeyDown(e);
+        }
+      });
+      console.log('[HomeEditor] ✅ Keyboard IME handlers ENABLED');
     }
     // Hard cap: prevent inserting more words once limit is reached (typing + paste)
     this.editor.addEventListener('beforeinput', (e) => {
@@ -547,10 +547,10 @@ class HomeEditor {
     });
     this.editor.addEventListener('input', () => {
       this.handleInput();
-      // CRITICAL: Disable auto-complete to prevent reverse text bug
-      // if (!this.translitV2Enabled) {
-      //   this.showAutocomplete();
-      // }
+      // Re-enabled: Auto-complete is safe now that highlighting is disabled
+      if (!this.translitV2Enabled) {
+        this.showAutocomplete();
+      }
     });
     this.editor.addEventListener('paste', (e) => this.handlePaste(e));
 
