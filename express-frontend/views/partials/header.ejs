@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ta">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -40,8 +40,9 @@
   <!-- Global injection of Google Client ID for browser usage (forces single source of truth) -->
   <script>
     window.GOOGLE_CLIENT_ID = "<%= process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '' %>";
+    // CRITICAL FIX: Disable Tamil IME to prevent reverse typing bug
     // Enable unified transliteration IME V2 across pages (Home/Free Editor/Workspace)
-    window.TRANS_SUGGEST_V2 = true;
+    window.TRANS_SUGGEST_V2 = false; // DISABLED until reverse text bug is fixed
   </script>
 
   <!-- Microsoft Clarity -->
@@ -364,7 +365,22 @@
     }
   </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-50" dir="ltr">
+  <style>
+    /* CRITICAL FIX: Force LTR for all text input and content editable */
+    body, html {
+      direction: ltr !important;
+      unicode-bidi: embed !important;
+    }
+    .ProseMirror, .ProseMirror *, 
+    [contenteditable], [contenteditable] *,
+    textarea, textarea *,
+    input[type="text"], input[type="text"] * {
+      direction: ltr !important;
+      unicode-bidi: normal !important;
+      text-align: left !important;
+    }
+  </style>
   <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:text-gray-900 focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg">
     Skip to main content
   </a>
