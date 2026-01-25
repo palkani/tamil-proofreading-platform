@@ -218,6 +218,13 @@ module.exports = async function handler(req, res) {
     // மொழி / mozhi: avoid invalid "மொலி"
     moli: ['மொழி', 'மொழியை', 'மொழியில்', 'மொழியால்', 'மொழிகள்', 'மொழியுடன்'],
     mozhi: ['மொழி', 'மொழியை', 'மொழியில்', 'மொழியால்', 'மொழிகள்', 'மொழியுடன்'],
+
+    // Common food words - Aksharamukha returns wrong forms
+    soru: ['சோறு', 'சோற்றை', 'சோற்றில்', 'சாதம்', 'சாப்பாடு'],
+    choru: ['சோறு', 'சோற்றை', 'சோற்றில்'],
+    saatham: ['சாதம்', 'சாதத்தை', 'சாதத்தில்'],
+    sapadu: ['சாப்பாடு', 'சாப்பாட்டை', 'சாப்பாட்டில்', 'சாப்பிட'],
+    saappadu: ['சாப்பாடு', 'சாப்பாட்டை', 'சாப்பாட்டில்', 'சாப்பிட'],
   };
   const target = `${base.replace(/\/+$/, '')}/transliterate/suggest?q=${encodeURIComponent(
     q
