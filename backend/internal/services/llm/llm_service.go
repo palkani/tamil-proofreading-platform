@@ -1105,16 +1105,55 @@ func (s *LLMService) proofreadWithOpenAI(ctx context.Context, cleaned string, re
         if s.openAIClient == nil {
                 return nil, &ProviderError{Provider: "openai", Message: "OpenAI client not configured", Retryable: false}
         }
-        model := getEnvTrim("OPENAI_PROOFREAD_MODEL", "gpt-4.1-mini")
+        // Use gpt-4o-mini (correct model name) with better Tamil support
+        model := getEnvTrim("OPENAI_PROOFREAD_MODEL", "gpt-4o-mini")
 
-        sys := "You are a Tamil Proofreading Assistant. Return ONLY valid JSON (no markdown)."
-        user := strings.Replace(proofreadingPrompt, "[USER'S TAMIL TEXT HERE]", cleaned, 1)
+        // OpenAI understands English prompts better - use English with Tamil text
+        sys := `You are a Tamil Language Expert, Grammar Teacher, and Proofreader.
+
+🎯 PRIMARY TASK: Fix errors only - no creative changes
+
+Your job: Analyze Tamil text and identify ALL errors.
+Do NOT suggest style changes or rewrites - only fix mistakes.
+
+⚠️ CRITICAL INSTRUCTIONS:
+- Check all error categories below carefully
+- Report ALL errors found - no limit on count
+- Do not mark style preferences or valid alternatives as errors
+- Analyze thoroughly like ChatGPT and catch every single error
+
+ANALYZE FOR:
+1. Spelling errors (தவறான எழுத்துக்கள்)
+2. Grammar errors (இலக்கணப் பிழைகள்)
+3. Verb-number agreement (வினை-எண் பொருந்தல்)
+4. Tense consistency (காலம் ஒத்துழைப்பு)
+5. Sandhi errors (புணர்ச்சி பிழைகள்)
+6. வல்லினம் மெல்லினம் errors
+7. Case markers (வேற்றுமை உருபுகள்)
+
+Return ONLY valid JSON (no markdown):
+{
+  "corrections": [
+    {
+      "original": "தவறான வார்த்தை",
+      "corrected": "சரியான வார்த்தை",
+      "reason": "explanation in Tamil",
+      "type": "grammar|spelling|sandhi|வல்லினம்|verb_agreement|tense",
+      "start_index": 0,
+      "end_index": 10
+    }
+  ],
+  "corrected_text": "fully corrected Tamil text here"
+}`
+        
+        // Use the Tamil prompt but with explicit English instruction about JSON format
+        user := fmt.Sprintf("%s\n\n[USER'S TAMIL TEXT HERE]\n%s", sys, cleaned)
 
         req := openai.ChatCompletionRequest{
                 Model:       model,
                 Temperature: 0.1,
                 Messages: []openai.ChatCompletionMessage{
-                        {Role: openai.ChatMessageRoleSystem, Content: sys},
+                        {Role: openai.ChatMessageRoleSystem, Content: "You are a Tamil proofreading expert. Always return valid JSON."},
                         {Role: openai.ChatMessageRoleUser, Content: user},
                 },
         }
@@ -1137,15 +1176,30 @@ func (s *LLMService) proofreadWithOpenAI(ctx context.Context, cleaned string, re
         }
 
 	content := resp.Choices[0].Message.Content
+	contentPreview := content
+	if len(contentPreview) > 200 {
+		contentPreview = contentPreview[:200] + "..."
+	}
+	log.Printf("[OPENAI-RESPONSE] request_id=%s content_length=%d content_preview=%s", 
+		requestID, len(content), contentPreview)
+	
 	corrected, suggestions, changes, alternatives, ok := parseProofreadJSON(content)
 	if !ok {
+		log.Printf("[OPENAI-PARSE-FAIL] request_id=%s failed to parse JSON response", requestID)
 		return nil, &ProviderError{Provider: "openai", Message: "failed to parse JSON", Retryable: true}
 	}
+	
+	// Log what we got
+	log.Printf("[OPENAI-PARSED] request_id=%s suggestions=%d changes=%d alternatives=%d corrected_len=%d", 
+		requestID, len(suggestions), len(changes), len(alternatives), len(corrected))
+	
 	// Empty response is VALID - means no corrections needed
 	if corrected == "" {
 		corrected = cleaned
+		log.Printf("[OPENAI] No corrections needed - using original text (request_id=%s)", requestID)
 	}
 	if len(suggestions) == 0 && corrected != cleaned {
+		log.Printf("[OPENAI] Auto-detecting changes from text diff (request_id=%s)", requestID)
 		suggestions = detectChangesFromText(cleaned, corrected)
 	}
 	suggestions = fillSuggestionIndices(cleaned, suggestions)
