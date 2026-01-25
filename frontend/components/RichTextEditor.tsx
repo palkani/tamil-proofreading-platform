@@ -47,13 +47,15 @@ export default function RichTextEditor({
   onPasteContent,
   onPlainTextChange,
 }: RichTextEditorProps) {
-  // Load Tamil IME preference from localStorage, default to true
+  // Load Tamil IME preference from localStorage, default to FALSE (disabled)
+  // TEMPORARY: IME has bugs, disable by default until fixed
   const [tamilIMEEnabled, setTamilIMEEnabled] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('tamilIMEEnabled');
-      return saved !== null ? saved === 'true' : true;
+      // Default to FALSE instead of TRUE
+      return saved !== null ? saved === 'true' : false;
     }
-    return true;
+    return false;
   });
   const updateTimerRef = useRef<number | null>(null);
   const pasteCallbackRef = useRef<typeof onPasteContent>(onPasteContent);
@@ -104,8 +106,9 @@ export default function RichTextEditor({
       attributes: {
         class:
           'h-full min-h-[40rem] overflow-y-auto border-2 border-[#E2E8F0] rounded-[28px] px-12 py-10 focus:outline-none bg-white shadow-lg focus:ring-4 focus:ring-[#4F46E5]/20 focus:border-[#4F46E5] transition-all',
-        style: 'color: #0F172A; font-size: 1.125rem; line-height: 2;',
+        style: 'color: #0F172A; font-size: 1.125rem; line-height: 2; direction: ltr;',
         'aria-label': placeholder ?? 'Tamil text editor',
+        dir: 'ltr',
       },
     },
     onUpdate({ editor }) {

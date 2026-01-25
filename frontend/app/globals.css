@@ -52,9 +52,16 @@ body {
   pointer-events: auto !important;
 }
 
-/* Alternative: Position absolutely when in editor */
+/* CRITICAL FIX: Force LTR text direction */
 .ProseMirror {
   position: relative;
+  direction: ltr !important;
+  unicode-bidi: embed !important;
+}
+
+.ProseMirror * {
+  direction: ltr !important;
+  unicode-bidi: normal !important;
 }
 
 /* Make dropdown appear on new line below text */
