@@ -85,27 +85,27 @@ CRITICAL TAMIL GRAMMAR RULES:
 1. Missing puḷḷi (புள்ளி) at word endings - "அளியுங்கள" → "கொடுங்கள்" or "அளியுங்கள்"
 2. Incorrect sandhi (புணர்ச்சி) - ONLY when words are improperly joined:
    ❌ "பதிவபுதுப்பித்தல்" → ✅ "பதிவுப் புதுப்பித்தல்" (missing space)
-3. PRESERVE sandhi consonants when adjective comes BEFORE noun:
-   ✅ "வரலாற்றுச் சிறப்புமிக்க" is CORRECT (DO NOT suggest removing "ச்")
-   ✅ "அரசியல்சாசனச் சட்டம்" is CORRECT (DO NOT suggest removing "ச்")
+3. DO NOT suggest adding/removing sandhi consonants - both forms are valid:
+   ✅ "வரலாற்றுச் சிறப்புமிக்க" (with ச் - classical style)
+   ✅ "வரலாற்று சிறப்புமிக்க" (without ச் - modern style)
+   ✅ "அரசியல்சாசனச் சட்டம்" (with ச்)
+   ✅ "அரசியல்சாசன சட்டம்" (without ச்)
+   Modern Tamil accepts both - DO NOT flag either as error!
 4. Wrong verb conjugations and honorific forms
 5. Spelling errors and colloquial forms
-
-SANDHI CONSONANTS TO PRESERVE:
-- Trailing "ச்", "த்", "ற்" between adjective and noun are GRAMMATICALLY CORRECT
-- DO NOT flag "வரலாற்றுச் சிறப்பு" as error
-- DO NOT suggest removing sandhi consonants from proper compound constructions
 
 EXAMPLES YOU MUST FLAG:
 - "அளியுங்கள" → "கொடுங்கள்" (missing புள்ளி or informal)
 - "பதிவபுதுப்பித்தல்" → "பதிவுப் புதுப்பித்தல்" (wrong word joining)
 - "வாங்க" → "வாருங்கள்" (too informal)
 
-EXAMPLES YOU MUST NOT FLAG:
-- "வரலாற்றுச் சிறப்புமிக்க" ✅ (correct sandhi)
-- "அரசியல்சாசனச் சட்டம்" ✅ (correct sandhi)
+EXAMPLES YOU MUST NOT FLAG (both forms valid):
+- "வரலாற்றுச் அங்கீகாரம்" ✅ (with sandhi)
+- "வரலாற்று அங்கீகாரம்" ✅ (without sandhi)
+- "அரசியல்சாசனச் சட்டம்" ✅ (with sandhi)
+- "அரசியல்சாசன சட்டம்" ✅ (without sandhi)
 
-BE STRICT but PRESERVE proper sandhi consonants.
+BE STRICT but DO NOT suggest stylistic sandhi changes!
 Provide title and description in TAMIL language only.`
               }]
             },

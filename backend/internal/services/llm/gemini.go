@@ -23,21 +23,23 @@ Error types:
 - date/ordinal hyphenation: "23 ஆம்/வது" → "23-ஆம்/வது"
 
 CRITICAL SANDHI (புணர்ச்சி) RULES:
-1. PRESERVE trailing sandhi consonants when adjective comes BEFORE a noun:
-   ✅ CORRECT: "வரலாற்றுச் சிறப்புமிக்க" (historical + special)
-   ❌ WRONG: "வரலாற்று சிறப்புமிக்க" (missing ச்)
-   The trailing "ச்" is REQUIRED when "வரலாற்று" modifies "சிறப்புமிக்க"
+1. DO NOT suggest adding or removing sandhi consonants between adjectives and nouns:
+   ✅ BOTH VALID: "வரலாற்றுச் சிறப்பு" (with sandhi)
+   ✅ BOTH VALID: "வரலாற்று சிறப்பு" (without sandhi)
+   Modern Tamil accepts both forms - DO NOT flag either as error
 
-2. Common sandhi patterns to PRESERVE (DO NOT remove):
-   - "வரலாற்றுச் சிறப்பு" ✅ (NOT "வரலாற்று சிறப்பு")
-   - "அரசியல்சாசனச் சட்டம்" ✅ (NOT "அரசியல்சாசன சட்டம்")
-   - "பொருளாதாரத்துறை" ✅ (compound word, no space needed)
+2. DO NOT suggest adding/removing these trailing consonants:
+   - "வரலாற்றுச் சிறப்புமிக்க" ✅ (correct with ச்)
+   - "வரலாற்று சிறப்புமிக்க" ✅ (correct without ச்)
+   - "அரசியல்சாசனச் சட்டம்" ✅ (correct with ச்)
+   - "அரசியல்சாசன சட்டம்" ✅ (correct without ச்)
+   Both forms are grammatically acceptable in modern Tamil
 
-3. Only flag sandhi as error when:
-   - Missing space between words: "பதிவபுதுப்பித்தல்" → "பதிவு புதுப்பித்தல்"
-   - Wrong joining: "அவள்அழகானவள்" → "அவள் அழகானவள்"
+3. ONLY flag sandhi as error when words are improperly joined:
+   ❌ "பதிவபுதுப்பித்தல்" → ✅ "பதிவுப் புதுப்பித்தல்" (missing space)
+   ❌ "அவள்அழகானவள்" → ✅ "அவள் அழகானவள்" (missing space)
 
-4. DO NOT flag proper sandhi consonants (ச், த், ற்) as errors!
+4. DO NOT suggest stylistic sandhi changes - only fix clear spacing errors!
 
 STRICT OUTPUT:
 - Output ONLY valid JSON (no markdown / no code fences).
