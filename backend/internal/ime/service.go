@@ -2,6 +2,7 @@ package ime
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"regexp"
@@ -17,12 +18,20 @@ type Service struct {
 	client       *Client
 	cache        *Cache
 	freq         freqDict
+	db           *sql.DB // Database connection for corpus queries
 	basePath     string
 	enabled      bool
 	cacheEnabled bool
 }
 
+// NewService creates IME service with optional database for corpus queries.
+// Pass nil for db if corpus queries are not needed (will fallback to Aksharamukha only).
 func NewService(basePath, aksharaURL string, enabled bool, cacheEnabled bool) *Service {
+	return NewServiceWithDB(basePath, aksharaURL, nil, enabled, cacheEnabled)
+}
+
+// NewServiceWithDB creates IME service with database connection for corpus-first architecture.
+func NewServiceWithDB(basePath, aksharaURL string, db *sql.DB, enabled bool, cacheEnabled bool) *Service {
 	var cache *Cache
 	if cacheEnabled {
 		cache = NewCache(10 * time.Minute)
@@ -31,6 +40,7 @@ func NewService(basePath, aksharaURL string, enabled bool, cacheEnabled bool) *S
 		client:       NewClient(aksharaURL),
 		cache:        cache,
 		freq:         loadFreqDict(basePath),
+		db:           db,
 		basePath:     basePath,
 		enabled:      enabled,
 		cacheEnabled: cacheEnabled,
@@ -70,6 +80,7 @@ func normalizePhonetic(q string) string {
 }
 
 // Suggest returns ranked candidates; never errors.
+// Architecture: Corpus-first, then Aksharamukha fallback.
 func (s *Service) Suggest(ctx context.Context, q, mode string, limit int) (cands []Candidate, meta map[string]interface{}) {
 	start := time.Now()
 	meta = map[string]interface{}{
@@ -94,14 +105,55 @@ func (s *Service) Suggest(ctx context.Context, q, mode string, limit int) (cands
 		return []Candidate{}, meta
 	}
 
+	// Check cache first
 	if s.cacheEnabled && s.cache != nil {
 		if cached, ok := s.cache.Get(s.key(mode, q, limit)); ok {
 			meta["cache"] = "hit"
 			meta["latency_ms"] = time.Since(start).Milliseconds()
+			meta["engine"] = "cache"
 			return cached, meta
 		}
 	}
 	meta["cache"] = "miss"
+
+	// ========== NEW: CORPUS-FIRST ARCHITECTURE ==========
+	// Step 1: Try corpus database first (fast, accurate, verified words)
+	var corpusCands []Candidate
+	var corpusErr error
+
+	// Try phrase match first (if input has spaces)
+	if strings.Contains(q, " ") {
+		phraseCands, phraseErr := s.queryCorpusPhrases(ctx, q, mode, limit)
+		if phraseErr == nil && len(phraseCands) > 0 {
+			log.Printf("[IME] Corpus PHRASE hit: q=%q mode=%s count=%d", q, mode, len(phraseCands))
+			meta["engine"] = "corpus_phrase"
+			meta["latency_ms"] = time.Since(start).Milliseconds()
+			if s.cacheEnabled && s.cache != nil {
+				s.cache.Set(s.key(mode, q, limit), phraseCands)
+			}
+			return phraseCands, meta
+		}
+	}
+
+	// Try word match
+	corpusCands, corpusErr = s.queryCorpus(ctx, q, mode, limit)
+	if corpusErr == nil && len(corpusCands) > 0 {
+		// Corpus hit! Return immediately (no need to call Aksharamukha)
+		log.Printf("[IME] Corpus WORD hit: q=%q mode=%s count=%d latency=%dms", 
+			q, mode, len(corpusCands), time.Since(start).Milliseconds())
+		meta["engine"] = "corpus"
+		meta["latency_ms"] = time.Since(start).Milliseconds()
+		
+		// Cache the corpus results
+		if s.cacheEnabled && s.cache != nil {
+			s.cache.Set(s.key(mode, q, limit), corpusCands)
+		}
+		return corpusCands, meta
+	}
+
+	// Step 2: Corpus miss - fallback to Aksharamukha API
+	log.Printf("[IME] Corpus miss for q=%q mode=%s, falling back to Aksharamukha", q, mode)
+	// ========== END CORPUS-FIRST ARCHITECTURE ==========
 
 	// Call transliterator in two ways:
 	// - raw token (best when the backend already understands the token)
@@ -129,6 +181,7 @@ func (s *Service) Suggest(ctx context.Context, q, mode string, limit int) (cands
 	reqID := ctx.Value("request_id")
 	cands = s.rankCandidates(words, q, limit, reqID)
 
+	meta["engine"] = "aksharamukha_fallback"
 	if s.cacheEnabled && s.cache != nil {
 		s.cache.Set(s.key(mode, q, limit), cands)
 	}

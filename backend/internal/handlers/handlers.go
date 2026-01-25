@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"log"
 	"strings"
 	"time"
@@ -50,7 +51,21 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	llmService := llm.NewLLMService(cfg.OpenAIAPIKey, cfg.GoogleGenAIKey, cfg.AnthropicAPIKey, nlpService)
 	paymentService := payment.NewPaymentService(db, cfg)
 
-	imeSvc := ime.NewService(".", cfg.AksharaURL, cfg.IMEEnabled, cfg.IMECacheEnabled)
+	// Get *sql.DB from gorm for IME corpus queries
+	var sqlDB *sql.DB
+	if db != nil {
+		var err error
+		sqlDB, err = db.DB()
+		if err != nil {
+			log.Printf("[IME] Warning: Failed to get sql.DB from gorm: %v. IME will fallback to Aksharamukha only.", err)
+			sqlDB = nil
+		} else {
+			log.Printf("[IME] Database connection available for corpus-first architecture ✓")
+		}
+	}
+
+	// Create IME service with corpus database connection
+	imeSvc := ime.NewServiceWithDB(".", cfg.AksharaURL, sqlDB, cfg.IMEEnabled, cfg.IMECacheEnabled)
 
 	h := &Handlers{
 		db:             db,
