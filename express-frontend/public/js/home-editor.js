@@ -287,16 +287,21 @@ class HomeEditor {
     
     this.init();
 
+    // CRITICAL FIX: Disable ALL transliteration until reverse text bug is fixed
     // Transliteration V2 (feature-flagged)
-    const editorEl = this.editor;
-    if (this.translitV2Enabled && editorEl) {
-      this.translitTypeahead = new window.TransliterationTypeahead(
-        new window.HomeEditorAdapter(editorEl),
-        {
-          getMode: () => this.getMode(),
-        }
-      );
-    }
+    // const editorEl = this.editor;
+    // if (this.translitV2Enabled && editorEl) {
+    //   this.translitTypeahead = new window.TransliterationTypeahead(
+    //     new window.HomeEditorAdapter(editorEl),
+    //     {
+    //       getMode: () => this.getMode(),
+    //     }
+    //   );
+    // }
+    
+    // Disable legacy transliteration too
+    this.translitV2Enabled = false;
+    console.log('[HomeEditor] ⚠️ ALL transliteration DISABLED to prevent reverse text bug');
   }
 
   getMode() {
@@ -490,26 +495,28 @@ class HomeEditor {
     }
     
     if (!this.translitV2Enabled) {
+      // CRITICAL: Disable keyboard IME handlers - causes reverse text bug
       // Handle keyboard for IME dropdown (arrow navigation + selection)
-      this.editor.addEventListener('keydown', (e) => {
-        const key = e.key;
-        // Only intercept keys when dropdown is visible
-        const dropdownOpen = this.autocompleteBox && !this.autocompleteBox.classList.contains('hidden');
-        if (!dropdownOpen) return;
-
-        const handledKeys = new Set([
-          'ArrowDown',
-          'ArrowUp',
-          'Enter',
-          'Tab',
-          'Escape',
-          ' ',
-        ]);
-
-        if (handledKeys.has(key) || /^[1-5]$/.test(key)) {
-          this.handleKeyDown(e);
-        }
-      });
+      // this.editor.addEventListener('keydown', (e) => {
+      //   const key = e.key;
+      //   // Only intercept keys when dropdown is visible
+      //   const dropdownOpen = this.autocompleteBox && !this.autocompleteBox.classList.contains('hidden');
+      //   if (!dropdownOpen) return;
+      //
+      //   const handledKeys = new Set([
+      //     'ArrowDown',
+      //     'ArrowUp',
+      //     'Enter',
+      //     'Tab',
+      //     'Escape',
+      //     ' ',
+      //   ]);
+      //
+      //   if (handledKeys.has(key) || /^[1-5]$/.test(key)) {
+      //     this.handleKeyDown(e);
+      //   }
+      // });
+      console.log('[HomeEditor] ⚠️ Keyboard IME handlers DISABLED');
     }
     // Hard cap: prevent inserting more words once limit is reached (typing + paste)
     this.editor.addEventListener('beforeinput', (e) => {
@@ -540,9 +547,10 @@ class HomeEditor {
     });
     this.editor.addEventListener('input', () => {
       this.handleInput();
-      if (!this.translitV2Enabled) {
-        this.showAutocomplete();
-      }
+      // CRITICAL: Disable auto-complete to prevent reverse text bug
+      // if (!this.translitV2Enabled) {
+      //   this.showAutocomplete();
+      // }
     });
     this.editor.addEventListener('paste', (e) => this.handlePaste(e));
 
