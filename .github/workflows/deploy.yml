@@ -92,23 +92,23 @@ jobs:
       id: seed-corpus
       continue-on-error: true
       run: |
-        echo "📦 Checking if corpus tables need seeding..."
+        echo "📦 Seeding corpus tables directly..."
         
         # Get DATABASE_URL from Secret Manager
         DATABASE_URL=$(gcloud secrets versions access latest --secret=DATABASE_URL --project=${{ env.PROJECT_ID }})
         
-        # Simple check: try to seed via Cloud Build (seeder handles duplicates gracefully)
-        # This is idempotent - seeder updates existing rows with GREATEST(frequency)
-        echo "Running corpus seeder via Cloud Build..."
-        gcloud builds submit \
-          --config=.github/cloudbuild-seed-corpus.yaml \
-          --substitutions=_DATABASE_URL="$DATABASE_URL" \
-          --timeout=300s \
-          --project=${{ env.PROJECT_ID }} \
-          . || {
-            echo "⚠️  Corpus seeding failed or skipped - tables may already be populated"
-            echo "This is not critical - the learning system will populate from user interactions"
-          }
+        if [ -z "$DATABASE_URL" ]; then
+          echo "⚠️  DATABASE_URL secret not found - skipping corpus seed"
+          exit 0
+        fi
+        
+        # Use direct SQL seeding (faster and more reliable than Cloud Build)
+        echo "Running SQL seed script..."
+        psql "$DATABASE_URL" -f backend/seed_corpus_minimal.sql || {
+          echo "⚠️  SQL seeding failed - may need Cloud SQL Auth Proxy"
+          echo "Tables may already be populated or connection failed"
+          echo "This is not critical - the learning system will populate from user interactions"
+        }
         
         echo "✅ Corpus seed step complete"
 

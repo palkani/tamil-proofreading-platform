@@ -1755,7 +1755,7 @@ class HomeEditor {
       const hasAlternatives = suggestion.alternatives && Array.isArray(suggestion.alternatives) && suggestion.alternatives.length > 0;
       
       return `
-        <div class="bg-accent-50 rounded-lg p-4 border-l-4 border-primary-500 mb-3">
+        <div class="bg-accent-50 rounded-lg p-4 border-l-4 border-primary-500 mb-3" data-suggestion-id="${suggestion.id || index}">
           <div class="flex items-start gap-2">
             <span class="inline-block px-2 py-1 bg-primary-600 text-white text-xs rounded font-semibold flex-shrink-0 whitespace-nowrap">
               ${typeLabel}
@@ -1783,6 +1783,30 @@ class HomeEditor {
                   </div>
                 </div>
               ` : ''}
+              ${hasCorrection ? `
+                <div class="flex gap-2 mt-3 pt-3 border-t border-primary-200">
+                  <button 
+                    type="button"
+                    class="suggestion-apply-btn flex-1 px-4 py-2 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 transition-colors"
+                    data-index="${index}"
+                    data-original="${this.escapeHtml(suggestion.original)}"
+                    data-corrected="${this.escapeHtml(suggestion.corrected)}">
+                    <svg class="w-4 h-4 inline-block mr-1 mb-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Apply
+                  </button>
+                  <button 
+                    type="button"
+                    class="suggestion-ignore-btn flex-1 px-4 py-2 bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                    data-index="${index}">
+                    <svg class="w-4 h-4 inline-block mr-1 mb-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    Ignore
+                  </button>
+                </div>
+              ` : ''}
             </div>
           </div>
         </div>
@@ -1797,6 +1821,110 @@ class HomeEditor {
         ${suggestionsHTML}
       </div>
     `;
+
+    // Attach event listeners for Apply and Ignore buttons
+    this.attachSuggestionHandlers(suggestions);
+  }
+
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  attachSuggestionHandlers(suggestions) {
+    if (!this.suggestionsContainer) return;
+
+    // Apply buttons
+    const applyButtons = this.suggestionsContainer.querySelectorAll('.suggestion-apply-btn');
+    applyButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const index = parseInt(btn.getAttribute('data-index'));
+        const original = btn.getAttribute('data-original');
+        const corrected = btn.getAttribute('data-corrected');
+        this.applySuggestion(index, original, corrected, suggestions);
+      });
+    });
+
+    // Ignore buttons
+    const ignoreButtons = this.suggestionsContainer.querySelectorAll('.suggestion-ignore-btn');
+    ignoreButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const index = parseInt(btn.getAttribute('data-index'));
+        this.ignoreSuggestion(index, suggestions);
+      });
+    });
+  }
+
+  applySuggestion(index, original, corrected, suggestions) {
+    if (!this.editor || !original || !corrected) return;
+
+    // Get current editor content
+    const currentText = this.editor.textContent || '';
+    
+    // Replace the first occurrence of the original text with the corrected text
+    const updatedText = currentText.replace(original, corrected);
+    
+    if (updatedText === currentText) {
+      // Text not found, show a gentle notification
+      console.warn('[APPLY] Original text not found in editor:', original);
+      this.showBriefNotification('Text not found in editor. It may have been edited.', 'warning');
+      return;
+    }
+
+    // Update editor content
+    this.editor.textContent = updatedText;
+    this.moveCursorToEnd();
+    this.updateWordCount();
+
+    // Remove the applied suggestion from the list
+    const updatedSuggestions = suggestions.filter((_, i) => i !== index);
+    
+    // Show success notification
+    this.showBriefNotification('✓ Correction applied', 'success');
+    
+    // Re-render suggestions without the applied one
+    this.displaySuggestions(updatedSuggestions);
+    
+    // Schedule auto-analysis to get fresh suggestions
+    this.scheduleAutoAnalysis();
+  }
+
+  ignoreSuggestion(index, suggestions) {
+    // Remove the ignored suggestion from the list
+    const updatedSuggestions = suggestions.filter((_, i) => i !== index);
+    
+    // Show brief notification
+    this.showBriefNotification('Suggestion ignored', 'info');
+    
+    // Re-render suggestions without the ignored one
+    this.displaySuggestions(updatedSuggestions);
+  }
+
+  showBriefNotification(message, type = 'info') {
+    // Create a toast notification
+    const toast = document.createElement('div');
+    toast.className = `fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-300 ${
+      type === 'success' ? 'bg-green-600 text-white' :
+      type === 'warning' ? 'bg-yellow-600 text-white' :
+      type === 'error' ? 'bg-red-600 text-white' :
+      'bg-gray-800 text-white'
+    }`;
+    toast.textContent = message;
+    toast.style.opacity = '0';
+    
+    document.body.appendChild(toast);
+    
+    // Fade in
+    setTimeout(() => { toast.style.opacity = '1'; }, 10);
+    
+    // Fade out and remove after 2 seconds
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => { toast.remove(); }, 300);
+    }, 2000);
   }
 }
 
