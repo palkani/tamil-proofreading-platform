@@ -255,38 +255,35 @@ func fillSuggestionIndices(originalText string, suggestions []Suggestion) []Sugg
         }
         used := make(map[int]bool)
         out := make([]Suggestion, 0, len(suggestions))
-        for _, s := range suggestions {
-                orig := strings.TrimSpace(s.Original)
-                corr := strings.TrimSpace(s.Corrected)
-                if orig == "" || corr == "" {
-                        continue
-                }
-                if normalizeComparable(orig) == normalizeComparable(corr) {
-                        continue
-                }
-                if (s.StartIndex <= 0 || s.EndIndex <= 0) && orig != "" {
-                        idx := 0
-                        for {
-                                pos := strings.Index(originalText[idx:], orig)
-                                if pos < 0 {
-                                        break
-                                }
-                                start := idx + pos
-                                end := start + len(orig)
-                                if !used[start] {
-                                        s.StartIndex = start
-                                        s.EndIndex = end
-                                        used[start] = true
-                                        break
-                                }
-                                idx = end
-                                if idx >= len(originalText) {
-                                        break
-                                }
-                        }
-                }
-                out = append(out, s)
-        }
+	for _, s := range suggestions {
+		orig := strings.TrimSpace(s.Original)
+		// NO FILTERING - just fill indices if missing
+		if orig == "" {
+			continue
+		}
+		if (s.StartIndex <= 0 || s.EndIndex <= 0) && orig != "" {
+			idx := 0
+			for {
+				pos := strings.Index(originalText[idx:], orig)
+				if pos < 0 {
+					break
+				}
+				start := idx + pos
+				end := start + len(orig)
+				if !used[start] {
+					s.StartIndex = start
+					s.EndIndex = end
+					used[start] = true
+					break
+				}
+				idx = end
+				if idx >= len(originalText) {
+					break
+				}
+			}
+		}
+		out = append(out, s)
+	}
         return out
 }
 
@@ -1006,14 +1003,12 @@ func toSuggestionSlice(val any) ([]Suggestion, bool) {
                 if v, ok := getIntInsensitive(obj, "start_index"); ok {
                         suggestion.StartIndex = v
                 }
-                if v, ok := getIntInsensitive(obj, "end_index"); ok {
-                        suggestion.EndIndex = v
-                }
-                // FILTER RULE: Only include suggestions where original ≠ corrected (as per Gemini prompt rule #7)
-                if suggestion.Original != "" && suggestion.Corrected != "" && suggestion.Original != suggestion.Corrected {
-                        suggestions = append(suggestions, suggestion)
-                }
-        }
+		if v, ok := getIntInsensitive(obj, "end_index"); ok {
+			suggestion.EndIndex = v
+		}
+		// NO FILTERING - Pass through everything Gemini returns
+		suggestions = append(suggestions, suggestion)
+	}
 
         return suggestions, len(suggestions) > 0
 }

@@ -3450,10 +3450,9 @@ class WorkspaceController {
       }
       
       const geminiSuggestions = corrections
-        // FILTER: Only include suggestions where original ≠ corrected (after normalization).
-        // This removes "duplicate" suggestions where both look the same to the user
-        // but may differ only by whitespace/quotes/zero-width chars.
-        .filter(result => {
+        // NO FILTERING - Trust Gemini's output completely
+        // .filter(result => { ... })  // REMOVED per user request
+        .map((result, index) => {
           const original =
             result.original ||
             result.originalText ||
