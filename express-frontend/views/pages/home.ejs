@@ -124,6 +124,11 @@
     .home-editor-grid {
       align-items: stretch;
     }
+    
+    /* Hide help text inside grid on desktop - takes up space! */
+    .home-editor-grid > div:first-child > div:first-child.bg-blue-50 {
+      display: none;
+    }
   }
   
   /* MOBILE RESPONSIVE: Stack vertically on small screens */
@@ -196,8 +201,8 @@
           <!-- Editor + AI assistant side-by-side (desktop) -->
           <div class="home-editor-grid grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] gap-6 items-stretch">
             <!-- Left: Editor ONLY -->
-            <div class="flex flex-col gap-6 min-w-0">
-            <!-- Home editor purpose / help text -->
+            <div class="flex flex-col min-w-0">
+            <!-- Editor -->
             <div class="bg-blue-50 border border-blue-100 rounded-2xl px-6 py-4 text-left">
               <div class="flex items-start gap-3">
                 <div class="mt-0.5 flex-shrink-0 w-10 h-10 rounded-xl bg-white border border-blue-100 flex items-center justify-center">
