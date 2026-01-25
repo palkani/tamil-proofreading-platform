@@ -1325,15 +1325,26 @@ class HomeEditor {
     if (this._suppressScheduledAnalysisUntil && Date.now() < this._suppressScheduledAnalysisUntil) {
       return;
     }
-    // Avoid unnecessary network calls for very short text.
-    // (We also guard inside autoAnalyze, but this prevents the /api/submit call from even starting.)
+    
+    // Check if text is empty or too short - clear suggestions immediately
     try {
       const text = this.getPlainText();
       const wc = this.countWords(text);
-      if (wc < 5 || text.length < 20) {
+      
+      // If empty or too short, clear suggestions immediately
+      if (!text || text.length === 0 || wc < 5 || text.length < 20) {
+        console.log('[HomeEditor] Text too short or empty - clearing suggestions');
+        this.displaySuggestions([]);
+        this.lastAnalyzedText = '';
+        this.emptyState = 'idle';
         return;
       }
-    } catch (_e) {}
+    } catch (_e) {
+      // If error, clear suggestions to be safe
+      this.displaySuggestions([]);
+      return;
+    }
+    
     // Clear existing timeout
     if (this.analysisTimeout) {
       clearTimeout(this.analysisTimeout);

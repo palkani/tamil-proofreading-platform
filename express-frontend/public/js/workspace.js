@@ -3299,9 +3299,13 @@ class WorkspaceController {
       return;
     }
     
-    // Skip if text is empty
+    // Skip if text is empty - clear AI suggestions
     if (!text || text.length === 0) {
-      console.log('[AI] ⚠️ Text is empty - skipping');
+      console.log('[AI] ⚠️ Text is empty - clearing AI suggestions');
+      if (this.suggestionsPanel && typeof this.suggestionsPanel.clearSuggestions === 'function') {
+        this.suggestionsPanel.clearSuggestions();
+      }
+      this.updateAnalysisStatus('');
       return;
     }
 
@@ -3313,13 +3317,16 @@ class WorkspaceController {
       return;
     }
     
-    // Skip if text is too short (minimum 20 words)
+    // Skip if text is too short (minimum 20 words) - clear AI suggestions
     const wordCount = countWords(text);
     console.log('[AI] 📊 Text analysis:', { wordCount, textLength: text.length, preview: text.substring(0, 100) });
     
     // Check if text meets minimum requirements (20 words)
     if (wordCount < MIN_SUBMIT_WORDS) {
-      console.log('[AI] ⚠️ Text too short - skipping analysis:', { wordCount, textLength: text.length });
+      console.log('[AI] ⚠️ Text too short - clearing AI suggestions:', { wordCount, textLength: text.length });
+      if (this.suggestionsPanel && typeof this.suggestionsPanel.clearSuggestions === 'function') {
+        this.suggestionsPanel.clearSuggestions();
+      }
       this.updateAnalysisStatus('');
       // Don't show notification when silent
       if (!silent && text.length > 0) {
