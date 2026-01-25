@@ -1738,6 +1738,122 @@ class HomeEditor {
     `;
   }
   
+  highlightErrorsInEditor(suggestions) {
+    if (!this.editor || !suggestions || suggestions.length === 0) {
+      // Clear any existing highlights
+      if (this.editor) {
+        const text = this.getPlainText();
+        this.editor.textContent = text;
+      }
+      return;
+    }
+    
+    try {
+      const text = this.getPlainText();
+      
+      // Create an array of segments to build the HTML
+      const segments = [];
+      let lastIndex = 0;
+      
+      // Sort suggestions by start_index to process them in order
+      const sortedSuggestions = [...suggestions].sort((a, b) => {
+        const aStart = a.start_index || 0;
+        const bStart = b.start_index || 0;
+        return aStart - bStart;
+      });
+      
+      // Process each suggestion and create highlighted spans
+      sortedSuggestions.forEach((suggestion, idx) => {
+        if (!suggestion.original) return;
+        
+        // Find the error text in the content
+        const errorText = suggestion.original;
+        const errorIndex = text.indexOf(errorText, lastIndex);
+        
+        if (errorIndex === -1) return; // Skip if not found
+        
+        // Add text before the error (plain text)
+        if (errorIndex > lastIndex) {
+          segments.push({
+            type: 'text',
+            content: text.substring(lastIndex, errorIndex)
+          });
+        }
+        
+        // Add the error text with highlighting
+        const typeClass = this.getTypeColorClass(suggestion.type);
+        segments.push({
+          type: 'error',
+          content: errorText,
+          class: typeClass,
+          index: idx
+        });
+        
+        lastIndex = errorIndex + errorText.length;
+      });
+      
+      // Add remaining text after last error
+      if (lastIndex < text.length) {
+        segments.push({
+          type: 'text',
+          content: text.substring(lastIndex)
+        });
+      }
+      
+      // Build the HTML with highlights
+      let html = '';
+      segments.forEach(segment => {
+        if (segment.type === 'text') {
+          html += this.escapeHtml(segment.content);
+        } else if (segment.type === 'error') {
+          html += `<span class="${segment.class}" data-error-index="${segment.index}" style="background-color: rgba(239, 68, 68, 0.15); border-bottom: 2px solid rgb(239, 68, 68); cursor: pointer; position: relative;" title="Click suggestion to fix">${this.escapeHtml(segment.content)}</span>`;
+        }
+      });
+      
+      // Update editor with highlighted content
+      this.editor.innerHTML = html;
+      
+      // Add click handlers to highlighted errors
+      this.editor.querySelectorAll('span[data-error-index]').forEach(span => {
+        span.addEventListener('click', (e) => {
+          const errorIndex = parseInt(e.target.getAttribute('data-error-index'));
+          this.scrollToSuggestion(errorIndex);
+        });
+      });
+      
+    } catch (error) {
+      console.error('[HIGHLIGHT] Error highlighting text:', error);
+      // Fallback: just show plain text
+      const text = this.getPlainText();
+      this.editor.textContent = text;
+    }
+  }
+  
+  getTypeColorClass(type) {
+    const typeMap = {
+      'grammar': 'error-grammar',
+      'spelling': 'error-spelling',
+      'space': 'error-space',
+      'sandhi': 'error-sandhi',
+      'phonetic': 'error-phonetic',
+      'punctuation': 'error-punctuation',
+      'case': 'error-case'
+    };
+    return typeMap[type] || 'error-default';
+  }
+  
+  scrollToSuggestion(index) {
+    const suggestionCard = this.suggestionsContainer.querySelector(`[data-suggestion-id="${index}"]`);
+    if (suggestionCard) {
+      suggestionCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      // Briefly highlight the suggestion card
+      suggestionCard.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+      setTimeout(() => {
+        suggestionCard.style.backgroundColor = '';
+      }, 1000);
+    }
+  }
+  
   displaySuggestions(suggestions) {
     if (!this.suggestionsContainer) return;
     
@@ -1751,6 +1867,9 @@ class HomeEditor {
       `;
       return;
     }
+    
+    // Highlight errors in editor
+    this.highlightErrorsInEditor(suggestions);
     
     // Get current text to check if editor is empty
     const currentText = this.getPlainText().trim();
