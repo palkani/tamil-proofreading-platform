@@ -26,6 +26,18 @@
     content: '';
   }
 
+  /* CRITICAL FIX: Force LTR text direction for home editor */
+  #home-editor {
+    direction: ltr !important;
+    unicode-bidi: embed !important;
+    text-align: left !important;
+  }
+  
+  #home-editor * {
+    direction: ltr !important;
+    unicode-bidi: normal !important;
+  }
+
   /* Home editor toolbar (match Workspace style) */
   .home-toolbar {
     position: sticky;
@@ -378,6 +390,7 @@
                 <div 
                   id="home-editor" 
                   contenteditable="true"
+                  dir="ltr"
                   class="editor-content bg-white rounded-xl shadow-sm border border-gray-200 min-h-[400px] sm:min-h-[480px] lg:min-h-[520px] p-4 sm:p-6 tamil-text text-base sm:text-lg text-left focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none w-full"
                   spellcheck="false"
                   placeholder="Type in English (e.g., vanakkam) or paste Tamil text..."
