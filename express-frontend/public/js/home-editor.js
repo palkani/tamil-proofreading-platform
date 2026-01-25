@@ -1719,6 +1719,17 @@ class HomeEditor {
   displaySuggestions(suggestions) {
     if (!this.suggestionsContainer) return;
     
+    // Validate suggestions is an array
+    if (!Array.isArray(suggestions)) {
+      console.error('[DISPLAY] Suggestions is not an array:', typeof suggestions);
+      this.suggestionsContainer.innerHTML = `
+        <div class="text-center text-gray-500 py-8">
+          <p class="text-sm text-red-600">Error displaying suggestions</p>
+        </div>
+      `;
+      return;
+    }
+    
     // Get current text to check if editor is empty
     const currentText = this.getPlainText().trim();
     
@@ -1860,6 +1871,13 @@ class HomeEditor {
 
   applySuggestion(index, original, corrected, suggestions) {
     if (!this.editor || !original || !corrected) return;
+    
+    // Validate suggestions array and index
+    if (!suggestions || !Array.isArray(suggestions) || index < 0 || index >= suggestions.length) {
+      console.error('[APPLY] Invalid suggestion index:', index, 'suggestions length:', suggestions?.length);
+      this.showBriefNotification('Invalid suggestion', 'error');
+      return;
+    }
 
     // Get current editor content
     const currentText = this.editor.textContent || '';
@@ -1872,7 +1890,7 @@ class HomeEditor {
     let updatedText;
     
     // If we have valid indices, use them for precise replacement
-    if (startIndex >= 0 && endIndex > startIndex && startIndex < currentText.length) {
+    if (startIndex >= 0 && endIndex > startIndex && startIndex < currentText.length && endIndex <= currentText.length) {
       const textAtPosition = currentText.substring(startIndex, endIndex);
       
       // Verify the text at this position matches the original
@@ -1886,7 +1904,7 @@ class HomeEditor {
       }
     } else {
       // No valid indices, search for the text
-      console.log('[APPLY] No indices available, searching for text:', original);
+      console.log('[APPLY] No valid indices, searching for text:', original);
       updatedText = this.replaceFirstOccurrence(currentText, original, corrected);
     }
     
@@ -1916,12 +1934,20 @@ class HomeEditor {
   }
 
   replaceFirstOccurrence(text, search, replace) {
+    if (!search || search.length === 0) return text;
     const index = text.indexOf(search);
     if (index === -1) return text;
     return text.substring(0, index) + replace + text.substring(index + search.length);
   }
 
   ignoreSuggestion(index, suggestions) {
+    // Validate suggestions array and index
+    if (!suggestions || !Array.isArray(suggestions) || index < 0 || index >= suggestions.length) {
+      console.error('[IGNORE] Invalid suggestion index:', index);
+      this.showBriefNotification('Invalid suggestion', 'error');
+      return;
+    }
+    
     // Remove the ignored suggestion from the list
     const updatedSuggestions = suggestions.filter((_, i) => i !== index);
     

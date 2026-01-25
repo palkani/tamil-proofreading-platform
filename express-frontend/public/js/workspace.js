@@ -35,23 +35,19 @@ const MIN_SUBMIT_WORDS = 20;
 // APPLY REPLACEMENT UTILITY
 // ============================================
 
-/**
- * Apply a replacement with position awareness
- * @param {string} text - The full text
- * @param {string} original - The text to replace
- * @param {string} replacement - The replacement text
- * @param {number|null} approxIndex - Optional start index from backend
- * @returns {{text: string, changed: boolean}}
- */
 function applyReplacement(text, original, replacement, approxIndex = null) {
   if (!text || !original) return { text, changed: false };
+  if (!replacement) replacement = ''; // Allow empty replacements (deletion)
 
-  // Try start_index if provided
-  if (typeof approxIndex === 'number' && approxIndex >= 0 && approxIndex <= text.length) {
-    const candidate = text.slice(approxIndex, approxIndex + original.length);
-    if (candidate === original) {
-      const newText = text.slice(0, approxIndex) + replacement + text.slice(approxIndex + original.length);
-      return { text: newText, changed: newText !== text };
+  // Try start_index if provided and within bounds
+  if (typeof approxIndex === 'number' && approxIndex >= 0 && approxIndex < text.length) {
+    const endIndex = approxIndex + original.length;
+    if (endIndex <= text.length) {
+      const candidate = text.slice(approxIndex, endIndex);
+      if (candidate === original) {
+        const newText = text.slice(0, approxIndex) + replacement + text.slice(endIndex);
+        return { text: newText, changed: newText !== text };
+      }
     }
   }
 
@@ -3598,7 +3594,14 @@ class WorkspaceController {
               const { text: newText, changed } = applyReplacement(currentText, original, corrected, startIdx);
               
               if (changed) {
-                this.editor.setText(newText);
+                // Safely update editor text
+                if (this.editor && typeof this.editor.setText === 'function') {
+                  this.editor.setText(newText);
+                } else if (this.editorElement) {
+                  this.editorElement.textContent = newText;
+                } else {
+                  console.error('[APPLY] No editor method available');
+                }
               }
             } : null,
             onIgnore: () => {
