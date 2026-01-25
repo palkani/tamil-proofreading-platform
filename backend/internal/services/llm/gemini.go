@@ -22,6 +22,23 @@ Error types:
 - spelling, grammar, punctuation, incomplete, space, sandhi
 - date/ordinal hyphenation: "23 ஆம்/வது" → "23-ஆம்/வது"
 
+CRITICAL SANDHI (புணர்ச்சி) RULES:
+1. PRESERVE trailing sandhi consonants when adjective comes BEFORE a noun:
+   ✅ CORRECT: "வரலாற்றுச் சிறப்புமிக்க" (historical + special)
+   ❌ WRONG: "வரலாற்று சிறப்புமிக்க" (missing ச்)
+   The trailing "ச்" is REQUIRED when "வரலாற்று" modifies "சிறப்புமிக்க"
+
+2. Common sandhi patterns to PRESERVE (DO NOT remove):
+   - "வரலாற்றுச் சிறப்பு" ✅ (NOT "வரலாற்று சிறப்பு")
+   - "அரசியல்சாசனச் சட்டம்" ✅ (NOT "அரசியல்சாசன சட்டம்")
+   - "பொருளாதாரத்துறை" ✅ (compound word, no space needed)
+
+3. Only flag sandhi as error when:
+   - Missing space between words: "பதிவபுதுப்பித்தல்" → "பதிவு புதுப்பித்தல்"
+   - Wrong joining: "அவள்அழகானவள்" → "அவள் அழகானவள்"
+
+4. DO NOT flag proper sandhi consonants (ச், த், ற்) as errors!
+
 STRICT OUTPUT:
 - Output ONLY valid JSON (no markdown / no code fences).
 - Prefer accuracy over quantity: return as many high-confidence corrections as you can.
