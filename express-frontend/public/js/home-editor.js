@@ -1864,11 +1864,34 @@ class HomeEditor {
     // Get current editor content
     const currentText = this.editor.textContent || '';
     
-    // Replace the first occurrence of the original text with the corrected text
-    const updatedText = currentText.replace(original, corrected);
+    // Get the suggestion object to access start_index if available
+    const suggestion = suggestions[index];
+    const startIndex = suggestion?.start_index ?? suggestion?.startIndex ?? suggestion?.start ?? -1;
+    const endIndex = suggestion?.end_index ?? suggestion?.endIndex ?? suggestion?.end ?? -1;
+    
+    let updatedText;
+    
+    // If we have valid indices, use them for precise replacement
+    if (startIndex >= 0 && endIndex > startIndex && startIndex < currentText.length) {
+      const textAtPosition = currentText.substring(startIndex, endIndex);
+      
+      // Verify the text at this position matches the original
+      if (textAtPosition === original) {
+        updatedText = currentText.substring(0, startIndex) + corrected + currentText.substring(endIndex);
+        console.log('[APPLY] Used position-based replacement:', { startIndex, endIndex, original, corrected });
+      } else {
+        // Position doesn't match, fall back to search
+        console.warn('[APPLY] Position mismatch, falling back to search. Expected:', original, 'Found:', textAtPosition);
+        updatedText = this.replaceFirstOccurrence(currentText, original, corrected);
+      }
+    } else {
+      // No valid indices, search for the text
+      console.log('[APPLY] No indices available, searching for text:', original);
+      updatedText = this.replaceFirstOccurrence(currentText, original, corrected);
+    }
     
     if (updatedText === currentText) {
-      // Text not found, show a gentle notification
+      // Text not found or already replaced, show a gentle notification
       console.warn('[APPLY] Original text not found in editor:', original);
       this.showBriefNotification('Text not found in editor. It may have been edited.', 'warning');
       return;
@@ -1890,6 +1913,12 @@ class HomeEditor {
     
     // Schedule auto-analysis to get fresh suggestions
     this.scheduleAutoAnalysis();
+  }
+
+  replaceFirstOccurrence(text, search, replace) {
+    const index = text.indexOf(search);
+    if (index === -1) return text;
+    return text.substring(0, index) + replace + text.substring(index + search.length);
   }
 
   ignoreSuggestion(index, suggestions) {

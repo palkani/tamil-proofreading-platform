@@ -32,6 +32,41 @@ try {
 const MIN_SUBMIT_WORDS = 20;
 
 // ============================================
+// APPLY REPLACEMENT UTILITY
+// ============================================
+
+/**
+ * Apply a replacement with position awareness
+ * @param {string} text - The full text
+ * @param {string} original - The text to replace
+ * @param {string} replacement - The replacement text
+ * @param {number|null} approxIndex - Optional start index from backend
+ * @returns {{text: string, changed: boolean}}
+ */
+function applyReplacement(text, original, replacement, approxIndex = null) {
+  if (!text || !original) return { text, changed: false };
+
+  // Try start_index if provided
+  if (typeof approxIndex === 'number' && approxIndex >= 0 && approxIndex <= text.length) {
+    const candidate = text.slice(approxIndex, approxIndex + original.length);
+    if (candidate === original) {
+      const newText = text.slice(0, approxIndex) + replacement + text.slice(approxIndex + original.length);
+      return { text: newText, changed: newText !== text };
+    }
+  }
+
+  // Try exact match first (only first occurrence to avoid breaking other suggestions)
+  const exactIdx = text.indexOf(original);
+  if (exactIdx !== -1) {
+    const newText = text.slice(0, exactIdx) + replacement + text.slice(exactIdx + original.length);
+    return { text: newText, changed: newText !== text };
+  }
+  
+  // No match found
+  return { text, changed: false };
+}
+
+// ============================================
 // TAMIL LINGUISTIC FILTERING UTILITIES
 // ============================================
 
