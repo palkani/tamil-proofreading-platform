@@ -747,9 +747,8 @@ class WorkspaceController {
     this.currentFetchQuery = query;
 
     try {
-      // Build API URL - use transliterate suggest endpoint for IME suggestions
-      // (this proxies to ProofTamilRunner /transliterate/suggest)
-      const url = `/api/transliterate/suggest?q=${encodeURIComponent(query)}&limit=${limit}&mode=${encodeURIComponent(mode)}&_ts=${Date.now()}&_r=${Math.random().toString(36).slice(2)}`;
+      // Build API URL - use in-process suggest engine (fast path)
+      const url = `/api/v1/suggest?q=${encodeURIComponent(query)}&limit=${limit}&_ts=${Date.now()}&_r=${Math.random().toString(36).slice(2)}`;
       
       console.log('[IME] Fetching suggestions for:', query, 'from:', url);
 

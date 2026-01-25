@@ -1,11 +1,11 @@
-// Shared transliteration helper that always targets the runner (never the Go backend).
+// Shared transliteration helper that targets the Go suggest engine (fast path).
 (() => {
   const IS_DEV = typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost';
   let lastSuggestions = [];
 
   function buildRunnerUrl(params) {
     const qs = new URLSearchParams(params).toString();
-    return `/api/transliterate/suggest?${qs}`;
+    return `/api/v1/suggest?${qs}`;
   }
 
   async function safeJson(res) {
