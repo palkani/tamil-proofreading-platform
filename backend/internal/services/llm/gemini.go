@@ -23,9 +23,10 @@ DO NOT suggest stylistic improvements or rewrites - ONLY fix actual mistakes.
 
 ⚠️ CRITICAL: Be THOROUGH but CONSERVATIVE
 - CHECK CAREFULLY for all error types listed below
-- FLAG all spacing, sandhi, tense, and grammar errors you find
+- FLAG ALL spacing, sandhi, tense, and grammar errors you find
 - DO NOT flag style preferences or valid alternatives
-- Your goal: Catch 5-10 real errors in typical text (like ChatGPT does)
+- Return ALL errors found - there is NO LIMIT on number of suggestions
+- Your goal: Catch EVERY real error (like ChatGPT does)
 
 ════════════════════════════════════════════════════════
 ⚠️ CORE RULES (FOLLOW STRICTLY)
@@ -111,10 +112,23 @@ DO NOT suggest stylistic improvements or rewrites - ONLY fix actual mistakes.
    மெல்லினம் (Soft): ங், ஞ், ண், ந், ம், ன்
    இடையினம் (Medium): ய், ர், ல், வ், ழ், ள்
    
-   Check ONLY if phonetic transformation is INCORRECT:
-   ❌ "பத்து பேர்" → ✅ "பத்துப் பேர்" (if ப் should be ம் phonetically)
-   ❌ Wrong nasal in plurals: "மரங்கள்" (check if correct nasal based on word)
-   ❌ Incorrect case marker consonant
+   ⚠️ IMPORTANT: Check these phonetic transformations carefully!
+   
+   a) வல்லினம் மிகுதல் (Hard consonant doubling):
+      When certain words end, the next consonant doubles:
+      ❌ "இடதுசாரி கட்சிகள்" → ✅ "இடதுசாரிக் கட்சிகள்" (க → க்)
+      ❌ "அது போன்ற" → ✅ "அதுபோன்ற" or "அதுப் போன்ற" (ப் doubling)
+      Rule: After certain word endings, க/ச/த/ப double to க்/ச்/த்/ப்
+   
+   b) Phonetic sandhi in compounds:
+      ❌ "பத்து பேர்" → ✅ "பத்துப் பேர்" (ப் needed between)
+   
+   c) Wrong nasal in plurals:
+      ❌ Check if correct nasal (ங்/ஞ்/ண்/ந்/ம்/ன்) based on word ending
+      Example: "மரங்கள்" (correct), NOT "மரன்கள்"
+   
+   d) Incorrect case marker consonant:
+      ❌ Wrong consonant in -க்கு/-த்து endings
 
 4. புணர்ச்சி பிழைகள் (SANDHI ERRORS):
    
@@ -214,11 +228,13 @@ SUGGESTION TYPES (use correct type for each error):
 
 ⚠️ CRITICAL OUTPUT RULES:
 ✅ Each "original" must be EXACT substring from input text
+✅ Return ALL errors found - DO NOT limit the number of suggestions
 ✅ Only include actual ERRORS - not stylistic suggestions
 ✅ Keep "reason" short (10-15 Tamil words max)
 ✅ Explain what ERROR was fixed, not why the new version is "better"
 ✅ Set corrected_text to "" (empty) - we only need corrections array
 ✅ If text has NO errors, return: {"corrections":[],"corrected_text":""}
+✅ If text has 20 errors, return ALL 20 corrections in the array
 
 ════════════════════════════════════════════════════════
 📚 EXAMPLES: What to CATCH vs IGNORE
@@ -238,11 +254,15 @@ SUGGESTION TYPES (use correct type for each error):
    ❌ "பாஜக-வுடன்" → ✅ "பாஜகவுடன்"
    Reason: "புணர்ச்சியில் இணைப்புக் குறி தேவையில்லை"
 
-4. Tense consistency:
+4. வல்லினம் மிகுதல் (Hard consonant doubling):
+   ❌ "இடதுசாரி கட்சிகள்" → ✅ "இடதுசாரிக் கட்சிகள்"
+   Reason: "வல்லினம் மிகுதல் - க் தேவை"
+
+5. Tense consistency:
    ❌ "குரல் கொடுத்தாலும்" (in past context) → ✅ "குரல் கொடுத்திருந்தாலும்"
    Reason: "இறந்தகால சூழலுக்கு முற்றுப்பெற்ற காலம் தேவை"
 
-5. Verb agreement:
+6. Verb agreement:
    ❌ "அவர்கள் வந்தான்" → ✅ "அவர்கள் வந்தார்கள்"
    Reason: "பன்மை எண்ணுடன் வினை பொருந்தவில்லை"
 
