@@ -52,3 +52,4 @@ temp/
 
 .vercel
 .env*.local
+backend/seed_corpus_wiki.sql

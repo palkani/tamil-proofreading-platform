@@ -37,10 +37,23 @@ func NormalizeRoman(q string, opts NormalizeOptions) string {
 		return ""
 	}
 
-	// Canonical mappings
-	out = strings.ReplaceAll(out, "zh", "l")
-	out = strings.ReplaceAll(out, "dh", "t")
-	out = strings.ReplaceAll(out, "th", "t")
+	// Canonical mappings - order matters (longer patterns first)
+	out = strings.ReplaceAll(out, "zh", "l")  // ழ → l
+	out = strings.ReplaceAll(out, "dh", "t")  // த/ட → t
+	out = strings.ReplaceAll(out, "th", "t")  // த/ட → t
+	out = strings.ReplaceAll(out, "gh", "k")  // க → k
+	out = strings.ReplaceAll(out, "kh", "k")  // க → k
+	out = strings.ReplaceAll(out, "bh", "p")  // ப → p
+	out = strings.ReplaceAll(out, "ph", "p")  // ப → p
+	out = strings.ReplaceAll(out, "ch", "c")  // ச → c
+	out = strings.ReplaceAll(out, "sh", "c")  // ஷ/ச → c (common variation)
+
+	// Tamil has no voiced/unvoiced distinction in many positions
+	// Map voiced consonants to their unvoiced equivalents
+	out = strings.ReplaceAll(out, "d", "t")   // ட/த → t
+	out = strings.ReplaceAll(out, "g", "k")   // க → k  
+	out = strings.ReplaceAll(out, "b", "p")   // ப → p
+	out = strings.ReplaceAll(out, "j", "c")   // ஜ/ச → c
 
 	if opts.EnableVowelCollapse {
 		out = collapseVowels(out)
