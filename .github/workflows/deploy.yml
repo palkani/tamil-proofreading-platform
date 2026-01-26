@@ -88,11 +88,16 @@ jobs:
         echo "Backend URL: $BACKEND_URL"
         curl -f "$BACKEND_URL/health" || echo "Health check pending..."
 
-    - name: Seed Corpus Tables (One-time)
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Seed Tamil Wikipedia Corpus (One-time)
       id: seed-corpus
       continue-on-error: true
       run: |
-        echo "📦 Seeding corpus tables directly..."
+        echo "📦 Seeding tamil_words from Tamil Wikipedia (one-time)..."
         
         # Get DATABASE_URL from Secret Manager
         DATABASE_URL=$(gcloud secrets versions access latest --secret=DATABASE_URL --project=${{ env.PROJECT_ID }})
@@ -101,13 +106,25 @@ jobs:
           echo "⚠️  DATABASE_URL secret not found - skipping corpus seed"
           exit 0
         fi
+
+        COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM tamil_words;" | tr -d '[:space:]')
+        if [ -z "$COUNT" ]; then
+          echo "⚠️  Could not read tamil_words count - skipping corpus seed"
+          exit 0
+        fi
+        echo "tamil_words current count: $COUNT"
+        if [ "$COUNT" -ge 100000 ]; then
+          echo "✅ tamil_words already populated (>= 100000). Skipping."
+          exit 0
+        fi
         
-        # Use direct SQL seeding (faster and more reliable than Cloud Build)
+        echo "Building SQL from tawiki dump..."
+        python3 scripts/build_tamil_wiki_corpus.py --max-words 100000 --output /tmp/seed_corpus_wiki.sql
+
         echo "Running SQL seed script..."
-        psql "$DATABASE_URL" -f backend/seed_corpus_minimal.sql || {
+        psql "$DATABASE_URL" -f /tmp/seed_corpus_wiki.sql || {
           echo "⚠️  SQL seeding failed - may need Cloud SQL Auth Proxy"
           echo "Tables may already be populated or connection failed"
-          echo "This is not critical - the learning system will populate from user interactions"
         }
         
         echo "✅ Corpus seed step complete"
