@@ -1,13 +1,17 @@
 package handlers
 
 import (
-        "net/http"
-        "strconv"
-        "strings"
+	"context"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
-        "tamil-proofreading-platform/backend/internal/models"
+	"tamil-proofreading-platform/backend/internal/models"
+	tamilCache "tamil-proofreading-platform/backend/internal/services/tamil_word_cache"
 
-        "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
 )
 
 type AutocompleteRequest struct {
@@ -28,70 +32,110 @@ type TamilSuggestion struct {
 }
 
 // AutocompleteTamil handles autocomplete requests for Tamil words
-// GET /api/v1/autocomplete?query=sangam&limit=10
+// GET /api/v1/autocomplete?query=a&limit=5
+// Target: < 70ms response time using cache
 func (h *Handlers) AutocompleteTamil(c *gin.Context) {
-        query := c.Query("query")
-        if query == "" {
-                c.JSON(http.StatusBadRequest, gin.H{"error": "Query parameter is required"})
-                return
-        }
+	startTime := time.Now()
+	
+	query := c.Query("query")
+	if query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Query parameter is required"})
+		return
+	}
 
-        // Parse and validate limit parameter - increased default to 20 for better suggestions
-        limit := 20
-        if limitStr := c.Query("limit"); limitStr != "" {
-                parsedLimit, err := strconv.Atoi(limitStr)
-                if err == nil && parsedLimit > 0 && parsedLimit <= 500 {
-                        limit = parsedLimit
-                }
-        }
+	// Parse and validate limit parameter - default to 5 for fast response
+	limit := 5
+	if limitStr := c.Query("limit"); limitStr != "" {
+		parsedLimit, err := strconv.Atoi(limitStr)
+		if err == nil && parsedLimit > 0 && parsedLimit <= 500 {
+			limit = parsedLimit
+		}
+	}
 
-        // Normalize query: lowercase and trim
-        query = strings.ToLower(strings.TrimSpace(query))
+	// Normalize query: lowercase and trim
+	query = strings.ToLower(strings.TrimSpace(query))
 
-        // Search database for matching words using prefix matching
-        // Note: Storing transliteration in lowercase in DB for efficient indexed search
-        var words []models.TamilWord
-        
-        // Use indexed prefix matching on transliteration column
-        // Transliterations are stored lowercase, so we don't need LOWER()
-        err := h.db.
-                Where("transliteration LIKE ?", query+"%").
-                Order("frequency DESC, user_confirmed DESC").
-                Limit(limit).
-                Find(&words).Error
+	// Use cache service for fast lookup (< 70ms target)
+	var suggestions []TamilSuggestion
+	source := "cache"
 
-        if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Database query failed"})
-                return
-        }
-        
-        // Post-process to prioritize exact matches
-        // Move exact match to front if found
-        for i, word := range words {
-                if word.Transliteration == query && i > 0 {
-                        // Move exact match to front
-                        words = append([]models.TamilWord{word}, append(words[:i], words[i+1:]...)...)
-                        break
-                }
-        }
+	if h.tamilWordCache != nil {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 50*time.Millisecond)
+		defer cancel()
 
-        // Convert to response format
-        suggestions := make([]TamilSuggestion, 0, len(words))
-        for _, word := range words {
-                suggestions = append(suggestions, TamilSuggestion{
-                        TamilText:       word.TamilText,
-                        Transliteration: word.Transliteration,
-                        Frequency:       word.Frequency,
-                        Category:        string(word.Category),
-                })
-        }
+		cachedWords, err := h.tamilWordCache.GetSuggestions(ctx, query, limit)
+		if err == nil && len(cachedWords) > 0 {
+			// Convert cached words to response format
+			suggestions = make([]TamilSuggestion, 0, len(cachedWords))
+			for _, word := range cachedWords {
+				suggestions = append(suggestions, TamilSuggestion{
+					TamilText:       word.TamilText,
+					Transliteration: word.Transliteration,
+					Frequency:       word.Frequency,
+					Category:        word.Category,
+				})
+			}
+		} else {
+			// Cache miss or error - fallback to database (slower but works)
+			source = "database"
+			var words []models.TamilWord
+			err := h.db.
+				Where("transliteration LIKE ?", query+"%").
+				Order("frequency DESC, user_confirmed DESC").
+				Limit(limit).
+				Find(&words).Error
 
-        response := AutocompleteResponse{
-                Suggestions: suggestions,
-                Source:      "database",
-        }
+			if err == nil {
+				suggestions = make([]TamilSuggestion, 0, len(words))
+				for _, word := range words {
+					suggestions = append(suggestions, TamilSuggestion{
+						TamilText:       word.TamilText,
+						Transliteration: word.Transliteration,
+						Frequency:       word.Frequency,
+						Category:        string(word.Category),
+					})
+				}
+			}
+		}
+	} else {
+		// Cache service not initialized - fallback to database
+		source = "database"
+		var words []models.TamilWord
+		err := h.db.
+			Where("transliteration LIKE ?", query+"%").
+			Order("frequency DESC, user_confirmed DESC").
+			Limit(limit).
+			Find(&words).Error
 
-        c.JSON(http.StatusOK, response)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database query failed"})
+			return
+		}
+
+		suggestions = make([]TamilSuggestion, 0, len(words))
+		for _, word := range words {
+			suggestions = append(suggestions, TamilSuggestion{
+				TamilText:       word.TamilText,
+				Transliteration: word.Transliteration,
+				Frequency:       word.Frequency,
+				Category:        string(word.Category),
+			})
+		}
+	}
+
+	response := AutocompleteResponse{
+		Suggestions: suggestions,
+		Source:      source,
+	}
+
+	elapsed := time.Since(startTime)
+	
+	// Log slow requests (> 70ms)
+	if elapsed > 70*time.Millisecond {
+		c.Header("X-Response-Time-Ms", fmt.Sprintf("%.2f", float64(elapsed.Nanoseconds())/1e6))
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // AddTamilWord allows adding a new Tamil word to the database
