@@ -136,7 +136,7 @@
     background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%) !important;
     border: 1px solid rgba(79, 70, 229, 0.15) !important;
     border-radius: 16px !important;
-    box-shadow: 
+    box-shadow:
       0 20px 40px rgba(79, 70, 229, 0.12),
       0 8px 16px rgba(0, 0, 0, 0.08),
       0 0 0 1px rgba(79, 70, 229, 0.05) !important;
@@ -155,7 +155,16 @@
     /* REMOVED: visibility: visible !important - Let JS control this */
     /* REMOVED: opacity: 1 !important - Let JS control this */
     pointer-events: auto !important;
+    /* CRITICAL: Strict overflow containment to prevent items appearing outside */
     overflow: hidden !important;
+    overflow-y: hidden !important;
+    overflow-x: hidden !important;
+    /* Prevent clipping by parent containers */
+    transform: translateZ(0) !important;
+    will-change: transform !important;
+    isolation: isolate !important;
+    /* Ensure all children are contained */
+    contain: layout style paint !important;
   }
   
   /* Container for dropdown - ensure it doesn't interfere */
@@ -168,6 +177,39 @@
     z-index: 999999 !important;
     pointer-events: none !important;
     overflow: visible !important;
+    /* Ensure container is not clipped by parent overflow */
+    isolation: isolate !important;
+  }
+  
+  /* Ensure workspace editor panel doesn't clip the dropdown */
+  .workspace-editor-panel {
+    /* Allow dropdown to escape overflow - use contain instead of overflow */
+    contain: layout style paint !important;
+    /* Ensure fixed children can escape */
+    transform: translateZ(0) !important;
+  }
+  
+  /* Ensure editor content area doesn't clip dropdown */
+  .workspace-editor-panel .flex-1 {
+    /* Don't clip fixed positioned children */
+    contain: layout style paint !important;
+    /* Ensure fixed children can escape */
+    transform: translateZ(0) !important;
+  }
+  
+  /* Ensure TipTap editor doesn't clip dropdown */
+  .ProseMirror {
+    /* Allow fixed positioned children to escape */
+    transform: translateZ(0) !important;
+  }
+  
+  /* Prevent any parent from clipping the dropdown */
+  body > #tamil-suggestions-dropdown {
+    /* Ensure it's always on top and not clipped */
+    position: fixed !important;
+    z-index: 999999 !important;
+    transform: translateZ(0) !important;
+    isolation: isolate !important;
   }
   
   /* Force visibility when inline style has display:block */
@@ -217,6 +259,9 @@
     overflow-y: auto;
     overflow-x: hidden;
     margin: 0;
+    /* CRITICAL: Ensure items are contained within list */
+    position: relative;
+    contain: layout style paint;
   }
 
   .tamil-suggestion-item {
@@ -233,6 +278,11 @@
     user-select: none !important;
     -webkit-user-select: none !important;
     pointer-events: auto !important;
+    /* CRITICAL: Ensure items are contained within dropdown */
+    width: 100% !important;
+    box-sizing: border-box !important;
+    /* Prevent items from appearing outside container */
+    contain: layout style paint !important;
   }
 
   .tamil-suggestion-item:hover {
