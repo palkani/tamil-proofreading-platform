@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"tamil-proofreading-platform/backend/internal/services/llm"
 	"tamil-proofreading-platform/backend/internal/services/nlp"
 	"tamil-proofreading-platform/backend/internal/services/payment"
+	tamil_word_cache "tamil-proofreading-platform/backend/internal/services/tamil_word_cache"
 	"tamil-proofreading-platform/backend/internal/suggest"
 
 	"github.com/gin-gonic/gin"
@@ -34,6 +36,7 @@ type Handlers struct {
 	advancedClient      *ime.AdvancedClient // NEW: Advanced suggestion service
 	useAdvancedSuggest  bool                // NEW: Feature flag for advanced service
 	suggestEngine       *suggest.Engine
+	tamilWordCache      *tamilCache.CacheService // NEW: Tamil word cache service
 }
 
 func New(db *gorm.DB, cfg *config.Config) *Handlers {
@@ -119,6 +122,19 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 		h.suggestEngine = suggestEngine
 		log.Printf("[SUGGEST] In-process suggest engine ready (min_len=%d, top_k=%d)", cfg.SuggestMinLen, cfg.SuggestTopK)
 	}
+
+	// Initialize Tamil word cache service
+	tamilWordCache := tamil_word_cache.NewCacheService(db, cfg.RedisURL)
+	h.tamilWordCache = tamilWordCache
+	
+	// Preload cache in background (non-blocking)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := tamilWordCache.InitializeCache(ctx); err != nil {
+			log.Printf("[TamilWordCache] Failed to initialize cache: %v", err)
+		}
+	}()
 
 	h.startArchiveCleanup()
 	h.startIMEAggregateJob()
