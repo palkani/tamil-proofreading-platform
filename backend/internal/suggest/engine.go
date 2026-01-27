@@ -114,6 +114,8 @@ func (e *Engine) reload(ctx context.Context) error {
 	data, err := LoadSuggestData(ctx, e.db, LoaderOptions{
 		MaxTopPerNode:      e.maxTopPerNode,
 		EnableVowelCollapse: e.vowelCollapse,
+		RedisClient:        e.redis,
+		UseRedisCache:      e.redis != nil && e.redis.Enabled(), // Use cache if Redis is enabled
 	})
 	if err != nil {
 		return err
@@ -337,6 +339,44 @@ func (e *Engine) MetricsSnapshot() map[string]interface{} {
 		"count":   count,
 		"ready":   e.Data() != nil,
 	}
+}
+
+// InvalidateLexiconCache clears the Redis lexicon cache, forcing next reload to use PostgreSQL.
+func (e *Engine) InvalidateLexiconCache(ctx context.Context) error {
+	if e.redis == nil || !e.redis.Enabled() {
+		return nil
+	}
+	return e.redis.InvalidateLexiconCache(ctx)
+}
+
+// GetLexiconCacheInfo returns Redis cache metadata if available.
+func (e *Engine) GetLexiconCacheInfo(ctx context.Context) (version string, count int, exists bool) {
+	if e.redis == nil || !e.redis.Enabled() {
+		return "", 0, false
+	}
+	return e.redis.GetLexiconCacheInfo(ctx)
+}
+
+// WarmLexiconCache pre-populates Redis cache from PostgreSQL.
+// Useful for initial setup or cache warming after deployment.
+func (e *Engine) WarmLexiconCache(ctx context.Context) error {
+	if e.db == nil {
+		return errors.New("database not available")
+	}
+	if e.redis == nil || !e.redis.Enabled() {
+		return errors.New("redis not available")
+	}
+	
+	// Load from PostgreSQL
+	var rows []LexiconRow
+	if err := e.db.WithContext(ctx).Table("tamil_words").
+		Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
+		Find(&rows).Error; err != nil {
+		return err
+	}
+	
+	version := time.Now().UTC().Format(time.RFC3339)
+	return e.redis.CacheLexiconRows(ctx, rows, version)
 }
 
 func msSince(t time.Time) float64 {
