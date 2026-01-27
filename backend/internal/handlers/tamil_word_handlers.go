@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"tamil-proofreading-platform/backend/internal/models"
-	tamilCache "tamil-proofreading-platform/backend/internal/services/tamil_word_cache"
 
 	"github.com/gin-gonic/gin"
 )

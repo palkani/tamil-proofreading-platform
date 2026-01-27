@@ -36,7 +36,7 @@ type Handlers struct {
 	advancedClient      *ime.AdvancedClient // NEW: Advanced suggestion service
 	useAdvancedSuggest  bool                // NEW: Feature flag for advanced service
 	suggestEngine       *suggest.Engine
-	tamilWordCache      *tamilCache.CacheService // NEW: Tamil word cache service
+	tamilWordCache      *tamil_word_cache.CacheService // NEW: Tamil word cache service
 }
 
 func New(db *gorm.DB, cfg *config.Config) *Handlers {
