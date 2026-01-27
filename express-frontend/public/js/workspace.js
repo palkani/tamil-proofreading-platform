@@ -392,9 +392,11 @@ class WorkspaceController {
     this._isRenderingDropdown = false; // Lock to prevent multiple simultaneous renders
     
     // CRITICAL: Global cleanup function to remove all dropdowns
+    // Removes both workspace.js dropdowns AND V2 TransliterationTypeahead dropdowns
     this.cleanupAllDropdowns = () => {
+      // Remove workspace.js dropdowns
       const allDropdowns = document.querySelectorAll('#tamil-suggestions-dropdown');
-      console.log('[IME] 🧹 Global cleanup: Removing', allDropdowns.length, 'dropdown(s)');
+      console.log('[IME] 🧹 Global cleanup: Removing', allDropdowns.length, 'workspace dropdown(s)');
       allDropdowns.forEach(dd => {
         dd.style.display = 'none';
         dd.style.visibility = 'hidden';
@@ -404,6 +406,26 @@ class WorkspaceController {
           dd.parentNode.removeChild(dd);
         }
       });
+      
+      // Remove V2 TransliterationTypeahead dropdowns
+      const v2Dropdowns = document.querySelectorAll('.translit-dropdown');
+      if (v2Dropdowns.length > 0) {
+        console.log('[IME] 🧹 Global cleanup: Removing', v2Dropdowns.length, 'V2 dropdown(s)');
+        v2Dropdowns.forEach(dd => {
+          dd.style.display = 'none';
+          dd.style.visibility = 'hidden';
+          dd.style.opacity = '0';
+          dd.innerHTML = '';
+          if (dd.parentNode) {
+            dd.parentNode.removeChild(dd);
+          }
+        });
+        // Close the typeahead instance if it exists
+        if (this.translitTypeahead && this.translitTypeahead.closeDropdown) {
+          this.translitTypeahead.closeDropdown();
+        }
+      }
+      
       // Remove orphaned items
       document.querySelectorAll('.tamil-suggestion-item').forEach(item => {
         if (!item.closest('#tamil-suggestions-dropdown')) {
@@ -1185,15 +1207,27 @@ class WorkspaceController {
     // Apply read-only mode after editor is mounted (disables contenteditable/title/toolbar)
     this.applyReadOnlyMode();
 
-    // Transliteration V2 (feature-flagged)
-    if (window.TRANS_SUGGEST_V2 && window.TransliterationTypeahead && window.WorkspaceEditorAdapter && editorElement) {
-      this.translitTypeahead = new window.TransliterationTypeahead(
-        new window.WorkspaceEditorAdapter(editorElement),
-        {
-          getMode: () => this.getMode(),
+    // CRITICAL: DO NOT enable TransliterationTypeahead (V2) in workspace
+    // Workspace uses its own pipeline (handleEditorChange -> fetchRunnerSuggestions -> displaySuggestions)
+    // Enabling V2 causes duplicate dropdowns (tamil-suggestions-dropdown + translit-dropdown)
+    // The homepage editor works because it only uses ONE system (home-editor.js)
+    // 
+    // If V2 was previously enabled, ensure it's disabled and cleaned up
+    if (this.translitTypeahead) {
+      try {
+        if (this.translitTypeahead.closeDropdown) {
+          this.translitTypeahead.closeDropdown();
         }
-      );
+        this.translitTypeahead = null;
+      } catch (_e) {
+        // non-fatal
+      }
     }
+    // Clean up any V2 dropdowns that might exist
+    const v2Dropdowns = document.querySelectorAll('.translit-dropdown');
+    v2Dropdowns.forEach(dd => {
+      if (dd.parentNode) dd.parentNode.removeChild(dd);
+    });
 
     // Proofread V2 highlights (feature-flagged)
     if (window.PROOFREAD_V2 && window.ProofreadHighlights && editorElement) {
@@ -1204,6 +1238,8 @@ class WorkspaceController {
     // NOTE: We intentionally do NOT enable the separate runner-backed IMETypeahead here.
     // Workspace uses its own pipeline (handleEditorChange -> /api/transliterate/suggest -> displaySuggestions).
     // Having both systems enabled causes race conditions and UI showing "[object Object]".
+    // CRITICAL: Disable TransliterationTypeahead (V2) to prevent duplicate dropdowns
+    // The workspace.js pipeline handles all suggestion UI via displaySuggestions()
 
     // Initialize suggestions panel
     const container = document.getElementById('suggestions-container');
@@ -1347,25 +1383,34 @@ class WorkspaceController {
         window.location.href = '/drafts';
       });
 
-      // If Transliteration V2 is enabled, attach it to the legacy editor and disable legacy IME UI.
-      try {
-        if (this.translitV2Enabled && !this.translitTypeahead) {
-          this.translitTypeahead = new window.TransliterationTypeahead(
-            new window.WorkspaceEditorAdapter(editorElement),
-            { getMode: () => this.getMode() }
-          );
+    // CRITICAL: DO NOT enable TransliterationTypeahead (V2) in workspace
+    // Workspace uses its own pipeline (handleEditorChange -> fetchRunnerSuggestions -> displaySuggestions)
+    // Enabling both causes duplicate dropdowns (tamil-suggestions-dropdown + translit-dropdown)
+    // The homepage editor works because it only uses ONE system (home-editor.js)
+    // 
+    // If Transliteration V2 was previously enabled, clean it up and ensure it's disabled
+    try {
+      if (this.translitTypeahead) {
+        // Clean up any V2 dropdowns
+        const v2Dropdowns = document.querySelectorAll('.translit-dropdown');
+        v2Dropdowns.forEach(dd => {
+          if (dd.parentNode) dd.parentNode.removeChild(dd);
+        });
+        // Destroy the typeahead instance
+        if (this.translitTypeahead.closeDropdown) {
+          this.translitTypeahead.closeDropdown();
         }
-        if (this.translitTypeahead) {
-          // Remove any legacy dropdown that might have been created before V2 kicked in.
-          const legacy = document.getElementById('tamil-suggestions-dropdown');
-          if (legacy && legacy.parentNode) legacy.parentNode.removeChild(legacy);
-          this.clearGhostText && this.clearGhostText();
-          this.clearTranslitSuggestions && this.clearTranslitSuggestions();
-          this.imeActive = false;
-        }
-      } catch (_e) {
-        // non-fatal
+        this.translitTypeahead = null;
       }
+      // Also remove any legacy dropdowns that might exist
+      const legacy = document.getElementById('tamil-suggestions-dropdown');
+      if (legacy && legacy.parentNode) legacy.parentNode.removeChild(legacy);
+      this.clearGhostText && this.clearGhostText();
+      this.clearTranslitSuggestions && this.clearTranslitSuggestions();
+      this.imeActive = false;
+    } catch (_e) {
+      // non-fatal
+    }
     }
 
     // Translate English to Tamil button
@@ -1689,9 +1734,10 @@ class WorkspaceController {
     }
     
     // CRITICAL: Remove ALL existing dropdowns FIRST to prevent duplicates
+    // Remove both workspace.js dropdowns (tamil-suggestions-dropdown) AND V2 dropdowns (translit-dropdown)
     const allExistingDropdowns = document.querySelectorAll('#tamil-suggestions-dropdown');
     if (allExistingDropdowns.length > 0) {
-      console.warn('[IME] ⚠️ Found', allExistingDropdowns.length, 'existing dropdown(s) - removing ALL before creating new one');
+      console.warn('[IME] ⚠️ Found', allExistingDropdowns.length, 'existing workspace dropdown(s) - removing ALL before creating new one');
       allExistingDropdowns.forEach(dd => {
         dd.style.display = 'none';
         dd.style.visibility = 'hidden';
@@ -1701,6 +1747,25 @@ class WorkspaceController {
           dd.parentNode.removeChild(dd);
         }
       });
+    }
+    
+    // CRITICAL: Also remove V2 TransliterationTypeahead dropdowns (translit-dropdown)
+    const v2Dropdowns = document.querySelectorAll('.translit-dropdown');
+    if (v2Dropdowns.length > 0) {
+      console.warn('[IME] ⚠️ Found', v2Dropdowns.length, 'V2 TransliterationTypeahead dropdown(s) - removing to prevent conflicts');
+      v2Dropdowns.forEach(dd => {
+        dd.style.display = 'none';
+        dd.style.visibility = 'hidden';
+        dd.style.opacity = '0';
+        dd.innerHTML = '';
+        if (dd.parentNode) {
+          dd.parentNode.removeChild(dd);
+        }
+      });
+      // Also close the typeahead instance if it exists
+      if (this.translitTypeahead && this.translitTypeahead.closeDropdown) {
+        this.translitTypeahead.closeDropdown();
+      }
     }
     
     // CRITICAL: Also remove any orphaned suggestion items
@@ -2658,10 +2723,11 @@ class WorkspaceController {
     window.logger?.debug?.('[IME] hideSuggestions called');
     
     // CRITICAL: Remove ALL dropdown instances completely (not just hide)
+    // Remove both workspace.js dropdowns AND V2 TransliterationTypeahead dropdowns
     const allDropdowns = document.querySelectorAll('#tamil-suggestions-dropdown');
-    console.log('[IME] Removing', allDropdowns.length, 'dropdown instance(s)');
+    console.log('[IME] Removing', allDropdowns.length, 'workspace dropdown instance(s)');
     allDropdowns.forEach((dropdown, index) => {
-      console.log('[IME] Removing dropdown', index + 1, 'of', allDropdowns.length);
+      console.log('[IME] Removing workspace dropdown', index + 1, 'of', allDropdowns.length);
       // Force hide with multiple methods
       dropdown.style.display = 'none';
       dropdown.style.visibility = 'hidden';
@@ -2673,8 +2739,29 @@ class WorkspaceController {
       if (dropdown.parentNode) {
         dropdown.parentNode.removeChild(dropdown);
       }
-      window.logger?.debug?.('[IME] ✅ Dropdown removed from DOM');
+      window.logger?.debug?.('[IME] ✅ Workspace dropdown removed from DOM');
     });
+    
+    // Also remove V2 TransliterationTypeahead dropdowns
+    const v2Dropdowns = document.querySelectorAll('.translit-dropdown');
+    if (v2Dropdowns.length > 0) {
+      console.log('[IME] Removing', v2Dropdowns.length, 'V2 TransliterationTypeahead dropdown(s)');
+      v2Dropdowns.forEach((dropdown, index) => {
+        console.log('[IME] Removing V2 dropdown', index + 1, 'of', v2Dropdowns.length);
+        dropdown.style.display = 'none';
+        dropdown.style.visibility = 'hidden';
+        dropdown.style.opacity = '0';
+        dropdown.innerHTML = '';
+        if (dropdown.parentNode) {
+          dropdown.parentNode.removeChild(dropdown);
+        }
+        window.logger?.debug?.('[IME] ✅ V2 dropdown removed from DOM');
+      });
+      // Close the typeahead instance if it exists
+      if (this.translitTypeahead && this.translitTypeahead.closeDropdown) {
+        this.translitTypeahead.closeDropdown();
+      }
+    }
     
     // CRITICAL: Remove any orphaned suggestion items that might be outside the dropdown
     const orphanedItems = document.querySelectorAll('.tamil-suggestion-item');
