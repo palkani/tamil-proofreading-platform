@@ -1015,7 +1015,30 @@ func toSuggestionSlice(val any) ([]Suggestion, bool) {
 		if v, ok := getIntInsensitive(obj, "end_index"); ok {
 			suggestion.EndIndex = v
 		}
-		// NO FILTERING - Pass through everything Gemini returns
+		
+		// Filter out invalid suggestions where original == corrected (no actual change)
+		// Normalize both strings for comparison (trim whitespace, remove quotes)
+		origNormalized := normalizeComparable(suggestion.Original)
+		corrNormalized := normalizeComparable(suggestion.Corrected)
+		if origNormalized == "" || corrNormalized == "" || origNormalized == corrNormalized {
+			// Skip this suggestion - no actual correction
+			log.Printf("[PARSE-FILTER] Skipping invalid suggestion: original=%q corrected=%q (identical or empty)", suggestion.Original, suggestion.Corrected)
+			continue
+		}
+		
+		// Filter out suggestions that are only about English words (not actual Tamil errors)
+		// Check if the reason mentions English words in parentheses or mixed language
+		reasonLower := strings.ToLower(suggestion.Reason)
+		if strings.Contains(reasonLower, "ஆங்கில") || 
+		   strings.Contains(reasonLower, "english") ||
+		   strings.Contains(reasonLower, "அடைப்புக்குறி") ||
+		   strings.Contains(reasonLower, "parentheses") ||
+		   (strings.Contains(reasonLower, "சொல் சரியானதே") && strings.Contains(reasonLower, "ஆங்கில")) {
+			// This is just flagging English words, not a real Tamil error - skip it
+			log.Printf("[PARSE-FILTER] Skipping English word suggestion: reason=%q", suggestion.Reason)
+			continue
+		}
+		
 		suggestions = append(suggestions, suggestion)
 	}
 

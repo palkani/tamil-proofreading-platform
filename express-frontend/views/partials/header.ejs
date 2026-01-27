@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" itemscope itemtype="https://schema.org/WebSite">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta itemprop="name" content="ProofTamil - prooftamil.com">
+  <meta itemprop="url" content="<%= typeof seo !== 'undefined' && seo.canonical ? seo.canonical : baseUrl + '/' %>">
   
   <% 
   const baseUrl = 'https://prooftamil.com';
-  const defaultKeywords = 'tamil proofreading tool, tamil proofreader online, tamil grammar checker, tamil grammar corrector, tamil spell checker, tamil spell check online, tamil writing assistant, tamil writing correction tool, tamil writing improvement tool, tamil grammar correction online, tamil grammar error checker, tamil AI grammar checker, tamil spelling correction tool, tamil spelling corrector online, tamil grammar and spelling checker, tamil AI writing tool, tamil text correction tool, tamil grammar fix tool, tamil grammar rewrite tool, tamil sentence correction tool, tamil content writing correction, tamil article proofreading tool, tamil blog writing checker, correct tamil grammar, fix tamil spelling, fix tamil grammar mistakes, check tamil grammar, check tamil spelling, improve tamil writing online, tamil grammar check free, tamil proofreading free, tamil grammar correction free tool';
+  const defaultKeywords = 'prooftamil, prooftamil.com, tamil proofreading tool, tamil proofreader online, tamil grammar checker, tamil grammar corrector, tamil spell checker, tamil spell check online, tamil writing assistant, tamil writing correction tool, tamil writing improvement tool, tamil grammar correction online, tamil grammar error checker, tamil AI grammar checker, tamil spelling correction tool, tamil spelling corrector online, tamil grammar and spelling checker, tamil AI writing tool, tamil text correction tool, tamil grammar fix tool, tamil grammar rewrite tool, tamil sentence correction tool, tamil content writing correction, tamil article proofreading tool, tamil blog writing checker, correct tamil grammar, fix tamil spelling, fix tamil grammar mistakes, check tamil grammar, check tamil spelling, improve tamil writing online, tamil grammar check free, tamil proofreading free, tamil grammar correction free tool';
   
   const seoTitle = typeof seo !== 'undefined' && seo.title ? seo.title : title;
   const seoDescription = typeof seo !== 'undefined' && seo.description ? seo.description : 'Free Tamil proofreading tool with AI-powered grammar checker, spell check, and writing correction. Check Tamil grammar online free, fix spelling errors, and improve Tamil writing instantly.';
@@ -109,13 +111,27 @@
   <script defer src="/js/logger.js"></script>
   
   <% if (pageType === 'home' || (typeof seo !== 'undefined' && seo.includeStructuredData) || typeof seo === 'undefined') { %>
+  <!-- Structured Data - Brand (for brand search optimization) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Brand",
+    "name": "ProofTamil",
+    "alternateName": ["prooftamil", "prooftamil.com"],
+    "url": "<%= baseUrl %>",
+    "logo": "<%= baseUrl %>/images/tamil-logo.svg",
+    "description": "ProofTamil - The leading free Tamil grammar checker and AI proofreading tool. Visit prooftamil.com for instant Tamil writing correction.",
+    "slogan": "Free Tamil Grammar Checker & AI Proofreading Tool"
+  }
+  </script>
+  
   <!-- Structured Data - WebApplication (Home page only) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "ProofTamil - Tamil Grammar Checker & Proofreading Tool",
-    "alternateName": ["Tamil Grammar Checker", "Tamil Proofreader Online", "Tamil Spell Checker", "Tamil Writing Assistant", "Tamil AI Grammar Tool", "Tamil Grammar Corrector"],
+    "alternateName": ["Tamil Grammar Checker", "Tamil Proofreader Online", "Tamil Spell Checker", "Tamil Writing Assistant", "Tamil AI Grammar Tool", "Tamil Grammar Corrector", "prooftamil", "prooftamil.com"],
     "applicationCategory": "UtilitiesApplication",
     "applicationSubCategory": "Grammar Checker",
     "operatingSystem": "Web Browser",
@@ -165,9 +181,10 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "ProofTamil",
+    "alternateName": ["prooftamil", "prooftamil.com"],
     "url": "<%= baseUrl %>",
     "logo": "<%= baseUrl %>/images/tamil-logo.svg",
-    "description": "Free Tamil proofreading and AI grammar checking platform. Best online tool for Tamil writing correction, spell check, and grammar improvement.",
+    "description": "ProofTamil (prooftamil.com) - Free Tamil proofreading and AI grammar checking platform. Best online tool for Tamil writing correction, spell check, and grammar improvement.",
     "sameAs": [],
     "contactPoint": {
       "@type": "ContactPoint",
