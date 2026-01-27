@@ -389,6 +389,44 @@ class WorkspaceController {
     this.currentTokenInfo = null; // { token, start, end } at caret
     this.previousToken = null; // Track previous token to avoid duplicate calls
     this.imeDebounceTimer = null; // Debounce timer for IME fetching
+    this._isRenderingDropdown = false; // Lock to prevent multiple simultaneous renders
+    
+    // CRITICAL: Global cleanup function to remove all dropdowns
+    this.cleanupAllDropdowns = () => {
+      const allDropdowns = document.querySelectorAll('#tamil-suggestions-dropdown');
+      console.log('[IME] 🧹 Global cleanup: Removing', allDropdowns.length, 'dropdown(s)');
+      allDropdowns.forEach(dd => {
+        dd.style.display = 'none';
+        dd.style.visibility = 'hidden';
+        dd.style.opacity = '0';
+        dd.innerHTML = '';
+        if (dd.parentNode) {
+          dd.parentNode.removeChild(dd);
+        }
+      });
+      // Remove orphaned items
+      document.querySelectorAll('.tamil-suggestion-item').forEach(item => {
+        if (!item.closest('#tamil-suggestions-dropdown')) {
+          item.remove();
+        }
+      });
+      this._isRenderingDropdown = false;
+      this.translitDropdownOpen = false;
+    };
+    
+    // CRITICAL: Cleanup on document clicks outside dropdown
+    if (typeof document !== 'undefined') {
+      document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('tamil-suggestions-dropdown');
+        if (dropdown && !dropdown.contains(e.target) && !e.target.closest('.tamil-suggestion-item')) {
+          // Only hide if clicking outside the editor area (to avoid hiding while typing)
+          const editor = this.editor || document.querySelector('.ProseMirror') || document.querySelector('#tiptap-workspace-editor');
+          if (editor && !editor.contains(e.target)) {
+            this.cleanupAllDropdowns();
+          }
+        }
+      }, true); // Use capture phase to catch early
+    }
     this.activeSuggestionIndex = 0; // For keyboard navigation
     this.isSelectingSuggestion = false; // Flag to prevent duplicate selection calls
     this.justReplacedToken = false; // Flag to prevent fetching suggestions immediately after replacement
@@ -1643,6 +1681,41 @@ class WorkspaceController {
   displaySuggestions(suggestions) {
     console.log('[IME] 🔍 displaySuggestions called with:', suggestions ? suggestions.length : 0, 'suggestions');
     console.log('[IME] Suggestions data:', suggestions);
+    
+    // CRITICAL: Prevent multiple simultaneous renders with a lock
+    if (this._isRenderingDropdown) {
+      console.warn('[IME] ⚠️ Already rendering dropdown, ignoring duplicate call');
+      return;
+    }
+    
+    // CRITICAL: Remove ALL existing dropdowns FIRST to prevent duplicates
+    const allExistingDropdowns = document.querySelectorAll('#tamil-suggestions-dropdown');
+    if (allExistingDropdowns.length > 0) {
+      console.warn('[IME] ⚠️ Found', allExistingDropdowns.length, 'existing dropdown(s) - removing ALL before creating new one');
+      allExistingDropdowns.forEach(dd => {
+        dd.style.display = 'none';
+        dd.style.visibility = 'hidden';
+        dd.style.opacity = '0';
+        dd.innerHTML = '';
+        if (dd.parentNode) {
+          dd.parentNode.removeChild(dd);
+        }
+      });
+    }
+    
+    // CRITICAL: Also remove any orphaned suggestion items
+    const orphanedItems = document.querySelectorAll('.tamil-suggestion-item');
+    orphanedItems.forEach(item => {
+      const parentDropdown = item.closest('#tamil-suggestions-dropdown');
+      if (!parentDropdown) {
+        console.warn('[IME] Removing orphaned suggestion item:', item);
+        item.remove();
+      }
+    });
+    
+    // Set lock
+    this._isRenderingDropdown = true;
+    
     // Support both legacy + TipTap editors (dropdown is rendered via DOM selection/caret).
 
     // CRITICAL: Store suggestions in instance variable FIRST so selectSuggestion can access them
@@ -1691,8 +1764,22 @@ class WorkspaceController {
       console.log('[IME] No suggestions provided (empty array or null)');
     }
 
+    // CRITICAL: Double-check - if a dropdown still exists after cleanup, remove it
+    const stillExisting = document.getElementById('tamil-suggestions-dropdown');
+    if (stillExisting) {
+      console.warn('[IME] ⚠️ Dropdown still exists after cleanup! Force removing...');
+      stillExisting.style.display = 'none';
+      stillExisting.style.visibility = 'hidden';
+      stillExisting.style.opacity = '0';
+      stillExisting.innerHTML = '';
+      if (stillExisting.parentNode) {
+        stillExisting.parentNode.removeChild(stillExisting);
+      }
+    }
+    
     // Get or create dropdown elements
     // CRITICAL: Append directly to body, not a container, to avoid pointer-events issues
+    // At this point, all existing dropdowns should have been removed above
     let dropdown = document.getElementById('tamil-suggestions-dropdown');
     if (!dropdown) {
       console.log('[IME] 📦 Creating new dropdown element');
@@ -1703,30 +1790,39 @@ class WorkspaceController {
       document.body.appendChild(dropdown);
       console.log('[IME] ✅ Dropdown created and added directly to body');
     } else {
-      console.log('[IME] ♻️ Using existing dropdown element');
-      // Ensure it's directly in body, not in a container
-      if (dropdown.parentElement && dropdown.parentElement !== document.body) {
-        console.log('[IME] Moving dropdown to body (was in:', dropdown.parentElement.tagName || dropdown.parentElement.id, ')');
-        if (dropdown.parentElement.removeChild) {
-          dropdown.parentElement.removeChild(dropdown);
-        }
-        document.body.appendChild(dropdown);
-      } else if (!dropdown.parentElement) {
-        document.body.appendChild(dropdown);
+      console.error('[IME] ❌ ERROR: Dropdown still exists after cleanup! This should not happen.');
+      // Force remove and recreate
+      dropdown.style.display = 'none';
+      dropdown.style.visibility = 'hidden';
+      dropdown.style.opacity = '0';
+      dropdown.innerHTML = '';
+      if (dropdown.parentNode) {
+        dropdown.parentNode.removeChild(dropdown);
       }
+      dropdown = document.createElement('div');
+      dropdown.id = 'tamil-suggestions-dropdown';
+      dropdown.className = 'tamil-suggestions-dropdown';
+      document.body.appendChild(dropdown);
+      console.log('[IME] ✅ Dropdown recreated after force removal');
     }
     
     // CRITICAL: Set pointer-events on dropdown itself (not parent)
     dropdown.style.pointerEvents = 'auto';
 
-    // Clear existing content
+    // Clear existing content completely
     dropdown.innerHTML = '';
+    
+    // CRITICAL: Ensure dropdown has proper overflow containment
+    dropdown.style.overflow = 'hidden';
+    dropdown.style.overflowY = 'hidden';
+    dropdown.style.overflowX = 'hidden';
 
     // Hide if no suggestions
     if (!suggestions || suggestions.length === 0) {
       console.log('[IME] ⚠️ No suggestions to display, hiding dropdown');
       dropdown.style.display = 'none';
       this.translitDropdownOpen = false;
+      this._isRenderingDropdown = false; // Release lock
       return;
     }
 
@@ -1737,6 +1833,7 @@ class WorkspaceController {
     if (!Array.isArray(suggestions)) {
       console.error('[IME] ❌ Suggestions is not an array:', typeof suggestions, suggestions);
       dropdown.style.display = 'none';
+      this._isRenderingDropdown = false; // Release lock
       return;
     }
 
@@ -1745,7 +1842,25 @@ class WorkspaceController {
     closeBtn.className = 'tamil-suggestions-close';
     closeBtn.innerHTML = '×';
     closeBtn.setAttribute('aria-label', 'Close suggestions');
-    closeBtn.onclick = () => {
+    closeBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[IME] Close button clicked - removing ALL dropdowns');
+      // CRITICAL: Remove ALL dropdowns, not just hide
+      const allDropdowns = document.querySelectorAll('#tamil-suggestions-dropdown');
+      allDropdowns.forEach(dd => {
+        dd.style.display = 'none';
+        dd.style.visibility = 'hidden';
+        dd.style.opacity = '0';
+        dd.innerHTML = '';
+        dd.remove();
+      });
+      // Also remove orphaned items
+      document.querySelectorAll('.tamil-suggestion-item').forEach(item => {
+        if (!item.closest('#tamil-suggestions-dropdown')) {
+          item.remove();
+        }
+      });
       this.hideSuggestions();
     };
     dropdown.appendChild(closeBtn);
@@ -1753,10 +1868,16 @@ class WorkspaceController {
     // Create suggestions list
     const list = document.createElement('div');
     list.className = 'tamil-suggestions-list';
+    // CRITICAL: Ensure list container has proper overflow containment
+    list.style.overflow = 'hidden';
+    list.style.overflowY = 'auto'; // Allow scrolling if needed, but contain items
+    list.style.overflowX = 'hidden';
+    list.style.maxHeight = '200px'; // Limit height to prevent overflow
 
     // Render each suggestion (max 4) - optimized for performance
+    // CRITICAL: Strictly limit to 4 suggestions to prevent overflow
     const maxSuggestions = Math.min(this.currentSuggestions.length, 4);
-    console.log('[IME] 🎯 Rendering', maxSuggestions, 'suggestions');
+    console.log('[IME] 🎯 Rendering', maxSuggestions, 'suggestions (strictly limited to 4)');
     
     for (let i = 0; i < maxSuggestions; i++) {
       // IMPORTANT: render from normalized list to avoid shape mismatches
@@ -1823,6 +1944,12 @@ class WorkspaceController {
       
       item.appendChild(number);
       item.appendChild(text);
+      
+      // CRITICAL: Ensure item is properly contained and doesn't overflow
+      item.style.position = 'relative'; // Not absolute/fixed - contained within list
+      item.style.display = 'flex';
+      item.style.width = '100%';
+      item.style.boxSizing = 'border-box';
       
       // Log to verify text is set
       console.log('[IME] ✅ Added suggestion item:', {
@@ -1907,6 +2034,28 @@ class WorkspaceController {
     // Verify list has items
     const listItems = list.querySelectorAll('.tamil-suggestion-item');
     console.log('[IME] 📋 List created with', listItems.length, 'items');
+    
+    // CRITICAL: Ensure we never have more than 4 items
+    if (listItems.length > 4) {
+      console.error('[IME] ❌ ERROR: More than 4 items rendered! Removing extras...');
+      for (let i = 4; i < listItems.length; i++) {
+        listItems[i].remove();
+      }
+    }
+    
+    // CRITICAL: Verify all items are contained within the dropdown
+    const allSuggestionItems = document.querySelectorAll('.tamil-suggestion-item');
+    allSuggestionItems.forEach(item => {
+      const parentDropdown = item.closest('#tamil-suggestions-dropdown');
+      if (!parentDropdown) {
+        console.error('[IME] ❌ Found orphaned suggestion item outside dropdown! Removing:', item);
+        item.remove();
+      } else if (parentDropdown !== dropdown) {
+        console.error('[IME] ❌ Found suggestion item in wrong dropdown! Removing:', item);
+        item.remove();
+      }
+    });
+    
     if (listItems.length === 0) {
       console.error('[IME] ❌ No items in list! Suggestions array:', suggestions);
     } else {
@@ -1916,7 +2065,8 @@ class WorkspaceController {
           exists: !!item,
           textEl: !!textEl,
           textContent: textEl?.textContent || 'MISSING',
-          innerHTML: item.innerHTML.substring(0, 100)
+          innerHTML: item.innerHTML.substring(0, 100),
+          contained: item.closest('#tamil-suggestions-dropdown') === dropdown
         });
       });
     }
@@ -2100,6 +2250,12 @@ class WorkspaceController {
     setTimeout(forceVisibility, 50);
     setTimeout(forceVisibility, 100);
     setTimeout(forceVisibility, 200);
+    
+    // Release lock after a short delay to allow DOM to settle
+    setTimeout(() => {
+      this._isRenderingDropdown = false;
+      console.log('[IME] ✅ Rendering lock released');
+    }, 100);
     
     // Final verification after all updates
     setTimeout(() => {
@@ -2500,15 +2656,49 @@ class WorkspaceController {
    */
   hideSuggestions() {
     window.logger?.debug?.('[IME] hideSuggestions called');
-    const dropdown = document.getElementById('tamil-suggestions-dropdown');
-    if (dropdown) {
-      // Force hide with multiple methods to ensure it's hidden
+    
+    // CRITICAL: Remove ALL dropdown instances completely (not just hide)
+    const allDropdowns = document.querySelectorAll('#tamil-suggestions-dropdown');
+    console.log('[IME] Removing', allDropdowns.length, 'dropdown instance(s)');
+    allDropdowns.forEach((dropdown, index) => {
+      console.log('[IME] Removing dropdown', index + 1, 'of', allDropdowns.length);
+      // Force hide with multiple methods
       dropdown.style.display = 'none';
       dropdown.style.visibility = 'hidden';
       dropdown.style.opacity = '0';
       dropdown.classList.add('hidden');
-      window.logger?.debug?.('[IME] ✅ Dropdown hidden');
+      // Clear content to prevent stale items
+      dropdown.innerHTML = '';
+      // CRITICAL: Actually remove from DOM, not just hide
+      if (dropdown.parentNode) {
+        dropdown.parentNode.removeChild(dropdown);
+      }
+      window.logger?.debug?.('[IME] ✅ Dropdown removed from DOM');
+    });
+    
+    // CRITICAL: Remove any orphaned suggestion items that might be outside the dropdown
+    const orphanedItems = document.querySelectorAll('.tamil-suggestion-item');
+    console.log('[IME] Checking', orphanedItems.length, 'suggestion items for orphans');
+    orphanedItems.forEach(item => {
+      const dropdown = item.closest('#tamil-suggestions-dropdown');
+      if (!dropdown) {
+        console.warn('[IME] Found orphaned suggestion item, removing:', item);
+        item.remove();
+      }
+    });
+    
+    // CRITICAL: Double-check - remove any remaining dropdowns
+    const remainingDropdowns = document.querySelectorAll('#tamil-suggestions-dropdown');
+    if (remainingDropdowns.length > 0) {
+      console.error('[IME] ❌ ERROR: Still found', remainingDropdowns.length, 'dropdown(s) after removal! Force removing...');
+      remainingDropdowns.forEach(dd => {
+        dd.remove();
+      });
     }
+    
+    // Release rendering lock
+    this._isRenderingDropdown = false;
+    
     this.translitDropdownOpen = false;
     this.imeActive = false;
     this.currentSuggestions = [];
@@ -2519,6 +2709,8 @@ class WorkspaceController {
       window.logger?.debug?.('[IME] Clearing currentTokenInfo when hiding suggestions');
       this.currentTokenInfo = null;
     }
+    
+    console.log('[IME] ✅ hideSuggestions complete - all dropdowns removed');
   }
 
   // Legacy method - redirects to new method

@@ -155,11 +155,16 @@
     /* REMOVED: visibility: visible !important - Let JS control this */
     /* REMOVED: opacity: 1 !important - Let JS control this */
     pointer-events: auto !important;
+    /* CRITICAL: Strict overflow containment to prevent items appearing outside */
     overflow: hidden !important;
+    overflow-y: hidden !important;
+    overflow-x: hidden !important;
     /* Prevent clipping by parent containers */
     transform: translateZ(0) !important;
     will-change: transform !important;
     isolation: isolate !important;
+    /* Ensure all children are contained */
+    contain: layout style paint !important;
   }
   
   /* Container for dropdown - ensure it doesn't interfere */
@@ -254,6 +259,9 @@
     overflow-y: auto;
     overflow-x: hidden;
     margin: 0;
+    /* CRITICAL: Ensure items are contained within list */
+    position: relative;
+    contain: layout style paint;
   }
 
   .tamil-suggestion-item {
@@ -270,6 +278,11 @@
     user-select: none !important;
     -webkit-user-select: none !important;
     pointer-events: auto !important;
+    /* CRITICAL: Ensure items are contained within dropdown */
+    width: 100% !important;
+    box-sizing: border-box !important;
+    /* Prevent items from appearing outside container */
+    contain: layout style paint !important;
   }
 
   .tamil-suggestion-item:hover {
