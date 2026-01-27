@@ -1027,15 +1027,38 @@ func toSuggestionSlice(val any) ([]Suggestion, bool) {
 		}
 		
 		// Filter out suggestions that are only about English words (not actual Tamil errors)
-		// Check if the reason mentions English words in parentheses or mixed language
+		// Check if the reason mentions English words, transliteration, or mixed language
 		reasonLower := strings.ToLower(suggestion.Reason)
-		if strings.Contains(reasonLower, "ஆங்கில") || 
-		   strings.Contains(reasonLower, "english") ||
-		   strings.Contains(reasonLower, "அடைப்புக்குறி") ||
-		   strings.Contains(reasonLower, "parentheses") ||
-		   (strings.Contains(reasonLower, "சொல் சரியானதே") && strings.Contains(reasonLower, "ஆங்கில")) {
-			// This is just flagging English words, not a real Tamil error - skip it
-			log.Printf("[PARSE-FILTER] Skipping English word suggestion: reason=%q", suggestion.Reason)
+		originalLower := strings.ToLower(suggestion.Original)
+		correctedLower := strings.ToLower(suggestion.Corrected)
+		
+		// Check if original is English (Latin script) and corrected is Tamil
+		originalIsEnglish := len(originalLower) > 0 && 
+			!strings.ContainsAny(originalLower, "அஆஇஈஉஊஎஏஐஒஓஔகஙசஞடணதநபமயரலவழளறனஸஷஜஹ") &&
+			strings.ContainsAny(originalLower, "abcdefghijklmnopqrstuvwxyz")
+		correctedIsTamil := len(correctedLower) > 0 && 
+			strings.ContainsAny(correctedLower, "அஆஇஈஉஊஎஏஐஒஓஔகஙசஞடணதநபமயரலவழளறனஸஷஜஹ")
+		
+		// Filter patterns for English word suggestions
+		englishWordPatterns := []string{
+			"ஆங்கில", "english", "transliterat", "not in tamil script",
+			"needs to be transliterated", "அடைப்புக்குறி", "parentheses",
+			"சொல் சரியானதே", "word is correct", "not in tamil",
+		}
+		
+		hasEnglishPattern := false
+		for _, pattern := range englishWordPatterns {
+			if strings.Contains(reasonLower, pattern) {
+				hasEnglishPattern = true
+				break
+			}
+		}
+		
+		// Filter if: (1) reason mentions English/transliteration, OR (2) it's suggesting to transliterate English to Tamil
+		if hasEnglishPattern || (originalIsEnglish && correctedIsTamil && suggestion.Type == "spelling") {
+			// This is just flagging English words or suggesting transliteration, not a real Tamil error - skip it
+			log.Printf("[PARSE-FILTER] Skipping English word/transliteration suggestion: original=%q corrected=%q reason=%q type=%q", 
+				suggestion.Original, suggestion.Corrected, suggestion.Reason, suggestion.Type)
 			continue
 		}
 		
