@@ -545,6 +545,46 @@ router.get('/privacy', (req, res) => {
   });
 });
 
+// Sitemap.xml - SEO optimization
+router.get('/sitemap.xml', (req, res) => {
+  const BASE_URL = 'https://prooftamil.com';
+  const now = new Date().toISOString().split('T')[0];
+  
+  // Public pages that should be indexed
+  const publicPages = [
+    { url: '', priority: '1.0', changefreq: 'daily' },
+    { url: '/free-tamil-editor', priority: '0.9', changefreq: 'weekly' },
+    { url: '/how-to-use', priority: '0.8', changefreq: 'monthly' },
+    { url: '/contact', priority: '0.7', changefreq: 'monthly' },
+    { url: '/privacy', priority: '0.5', changefreq: 'yearly' },
+    { url: '/terms', priority: '0.5', changefreq: 'yearly' },
+    { url: '/login', priority: '0.6', changefreq: 'monthly' },
+    { url: '/register', priority: '0.6', changefreq: 'monthly' },
+    { url: '/tools/ocr', priority: '0.8', changefreq: 'weekly' },
+    { url: '/tools/converter', priority: '0.8', changefreq: 'weekly' },
+    { url: '/tools/ai-content-writer', priority: '0.8', changefreq: 'weekly' },
+    { url: '/tools/event-name-suggester', priority: '0.7', changefreq: 'monthly' },
+    { url: '/blog', priority: '0.8', changefreq: 'weekly' }
+  ];
+  
+  let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">\n';
+  
+  publicPages.forEach(page => {
+    sitemap += '  <url>\n';
+    sitemap += `    <loc>${BASE_URL}${page.url}</loc>\n`;
+    sitemap += `    <lastmod>${now}</lastmod>\n`;
+    sitemap += `    <changefreq>${page.changefreq}</changefreq>\n`;
+    sitemap += `    <priority>${page.priority}</priority>\n`;
+    sitemap += '  </url>\n';
+  });
+  
+  sitemap += '</urlset>';
+  
+  res.set('Content-Type', 'application/xml');
+  res.send(sitemap);
+});
+
 // Terms of Service page - accessible to everyone
 router.get('/terms', (req, res) => {
   const user = getCurrentUser(req);

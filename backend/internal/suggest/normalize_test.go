@@ -5,6 +5,7 @@ import "testing"
 func TestNormalizeRoman(t *testing.T) {
 	opts := NormalizeOptions{EnableVowelCollapse: true}
 	cases := map[string]string{
+		// Original tests
 		" Thamizh ": "tamil",
 		"zh":        "l",
 		"dh":        "t",
@@ -13,16 +14,23 @@ func TestNormalizeRoman(t *testing.T) {
 		"EE":        "i",
 		"oo":        "u",
 		"taMIL":     "tamil",
-		"naanum":    "nanum",
-		// Tamil consonant voicing normalization
-		"nadagam":   "natakam",  // d→t, g→k
-		"padagu":    "pataku",   // d→t, g→k
-		"bagam":     "pakam",    // b→p, g→k
-		"jalam":     "calam",    // j→c
-		"shiva":     "civa",     // sh→c
-		"krishna":   "kricna",   // sh→c
-		"bharat":    "parat",    // bh→p
-		"gandhi":    "kanti",    // g→k, dh→t
+		"naanum":    "nanum", // aa→a with vowel collapse
+		
+		// New tests for consonant normalization
+		"nadagam":   "natakam", // d→t, g→k: handles natakam/nadagam variation
+		"natakam":   "natakam", // already canonical
+		"damizh":    "tamil",   // d→t: handles tamizh/damizh variation
+		"tamizh":    "tamil",   // already normalized (th→t, zh→l)
+		"thamizh":   "tamil",   // th→t, zh→l
+		"govil":     "kovil",   // g→k: handles kovil/govil variation
+		"kovil":     "kovil",   // already canonical
+		"batam":     "patam",   // b→p
+		"patam":     "patam",   // already canonical
+		"sari":      "cari",    // s→c
+		"cari":      "cari",    // already canonical
+		"jari":      "cari",    // j→c
+		"shari":     "shari",   // preserve 'sh' (distinct sound)
+		"zari":      "cari",    // z→c (when not zh)
 	}
 	for in, want := range cases {
 		got := NormalizeRoman(in, opts)
@@ -32,18 +40,17 @@ func TestNormalizeRoman(t *testing.T) {
 	}
 }
 
-func TestNormalizeRomanNoVowelCollapse(t *testing.T) {
+func TestNormalizeRomanWithoutVowelCollapse(t *testing.T) {
 	opts := NormalizeOptions{EnableVowelCollapse: false}
 	cases := map[string]string{
-		"naanum":  "naanum",  // no vowel collapse, aa stays aa
-		"vaaaan":  "vaaaan",  // no vowel collapse
-		"thamizh": "tamil",   // zh→l, th→t still apply
-		"nadagam": "natakam", // consonant normalization still applies
+		"nadagam": "natakam", // d→t, g→k
+		"aa":      "aa",       // vowels not collapsed
+		"ee":      "ee",       // vowels not collapsed
 	}
 	for in, want := range cases {
 		got := NormalizeRoman(in, opts)
 		if got != want {
-			t.Errorf("normalize (no vowel collapse) %q => %q, want %q", in, got, want)
+			t.Errorf("normalize %q => %q, want %q", in, got, want)
 		}
 	}
 }

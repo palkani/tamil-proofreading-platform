@@ -38,10 +38,43 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 	}
 
 	var rows []LexiconRow
-	if err := db.WithContext(ctx).Table("tamil_words").
-		Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
-		Find(&rows).Error; err != nil {
-		return nil, err
+	var version string
+	var loadedFromCache bool
+
+	// Try loading from Redis cache first
+	if opts.UseRedisCache && opts.RedisClient != nil && opts.RedisClient.Enabled() {
+		cachedRows, cachedVersion, _, found, err := opts.RedisClient.LoadLexiconRowsFromCache(ctx)
+		if err == nil && found && len(cachedRows) > 0 {
+			rows = cachedRows
+			version = cachedVersion
+			loadedFromCache = true
+			// Use cached version or generate new one
+			if version == "" {
+				version = time.Now().UTC().Format(time.RFC3339)
+			}
+		}
+	}
+
+	// Fallback to PostgreSQL if cache miss
+	if !loadedFromCache {
+		if err := db.WithContext(ctx).Table("tamil_words").
+			Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
+			Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		
+		// Generate version timestamp
+		version = time.Now().UTC().Format(time.RFC3339)
+		
+		// Cache in Redis for next time (async, don't block on error)
+		if opts.UseRedisCache && opts.RedisClient != nil && opts.RedisClient.Enabled() {
+			go func() {
+				// Use background context with timeout for caching
+				cacheCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				_ = opts.RedisClient.CacheLexiconRows(cacheCtx, rows, version)
+			}()
+		}
 	}
 
 	maxID := 0
@@ -90,13 +123,15 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 		Trie:         trie,
 		LexiconCount: len(rows),
 		LoadedAt:     time.Now(),
-		TrieVersion:  time.Now().UTC().Format(time.RFC3339),
+		TrieVersion:  version,
 	}, nil
 }
 
 type LoaderOptions struct {
 	MaxTopPerNode      int
 	EnableVowelCollapse bool
+	RedisClient        *RedisClient // Optional: for caching lexicon
+	UseRedisCache      bool         // Whether to use Redis cache
 }
 
 func parseAlternateSpellings(raw string) []string {

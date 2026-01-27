@@ -848,13 +848,18 @@ class HomeEditor {
       try {
         const suggestions = await callTransliterator(lastWord, mode, 8, controller.signal);
         // Stale response guard
-        if (requestId < this.autocompleteRequestId) return;
+        if (requestId < this.autocompleteRequestId) {
+          console.log('[AUTOCOMPLETE] Stale response ignored (requestId:', requestId, 'current:', this.autocompleteRequestId, ')');
+          return;
+        }
+        console.log('[AUTOCOMPLETE] Received', suggestions?.length || 0, 'suggestions for:', lastWord);
         const normalized = (suggestions || [])
           .map((s) => ({
             word: normalizeTamilWord(s),
             score: (typeof s === 'object' && s) ? (s.score || s.confidence || 0) : 0,
           }))
           .filter(s => s.word);
+        console.log('[AUTOCOMPLETE] Normalized to', normalized.length, 'suggestions');
         this.autocompleteCache[cacheKey] = normalized;
         if (!this.autocompleteCacheOrder.includes(cacheKey)) {
           this.autocompleteCacheOrder.push(cacheKey);
@@ -869,7 +874,10 @@ class HomeEditor {
         this.autocompleteLastApplied = requestId;
         this.renderSuggestions(normalized);
       } catch (err) {
-        if (err?.name !== 'AbortError') {
+        if (err?.name === 'AbortError') {
+          // AbortError is expected when user types quickly - don't log as error
+          console.log('[AUTOCOMPLETE] Request aborted (user typing fast)');
+        } else {
           console.error('[AUTOCOMPLETE] Fetch error:', err);
         }
       }

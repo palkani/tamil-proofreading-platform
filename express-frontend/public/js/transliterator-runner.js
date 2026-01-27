@@ -49,14 +49,16 @@
 
       const parsed = await safeJson(res);
       if (!parsed || parsed.success === false) {
+        if (IS_DEV) console.debug('[TRANSLITERATOR] No suggestions or success=false', parsed);
         return [];
       }
       const normalized = (parsed.suggestions || [])
         .map((s) => ({
-          text: s.ta || s.word || '',
+          text: s.text || s.ta || s.word || '',
           score: typeof s.score === 'number' ? s.score : 0,
         }))
         .filter((s) => s.text);
+      if (IS_DEV) console.debug('[TRANSLITERATOR] Normalized suggestions:', normalized.length, normalized);
       lastSuggestions = normalized;
       return normalized;
     } catch (err) {
