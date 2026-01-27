@@ -16,6 +16,18 @@ function isTokenExpired(token) {
 
 console.log('[HomeEditorJS] ✅ Loaded version v20260122a (normalizeComparable fix + paste double-submit fix)');
 
+// Suppress AbortError logs from unhandled promise rejections (expected when canceling stale requests)
+if (typeof window !== 'undefined') {
+  const originalConsoleError = console.error;
+  window.addEventListener('unhandledrejection', (event) => {
+    if (event.reason?.name === 'AbortError' || event.reason?.message?.includes('aborted')) {
+      // Suppress AbortError - it's expected behavior when canceling stale requests
+      event.preventDefault();
+      return;
+    }
+  });
+}
+
 // Unified API helper for all /api calls
 // Use centralized auth-utils.apiFetch if available, with fallback
 // CRITICAL: Default to requireAuth = false for homepage to allow unauthenticated usage
@@ -837,9 +849,14 @@ class HomeEditor {
 
     // Debounced API call (fast enough to feel "per letter" without spamming)
     if (this.translitTimeout) clearTimeout(this.translitTimeout);
-    // Cancel previous in-flight request
+    // Cancel previous in-flight request (silently - AbortError is expected)
     if (this.autocompleteAbort) {
-      try { this.autocompleteAbort.abort(); } catch (_e) {}
+      try { 
+        this.autocompleteAbort.abort('replaced_by_new_request'); 
+      } catch (_e) {
+        // Ignore - abort() may throw if already aborted
+      }
+      this.autocompleteAbort = null;
     }
     const requestId = ++this.autocompleteRequestId;
     const controller = new AbortController();
@@ -847,19 +864,38 @@ class HomeEditor {
     this.translitTimeout = setTimeout(async () => {
       try {
         const suggestions = await callTransliterator(lastWord, mode, 8, controller.signal);
-        // Stale response guard
+        // Stale response guard - check if a newer request has been made
         if (requestId < this.autocompleteRequestId) {
           console.log('[AUTOCOMPLETE] Stale response ignored (requestId:', requestId, 'current:', this.autocompleteRequestId, ')');
           return;
         }
-        console.log('[AUTOCOMPLETE] Received', suggestions?.length || 0, 'suggestions for:', lastWord);
+        console.log('[AUTOCOMPLETE] Received', suggestions?.length || 0, 'suggestions for:', lastWord, suggestions);
+        
+        // Normalize suggestions - handle both object format {text, score} and string format
+        // transliterator-runner.js returns: [{text: "மரம்", score: 2.63}, ...]
         const normalized = (suggestions || [])
-          .map((s) => ({
-            word: normalizeTamilWord(s),
-            score: (typeof s === 'object' && s) ? (s.score || s.confidence || 0) : 0,
-          }))
-          .filter(s => s.word);
-        console.log('[AUTOCOMPLETE] Normalized to', normalized.length, 'suggestions');
+          .map((s, idx) => {
+            // Handle object format from transliterator-runner.js: {text: "...", score: ...}
+            const word = normalizeTamilWord(s);
+            if (!word) {
+              console.warn('[AUTOCOMPLETE] Item', idx, 'produced empty word:', s);
+              return null;
+            }
+            return {
+              word: word,
+              score: (typeof s === 'object' && s) ? (s.score || s.confidence || 0) : 0,
+            };
+          })
+          .filter(s => s && s.word);
+        
+        console.log('[AUTOCOMPLETE] Normalized to', normalized.length, 'suggestions:', normalized.map(s => s.word));
+        
+        if (normalized.length === 0) {
+          console.warn('[AUTOCOMPLETE] No valid suggestions after normalization for:', lastWord);
+          this.autocompleteBox?.classList.add('hidden');
+          return;
+        }
+        
         this.autocompleteCache[cacheKey] = normalized;
         if (!this.autocompleteCacheOrder.includes(cacheKey)) {
           this.autocompleteCacheOrder.push(cacheKey);
@@ -874,12 +910,14 @@ class HomeEditor {
         this.autocompleteLastApplied = requestId;
         this.renderSuggestions(normalized);
       } catch (err) {
+        // AbortError is expected and normal when user types quickly - don't log as error
         if (err?.name === 'AbortError') {
-          // AbortError is expected when user types quickly - don't log as error
-          console.log('[AUTOCOMPLETE] Request aborted (user typing fast)');
-        } else {
-          console.error('[AUTOCOMPLETE] Fetch error:', err);
+          // Silently ignore - this is expected behavior
+          return;
         }
+        console.error('[AUTOCOMPLETE] Fetch error:', err);
+        // Hide dropdown on error
+        this.autocompleteBox?.classList.add('hidden');
       }
     }, lastWord.length <= 2 ? 90 : 120);
   }
@@ -921,13 +959,19 @@ class HomeEditor {
       return;
     }
 
+    console.log('[AUTOCOMPLETE] renderSuggestions called with', suggestions?.length || 0, 'suggestions');
+
     // Normalize + filter out empty/duplicate words (prevents "blank rows" + meaningless duplicates)
     const cleaned = (() => {
       const seen = new Set();
       const out = [];
       for (const item of (suggestions || [])) {
+        // Handle both object format {word: "...", score: ...} and string format
         const w = normalizeTamilWord(typeof item === 'string' ? item : (item.word || item.ta || item.text || item.suggestion || item.value || item));
-        if (!w) continue;
+        if (!w) {
+          console.warn('[AUTOCOMPLETE] Skipping empty word from item:', item);
+          continue;
+        }
         const key = w.normalize ? w.normalize('NFC') : w;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -937,8 +981,11 @@ class HomeEditor {
       return out;
     })();
 
+    console.log('[AUTOCOMPLETE] Cleaned suggestions:', cleaned.length, cleaned);
+
     if (!cleaned.length) {
       // Never show an "empty background" dropdown — just close it.
+      console.warn('[AUTOCOMPLETE] No cleaned suggestions, hiding dropdown');
       this.autocompleteBox.classList.add('hidden');
       const container = this.autocompleteList || this.autocompleteBox.querySelector('#home-autocomplete-list');
       if (container) container.innerHTML = '';
@@ -975,8 +1022,15 @@ class HomeEditor {
         .join('');
 
       console.log('[AUTOCOMPLETE] Showing dropdown with', cleaned.length, 'suggestions');
-      this.positionAutocomplete();
-      this.autocompleteBox.classList.remove('hidden');
+      try {
+        this.positionAutocomplete();
+        this.autocompleteBox.classList.remove('hidden');
+        console.log('[AUTOCOMPLETE] Dropdown should now be visible');
+      } catch (posErr) {
+        console.error('[AUTOCOMPLETE] Error positioning dropdown:', posErr);
+        // Still try to show it even if positioning fails
+        this.autocompleteBox.classList.remove('hidden');
+      }
 
       // Attach click handlers (no inline onclick — works for mouse/touchpad reliably)
       Array.from(container.querySelectorAll('button[data-index]')).forEach((btn) => {
