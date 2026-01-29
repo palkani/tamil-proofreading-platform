@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html"
 	"io"
 	"log"
@@ -11,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"tamil-proofreading-platform/backend/internal/middleware"
@@ -34,6 +38,61 @@ var eventAttrRegex = regexp.MustCompile(`(?i)\s+on[a-z]+\s*=\s*(".*?"|'.*?')`)
 var javascriptProtoRegex = regexp.MustCompile(`(?i)javascript:`)
 // Go regexp (RE2) supports \x{....} for Unicode code points (not \u....).
 var tamilCharRegex = regexp.MustCompile(`[\x{0B80}-\x{0BFF}]`)
+
+// submitResponseCache: in-memory cache for inline submit responses so repeat identical text returns in <100ms.
+const submitCacheTTL = 5 * time.Minute
+const submitCacheMaxEntries = 500
+
+type submitCachedCorrection struct {
+	BlockID      string `json:"blockId"`
+	OriginalText string `json:"originalText"`
+	Correction   string `json:"correction"`
+	Reason       string `json:"reason"`
+	Type         string `json:"type"`
+	StartIndex   int    `json:"start_index"`
+	EndIndex     int    `json:"end_index"`
+}
+
+type submitCacheEntry struct {
+	corrections []submitCachedCorrection
+	expiresAt   time.Time
+}
+
+var (
+	submitCacheMu sync.RWMutex
+	submitCache   = make(map[string]submitCacheEntry)
+)
+
+func submitCacheKey(normalizedText string, includeAlternatives bool) string {
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s|alt=%t", normalizedText, includeAlternatives)))
+	return hex.EncodeToString(h[:])
+}
+
+func getSubmitCache(key string) []submitCachedCorrection {
+	submitCacheMu.RLock()
+	ent, ok := submitCache[key]
+	submitCacheMu.RUnlock()
+	if !ok || time.Now().After(ent.expiresAt) {
+		return nil
+	}
+	return ent.corrections
+}
+
+func setSubmitCache(key string, corrections []submitCachedCorrection) {
+	if len(corrections) == 0 {
+		return
+	}
+	submitCacheMu.Lock()
+	defer submitCacheMu.Unlock()
+	if len(submitCache) >= submitCacheMaxEntries {
+		// Evict one random entry (oldest would require tracking; simple eviction)
+		for k := range submitCache {
+			delete(submitCache, k)
+			break
+		}
+	}
+	submitCache[key] = submitCacheEntry{corrections: corrections, expiresAt: time.Now().Add(submitCacheTTL)}
+}
 
 func proofreadTimeoutFor(wordCount int, textLen int) time.Duration {
 	// Keep interactive submits fast, but allow long-form pastes (like transcripts) enough time.
@@ -257,6 +316,20 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 
 	// For inline analysis (demo/homepage), no auth required
 	if !saveDraft {
+		// Cache-first: same text (normalized) returns in <100ms without calling LLM
+		normalizedForCache := strings.TrimSpace(strings.Join(strings.Fields(req.Text), " "))
+		cacheKey := submitCacheKey(normalizedForCache, req.IncludeAlternatives)
+		if cached := getSubmitCache(cacheKey); cached != nil {
+			c.Header("Cache-Control", "no-store, max-age=0")
+			c.Header("X-Proofread-Cache", "HIT")
+			c.JSON(http.StatusOK, gin.H{
+				"success":     true,
+				"request_id":  requestID,
+				"corrections": cached,
+			})
+			return
+		}
+
 		ctx, cancel := context.WithTimeout(c.Request.Context(), proofreadTimeoutFor(wordCount, len(req.Text)))
 		defer cancel()
 		result, err := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID, 0)
@@ -280,20 +353,10 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		})
 
 		// Map to required corrections format (stable schema)
-		type correction struct {
-			BlockID      string `json:"blockId"`
-			OriginalText string `json:"originalText"`
-			Correction   string `json:"correction"`
-			Reason       string `json:"reason"`
-			Type         string `json:"type"`
-			StartIndex   int    `json:"start_index"`
-			EndIndex     int    `json:"end_index"`
-		}
-		corrections := []correction{}
 		blockID := "0"
 		used := []usedRange{}
+		corrections := []submitCachedCorrection{}
 		for _, s := range result.Suggestions {
-			// best-effort indices
 			startIdx := s.StartIndex
 			endIdx := s.EndIndex
 			if startIdx <= 0 || endIdx <= 0 || startIdx >= endIdx {
@@ -302,7 +365,7 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 			if startIdx > 0 && endIdx > startIdx {
 				used = append(used, usedRange{Start: startIdx, End: endIdx})
 			}
-			corrections = append(corrections, correction{
+			corrections = append(corrections, submitCachedCorrection{
 				BlockID:      blockID,
 				OriginalText: s.Original,
 				Correction:   s.Corrected,
@@ -312,6 +375,7 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 				EndIndex:     endIdx,
 			})
 		}
+		setSubmitCache(cacheKey, corrections)
 
 		c.Header("Cache-Control", "no-store, max-age=0")
 		c.Header("Pragma", "no-cache")

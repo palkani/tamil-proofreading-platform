@@ -92,6 +92,16 @@ const seoConfig = {
     pageType: 'tool'
   },
 
+  emailSpamDetectorTool: {
+    title: 'Email Spam Detector - Check if Email is Spam | ProofTamil',
+    description: 'Check if an email (subject and body) looks like spam. Uses heuristics: keywords, link density, caps, urgency language. Free quick check for Tamil and English emails.',
+    keywords: 'email spam checker, spam detector, check spam email, email filter, spam score',
+    canonical: BASE_URL + '/tools/email-spam-detector',
+    ogTitle: 'Email Spam Detector - ProofTamil',
+    ogDescription: 'Check if an email is spam. Paste subject and body for an instant heuristic-based score.',
+    pageType: 'tool'
+  },
+
   blog: {
     title: 'Tamil Writing Blog - ProofTamil (prooftamil.com) | Tips, Examples, Proofreading',
     description: 'ProofTamil blog - Read Tamil writing tips, proofreading examples, and AI-assisted workflows. Learn Tamil grammar, spelling, and style with practical examples.',

@@ -1,5 +1,7 @@
 // Google-style transliteration typeahead shared module
 // Feature flag: enable only when window.TRANS_SUGGEST_V2 is truthy.
+// CRITICAL: In workspace, this is DISABLED to prevent duplicate dropdowns.
+// Workspace uses its own pipeline (workspace.js -> displaySuggestions).
 (function () {
   const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
   const DEBOUNCE_MS = 300;
@@ -8,9 +10,26 @@
   const DEBUG = typeof window !== 'undefined' && !!window.__TRANS_LIT_DEBUG__;
   const IS_DEV = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
   const HAS_RUNNER = typeof window !== 'undefined' && typeof window.transliterateViaRunner === 'function';
+  
+  // CRITICAL: Check if we're in workspace - if so, disable auto-initialization
+  const IS_WORKSPACE = typeof window !== 'undefined' && 
+    (window.location?.pathname?.includes('/workspace') || 
+     window.location?.pathname?.includes('/draft'));
 
   class TransliterationTypeahead {
     constructor(adapter, opts = {}) {
+      // CRITICAL: In workspace, prevent initialization to avoid duplicate dropdowns
+      if (IS_WORKSPACE) {
+        console.warn('[TransliterationTypeahead] DISABLED in workspace - workspace.js handles suggestions');
+        // Return a no-op instance that won't create dropdowns
+        this.adapter = adapter;
+        this.getMode = opts.getMode || (() => 'spoken');
+        this.dropdown = null;
+        this.closeDropdown = () => {}; // No-op
+        this.attach = () => {}; // No-op
+        return;
+      }
+      
       this.adapter = adapter;
       this.getMode = opts.getMode || (() => 'spoken');
       this.cache = new Map();
@@ -430,6 +449,39 @@
     }
   }
 
-  window.TransliterationTypeahead = TransliterationTypeahead;
+  // CRITICAL: In workspace, wrap the constructor to prevent initialization
+  const OriginalTypeahead = TransliterationTypeahead;
+  window.TransliterationTypeahead = function(adapter, opts) {
+    // Check if we're in workspace
+    const isWorkspace = typeof window !== 'undefined' && 
+      (window.location?.pathname?.includes('/workspace') || 
+       window.location?.pathname?.includes('/draft'));
+    
+    if (isWorkspace) {
+      console.warn('[TransliterationTypeahead] BLOCKED in workspace - workspace.js handles suggestions');
+      // Return a no-op instance
+      return {
+        adapter: adapter,
+        getMode: opts?.getMode || (() => 'spoken'),
+        dropdown: null,
+        closeDropdown: () => {
+          // Clean up any dropdowns that might exist
+          document.querySelectorAll('.translit-dropdown').forEach(dd => {
+            if (dd.parentNode) dd.parentNode.removeChild(dd);
+          });
+        },
+        attach: () => {},
+        handleInput: () => {},
+        handleKeydown: () => {},
+        handleBlur: () => {},
+      };
+    }
+    
+    // Not in workspace - use original constructor
+    return new OriginalTypeahead(adapter, opts);
+  };
+  
+  // Preserve original for non-workspace pages
+  window.TransliterationTypeahead.Original = OriginalTypeahead;
 })();
 

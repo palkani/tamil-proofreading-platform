@@ -95,6 +95,7 @@ func (h *Handlers) Transliterate(c *gin.Context) {
 
 	// Get in-memory transliteration suggestions
 	suggestions := translit.GetSuggestions(englishText)
+	suggestions = translit.ValidateSuggestions(suggestions)
 	if len(suggestions) == 0 {
 		log.Printf("[TRANSLIT-HANDLER] No suggestions found for %q", englishText)
 		c.JSON(http.StatusOK, TransliterateResponse{
@@ -166,6 +167,7 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 					"reason": "Hybrid trie suggestion",
 				})
 			}
+			mapped = validateSuggestionsMap(mapped)
 			c.JSON(http.StatusOK, TransliterateSuggestResponse{
 				Success:     true,
 				Query:       q,
@@ -211,7 +213,8 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 	}
 
 	// Avoid logging raw user tokens in production logs.
-	log.Printf("[SUGGEST] len=%d count=%d mode=%s", len(q), len(suggestions), mode)
+	mapped = validateSuggestionsMap(mapped)
+	log.Printf("[SUGGEST] len=%d count=%d mode=%s", len(q), len(mapped), mode)
 
 	c.JSON(http.StatusOK, TransliterateSuggestResponse{
 		Success:     true,
@@ -313,7 +316,10 @@ func (h *Handlers) tryNodeSuggest(c *gin.Context, q, prev, mode string, limit in
 	if len(mapped) == 0 {
 		return TransliterateSuggestResponse{}, false
 	}
-
+	mapped = validateSuggestionsMap(mapped)
+	if len(mapped) == 0 {
+		return TransliterateSuggestResponse{}, false
+	}
 	return TransliterateSuggestResponse{Success: true, Query: q, Suggestions: mapped}, true
 }
 
@@ -439,6 +445,10 @@ func (h *Handlers) tryRunnerSuggest(c *gin.Context, q, prev, mode string, limit 
 	if len(mapped) == 0 {
 		return TransliterateSuggestResponse{}, false
 	}
+	mapped = validateSuggestionsMap(mapped)
+	if len(mapped) == 0 {
+		return TransliterateSuggestResponse{}, false
+	}
 	return TransliterateSuggestResponse{Success: true, Query: q, Suggestions: mapped}, true
 }
 
@@ -473,6 +483,7 @@ func mapCandidatesToSuggestResponse(q, usageLabel string, cands []ime.Candidate)
 			"reason": "IME fallback suggestion",
 		})
 	}
+	mapped = validateSuggestionsMap(mapped)
 	return TransliterateSuggestResponse{Success: true, Query: q, Suggestions: mapped}
 }
 
@@ -481,6 +492,32 @@ func safeErr(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// validateSuggestionsMap filters mapped suggestions to valid Tamil words and deduplicates by word/ta.
+func validateSuggestionsMap(mapped []map[string]interface{}) []map[string]interface{} {
+	if len(mapped) == 0 {
+		return mapped
+	}
+	seen := make(map[string]bool)
+	out := make([]map[string]interface{}, 0, len(mapped))
+	for _, m := range mapped {
+		word := ""
+		if w, ok := m["word"].(string); ok {
+			word = strings.TrimSpace(w)
+		}
+		if word == "" {
+			if ta, ok := m["ta"].(string); ok {
+				word = strings.TrimSpace(ta)
+			}
+		}
+		if word == "" || seen[word] || !translit.IsValidTamilWord(word) {
+			continue
+		}
+		seen[word] = true
+		out = append(out, m)
+	}
+	return out
 }
 
 type TransliterateAcceptRequest struct {
@@ -609,6 +646,7 @@ func (h *Handlers) ValidateText(c *gin.Context) {
 		}
 
 		suggestions := translit.GetSuggestions(w)
+		suggestions = translit.ValidateSuggestions(suggestions)
 		if len(suggestions) > 0 {
 			mapped := make([]map[string]interface{}, 0, len(suggestions))
 			for idx, s := range suggestions {

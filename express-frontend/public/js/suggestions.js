@@ -241,10 +241,13 @@ class SuggestionsPanel {
       'incomplete word': 'Incomplete Word',
       'sandhi': 'Sandhi (Punarchi)',
       'missing space': 'Missing Space',
+      'phonetic': 'Phonetic', // வல்லினம் மிகுதல் / ஒலியியல் பிழை
+      'case': 'Case', // வேற்றுமை உருபு பிழை
+      'space': 'Space', // இடைவெளி பிழை
       suggestion: 'Suggestions',
       alternative: 'Alternative Phrasings'
     };
-    return labels[type?.toLowerCase()] || 'Suggestions';
+    return labels[type?.toLowerCase()] || (type ? type.charAt(0).toUpperCase() + type.slice(1).toLowerCase() : 'Suggestions');
   }
 
   createSuggestionCard(suggestion) {

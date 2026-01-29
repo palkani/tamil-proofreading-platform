@@ -116,6 +116,17 @@ router.get('/tools/font-converter', (req, res) => {
   });
 });
 
+// Email Spam Detector Tool page - accessible to everyone
+router.get('/tools/email-spam-detector', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('emailSpamDetectorTool') || getSeoData('home');
+  res.render('pages/email-spam-detector', {
+    title: 'Email Spam Detector - Check if Email is Spam | ProofTamil',
+    seo,
+    user,
+  });
+});
+
 // Blog (public) - hosted posts
 router.get('/blog', async (req, res) => {
   const user = getCurrentUser(req);
@@ -564,6 +575,8 @@ router.get('/sitemap.xml', (req, res) => {
     { url: '/tools/converter', priority: '0.8', changefreq: 'weekly' },
     { url: '/tools/ai-content-writer', priority: '0.8', changefreq: 'weekly' },
     { url: '/tools/event-name-suggester', priority: '0.7', changefreq: 'monthly' },
+    { url: '/tools/font-converter', priority: '0.8', changefreq: 'weekly' },
+    { url: '/tools/email-spam-detector', priority: '0.7', changefreq: 'monthly' },
     { url: '/blog', priority: '0.8', changefreq: 'weekly' }
   ];
   

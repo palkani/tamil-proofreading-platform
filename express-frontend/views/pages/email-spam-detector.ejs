@@ -1,0 +1,150 @@
+<%- include('../partials/header') %>
+
+<!-- Navigation -->
+<%- include('../partials/nav', { active: 'tools', user: user || null }) %>
+
+<div class="min-h-screen bg-gradient-to-b from-blue-50 via-white to-white py-12">
+  <div class="max-w-4xl mx-auto px-6">
+    <!-- Header -->
+    <div class="text-center mb-12">
+      <div class="inline-block px-4 py-2 bg-primary-100 text-primary-700 rounded-full text-sm font-semibold mb-4">
+        Email Spam Detector
+      </div>
+      <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
+        Check if an Email is Spam
+      </h1>
+      <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+        Paste the <strong>subject</strong> and <strong>body</strong> of an email to get an instant heuristic-based spam score. Works for Tamil and English.
+      </p>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 md:p-8">
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Subject</label>
+          <input
+            type="text"
+            id="spam-subject"
+            class="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            placeholder="e.g. Urgent: Verify your account"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Body</label>
+          <textarea
+            id="spam-body"
+            rows="8"
+            class="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            placeholder="Paste the email body here…"
+          ></textarea>
+        </div>
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            id="spam-check-btn"
+            class="px-6 py-3 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+          >
+            Check for Spam
+          </button>
+          <button type="button" id="spam-clear-btn" class="px-4 py-3 border border-gray-200 rounded-xl text-gray-700 font-semibold hover:bg-gray-50">
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div id="spam-result" class="mt-8 hidden rounded-2xl border border-gray-200 p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <span id="spam-verdict" class="text-xl font-bold"></span>
+          <span id="spam-score" class="text-sm text-gray-600"></span>
+          <span id="spam-confidence" class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700"></span>
+        </div>
+        <ul id="spam-reasons" class="list-disc list-inside text-gray-600 text-sm space-y-1"></ul>
+      </div>
+      <div id="spam-error" class="mt-6 hidden rounded-xl bg-red-50 border border-red-200 p-4 text-red-700 text-sm"></div>
+      <div id="spam-loading" class="mt-6 hidden text-gray-600 text-sm">Checking…</div>
+    </div>
+
+    <p class="mt-6 text-center text-sm text-gray-500">
+      This uses a heuristic check (keywords, links, caps, urgency). For trained models or SpamAssassin, use the <a href="https://github.com/palkani/tamil-proofreading-platform/tree/main/tools/email-spam-detector" class="text-primary-600 hover:underline">CLI tool</a>.
+    </p>
+  </div>
+</div>
+
+<script>
+(function () {
+  const subjectEl = document.getElementById('spam-subject');
+  const bodyEl = document.getElementById('spam-body');
+  const btn = document.getElementById('spam-check-btn');
+  const clearBtn = document.getElementById('spam-clear-btn');
+  const resultEl = document.getElementById('spam-result');
+  const verdictEl = document.getElementById('spam-verdict');
+  const scoreEl = document.getElementById('spam-score');
+  const confidenceEl = document.getElementById('spam-confidence');
+  const reasonsEl = document.getElementById('spam-reasons');
+  const errorEl = document.getElementById('spam-error');
+  const loadingEl = document.getElementById('spam-loading');
+
+  function showResult(data) {
+    loadingEl.classList.add('hidden');
+    errorEl.classList.add('hidden');
+    resultEl.classList.remove('hidden');
+    verdictEl.textContent = data.is_spam ? 'Spam' : 'Not spam';
+    verdictEl.className = 'text-xl font-bold ' + (data.is_spam ? 'text-red-600' : 'text-green-600');
+    scoreEl.textContent = 'Score: ' + data.score + '/100';
+    confidenceEl.textContent = 'Confidence: ' + data.confidence;
+    reasonsEl.innerHTML = '';
+    (data.reasons || []).forEach(function (r) {
+      const li = document.createElement('li');
+      li.textContent = r;
+      reasonsEl.appendChild(li);
+    });
+  }
+
+  function showError(msg) {
+    loadingEl.classList.add('hidden');
+    resultEl.classList.add('hidden');
+    errorEl.classList.remove('hidden');
+    errorEl.textContent = msg;
+  }
+
+  btn.addEventListener('click', function () {
+    const subject = (subjectEl.value || '').trim();
+    const body = (bodyEl.value || '').trim();
+    if (!subject && !body) {
+      showError('Please enter a subject or body.');
+      return;
+    }
+    loadingEl.classList.remove('hidden');
+    errorEl.classList.add('hidden');
+    resultEl.classList.add('hidden');
+
+    fetch('/api/spam-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject: subject, body: body })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.error) {
+          showError(data.error);
+          return;
+        }
+        showResult(data);
+      })
+      .catch(function (err) {
+        showError('Request failed. Please try again.');
+      });
+  });
+
+  clearBtn.addEventListener('click', function () {
+    subjectEl.value = '';
+    bodyEl.value = '';
+    resultEl.classList.add('hidden');
+    errorEl.classList.add('hidden');
+    loadingEl.classList.add('hidden');
+  });
+})();
+</script>
+
+<%- include('../partials/footer') %>

@@ -1062,9 +1062,14 @@ func toSuggestionSlice(val any) ([]Suggestion, bool) {
 			continue
 		}
 		
+		// Log each suggestion being added to verify it's from API
+		log.Printf("[PARSE-SUGGESTION] Adding suggestion from API: type=%q original=%q corrected=%q reason=%q", 
+			suggestion.Type, suggestion.Original, suggestion.Corrected, suggestion.Reason)
+		
 		suggestions = append(suggestions, suggestion)
 	}
 
+        log.Printf("[PARSE-SUGGESTIONS] Total suggestions parsed from API: %d", len(suggestions))
         return suggestions, len(suggestions) > 0
 }
 
@@ -1214,6 +1219,7 @@ REMEMBER:
 - Find at least 1-2 errors in most texts (be thorough!)
 - Common error: Hyphens between Tamil words (sandhi error)
 - If truly no errors, corrections can be empty BUT corrected_text must equal original
+- Do NOT include a correction when original and corrected are identical (only real changes)
 - Always return valid JSON
 - No markdown code fences
 - No explanatory text outside JSON`

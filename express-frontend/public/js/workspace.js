@@ -1,9 +1,9 @@
-// v20251229a - FIXED: cacheKey declared at function start, cacheKey is not defined error resolved
+// v20251229b - FIXED: Disabled TransliterationTypeahead V2 to prevent duplicate dropdowns
 // Main Workspace Controller
 // VERIFICATION: If you see this message, the new file is loaded
-console.log('[WorkspaceJS] ✅✅✅ Loaded version v20251229a - cacheKey fix applied');
-console.log('[WorkspaceJS] CacheKey is now declared at the start of fetchRunnerSuggestions method (line 315)');
-console.log('[WorkspaceJS] If you see this, the NEW file is loaded. Old file would NOT show this message.');
+console.log('[WorkspaceJS] ✅✅✅ Loaded version v20251229b - V2 dropdown fix applied');
+console.log('[WorkspaceJS] TransliterationTypeahead V2 is DISABLED in workspace to prevent duplicate dropdowns');
+console.log('[WorkspaceJS] Workspace uses its own pipeline (handleEditorChange -> displaySuggestions)');
 
 // CRITICAL: Ensure USE_TIPTAP_EDITOR is set to false at the very top
 // This prevents any initialization issues
@@ -1065,16 +1065,23 @@ class WorkspaceController {
         console.warn('[TipTap Migration] switchWorkspaceEditor failed (non-fatal):', e?.message);
       }
 
-      // If Transliteration V2 is enabled, attach it to the ProseMirror surface (and do not use legacy IME).
+      // CRITICAL: DO NOT enable TransliterationTypeahead (V2) for TipTap editor
+      // Workspace uses its own pipeline (handleEditorChange -> fetchRunnerSuggestions -> displaySuggestions)
+      // Enabling V2 causes duplicate dropdowns (tamil-suggestions-dropdown + translit-dropdown)
+      // 
+      // Clean up any V2 instances that might have been created
       try {
-        if (this.translitV2Enabled && !this.translitTypeahead) {
-          const pm = document.querySelector('#tiptap-workspace-editor .ProseMirror');
-          if (pm) {
-            this.translitTypeahead = new window.TransliterationTypeahead(
-              new window.WorkspaceEditorAdapter(pm),
-              { getMode: () => this.getMode() }
-            );
+        if (this.translitTypeahead) {
+          // Clean up any V2 dropdowns
+          const v2Dropdowns = document.querySelectorAll('.translit-dropdown');
+          v2Dropdowns.forEach(dd => {
+            if (dd.parentNode) dd.parentNode.removeChild(dd);
+          });
+          // Destroy the typeahead instance
+          if (this.translitTypeahead.closeDropdown) {
+            this.translitTypeahead.closeDropdown();
           }
+          this.translitTypeahead = null;
         }
       } catch (_e) {
         // non-fatal
@@ -3771,6 +3778,18 @@ class WorkspaceController {
         [];
       console.log('[AI Debug] Extracted corrections:', corrections.length, 'items');
       console.log('[AI Debug] Raw corrections data:', JSON.stringify(corrections, null, 2));
+      console.log('[AI Debug] Full API response data:', JSON.stringify(data, null, 2));
+      
+      // Log each correction's type to verify they're from API
+      corrections.forEach((corr, idx) => {
+        console.log(`[AI Debug] Correction ${idx + 1}:`, {
+          type: corr.type || corr.Type || 'unknown',
+          original: corr.original || corr.originalText || 'N/A',
+          corrected: corr.corrected || corr.correction || 'N/A',
+          reason: corr.reason || corr.description || 'N/A',
+          source: 'API_RESPONSE'
+        });
+      });
       
       // Check if suggestionsPanel is initialized
       if (!this.suggestionsPanel) {
@@ -3854,7 +3873,14 @@ class WorkspaceController {
             '';
           const reason = result.reason || result.description || result.title || result.Reason || '';
           
-          console.log('[AI Debug] Mapping suggestion:', { original, corrected, reason, type: result.type });
+          console.log('[AI Debug] Mapping suggestion from API:', { 
+            original, 
+            corrected, 
+            reason, 
+            type: result.type || result.Type || 'grammar',
+            rawResult: result,
+            source: 'API_RESPONSE'
+          });
           
           // Use a stable ID so duplicates don't render repeatedly (and Apply/Ignore stays consistent).
           const normalizeComparable = (s) => {
