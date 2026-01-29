@@ -178,4 +178,3 @@ func (r *RedisClient) GetLexiconCacheInfo(ctx context.Context) (version string, 
 	
 	return version, count, true
 }
-
