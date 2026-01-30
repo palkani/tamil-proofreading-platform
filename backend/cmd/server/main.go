@@ -155,6 +155,7 @@ func main() {
 				&models.DailyActivityStats{},
 				&models.EmailVerification{},
 				&models.PasswordResetToken{},
+				&models.NewsletterSubscriber{}, // Newsletter subscription table
 			)
 			if err != nil {
 				log.Printf("[ERROR] Database migration failed: %v", err)
