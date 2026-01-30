@@ -1553,6 +1553,92 @@ router.post('/spam-check', (req, res) => {
   }
 });
 
+// ==================== NEWSLETTER API ROUTES ====================
+// These routes proxy newsletter requests to the Go backend
+
+// Subscribe to newsletter
+router.post('/newsletter/subscribe', async (req, res) => {
+  try {
+    const url = `${BACKEND_URL}/newsletter/subscribe`;
+    const response = await axios.post(url, req.body, {
+      headers: { 'Content-Type': 'application/json' },
+      validateStatus: () => true,
+    });
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('[NEWSLETTER] Subscribe error:', error.message);
+    res.status(500).json({ error: 'Failed to subscribe. Please try again.' });
+  }
+});
+
+// Confirm subscription (via email link)
+router.get('/newsletter/confirm/:token', async (req, res) => {
+  try {
+    const url = `${BACKEND_URL}/newsletter/confirm/${req.params.token}`;
+    const response = await axios.get(url, {
+      validateStatus: () => true,
+    });
+    // Redirect to a success page or show message
+    if (response.status === 200) {
+      res.redirect('/?newsletter=confirmed');
+    } else {
+      res.redirect('/?newsletter=error');
+    }
+  } catch (error) {
+    console.error('[NEWSLETTER] Confirm error:', error.message);
+    res.redirect('/?newsletter=error');
+  }
+});
+
+// Unsubscribe from newsletter
+router.get('/newsletter/unsubscribe', async (req, res) => {
+  try {
+    const token = req.query.token;
+    const email = req.query.email;
+    const url = `${BACKEND_URL}/newsletter/unsubscribe?token=${token || ''}&email=${email || ''}`;
+    const response = await axios.get(url, {
+      validateStatus: () => true,
+    });
+    // Redirect to confirmation page
+    if (response.status === 200) {
+      res.redirect('/?newsletter=unsubscribed');
+    } else {
+      res.redirect('/?newsletter=error');
+    }
+  } catch (error) {
+    console.error('[NEWSLETTER] Unsubscribe error:', error.message);
+    res.redirect('/?newsletter=error');
+  }
+});
+
+router.post('/newsletter/unsubscribe', async (req, res) => {
+  try {
+    const url = `${BACKEND_URL}/newsletter/unsubscribe`;
+    const response = await axios.post(url, req.body, {
+      headers: { 'Content-Type': 'application/json' },
+      validateStatus: () => true,
+    });
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('[NEWSLETTER] Unsubscribe error:', error.message);
+    res.status(500).json({ error: 'Failed to unsubscribe. Please try again.' });
+  }
+});
+
+// Get subscriber count (public)
+router.get('/newsletter/count', async (req, res) => {
+  try {
+    const url = `${BACKEND_URL}/newsletter/count`;
+    const response = await axios.get(url, {
+      validateStatus: () => true,
+    });
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('[NEWSLETTER] Count error:', error.message);
+    res.status(200).json({ count: 0 }); // Return 0 on error instead of failing
+  }
+});
+
 // Proxy other API calls to Go backend
 // IMPORTANT: This catch-all must be LAST to avoid intercepting specific routes like /submit
 router.all('/*', async (req, res) => {

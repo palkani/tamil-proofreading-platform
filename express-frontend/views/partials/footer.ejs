@@ -2,6 +2,45 @@
   <!-- Footer -->
   <footer class="bg-gray-50 border-t border-gray-200 py-12">
     <div class="max-w-7xl mx-auto px-6">
+      <!-- Newsletter Section -->
+      <div class="bg-gradient-to-r from-primary-50 to-primary-100 rounded-2xl p-6 md:p-8 mb-10">
+        <div class="grid md:grid-cols-2 gap-6 items-center">
+          <div>
+            <h3 class="text-xl md:text-2xl font-bold text-gray-900 mb-2">
+              தமிழ் செய்திமடல்
+            </h3>
+            <p class="text-gray-600">
+              வாரந்தோறும் தமிழ் எழுத்துக்கள், கதைகள் மற்றும் இலக்கணக் குறிப்புகள் உங்கள் மின்னஞ்சலுக்கு!
+            </p>
+            <p class="text-sm text-gray-500 mt-1">
+              Weekly Tamil writings, stories, and grammar tips delivered to your inbox.
+            </p>
+          </div>
+          <div>
+            <form id="newsletter-form" class="flex flex-col sm:flex-row gap-3">
+              <input
+                type="email"
+                id="newsletter-email"
+                placeholder="உங்கள் மின்னஞ்சல் / Your email"
+                required
+                class="flex-1 px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+              <button
+                type="submit"
+                id="newsletter-btn"
+                class="px-6 py-3 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition whitespace-nowrap"
+              >
+                Subscribe
+              </button>
+            </form>
+            <div id="newsletter-message" class="mt-2 text-sm hidden"></div>
+            <p class="text-xs text-gray-500 mt-2">
+              No spam. Unsubscribe anytime. We respect your privacy.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div class="grid md:grid-cols-2 gap-8 items-start">
         <!-- Left: Brand and Description -->
         <div>
@@ -48,6 +87,60 @@
       </div>
     </div>
   </footer>
+  
+  <!-- Newsletter Form Script -->
+  <script>
+  (function() {
+    var form = document.getElementById('newsletter-form');
+    var emailInput = document.getElementById('newsletter-email');
+    var btn = document.getElementById('newsletter-btn');
+    var msgEl = document.getElementById('newsletter-message');
+    
+    if (!form) return;
+    
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      var email = (emailInput.value || '').trim();
+      if (!email) {
+        showMessage('Please enter your email address.', 'error');
+        return;
+      }
+      
+      // Disable button
+      btn.disabled = true;
+      btn.textContent = 'Subscribing...';
+      
+      fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, source: 'footer' })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.error) {
+          showMessage(data.error, 'error');
+        } else {
+          showMessage(data.message || 'Thank you for subscribing!', 'success');
+          emailInput.value = '';
+        }
+      })
+      .catch(function() {
+        showMessage('Something went wrong. Please try again.', 'error');
+      })
+      .finally(function() {
+        btn.disabled = false;
+        btn.textContent = 'Subscribe';
+      });
+    });
+    
+    function showMessage(msg, type) {
+      msgEl.textContent = msg;
+      msgEl.classList.remove('hidden', 'text-green-600', 'text-red-600');
+      msgEl.classList.add(type === 'success' ? 'text-green-600' : 'text-red-600');
+    }
+  })();
+  </script>
   <!-- Global error handler (move to end so it doesn't block render) -->
   <script>
     window.addEventListener('error', function(event) {
