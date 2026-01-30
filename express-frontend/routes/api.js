@@ -1142,7 +1142,7 @@ router.post('/blog/publish', async (req, res) => {
       });
     }
 
-    const url = `${BACKEND_URL}/blog/posts`;
+    const url = `${BACKEND_URL}/api/v1/blog/posts`;
     const headers = {
       'Content-Type': 'application/json',
     };
@@ -1154,7 +1154,7 @@ router.post('/blog/publish', async (req, res) => {
       headers.Cookie = req.headers.cookie;
     }
 
-    console.log('[BLOG-PUBLISH] Admin publishing:', userEmail);
+    console.log('[BLOG-PUBLISH] Admin publishing:', userEmail, 'to URL:', url);
 
     const backendRes = await axios.post(url, req.body, {
       headers,
@@ -1190,7 +1190,7 @@ router.delete('/blog/posts/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid id' });
     }
 
-    const url = `${BACKEND_URL}/blog/posts/${encodeURIComponent(id)}`;
+    const url = `${BACKEND_URL}/api/v1/blog/posts/${encodeURIComponent(id)}`;
     const headers = {
       'Content-Type': 'application/json',
     };

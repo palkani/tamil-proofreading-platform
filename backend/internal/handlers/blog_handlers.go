@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -122,7 +123,8 @@ func (h *Handlers) BlogCreatePost(c *gin.Context) {
 	// ensure unique slug (append -2/-3 etc)
 	uniqueSlug, err := h.ensureUniqueSlug(slug, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create post"})
+		log.Printf("[BLOG] ensureUniqueSlug failed for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create post", "details": "slug generation failed"})
 		return
 	}
 
@@ -140,10 +142,15 @@ func (h *Handlers) BlogCreatePost(c *gin.Context) {
 		PublishedAt:     publishedAt,
 	}
 
+	log.Printf("[BLOG] Creating post for user %d: title=%q slug=%q", userID, title, uniqueSlug)
+
 	if err := h.db.Create(&post).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create post"})
+		log.Printf("[BLOG] Create post failed for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create post", "details": err.Error()})
 		return
 	}
+
+	log.Printf("[BLOG] Post created successfully: id=%d slug=%q", post.ID, post.Slug)
 
 	c.JSON(http.StatusCreated, gin.H{"success": true, "post": post})
 }
