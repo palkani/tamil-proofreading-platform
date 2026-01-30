@@ -1,10 +1,26 @@
 const axios = require('axios');
+const https = require('https');
 
 // AI Content Writer Service - Wrapper for Python Flask API
 // This service proxies requests to the Python Flask API running on port 5002
 
 const AI_WRITER_API_URL = process.env.AI_WRITER_API_URL || 'http://localhost:5002';
 const AI_WRITER_TIMEOUT = 60000; // 60 seconds for content generation
+
+// HTTPS Agent with keep-alive for stable Gemini API connections
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  maxSockets: 20,
+  maxFreeSockets: 10,
+  timeout: AI_WRITER_TIMEOUT,
+});
+
+// Axios instance with connection pooling
+const geminiAxios = axios.create({
+  httpsAgent: httpsAgent,
+  timeout: AI_WRITER_TIMEOUT,
+});
 
 function isLocalhostUrl(url) {
   const u = String(url || '').toLowerCase();
@@ -69,7 +85,7 @@ async function geminiGenerate(systemText, userText, schema, maxOutputTokens = 20
     );
   }
 
-  const response = await axios.post(
+  const response = await geminiAxios.post(
     `${baseUrl}/models/gemini-2.5-flash:generateContent`,
     {
       systemInstruction: { parts: [{ text: systemText }] },
@@ -93,11 +109,30 @@ async function geminiGenerate(systemText, userText, schema, maxOutputTokens = 20
   );
 
   if (response.status < 200 || response.status >= 300) {
-    const msg =
+    const errorMsg =
       response.data?.error?.message ||
       response.data?.error ||
       `Gemini API failed (${response.status})`;
-    throw createServiceError('Gemini API error', msg);
+    
+    // Log full error details for debugging
+    console.error('[AI-WRITER] Gemini API error:', {
+      status: response.status,
+      error: response.data?.error,
+      message: errorMsg,
+    });
+    
+    // Check for specific error types
+    if (response.status === 429) {
+      throw createServiceError('Rate limit exceeded', 'Gemini API rate limit reached. Please wait a moment and try again.');
+    }
+    if (response.status === 403) {
+      throw createServiceError('API key invalid', 'Gemini API key is invalid or has insufficient permissions. Please check your API key configuration.');
+    }
+    if (response.status === 400) {
+      throw createServiceError('Invalid request', errorMsg || 'The request to Gemini API was malformed. Please try with different content.');
+    }
+    
+    throw createServiceError('Gemini API error', errorMsg);
   }
 
   const aiText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
