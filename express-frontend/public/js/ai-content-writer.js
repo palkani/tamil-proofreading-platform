@@ -787,5 +787,48 @@
     div.textContent = text;
     return div.innerHTML;
   }
+
+  // Expose copy function globally for non-admin users
+  window.copyGeneratedContent = function() {
+    const copyStatus = document.getElementById('copy-status');
+    
+    if (!currentResult || !currentResult.content) {
+      if (copyStatus) {
+        copyStatus.style.display = 'block';
+        copyStatus.textContent = 'No content to copy. Generate content first.';
+        copyStatus.className = 'publish-status error';
+      }
+      return;
+    }
+
+    const content = currentResult.content;
+    let textToCopy = '';
+
+    // Build the text to copy
+    if (content.title) {
+      textToCopy += content.title + '\n\n';
+    }
+    if (content.content) {
+      textToCopy += content.content;
+    }
+
+    navigator.clipboard.writeText(textToCopy).then(function() {
+      if (copyStatus) {
+        copyStatus.style.display = 'block';
+        copyStatus.textContent = '✓ Content copied to clipboard!';
+        copyStatus.className = 'publish-status success';
+        setTimeout(function() {
+          copyStatus.style.display = 'none';
+        }, 3000);
+      }
+    }).catch(function(err) {
+      console.error('Copy failed:', err);
+      if (copyStatus) {
+        copyStatus.style.display = 'block';
+        copyStatus.textContent = 'Failed to copy. Please select and copy manually.';
+        copyStatus.className = 'publish-status error';
+      }
+    });
+  };
 })();
 

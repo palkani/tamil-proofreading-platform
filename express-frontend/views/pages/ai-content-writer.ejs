@@ -242,7 +242,15 @@
       <!-- Publish tools (shown only for Generated Content) -->
       <div id="publish-tools" class="publish-tools" style="display: none;">
         <div class="publish-grid">
-          <!-- Blog Publish -->
+          <% 
+            // Check if user is admin (allowed to publish)
+            const adminEmails = ['palkani.r@gmail.com', 'prooftamil@gmail.com'];
+            const userEmail = user && user.email ? String(user.email).toLowerCase().trim() : '';
+            const canPublish = adminEmails.includes(userEmail);
+          %>
+          
+          <% if (canPublish) { %>
+          <!-- Blog Publish (Admin Only) -->
           <div class="publish-card">
             <div class="publish-card-header">
               <h3 class="publish-card-title">Publish to Blog</h3>
@@ -301,6 +309,25 @@
               <div id="blog-preview" class="blog-preview"></div>
             </div>
           </div>
+          <% } else { %>
+          <!-- Copy Content Card (For Non-Admin Users) -->
+          <div class="publish-card">
+            <div class="publish-card-header">
+              <h3 class="publish-card-title">Use Your Content</h3>
+              <p class="publish-card-subtitle">Copy the generated content to use anywhere.</p>
+            </div>
+            
+            <div class="publish-row" style="text-align: center; padding: 1.5rem;">
+              <p style="color: #666; margin-bottom: 1rem;">
+                Your AI-generated content is ready! Click the copy button below to copy it to your clipboard.
+              </p>
+              <button id="copy-content-btn" class="btn btn-generate" onclick="copyGeneratedContent()">
+                📋 Copy Content
+              </button>
+              <div id="copy-status" class="publish-status" style="display:none; margin-top: 0.5rem;"></div>
+            </div>
+          </div>
+          <% } %>
 
         </div>
       </div>

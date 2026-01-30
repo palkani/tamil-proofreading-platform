@@ -1126,9 +1126,22 @@ router.post('/ai-content-writer/translate', async (req, res) => {
 // ============= END AI CONTENT WRITER API ROUTES =============
 
 // ============= BLOG PUBLISH API (Express -> Go backend) =============
-// Create a blog post in the backend (requires auth cookies/Authorization)
+// Admin-only emails allowed to publish blogs
+const BLOG_PUBLISH_ALLOWED_EMAILS = ['palkani.r@gmail.com', 'prooftamil@gmail.com'];
+
+// Create a blog post in the backend (requires auth - ADMIN ONLY)
 router.post('/blog/publish', async (req, res) => {
   try {
+    // Check if user is allowed to publish (admin only)
+    const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : '';
+    if (!userEmail || !BLOG_PUBLISH_ALLOWED_EMAILS.includes(userEmail)) {
+      console.log('[BLOG-PUBLISH] Unauthorized publish attempt:', userEmail || 'no user');
+      return res.status(403).json({ 
+        error: 'Blog publishing is restricted to administrators.',
+        message: 'Please contact the admin to publish content.'
+      });
+    }
+
     const url = `${BACKEND_URL}/blog/posts`;
     const headers = {
       'Content-Type': 'application/json',
@@ -1136,26 +1149,42 @@ router.post('/blog/publish', async (req, res) => {
     if (req.headers.authorization) {
       headers.Authorization = req.headers.authorization;
     }
+    // Forward cookies with proper header case (Cookie, not cookie)
     if (req.headers.cookie) {
-      headers.cookie = req.headers.cookie; // forward httpOnly cookies
+      headers.Cookie = req.headers.cookie;
     }
+
+    console.log('[BLOG-PUBLISH] Admin publishing:', userEmail);
 
     const backendRes = await axios.post(url, req.body, {
       headers,
-      withCredentials: true,
       validateStatus: () => true,
     });
+
+    // Log backend response for debugging
+    if (backendRes.status !== 200 && backendRes.status !== 201) {
+      console.error('[BLOG-PUBLISH] Backend error:', backendRes.status, backendRes.data);
+    }
 
     res.status(backendRes.status).json(backendRes.data);
   } catch (error) {
     console.error('[BLOG-PUBLISH] error:', error.message);
+    if (error.response) {
+      console.error('[BLOG-PUBLISH] Response:', error.response.status, error.response.data);
+    }
     res.status(502).json({ error: 'Blog publish failed', details: error.message });
   }
 });
 
-// Delete a blog post by id (requires auth cookies/Authorization)
+// Delete a blog post by id (requires auth - ADMIN ONLY)
 router.delete('/blog/posts/:id', async (req, res) => {
   try {
+    // Check if user is allowed to delete (admin only)
+    const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : '';
+    if (!userEmail || !BLOG_PUBLISH_ALLOWED_EMAILS.includes(userEmail)) {
+      return res.status(403).json({ error: 'Blog deletion is restricted to administrators.' });
+    }
+
     const id = String(req.params.id || '').trim();
     if (!id) {
       return res.status(400).json({ error: 'Invalid id' });
@@ -1168,13 +1197,13 @@ router.delete('/blog/posts/:id', async (req, res) => {
     if (req.headers.authorization) {
       headers.Authorization = req.headers.authorization;
     }
+    // Forward cookies with proper header case
     if (req.headers.cookie) {
-      headers.cookie = req.headers.cookie; // forward httpOnly cookies
+      headers.Cookie = req.headers.cookie;
     }
 
     const backendRes = await axios.delete(url, {
       headers,
-      withCredentials: true,
       validateStatus: () => true,
     });
 
