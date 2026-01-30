@@ -40,8 +40,9 @@ var javascriptProtoRegex = regexp.MustCompile(`(?i)javascript:`)
 var tamilCharRegex = regexp.MustCompile(`[\x{0B80}-\x{0BFF}]`)
 
 // submitResponseCache: in-memory cache for inline submit responses so repeat identical text returns in <100ms.
-const submitCacheTTL = 5 * time.Minute
-const submitCacheMaxEntries = 500
+// Increased TTL and cache size for better performance on repeat submissions.
+const submitCacheTTL = 15 * time.Minute
+const submitCacheMaxEntries = 1000
 
 type submitCachedCorrection struct {
 	BlockID      string `json:"blockId"`
@@ -398,7 +399,8 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 
 	// Daily Gemini token usage limit.
 	// Enforced only for authenticated, draft-saving submits (Workspace).
-	const dailyTokenLimit = 2000
+	// Increased from 2000 to 15000 to allow more usage per day.
+	const dailyTokenLimit = 15000
 
 	// Admin bypass: do not enforce daily quota for the admin email(s) or admin role.
 	// This allows you to demo/test freely without hitting limits.

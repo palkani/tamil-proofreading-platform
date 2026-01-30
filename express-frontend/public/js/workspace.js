@@ -3939,6 +3939,18 @@ class WorkspaceController {
                 } else {
                   console.error('[APPLY] No editor method available');
                 }
+                
+                // Auto-save draft after applying suggestion (never lose changes)
+                // Use a short delay to batch multiple rapid applies
+                if (this._applySaveTimeout) {
+                  clearTimeout(this._applySaveTimeout);
+                }
+                this._applySaveTimeout = setTimeout(() => {
+                  if (typeof this.autosave === 'function') {
+                    console.log('[APPLY] Auto-saving draft after suggestion applied');
+                    this.autosave();
+                  }
+                }, 500);
               }
             } : null,
             onIgnore: () => {
@@ -4465,6 +4477,12 @@ class WorkspaceController {
 
     this.updateAcceptedCount();
     this.showNotification('All suggestions applied!', 'success');
+    
+    // Auto-save draft after accepting all suggestions (never lose changes)
+    if (typeof this.autosave === 'function') {
+      console.log('[APPLY] Auto-saving draft after accepting all suggestions');
+      setTimeout(() => this.autosave(), 300);
+    }
   }
 
   async pollSubmission(submissionId, seq = this.analysisSeq) {

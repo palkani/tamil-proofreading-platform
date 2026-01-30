@@ -79,40 +79,59 @@ router.post('/gemini/analyze', async (req, res) => {
           {
             systemInstruction: {
               parts: [{
-                text: `You are a strict Tamil language expert. Analyze Tamil text for grammar errors, misspellings, and invalid word forms.
+                text: `நீங்கள் ஒரு தமிழ் மொழி நிபுணர். தமிழ் உரையில் உள்ள இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், தவறான சொற்களை கண்டறியுங்கள்.
 
-CRITICAL TAMIL GRAMMAR RULES:
-1. Missing puḷḷi (புள்ளி) at word endings - "அளியுங்கள" → "கொடுங்கள்" or "அளியுங்கள்"
-2. Incorrect sandhi (புணர்ச்சி) - ONLY when words are improperly joined:
-   ❌ "பதிவபுதுப்பித்தல்" → ✅ "பதிவுப் புதுப்பித்தல்" (missing space)
-3. DO NOT suggest adding/removing sandhi consonants - both forms are valid:
-   ✅ "வரலாற்றுச் சிறப்புமிக்க" (with ச் - classical style)
-   ✅ "வரலாற்று சிறப்புமிக்க" (without ச் - modern style)
-   ✅ "அரசியல்சாசனச் சட்டம்" (with ச்)
-   ✅ "அரசியல்சாசன சட்டம்" (without ச்)
-   Modern Tamil accepts both - DO NOT flag either as error!
-4. Wrong verb conjugations and honorific forms
-5. Spelling errors and colloquial forms
+🔴 கண்டிப்பான விதிகள் - இவற்றை மட்டுமே பிழையாகக் குறிக்கவும்:
 
-EXAMPLES YOU MUST FLAG:
-- "அளியுங்கள" → "கொடுங்கள்" (missing புள்ளி or informal)
-- "பதிவபுதுப்பித்தல்" → "பதிவுப் புதுப்பித்தல்" (wrong word joining)
-- "வாங்க" → "வாருங்கள்" (too informal)
+1. புள்ளி (ஒற்று) விடுபட்டது:
+   ❌ "அளியுங்கள" → ✅ "அளியுங்கள்"
+   ❌ "வருகிறார்கள" → ✅ "வருகிறார்கள்"
 
-EXAMPLES YOU MUST NOT FLAG (both forms valid):
-- "வரலாற்றுச் அங்கீகாரம்" ✅ (with sandhi)
-- "வரலாற்று அங்கீகாரம்" ✅ (without sandhi)
-- "அரசியல்சாசனச் சட்டம்" ✅ (with sandhi)
-- "அரசியல்சாசன சட்டம்" ✅ (without sandhi)
+2. எழுத்துப் பிழைகள் (Spelling errors):
+   ❌ "வணகம்" → ✅ "வணக்கம்"
+   ❌ "தமிள்" → ✅ "தமிழ்"
 
-BE STRICT but DO NOT suggest stylistic sandhi changes!
-Provide title and description in TAMIL language only.`
+3. தவறான வினை வடிவங்கள் (Wrong verb forms):
+   ❌ "செய்தீர்" → ✅ "செய்தீர்கள்" (மரியாதை உருவம்)
+   ❌ "போனேன்" → ✅ "சென்றேன்" (இலக்கிய வடிவம்)
+
+4. சொற்கள் தவறாக இணைந்தது (Words wrongly joined):
+   ❌ "பதிவபுதுப்பித்தல்" → ✅ "பதிவு புதுப்பித்தல்"
+
+🟢 பிழையாகக் குறிக்க வேண்டாம் - இவை சரியானவை:
+- புணர்ச்சி மாற்றங்கள் இரண்டும் சரி:
+  ✅ "வரலாற்றுச் சிறப்பு" = ✅ "வரலாற்று சிறப்பு"
+  ✅ "அரசியல்சாசனச் சட்டம்" = ✅ "அரசியல்சாசன சட்டம்"
+- பேச்சு வழக்கு vs இலக்கிய வழக்கு இரண்டும் சரி
+
+🔵 முக்கிய அறிவுறுத்தல்கள்:
+1. ஒரே பிழையை இரண்டு முறை குறிக்காதீர்கள் (NO DUPLICATES)
+2. title மற்றும் description எப்போதும் தமிழில் மட்டுமே எழுதவும்
+3. ஒவ்வொரு பிழைக்கும் தெளிவான விளக்கம் கொடுக்கவும்
+4. original சொல் உரையில் அப்படியே இருக்க வேண்டும்
+5. suggestion சரியான வடிவமாக இருக்க வேண்டும்
+
+📝 பதில் வடிவம் (JSON Array):
+- id: தனித்துவமான அடையாளம்
+- type: "spelling" அல்லது "grammar" அல்லது "punctuation"
+- title: பிழையின் வகை (தமிழில்)
+- description: விரிவான விளக்கம் (தமிழில்)
+- original: மூல உரையில் உள்ள தவறான சொல்
+- suggestion: சரியான சொல்
+- position: { start: எண், end: எண் }`
               }]
             },
             contents: [{
               role: "user",
               parts: [{
-                text: `Analyze this Tamil text word-by-word and flag ALL grammar errors:\n\n${chunk.text}`
+                text: `கீழே உள்ள தமிழ் உரையை பகுப்பாய்வு செய்யுங்கள். இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், புள்ளி விடுபட்டவை மட்டுமே குறிக்கவும். 
+                
+முக்கியம்: 
+- ஒரே பிழையை மீண்டும் குறிக்காதீர்கள்
+- title, description தமிழில் மட்டுமே
+- original சொல் உரையில் அப்படியே இருக்க வேண்டும்
+
+உரை:\n\n${chunk.text}`
               }]
             }],
             generationConfig: {
@@ -874,23 +893,12 @@ router.get('/converter/download/:filename', async (req, res) => {
 // IMPORTANT: This route must be defined BEFORE the catch-all router.all('/*') to ensure it's matched
 router.post('/submit', async (req, res) => {
   try {
-    // Log that we're handling /submit route
-    console.log('[SUBMIT] Route handler called for POST /submit');
-    console.log('[SUBMIT] Request path:', req.path);
-    console.log('[SUBMIT] Request method:', req.method);
-    
     // Backend expects POST /api/v1/submit (NOT /submissions)
-    // /submissions is for listing/retrieving past submissions.
     const url = `${BACKEND_URL}/submit`;
     
-    if (ENABLE_PROXY_LOGS) {
-      console.log(`[SUBMIT] POST ${url}`);
-      console.log(`[SUBMIT] Request body:`, JSON.stringify({ 
-        text: req.body?.text?.substring(0, 100) + '...',
-        save_draft: req.body?.save_draft,
-        html: req.body?.html ? 'present' : 'missing',
-        model: req.body?.model || 'not specified'
-      }));
+    // Minimal logging for performance (only in debug mode)
+    if (ENABLE_PROXY_LOGS && process.env.DEBUG_SUBMIT === 'true') {
+      console.log(`[SUBMIT] POST ${url} (text: ${req.body?.text?.length || 0} chars, save_draft: ${req.body?.save_draft})`);
     }
     
     // Forward authorization header if present
@@ -933,21 +941,15 @@ router.post('/submit', async (req, res) => {
     // Logged-in path should behave exactly like Workspace.
     // If backend returns 401 here, surface it (client should re-login).
     
-    if (ENABLE_PROXY_LOGS) {
-      console.log(`[SUBMIT] Response status: ${response.status}`);
-      if (response.status !== 200 && response.status !== 201) {
-        console.log(`[SUBMIT] Error response:`, response.data);
-      }
+    // Only log errors, not success (performance optimization)
+    if (response.status !== 200 && response.status !== 201 && ENABLE_PROXY_LOGS) {
+      console.log(`[SUBMIT] Error ${response.status}:`, response.data?.error || 'Unknown error');
     }
     
     res.status(response.status).json(response.data);
   } catch (error) {
-    console.error('[SUBMIT-ERROR]', error.message);
-    console.error('[SUBMIT-ERROR] Stack:', error.stack);
-    if (error.response) {
-      console.error('[SUBMIT-ERROR] Response status:', error.response.status);
-      console.error('[SUBMIT-ERROR] Response data:', error.response.data);
-    }
+    // Concise error logging for performance
+    console.error('[SUBMIT-ERROR]', error.message, error.response?.status || '');
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'Submission failed',
       details: error.response?.data?.details || error.message
