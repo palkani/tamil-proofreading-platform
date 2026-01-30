@@ -1229,6 +1229,95 @@ router.get('/ime/suggest', async (req, res) => {
   }
 });
 
+// Email spam check (heuristic-based; for full model/SpamAssassin use tools/email-spam-detector CLI)
+// NOTE: This route must be defined BEFORE the catch-all proxy routes below
+const SPAM_KEYWORDS = [
+  'winner', 'congratulations', 'claim', 'prize', 'free', 'urgent', 'act now',
+  'click here', 'unsubscribe', 'limited time', 'offer expires', 'buy now',
+  'dear friend', 'dear winner', 'you have been selected', 'wire transfer',
+  'bank account', 'verify your account', 'click below', 'suspended', 'account locked',
+  'inheritance', 'lottery', 'cash bonus', 'no obligation', 'risk free',
+  'viagra', 'cialis', 'pharmacy', 'discount', 'percent off', 'million', 'billion'
+];
+const URGENCY_PHRASES = ['act now', 'limited time', 'expires soon', "don't miss", 'last chance', 'verify now', 'confirm now', 'click now'];
+
+function spamCheckHeuristic(subject, body) {
+  const combined = ((subject || '') + '\n' + (body || '')).trim();
+  const lower = combined.toLowerCase();
+  let score = 0;
+  const reasons = [];
+
+  // Keywords
+  let hits = 0;
+  for (const kw of SPAM_KEYWORDS) {
+    if (lower.includes(kw)) hits++;
+  }
+  if (hits > 0) {
+    score += Math.min(hits * 4, 35);
+    reasons.push('Spam/urgent keywords detected');
+  }
+
+  // Caps ratio
+  let letters = 0, caps = 0;
+  for (const c of combined) {
+    if (/[a-zA-Z]/.test(c)) {
+      letters++;
+      if (c === c.toUpperCase() && c !== c.toLowerCase()) caps++;
+    }
+  }
+  if (letters > 0) {
+    const ratio = caps / letters;
+    if (ratio > 0.5) { score += 15; reasons.push('High proportion of capital letters'); }
+    else if (ratio > 0.3) { score += 8; reasons.push('Elevated use of caps'); }
+  }
+
+  // Link density
+  const linkMatch = combined.match(/https?:\/\/[^\s<>"']+|www\.[^\s<>"']+/gi);
+  const linkCount = linkMatch ? linkMatch.length : 0;
+  const words = combined.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length;
+  if (words > 0) {
+    const linksPer100 = (linkCount / words) * 100;
+    if (linksPer100 >= 10) { score += 20; reasons.push('Very high link density'); }
+    else if (linksPer100 >= 5) { score += 12; reasons.push('High link density'); }
+    else if (linksPer100 >= 2) score += 5;
+  }
+
+  // Urgency
+  for (const p of URGENCY_PHRASES) {
+    if (lower.includes(p)) {
+      score += 5;
+      reasons.push('Urgency/pressure language');
+      break;
+    }
+  }
+
+  // Excessive punctuation
+  if (/!{2,}|\?{2,}/.test(combined)) {
+    score += 5;
+    reasons.push('Excessive punctuation');
+  }
+
+  score = Math.min(score, 100);
+  const isSpam = score >= 50;
+  let confidence = 'low';
+  if (score >= 75 || score <= 25) confidence = 'high';
+  else if (score >= 60 || score <= 40) confidence = 'medium';
+
+  return { is_spam: isSpam, score: Math.round(score * 100) / 100, confidence, reasons };
+}
+
+router.post('/spam-check', (req, res) => {
+  try {
+    const subject = typeof req.body?.subject === 'string' ? req.body.subject.trim() : '';
+    const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
+    const result = spamCheckHeuristic(subject, body);
+    res.json(result);
+  } catch (err) {
+    console.error('[spam-check]', err);
+    res.status(500).json({ error: 'Spam check failed' });
+  }
+});
+
 // Proxy other API calls to Go backend
 // IMPORTANT: This catch-all must be LAST to avoid intercepting specific routes like /submit
 router.all('/*', async (req, res) => {
@@ -1332,94 +1421,6 @@ router.all('/v1/*', async (req, res) => {
     } else {
       res.status(500).json({ error: 'Proxy error', details: error.message });
     }
-  }
-});
-
-// Email spam check (heuristic-based; for full model/SpamAssassin use tools/email-spam-detector CLI)
-const SPAM_KEYWORDS = [
-  'winner', 'congratulations', 'claim', 'prize', 'free', 'urgent', 'act now',
-  'click here', 'unsubscribe', 'limited time', 'offer expires', 'buy now',
-  'dear friend', 'dear winner', 'you have been selected', 'wire transfer',
-  'bank account', 'verify your account', 'click below', 'suspended', 'account locked',
-  'inheritance', 'lottery', 'cash bonus', 'no obligation', 'risk free',
-  'viagra', 'cialis', 'pharmacy', 'discount', 'percent off', 'million', 'billion'
-];
-const URGENCY_PHRASES = ['act now', 'limited time', 'expires soon', "don't miss", 'last chance', 'verify now', 'confirm now', 'click now'];
-
-function spamCheckHeuristic(subject, body) {
-  const combined = ((subject || '') + '\n' + (body || '')).trim();
-  const lower = combined.toLowerCase();
-  let score = 0;
-  const reasons = [];
-
-  // Keywords
-  let hits = 0;
-  for (const kw of SPAM_KEYWORDS) {
-    if (lower.includes(kw)) hits++;
-  }
-  if (hits > 0) {
-    score += Math.min(hits * 4, 35);
-    reasons.push('Spam/urgent keywords detected');
-  }
-
-  // Caps ratio
-  let letters = 0, caps = 0;
-  for (const c of combined) {
-    if (/[a-zA-Z]/.test(c)) {
-      letters++;
-      if (c === c.toUpperCase() && c !== c.toLowerCase()) caps++;
-    }
-  }
-  if (letters > 0) {
-    const ratio = caps / letters;
-    if (ratio > 0.5) { score += 15; reasons.push('High proportion of capital letters'); }
-    else if (ratio > 0.3) { score += 8; reasons.push('Elevated use of caps'); }
-  }
-
-  // Link density
-  const linkMatch = combined.match(/https?:\/\/[^\s<>"']+|www\.[^\s<>"']+/gi);
-  const linkCount = linkMatch ? linkMatch.length : 0;
-  const words = combined.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length;
-  if (words > 0) {
-    const linksPer100 = (linkCount / words) * 100;
-    if (linksPer100 >= 10) { score += 20; reasons.push('Very high link density'); }
-    else if (linksPer100 >= 5) { score += 12; reasons.push('High link density'); }
-    else if (linksPer100 >= 2) score += 5;
-  }
-
-  // Urgency
-  for (const p of URGENCY_PHRASES) {
-    if (lower.includes(p)) {
-      score += 5;
-      reasons.push('Urgency/pressure language');
-      break;
-    }
-  }
-
-  // Excessive punctuation
-  if (/!{2,}|\?{2,}/.test(combined)) {
-    score += 5;
-    reasons.push('Excessive punctuation');
-  }
-
-  score = Math.min(score, 100);
-  const isSpam = score >= 50;
-  let confidence = 'low';
-  if (score >= 75 || score <= 25) confidence = 'high';
-  else if (score >= 60 || score <= 40) confidence = 'medium';
-
-  return { is_spam: isSpam, score: Math.round(score * 100) / 100, confidence, reasons };
-}
-
-router.post('/spam-check', (req, res) => {
-  try {
-    const subject = typeof req.body?.subject === 'string' ? req.body.subject.trim() : '';
-    const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
-    const result = spamCheckHeuristic(subject, body);
-    res.json(result);
-  } catch (err) {
-    console.error('[spam-check]', err);
-    res.status(500).json({ error: 'Spam check failed' });
   }
 });
 
