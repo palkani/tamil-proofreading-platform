@@ -14,8 +14,28 @@
         Check if an Email is Spam
       </h1>
       <p class="text-xl text-gray-600 max-w-3xl mx-auto">
-        Paste the <strong>subject</strong> and <strong>body</strong> of an email to get an instant heuristic-based spam score. Works for Tamil and English.
+        Paste the <strong>subject</strong> and <strong>body</strong> of an email to get an instant spam analysis. Works for Tamil and English.
       </p>
+    </div>
+
+    <!-- Disclaimer Banner -->
+    <div class="mb-6 rounded-xl bg-amber-50 border border-amber-200 p-4">
+      <div class="flex items-start gap-3">
+        <svg class="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+        <div class="text-sm text-amber-800">
+          <p class="font-semibold mb-1">Limitations of Content-Based Analysis</p>
+          <p>This tool analyzes <strong>email content only</strong>. It cannot check:</p>
+          <ul class="list-disc list-inside mt-1 space-y-0.5 text-amber-700">
+            <li><strong>Sender reputation</strong> - Whether the sender's domain/IP is trusted</li>
+            <li><strong>Email authentication</strong> - SPF, DKIM, DMARC verification</li>
+            <li><strong>Link safety</strong> - Whether URLs lead to malicious sites</li>
+            <li><strong>Attachment safety</strong> - Whether files contain malware</li>
+          </ul>
+          <p class="mt-2">Gmail and other providers use these signals, which is why results may differ.</p>
+        </div>
+      </div>
     </div>
 
     <div class="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 md:p-8">
@@ -53,21 +73,56 @@
       </div>
 
       <!-- Result -->
-      <div id="spam-result" class="mt-8 hidden rounded-2xl border border-gray-200 p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <span id="spam-verdict" class="text-xl font-bold"></span>
-          <span id="spam-score" class="text-sm text-gray-600"></span>
-          <span id="spam-confidence" class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700"></span>
+      <div id="spam-result" class="mt-8 hidden">
+        <!-- Main verdict -->
+        <div class="rounded-2xl border border-gray-200 p-6">
+          <div class="flex items-center gap-3 mb-4">
+            <span id="spam-verdict" class="text-xl font-bold"></span>
+            <span id="spam-score" class="text-sm text-gray-600"></span>
+            <span id="spam-confidence" class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700"></span>
+          </div>
+          
+          <!-- Reasons -->
+          <div id="spam-reasons-section" class="hidden mb-4">
+            <p class="text-sm font-semibold text-gray-700 mb-2">Issues Detected:</p>
+            <ul id="spam-reasons" class="list-disc list-inside text-red-600 text-sm space-y-1"></ul>
+          </div>
+          
+          <!-- Warnings -->
+          <div id="spam-warnings-section" class="hidden mb-4">
+            <p class="text-sm font-semibold text-gray-700 mb-2">Warnings:</p>
+            <ul id="spam-warnings" class="list-disc list-inside text-amber-600 text-sm space-y-1"></ul>
+          </div>
+          
+          <!-- Analysis Details -->
+          <div id="spam-analysis-section" class="hidden mt-4 pt-4 border-t border-gray-100">
+            <p class="text-sm font-semibold text-gray-700 mb-2">Analysis Details:</p>
+            <div id="spam-analysis" class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm"></div>
+          </div>
         </div>
-        <ul id="spam-reasons" class="list-disc list-inside text-gray-600 text-sm space-y-1"></ul>
+        
+        <!-- Dynamic disclaimer from API -->
+        <div id="spam-disclaimer" class="mt-4 p-3 rounded-lg bg-gray-50 text-xs text-gray-500 hidden"></div>
       </div>
+      
       <div id="spam-error" class="mt-6 hidden rounded-xl bg-red-50 border border-red-200 p-4 text-red-700 text-sm"></div>
-      <div id="spam-loading" class="mt-6 hidden text-gray-600 text-sm">Checking…</div>
+      <div id="spam-loading" class="mt-6 hidden text-gray-600 text-sm flex items-center gap-2">
+        <svg class="animate-spin h-4 w-4 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        Analyzing email content…
+      </div>
     </div>
 
-    <p class="mt-6 text-center text-sm text-gray-500">
-      This uses a heuristic check (keywords, links, caps, urgency). For trained models or SpamAssassin, use the <a href="https://github.com/palkani/tamil-proofreading-platform/tree/main/tools/email-spam-detector" class="text-primary-600 hover:underline">CLI tool</a>.
-    </p>
+    <div class="mt-6 text-center">
+      <p class="text-sm text-gray-500 mb-2">
+        This tool checks for spam keywords, phishing patterns, suspicious URLs, HTML tricks, and more.
+      </p>
+      <p class="text-xs text-gray-400">
+        For ML-based detection or SpamAssassin integration, see the <a href="https://github.com/palkani/tamil-proofreading-platform/tree/main/tools/email-spam-detector" class="text-primary-600 hover:underline">CLI tool</a>.
+      </p>
+    </div>
   </div>
 </div>
 
@@ -82,6 +137,12 @@
   const scoreEl = document.getElementById('spam-score');
   const confidenceEl = document.getElementById('spam-confidence');
   const reasonsEl = document.getElementById('spam-reasons');
+  const reasonsSectionEl = document.getElementById('spam-reasons-section');
+  const warningsEl = document.getElementById('spam-warnings');
+  const warningsSectionEl = document.getElementById('spam-warnings-section');
+  const analysisSectionEl = document.getElementById('spam-analysis-section');
+  const analysisEl = document.getElementById('spam-analysis');
+  const disclaimerEl = document.getElementById('spam-disclaimer');
   const errorEl = document.getElementById('spam-error');
   const loadingEl = document.getElementById('spam-loading');
 
@@ -89,16 +150,98 @@
     loadingEl.classList.add('hidden');
     errorEl.classList.add('hidden');
     resultEl.classList.remove('hidden');
-    verdictEl.textContent = data.is_spam ? 'Spam' : 'Not spam';
-    verdictEl.className = 'text-xl font-bold ' + (data.is_spam ? 'text-red-600' : 'text-green-600');
+
+    // Verdict
+    if (data.is_spam) {
+      verdictEl.textContent = 'Likely Spam';
+      verdictEl.className = 'text-xl font-bold text-red-600';
+    } else if (data.score >= 30) {
+      verdictEl.textContent = 'Suspicious';
+      verdictEl.className = 'text-xl font-bold text-amber-600';
+    } else {
+      verdictEl.textContent = 'Likely Safe';
+      verdictEl.className = 'text-xl font-bold text-green-600';
+    }
+
     scoreEl.textContent = 'Score: ' + data.score + '/100';
+    
+    // Confidence badge
+    var confClass = 'text-xs px-2 py-1 rounded-full ';
+    if (data.confidence === 'high') {
+      confClass += 'bg-green-100 text-green-700';
+    } else if (data.confidence === 'medium') {
+      confClass += 'bg-amber-100 text-amber-700';
+    } else {
+      confClass += 'bg-gray-100 text-gray-700';
+    }
+    confidenceEl.className = confClass;
     confidenceEl.textContent = 'Confidence: ' + data.confidence;
+
+    // Reasons
     reasonsEl.innerHTML = '';
-    (data.reasons || []).forEach(function (r) {
-      const li = document.createElement('li');
-      li.textContent = r;
-      reasonsEl.appendChild(li);
-    });
+    if (data.reasons && data.reasons.length > 0) {
+      reasonsSectionEl.classList.remove('hidden');
+      data.reasons.forEach(function (r) {
+        var li = document.createElement('li');
+        li.textContent = r;
+        reasonsEl.appendChild(li);
+      });
+    } else {
+      reasonsSectionEl.classList.add('hidden');
+    }
+
+    // Warnings
+    warningsEl.innerHTML = '';
+    if (data.warnings && data.warnings.length > 0) {
+      warningsSectionEl.classList.remove('hidden');
+      data.warnings.forEach(function (w) {
+        var li = document.createElement('li');
+        li.textContent = w;
+        warningsEl.appendChild(li);
+      });
+    } else {
+      warningsSectionEl.classList.add('hidden');
+    }
+
+    // Analysis details
+    if (data.analysis) {
+      analysisSectionEl.classList.remove('hidden');
+      analysisEl.innerHTML = '';
+      
+      var stats = [
+        { label: 'URLs Found', value: data.analysis.urls_found || 0 },
+        { label: 'Unique Domains', value: data.analysis.unique_domains || 0 },
+        { label: 'URL Shorteners', value: data.analysis.url_shorteners || 0, warn: data.analysis.url_shorteners > 0 },
+        { label: 'Suspicious URLs', value: data.analysis.suspicious_urls || 0, warn: data.analysis.suspicious_urls > 0 }
+      ];
+
+      stats.forEach(function (stat) {
+        var div = document.createElement('div');
+        div.className = 'bg-gray-50 rounded-lg p-2 text-center';
+        var valueClass = stat.warn ? 'text-red-600' : 'text-gray-900';
+        div.innerHTML = '<div class="text-lg font-bold ' + valueClass + '">' + stat.value + '</div>' +
+                        '<div class="text-xs text-gray-500">' + stat.label + '</div>';
+        analysisEl.appendChild(div);
+      });
+
+      // Newsletter badge
+      if (data.analysis.is_newsletter) {
+        var badge = document.createElement('div');
+        badge.className = 'col-span-2 md:col-span-4 mt-2 text-center';
+        badge.innerHTML = '<span class="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">This appears to be a newsletter/marketing email</span>';
+        analysisEl.appendChild(badge);
+      }
+    } else {
+      analysisSectionEl.classList.add('hidden');
+    }
+
+    // Disclaimer
+    if (data.disclaimer) {
+      disclaimerEl.classList.remove('hidden');
+      disclaimerEl.textContent = data.disclaimer;
+    } else {
+      disclaimerEl.classList.add('hidden');
+    }
   }
 
   function showError(msg) {
@@ -109,8 +252,8 @@
   }
 
   btn.addEventListener('click', function () {
-    const subject = (subjectEl.value || '').trim();
-    const body = (bodyEl.value || '').trim();
+    var subject = (subjectEl.value || '').trim();
+    var body = (bodyEl.value || '').trim();
     if (!subject && !body) {
       showError('Please enter a subject or body.');
       return;

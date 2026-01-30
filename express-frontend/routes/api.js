@@ -1229,35 +1229,217 @@ router.get('/ime/suggest', async (req, res) => {
   }
 });
 
-// Email spam check (heuristic-based; for full model/SpamAssassin use tools/email-spam-detector CLI)
+// ==================== ENHANCED EMAIL SPAM DETECTOR ====================
 // NOTE: This route must be defined BEFORE the catch-all proxy routes below
-const SPAM_KEYWORDS = [
-  'winner', 'congratulations', 'claim', 'prize', 'free', 'urgent', 'act now',
-  'click here', 'unsubscribe', 'limited time', 'offer expires', 'buy now',
-  'dear friend', 'dear winner', 'you have been selected', 'wire transfer',
-  'bank account', 'verify your account', 'click below', 'suspended', 'account locked',
-  'inheritance', 'lottery', 'cash bonus', 'no obligation', 'risk free',
-  'viagra', 'cialis', 'pharmacy', 'discount', 'percent off', 'million', 'billion'
+
+// Classic spam keywords (high confidence indicators)
+const SPAM_KEYWORDS_HIGH = [
+  'winner', 'congratulations', 'you have won', 'claim your prize', 'lottery',
+  'inheritance', 'million dollars', 'billion dollars', 'wire transfer',
+  'nigerian prince', 'beneficiary', 'next of kin', 'dying wish',
+  'viagra', 'cialis', 'pharmacy', 'enlarge', 'weight loss miracle',
+  'casino', 'poker', 'gambling', 'bitcoin opportunity', 'crypto investment',
+  'work from home', 'make money fast', 'earn $', 'double your',
+  'password expired', 'account suspended', 'account locked', 'verify immediately',
+  'social security', 'irs refund', 'tax refund'
 ];
-const URGENCY_PHRASES = ['act now', 'limited time', 'expires soon', "don't miss", 'last chance', 'verify now', 'confirm now', 'click now'];
+
+// Medium confidence spam keywords
+const SPAM_KEYWORDS_MEDIUM = [
+  'act now', 'limited time', 'offer expires', 'don\'t miss out',
+  'click here', 'click below', 'click now', 'buy now',
+  'free gift', 'free offer', 'no cost', 'no obligation', 'risk free',
+  'dear friend', 'dear customer', 'dear valued', 'dear winner',
+  'urgent action', 'immediate attention', 'respond immediately',
+  'verify your account', 'confirm your identity', 'update your information',
+  'credit card required', 'order now', 'supplies limited',
+  'once in a lifetime', 'exclusive deal', 'special promotion'
+];
+
+// Phishing indicators
+const PHISHING_PATTERNS = [
+  'verify your account', 'confirm your password', 'update your payment',
+  'unusual activity', 'suspicious login', 'security alert',
+  'your account will be', 'will be suspended', 'will be terminated',
+  'click the link below', 'log in to verify', 'reset your password',
+  'billing information', 'payment declined', 'invoice attached'
+];
+
+// Newsletter/marketing patterns (legitimate but bulk mail)
+const NEWSLETTER_PATTERNS = [
+  'unsubscribe', 'manage preferences', 'email preferences',
+  'view in browser', 'view this email', 'view online',
+  'you are receiving this', 'you received this email',
+  'mailing list', 'newsletter', 'update your preferences',
+  'powered by mailchimp', 'powered by constant contact', 'powered by glue up',
+  'sent via', 'this email was sent to'
+];
+
+// Suspicious URL patterns
+const SUSPICIOUS_URL_PATTERNS = [
+  /https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/i, // IP-based URLs
+  /https?:\/\/[^\/]*@/i, // URLs with @ symbol (credential hiding)
+  /https?:\/\/[a-z0-9]{20,}\./i, // Very long random subdomains
+  /(bit\.ly|tinyurl|t\.co|goo\.gl|ow\.ly|is\.gd|buff\.ly|adf\.ly|j\.mp)/i, // URL shorteners
+];
+
+// Suspicious TLDs often used in spam/phishing
+const SUSPICIOUS_TLDS = [
+  '.xyz', '.top', '.work', '.click', '.link', '.tk', '.ml', '.ga', '.cf', '.gq',
+  '.buzz', '.club', '.online', '.site', '.website', '.space', '.icu', '.cam'
+];
+
+// Known safe/legitimate domains (reduce false positives)
+const SAFE_DOMAINS = [
+  'google.com', 'gmail.com', 'youtube.com', 'facebook.com', 'twitter.com',
+  'linkedin.com', 'microsoft.com', 'apple.com', 'amazon.com', 'paypal.com',
+  'github.com', 'zoom.us', 'dropbox.com', 'mailchimp.com', 'eventbrite.com'
+];
+
+function extractUrls(text) {
+  const urlRegex = /https?:\/\/[^\s<>"'\])+]+/gi;
+  return (text.match(urlRegex) || []).map(u => u.replace(/[.,;:!?)]+$/, ''));
+}
+
+function extractDomain(url) {
+  try {
+    const match = url.match(/https?:\/\/([^\/\?#]+)/i);
+    return match ? match[1].toLowerCase() : '';
+  } catch {
+    return '';
+  }
+}
+
+function analyzeUrls(urls) {
+  const analysis = {
+    total: urls.length,
+    shorteners: 0,
+    ipBased: 0,
+    suspiciousTld: 0,
+    suspiciousPatterns: 0,
+    uniqueDomains: new Set(),
+    issues: []
+  };
+
+  for (const url of urls) {
+    const domain = extractDomain(url);
+    if (domain) analysis.uniqueDomains.add(domain);
+
+    // Check for URL shorteners
+    if (SUSPICIOUS_URL_PATTERNS[4].test(url)) {
+      analysis.shorteners++;
+    }
+
+    // Check for IP-based URLs
+    if (SUSPICIOUS_URL_PATTERNS[0].test(url)) {
+      analysis.ipBased++;
+      analysis.issues.push('IP-based URL detected (often used in phishing)');
+    }
+
+    // Check for @ in URL (credential hiding technique)
+    if (SUSPICIOUS_URL_PATTERNS[1].test(url)) {
+      analysis.suspiciousPatterns++;
+      analysis.issues.push('URL contains @ symbol (credential hiding technique)');
+    }
+
+    // Check for suspicious TLDs
+    for (const tld of SUSPICIOUS_TLDS) {
+      if (domain.endsWith(tld)) {
+        analysis.suspiciousTld++;
+        break;
+      }
+    }
+  }
+
+  return analysis;
+}
+
+function analyzeHtmlPatterns(text) {
+  const analysis = { issues: [], score: 0 };
+
+  // Check for hidden text (common spam technique)
+  if (/style\s*=\s*["'][^"']*color\s*:\s*(white|#fff|#ffffff|transparent)/i.test(text)) {
+    analysis.issues.push('Hidden/invisible text detected');
+    analysis.score += 15;
+  }
+
+  // Check for tracking pixels
+  if (/<img[^>]*(?:width|height)\s*=\s*["']?[01](?:px)?["']?[^>]*>/i.test(text)) {
+    analysis.issues.push('Tracking pixel detected');
+    analysis.score += 5;
+  }
+
+  // Check for excessive images with no alt text
+  const imgTags = text.match(/<img[^>]*>/gi) || [];
+  const noAltImgs = imgTags.filter(img => !/alt\s*=/i.test(img)).length;
+  if (noAltImgs > 5) {
+    analysis.issues.push('Many images without alt text (possible image-based spam)');
+    analysis.score += 10;
+  }
+
+  // Check for form elements (phishing indicator)
+  if (/<form[^>]*>/i.test(text) && /<input[^>]*type\s*=\s*["']?password/i.test(text)) {
+    analysis.issues.push('Password input form detected in email');
+    analysis.score += 25;
+  }
+
+  // Check for JavaScript (should never be in email)
+  if (/<script[^>]*>/i.test(text) || /javascript:/i.test(text)) {
+    analysis.issues.push('JavaScript detected (dangerous)');
+    analysis.score += 20;
+  }
+
+  return analysis;
+}
 
 function spamCheckHeuristic(subject, body) {
   const combined = ((subject || '') + '\n' + (body || '')).trim();
   const lower = combined.toLowerCase();
   let score = 0;
   const reasons = [];
+  const warnings = [];
 
-  // Keywords
-  let hits = 0;
-  for (const kw of SPAM_KEYWORDS) {
-    if (lower.includes(kw)) hits++;
+  // === HIGH CONFIDENCE SPAM KEYWORDS ===
+  let highHits = 0;
+  for (const kw of SPAM_KEYWORDS_HIGH) {
+    if (lower.includes(kw)) highHits++;
   }
-  if (hits > 0) {
-    score += Math.min(hits * 4, 35);
-    reasons.push('Spam/urgent keywords detected');
+  if (highHits > 0) {
+    score += Math.min(highHits * 8, 40);
+    reasons.push(`High-risk spam keywords detected (${highHits})`);
   }
 
-  // Caps ratio
+  // === MEDIUM CONFIDENCE SPAM KEYWORDS ===
+  let medHits = 0;
+  for (const kw of SPAM_KEYWORDS_MEDIUM) {
+    if (lower.includes(kw)) medHits++;
+  }
+  if (medHits > 0) {
+    score += Math.min(medHits * 3, 20);
+    reasons.push(`Marketing/urgency phrases detected (${medHits})`);
+  }
+
+  // === PHISHING PATTERNS ===
+  let phishHits = 0;
+  for (const p of PHISHING_PATTERNS) {
+    if (lower.includes(p)) phishHits++;
+  }
+  if (phishHits > 0) {
+    score += Math.min(phishHits * 10, 35);
+    reasons.push(`Phishing indicators detected (${phishHits})`);
+  }
+
+  // === NEWSLETTER DETECTION ===
+  let newsletterHits = 0;
+  for (const n of NEWSLETTER_PATTERNS) {
+    if (lower.includes(n)) newsletterHits++;
+  }
+  if (newsletterHits >= 2) {
+    // Don't add to spam score, but note it's bulk mail
+    warnings.push('This appears to be a newsletter/marketing email (bulk mail indicators detected)');
+  }
+
+  // === CAPS RATIO ===
   let letters = 0, caps = 0;
   for (const c of combined) {
     if (/[a-zA-Z]/.test(c)) {
@@ -1271,39 +1453,90 @@ function spamCheckHeuristic(subject, body) {
     else if (ratio > 0.3) { score += 8; reasons.push('Elevated use of caps'); }
   }
 
-  // Link density
-  const linkMatch = combined.match(/https?:\/\/[^\s<>"']+|www\.[^\s<>"']+/gi);
-  const linkCount = linkMatch ? linkMatch.length : 0;
+  // === URL ANALYSIS ===
+  const urls = extractUrls(combined);
+  const urlAnalysis = analyzeUrls(urls);
+
+  if (urlAnalysis.ipBased > 0) {
+    score += 20;
+    reasons.push('IP-based URLs detected (common in phishing)');
+  }
+
+  if (urlAnalysis.suspiciousPatterns > 0) {
+    score += 15;
+  }
+
+  if (urlAnalysis.shorteners > 0) {
+    score += Math.min(urlAnalysis.shorteners * 5, 15);
+    warnings.push(`URL shorteners detected (${urlAnalysis.shorteners}) - destination unknown`);
+  }
+
+  if (urlAnalysis.suspiciousTld > 0) {
+    score += Math.min(urlAnalysis.suspiciousTld * 5, 15);
+    reasons.push(`Suspicious domain TLDs detected (${urlAnalysis.suspiciousTld})`);
+  }
+
+  // Link density (adjusted - high density in newsletters is normal)
   const words = combined.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length;
-  if (words > 0) {
-    const linksPer100 = (linkCount / words) * 100;
-    if (linksPer100 >= 10) { score += 20; reasons.push('Very high link density'); }
-    else if (linksPer100 >= 5) { score += 12; reasons.push('High link density'); }
-    else if (linksPer100 >= 2) score += 5;
+  if (words > 0 && newsletterHits < 2) {
+    const linksPer100 = (urls.length / words) * 100;
+    if (linksPer100 >= 15) { score += 15; reasons.push('Very high link density'); }
+    else if (linksPer100 >= 8) { score += 8; reasons.push('High link density'); }
   }
 
-  // Urgency
-  for (const p of URGENCY_PHRASES) {
-    if (lower.includes(p)) {
-      score += 5;
-      reasons.push('Urgency/pressure language');
-      break;
-    }
-  }
+  // === HTML ANALYSIS ===
+  const htmlAnalysis = analyzeHtmlPatterns(combined);
+  score += htmlAnalysis.score;
+  reasons.push(...htmlAnalysis.issues);
 
-  // Excessive punctuation
-  if (/!{2,}|\?{2,}/.test(combined)) {
-    score += 5;
+  // === EXCESSIVE PUNCTUATION ===
+  if (/!{3,}|\?{3,}/.test(combined)) {
+    score += 8;
     reasons.push('Excessive punctuation');
+  } else if (/!{2}|\?{2}/.test(combined)) {
+    score += 3;
   }
 
+  // === MONEY PATTERNS ===
+  const moneyPattern = /\$\s*\d{1,3}(?:,\d{3})*(?:\.\d{2})?|\d+\s*(?:million|billion|thousand)\s*(?:dollars?|usd|\$)/gi;
+  const moneyMatches = combined.match(moneyPattern) || [];
+  if (moneyMatches.length > 2) {
+    score += 10;
+    reasons.push('Multiple money amounts mentioned');
+  }
+
+  // === GENERIC GREETING ===
+  if (/^dear\s+(?:friend|customer|valued\s+customer|sir|madam|user|account\s*holder)/im.test(lower)) {
+    score += 8;
+    reasons.push('Generic greeting (common in spam/phishing)');
+  }
+
+  // === FINAL CALCULATION ===
   score = Math.min(score, 100);
   const isSpam = score >= 50;
+  
   let confidence = 'low';
-  if (score >= 75 || score <= 25) confidence = 'high';
-  else if (score >= 60 || score <= 40) confidence = 'medium';
+  if (score >= 75 || score <= 20) confidence = 'high';
+  else if (score >= 60 || score <= 35) confidence = 'medium';
 
-  return { is_spam: isSpam, score: Math.round(score * 100) / 100, confidence, reasons };
+  // Deduplicate reasons
+  const uniqueReasons = [...new Set(reasons)];
+
+  return {
+    is_spam: isSpam,
+    score: Math.round(score * 100) / 100,
+    confidence,
+    reasons: uniqueReasons,
+    warnings,
+    analysis: {
+      urls_found: urls.length,
+      unique_domains: urlAnalysis.uniqueDomains.size,
+      is_newsletter: newsletterHits >= 2,
+      url_shorteners: urlAnalysis.shorteners,
+      suspicious_urls: urlAnalysis.ipBased + urlAnalysis.suspiciousPatterns
+    },
+    disclaimer: 'This is a content-based heuristic analysis only. It cannot detect sender reputation, email authentication (SPF/DKIM/DMARC), or link destination safety. For comprehensive spam detection, use your email provider\'s built-in filters.'
+  };
 }
 
 router.post('/spam-check', (req, res) => {
