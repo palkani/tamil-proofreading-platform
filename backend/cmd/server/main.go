@@ -97,12 +97,37 @@ func main() {
 	var db *gorm.DB
 	var err error
 
-	db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
+	db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
+		PrepareStmt: true, // Cache prepared statements for better performance
+	})
 	if err != nil {
 		log.Printf("[ERROR] Database connection failed: %v", err)
 		log.Printf("[INFO] Server running but database operations will fail")
 	} else {
 		log.Printf("[SUCCESS] Connected to database")
+
+		// Configure connection pool for high concurrency (1000+ users)
+		sqlDB, poolErr := db.DB()
+		if poolErr != nil {
+			log.Printf("[WARN] Failed to get underlying sql.DB for pool config: %v", poolErr)
+		} else {
+			// Max open connections - limit to prevent DB overload
+			// Rule of thumb: connections = (core_count * 2) + effective_spindle_count
+			// For cloud DB with 4 cores: ~10-25 connections is optimal
+			// We set higher to handle burst traffic but not too high
+			sqlDB.SetMaxOpenConns(50)
+
+			// Max idle connections - keep warm connections ready
+			sqlDB.SetMaxIdleConns(25)
+
+			// Connection max lifetime - prevent stale connections
+			sqlDB.SetConnMaxLifetime(30 * time.Minute)
+
+			// Connection max idle time - close idle connections faster
+			sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+
+			log.Printf("[SUCCESS] Database connection pool configured: MaxOpen=50, MaxIdle=25, MaxLifetime=30m")
+		}
 
 		// Only run migrations if SKIP_MIGRATIONS is not set to "true"
 		// In production, set SKIP_MIGRATIONS=true to avoid running migrations on every deploy
@@ -179,8 +204,9 @@ func main() {
 		api.GET("/ime/suggest", h.IMESuggest)
 		api.GET("/suggest", h.Suggest)
 		api.POST("/select", h.SuggestSelect)
-		// Public routes (rate-limited per IP)
-		api.Use(middleware.RateLimitMiddleware(90, time.Minute))
+		// Public routes - rate limit per IP (increased for 1000+ concurrent users)
+		// 600 req/min = 10 req/sec per IP, suitable for normal browsing patterns
+		api.Use(middleware.RateLimitMiddleware(600, time.Minute))
 		api.POST("/auth/register", h.Register)
 		api.POST("/auth/login", h.Login)
 		api.POST("/auth/logout", h.Logout)
@@ -219,10 +245,11 @@ func main() {
 	}
 
 	// Protected routes enforce JWT validation before any DB access
+	// Authenticated users get higher limits: 1200 req/min = 20 req/sec
 	protected := api.Group("")
 	protected.Use(
 		middleware.AuthMiddleware(cfg.JWTSecret),
-		middleware.RateLimitMiddleware(300, time.Minute),
+		middleware.RateLimitMiddleware(1200, time.Minute),
 	)
 	{
 		protected.GET("/auth/me", h.GetCurrentUser)

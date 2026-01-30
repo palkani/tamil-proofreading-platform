@@ -79,10 +79,10 @@ func NewEngine(db *gorm.DB, opts EngineOptions) (*Engine, error) {
 		opts.MaxTopPerNode = 15
 	}
 	if opts.CacheEntries <= 0 {
-		opts.CacheEntries = 200
+		opts.CacheEntries = 2000 // Increased for high concurrency
 	}
 	if opts.CacheTTL <= 0 {
-		opts.CacheTTL = 2 * time.Minute
+		opts.CacheTTL = 5 * time.Minute // Extended TTL for better hit rate
 	}
 	if opts.RedisTimeoutMs <= 0 {
 		opts.RedisTimeoutMs = 25

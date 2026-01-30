@@ -1,7 +1,32 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const http = require('http');
+const https = require('https');
 const { redirectIfAuth, getCurrentUser, requireAuth } = require('../middleware/auth');
+
+// HTTP Agent pooling for high concurrency (shared with other routes)
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  maxSockets: 50,
+  maxFreeSockets: 25,
+  timeout: 30000,
+});
+
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  maxSockets: 50,
+  maxFreeSockets: 25,
+  timeout: 30000,
+});
+
+const axiosWithPool = axios.create({
+  httpAgent: httpAgent,
+  httpsAgent: httpsAgent,
+  timeout: 30000,
+});
 const { getSeoData } = require('../config/seo');
 // Build backend API URL (matches api/auth proxy)
 function getBackendApiUrl() {
@@ -138,7 +163,7 @@ router.get('/blog', async (req, res) => {
     pageType: 'blogIndex',
   };
   try {
-    const backendRes = await axios.get(`${BACKEND_URL}/blog/posts`, {
+    const backendRes = await axiosWithPool.get(`${BACKEND_URL}/blog/posts`, {
       params: { page, limit: 12 },
       timeout: 10000,
       validateStatus: () => true,
@@ -181,7 +206,7 @@ router.get('/blog/:slug', async (req, res) => {
   const seoBase = getSeoData('blogPost') || getSeoData('home');
   const slug = String(req.params.slug || '').trim();
   try {
-    const backendRes = await axios.get(`${BACKEND_URL}/blog/posts/${encodeURIComponent(slug)}`, {
+    const backendRes = await axiosWithPool.get(`${BACKEND_URL}/blog/posts/${encodeURIComponent(slug)}`, {
       timeout: 10000,
       validateStatus: () => true,
     });
@@ -277,7 +302,7 @@ router.get('/blog/:slug', async (req, res) => {
 router.get('/blog/rss.xml', async (req, res) => {
   const baseUrl = 'https://prooftamil.com';
   try {
-    const backendRes = await axios.get(`${BACKEND_URL}/blog/posts`, {
+    const backendRes = await axiosWithPool.get(`${BACKEND_URL}/blog/posts`, {
       params: { page: 1, limit: 50 },
       timeout: 10000,
       validateStatus: () => true,
@@ -350,7 +375,7 @@ router.get('/my-blogs', requireAuth, async (req, res) => {
     if (req.headers.cookie) headers.cookie = req.headers.cookie;
     if (req.headers.authorization) headers.authorization = req.headers.authorization;
 
-    const backendRes = await axios.get(`${BACKEND_URL}/blog/me/posts`, {
+    const backendRes = await axiosWithPool.get(`${BACKEND_URL}/blog/me/posts`, {
       params: { limit: 200 },
       headers,
       withCredentials: true,

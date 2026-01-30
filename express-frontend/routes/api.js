@@ -1,8 +1,36 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const http = require('http');
+const https = require('https');
 const multer = require('multer');
 const FormData = require('form-data');
+
+// HTTP Agent pooling for high concurrency (1000+ users)
+// This reuses TCP connections instead of creating new ones per request
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,    // 30 seconds keep-alive
+  maxSockets: 100,          // Max concurrent sockets per host
+  maxFreeSockets: 50,       // Max idle sockets to keep in pool
+  timeout: 60000,           // 60 second socket timeout
+});
+
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  maxSockets: 100,
+  maxFreeSockets: 50,
+  timeout: 60000,
+});
+
+// Create axios instance with connection pooling
+const axiosWithPool = axios.create({
+  httpAgent: httpAgent,
+  httpsAgent: httpsAgent,
+  timeout: 60000,           // Default 60 second timeout
+  maxRedirects: 5,
+});
 
 // Construct backend API URL - handle both cases:
 // 1. BACKEND_URL = http://localhost:8080/api/v1 (dev)
@@ -74,7 +102,7 @@ router.post('/gemini/analyze', async (req, res) => {
     // OPTIMIZATION: Process all chunks in parallel for 3-5x speed improvement
     const chunkPromises = chunks.map(async (chunk) => {
       try {
-        const response = await axios.post(
+        const response = await axiosWithPool.post(
           `${baseUrl}/models/gemini-2.5-flash:generateContent`,
           {
             systemInstruction: {
@@ -241,7 +269,7 @@ router.post('/gemini/translate', async (req, res) => {
 
     console.log('[TRANSLATE] Translating English to Tamil:', text.substring(0, 50) + '...');
 
-    const response = await axios.post(
+    const response = await axiosWithPool.post(
       `${baseUrl}/models/gemini-2.5-flash:generateContent`,
       {
         systemInstruction: {
@@ -327,7 +355,7 @@ router.post('/transliterate', async (req, res) => {
     const url = `${BACKEND_URL}/transliterate`;
     console.log(`[TRANSLITERATE] POST ${url} with text: ${text}`);
     
-    const response = await axios.post(url, { text });
+    const response = await axiosWithPool.post(url, { text });
     res.status(response.status).json(response.data);
   } catch (error) {
     console.error(`[TRANSLITERATE-ERROR] ${error.message}`);
@@ -573,7 +601,7 @@ router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
         formData.append('file', fileBuffer, { filename, contentType: mimeType });
         formData.append('lang', lang);
 
-        const response = await axios.post(url, formData, {
+        const response = await axiosWithPool.post(url, formData, {
           headers: {
             ...formData.getHeaders(),
             // Forward cookies/auth if present (some backends may gate large uploads)
@@ -607,7 +635,7 @@ router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
       });
       formData.append('lang', lang);
       
-      const response = await axios.post(`${OCR_SERVICE_URL}/upload`, formData, {
+      const response = await axiosWithPool.post(`${OCR_SERVICE_URL}/upload`, formData, {
         headers: {
           ...formData.getHeaders()
         },
@@ -745,7 +773,7 @@ router.get('/ocr/download/:filename', async (req, res) => {
     
     // Fallback to external service if configured
     if (OCR_SERVICE_URL && OCR_SERVICE_URL !== 'http://localhost:5000') {
-      const response = await axios.get(`${OCR_SERVICE_URL}/download/${filename}`, {
+      const response = await axiosWithPool.get(`${OCR_SERVICE_URL}/download/${filename}`, {
         responseType: 'stream'
       });
       
@@ -756,7 +784,7 @@ router.get('/ocr/download/:filename', async (req, res) => {
 
     // Fallback to backend OCR proxy (Cloud Run backend) if available
     try {
-      const response = await axios.get(`${BACKEND_URL}/ocr/download/${encodeURIComponent(filename)}`, {
+      const response = await axiosWithPool.get(`${BACKEND_URL}/ocr/download/${encodeURIComponent(filename)}`, {
         responseType: 'stream',
         headers: {
           cookie: req.headers.cookie,
@@ -933,7 +961,7 @@ router.post('/submit', async (req, res) => {
       requestBody.save_draft = req.body.save_draft;
     }
     
-    const response = await axios.post(url, requestBody, {
+    const response = await axiosWithPool.post(url, requestBody, {
       headers,
       validateStatus: () => true, // Don't throw on any status
     });
@@ -1156,7 +1184,7 @@ router.post('/blog/publish', async (req, res) => {
 
     console.log('[BLOG-PUBLISH] Admin publishing:', userEmail, 'to URL:', url);
 
-    const backendRes = await axios.post(url, req.body, {
+    const backendRes = await axiosWithPool.post(url, req.body, {
       headers,
       validateStatus: () => true,
     });
@@ -1202,7 +1230,7 @@ router.delete('/blog/posts/:id', async (req, res) => {
       headers.Cookie = req.headers.cookie;
     }
 
-    const backendRes = await axios.delete(url, {
+    const backendRes = await axiosWithPool.delete(url, {
       headers,
       validateStatus: () => true,
     });
@@ -1246,7 +1274,7 @@ router.get('/ime/suggest', async (req, res) => {
       headers.Authorization = req.headers.authorization;
     }
     
-    const response = await axios.get(url, {
+    const response = await axiosWithPool.get(url, {
       headers,
       validateStatus: () => true,
     });
@@ -1589,7 +1617,7 @@ router.post('/spam-check', (req, res) => {
 router.post('/newsletter/subscribe', async (req, res) => {
   try {
     const url = `${BACKEND_URL}/newsletter/subscribe`;
-    const response = await axios.post(url, req.body, {
+    const response = await axiosWithPool.post(url, req.body, {
       headers: { 'Content-Type': 'application/json' },
       validateStatus: () => true,
     });
@@ -1604,7 +1632,7 @@ router.post('/newsletter/subscribe', async (req, res) => {
 router.get('/newsletter/confirm/:token', async (req, res) => {
   try {
     const url = `${BACKEND_URL}/newsletter/confirm/${req.params.token}`;
-    const response = await axios.get(url, {
+    const response = await axiosWithPool.get(url, {
       validateStatus: () => true,
     });
     // Redirect to a success page or show message
@@ -1625,7 +1653,7 @@ router.get('/newsletter/unsubscribe', async (req, res) => {
     const token = req.query.token;
     const email = req.query.email;
     const url = `${BACKEND_URL}/newsletter/unsubscribe?token=${token || ''}&email=${email || ''}`;
-    const response = await axios.get(url, {
+    const response = await axiosWithPool.get(url, {
       validateStatus: () => true,
     });
     // Redirect to confirmation page
@@ -1643,7 +1671,7 @@ router.get('/newsletter/unsubscribe', async (req, res) => {
 router.post('/newsletter/unsubscribe', async (req, res) => {
   try {
     const url = `${BACKEND_URL}/newsletter/unsubscribe`;
-    const response = await axios.post(url, req.body, {
+    const response = await axiosWithPool.post(url, req.body, {
       headers: { 'Content-Type': 'application/json' },
       validateStatus: () => true,
     });
@@ -1658,7 +1686,7 @@ router.post('/newsletter/unsubscribe', async (req, res) => {
 router.get('/newsletter/count', async (req, res) => {
   try {
     const url = `${BACKEND_URL}/newsletter/count`;
-    const response = await axios.get(url, {
+    const response = await axiosWithPool.get(url, {
       validateStatus: () => true,
     });
     res.status(response.status).json(response.data);

@@ -40,9 +40,9 @@ var javascriptProtoRegex = regexp.MustCompile(`(?i)javascript:`)
 var tamilCharRegex = regexp.MustCompile(`[\x{0B80}-\x{0BFF}]`)
 
 // submitResponseCache: in-memory cache for inline submit responses so repeat identical text returns in <100ms.
-// Increased TTL and cache size for better performance on repeat submissions.
-const submitCacheTTL = 15 * time.Minute
-const submitCacheMaxEntries = 1000
+// Increased TTL and cache size for better performance with 1000+ concurrent users.
+const submitCacheTTL = 30 * time.Minute    // Extended TTL for better cache hit rate
+const submitCacheMaxEntries = 5000          // Increased for high concurrency
 
 type submitCachedCorrection struct {
 	BlockID      string `json:"blockId"`
