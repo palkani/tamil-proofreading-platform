@@ -62,14 +62,14 @@ func (h *Handlers) SubscribeNewsletter(c *gin.Context) {
 	var existing models.NewsletterSubscriber
 	if err := h.db.Where("email = ?", email).First(&existing).Error; err == nil {
 		// Already exists
-		if existing.Status == models.StatusConfirmed {
+		if existing.Status == models.SubscriptionConfirmed {
 			c.JSON(http.StatusOK, gin.H{
 				"status":  "already_subscribed",
 				"message": "You are already subscribed to our newsletter!",
 			})
 			return
 		}
-		if existing.Status == models.StatusPending {
+		if existing.Status == models.SubscriptionPending {
 			// Resend confirmation (could implement here)
 			c.JSON(http.StatusOK, gin.H{
 				"status":  "pending",
@@ -77,9 +77,9 @@ func (h *Handlers) SubscribeNewsletter(c *gin.Context) {
 			})
 			return
 		}
-		if existing.Status == models.StatusUnsubscribed {
+		if existing.Status == models.SubscriptionUnsubscribed {
 			// Re-subscribe
-			existing.Status = models.StatusPending
+			existing.Status = models.SubscriptionPending
 			existing.ConfirmationToken = generateToken()
 			existing.UnsubscribedAt = nil
 			existing.SubscribedAt = time.Now()
@@ -121,7 +121,7 @@ func (h *Handlers) SubscribeNewsletter(c *gin.Context) {
 	subscriber := &models.NewsletterSubscriber{
 		Email:             email,
 		Name:              name,
-		Status:            models.StatusPending,
+		Status:            models.SubscriptionPending,
 		Source:            source,
 		ConfirmationToken: generateToken(),
 		UnsubscribeToken:  generateToken(),
@@ -143,7 +143,7 @@ func (h *Handlers) SubscribeNewsletter(c *gin.Context) {
 
 	// Auto-confirm for now (remove this in production with proper email verification)
 	now := time.Now()
-	subscriber.Status = models.StatusConfirmed
+	subscriber.Status = models.SubscriptionConfirmed
 	subscriber.ConfirmedAt = &now
 	h.db.Save(subscriber)
 
@@ -169,7 +169,7 @@ func (h *Handlers) ConfirmSubscription(c *gin.Context) {
 		return
 	}
 
-	if subscriber.Status == models.StatusConfirmed {
+	if subscriber.Status == models.SubscriptionConfirmed {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "already_confirmed",
 			"message": "Your subscription is already confirmed!",
@@ -178,7 +178,7 @@ func (h *Handlers) ConfirmSubscription(c *gin.Context) {
 	}
 
 	now := time.Now()
-	subscriber.Status = models.StatusConfirmed
+	subscriber.Status = models.SubscriptionConfirmed
 	subscriber.ConfirmedAt = &now
 	subscriber.ConfirmationToken = "" // Clear token after use
 
@@ -227,7 +227,7 @@ func (h *Handlers) UnsubscribeNewsletter(c *gin.Context) {
 		return
 	}
 
-	if subscriber.Status == models.StatusUnsubscribed {
+	if subscriber.Status == models.SubscriptionUnsubscribed {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "already_unsubscribed",
 			"message": "You are already unsubscribed.",
@@ -236,7 +236,7 @@ func (h *Handlers) UnsubscribeNewsletter(c *gin.Context) {
 	}
 
 	now := time.Now()
-	subscriber.Status = models.StatusUnsubscribed
+	subscriber.Status = models.SubscriptionUnsubscribed
 	subscriber.UnsubscribedAt = &now
 
 	if err := h.db.Save(&subscriber).Error; err != nil {
@@ -270,9 +270,9 @@ func (h *Handlers) AdminListSubscribers(c *gin.Context) {
 
 	// Count by status
 	var totalConfirmed, totalPending, totalUnsubscribed int64
-	h.db.Model(&models.NewsletterSubscriber{}).Where("status = ?", models.StatusConfirmed).Count(&totalConfirmed)
-	h.db.Model(&models.NewsletterSubscriber{}).Where("status = ?", models.StatusPending).Count(&totalPending)
-	h.db.Model(&models.NewsletterSubscriber{}).Where("status = ?", models.StatusUnsubscribed).Count(&totalUnsubscribed)
+	h.db.Model(&models.NewsletterSubscriber{}).Where("status = ?", models.SubscriptionConfirmed).Count(&totalConfirmed)
+	h.db.Model(&models.NewsletterSubscriber{}).Where("status = ?", models.SubscriptionPending).Count(&totalPending)
+	h.db.Model(&models.NewsletterSubscriber{}).Where("status = ?", models.SubscriptionUnsubscribed).Count(&totalUnsubscribed)
 
 	c.JSON(http.StatusOK, gin.H{
 		"subscribers": subscribers,
@@ -288,7 +288,7 @@ func (h *Handlers) AdminListSubscribers(c *gin.Context) {
 // GetSubscriberCount returns the count of active subscribers (public)
 func (h *Handlers) GetSubscriberCount(c *gin.Context) {
 	var count int64
-	h.db.Model(&models.NewsletterSubscriber{}).Where("status = ?", models.StatusConfirmed).Count(&count)
+	h.db.Model(&models.NewsletterSubscriber{}).Where("status = ?", models.SubscriptionConfirmed).Count(&count)
 
 	c.JSON(http.StatusOK, gin.H{
 		"count": count,

@@ -10,9 +10,9 @@ import (
 type SubscriptionStatus string
 
 const (
-	StatusPending      SubscriptionStatus = "pending"      // Awaiting email confirmation
-	StatusConfirmed    SubscriptionStatus = "confirmed"    // Email confirmed, active subscriber
-	StatusUnsubscribed SubscriptionStatus = "unsubscribed" // User unsubscribed
+	SubscriptionPending      SubscriptionStatus = "pending"      // Awaiting email confirmation
+	SubscriptionConfirmed    SubscriptionStatus = "confirmed"    // Email confirmed, active subscriber
+	SubscriptionUnsubscribed SubscriptionStatus = "unsubscribed" // User unsubscribed
 )
 
 // SubscriptionSource tracks where the subscription came from
@@ -68,5 +68,5 @@ func (NewsletterSubscriber) TableName() string {
 
 // IsActive returns true if the subscriber can receive emails
 func (n *NewsletterSubscriber) IsActive() bool {
-	return n.Status == StatusConfirmed && n.DeletedAt.Time.IsZero()
+	return n.Status == SubscriptionConfirmed && n.DeletedAt.Time.IsZero()
 }
