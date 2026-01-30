@@ -6,6 +6,9 @@ const https = require('https');
 const multer = require('multer');
 const FormData = require('form-data');
 
+// Shared Gemini key rotator for multi-key support
+const { keyRotator } = require('../utils/gemini-key-rotator');
+
 // HTTP Agent pooling for high concurrency (1000+ users)
 // This reuses TCP connections instead of creating new ones per request
 const httpAgent = new http.Agent({
@@ -84,16 +87,17 @@ router.post('/gemini/analyze', async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    // Gemini config:
-    // - In some deployments we use Replit AI Integrations (AI_INTEGRATIONS_*).
-    // - In others we use Google GenAI directly (GOOGLE_GENAI_API_KEY).
-    // Always allow direct Google mode with a sane default baseUrl.
-    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
-    const baseUrl =
-      process.env.AI_INTEGRATIONS_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
+    // Use shared key rotator for multi-key support
+    const keyInfo = keyRotator.getNextKey();
+    const apiKey = keyInfo ? keyInfo.key : null;
+    const keyIndex = keyInfo ? keyInfo.index : -1;
+    const baseUrl = keyRotator.baseUrl;
     
     if (!apiKey) {
-      return res.status(500).json({ error: 'Gemini AI not configured - API key missing' });
+      return res.status(500).json({ 
+        error: 'Gemini AI not configured - API key missing',
+        help: 'Set GEMINI_API_KEY_1 in Vercel environment. Get free keys at https://aistudio.google.com/apikey'
+      });
     }
 
     // Split into chunks to improve detection accuracy
@@ -200,6 +204,18 @@ router.post('/gemini/analyze', async (req, res) => {
           }
         );
 
+        // Check for rate limiting
+        if (response.status === 429) {
+          keyRotator.markRateLimited(keyIndex);
+          console.log(`[GEMINI] Rate limited on key ${keyIndex + 1}, chunk will return empty`);
+          return [];
+        }
+        
+        if (response.status !== 200) {
+          console.error(`[GEMINI] API error ${response.status}:`, response.data?.error);
+          return [];
+        }
+
         const aiText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
         
         // Clean and validate JSON before parsing
@@ -260,11 +276,17 @@ router.post('/gemini/translate', async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
-    const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
+    // Use shared key rotator for multi-key support
+    const keyInfo = keyRotator.getNextKey();
+    const apiKey = keyInfo ? keyInfo.key : null;
+    const keyIndex = keyInfo ? keyInfo.index : -1;
+    const baseUrl = keyRotator.baseUrl;
     
     if (!apiKey) {
-      return res.status(500).json({ error: 'Gemini AI not configured - API key missing' });
+      return res.status(500).json({ 
+        error: 'Gemini AI not configured - API key missing',
+        help: 'Set GEMINI_API_KEY_1 in Vercel environment'
+      });
     }
 
     console.log('[TRANSLATE] Translating English to Tamil:', text.substring(0, 50) + '...');

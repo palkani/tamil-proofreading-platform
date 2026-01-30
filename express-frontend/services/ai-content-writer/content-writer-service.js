@@ -27,10 +27,15 @@ function isLocalhostUrl(url) {
   return u.includes('localhost') || u.includes('127.0.0.1');
 }
 
+// Use shared key rotator for consistent key management across all services
+const { keyRotator } = require('../../utils/gemini-key-rotator');
+
 function getGeminiConfig() {
-  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
-  const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
-  return { apiKey, baseUrl };
+  const keyInfo = keyRotator.getNextKey();
+  const apiKey = keyInfo ? keyInfo.key : null;
+  const keyIndex = keyInfo ? keyInfo.index : -1;
+  const baseUrl = keyRotator.baseUrl;
+  return { apiKey, baseUrl, keyIndex };
 }
 
 function safeJsonParse(text, fallback) {
@@ -76,15 +81,19 @@ function chooseMaxOutputTokens(requestedWordCount) {
   return Math.max(4096, Math.min(16384, estimatedTokens));
 }
 
-async function geminiGenerate(systemText, userText, schema, maxOutputTokens = 2048) {
-  const { apiKey, baseUrl } = getGeminiConfig();
+async function geminiGenerate(systemText, userText, schema, maxOutputTokens = 2048, retryCount = 0) {
+  const maxRetries = Math.min(keyRotator.getKeyCount(), 3); // Max 3 retries across different keys
+  const { apiKey, baseUrl, keyIndex } = getGeminiConfig();
+  
   if (!apiKey) {
     throw createServiceError(
       'AI Content Writer is not configured',
-      'Missing Gemini API key. Set AI_INTEGRATIONS_GEMINI_API_KEY (preferred) or GOOGLE_GENAI_API_KEY in production env.'
+      `Missing Gemini API key. Set GEMINI_API_KEY_1 (or GEMINI_API_KEY_2, etc.) in Vercel environment variables. You can get free keys from https://aistudio.google.com/apikey`
     );
   }
 
+  const keyLabel = keyRotator.getKeyCount() > 1 ? ` (key ${keyIndex + 1}/${keyRotator.getKeyCount()})` : '';
+  
   const response = await geminiAxios.post(
     `${baseUrl}/models/gemini-2.5-flash:generateContent`,
     {
@@ -115,18 +124,31 @@ async function geminiGenerate(systemText, userText, schema, maxOutputTokens = 20
       `Gemini API failed (${response.status})`;
     
     // Log full error details for debugging
-    console.error('[AI-WRITER] Gemini API error:', {
+    console.error(`[AI-WRITER] Gemini API error${keyLabel}:`, {
       status: response.status,
       error: response.data?.error,
       message: errorMsg,
+      retryCount,
     });
     
-    // Check for specific error types
+    // Handle rate limiting with automatic key rotation
     if (response.status === 429) {
-      throw createServiceError('Rate limit exceeded', 'Gemini API rate limit reached. Please wait a moment and try again.');
+      keyRotator.markRateLimited(keyIndex);
+      
+      // Retry with a different key if available
+      if (retryCount < maxRetries && keyRotator.getAvailableKeyCount() > 0) {
+        console.log(`[AI-WRITER] Rate limited on key ${keyIndex + 1}, trying another key (attempt ${retryCount + 2}/${maxRetries + 1})`);
+        return geminiGenerate(systemText, userText, schema, maxOutputTokens, retryCount + 1);
+      }
+      
+      throw createServiceError(
+        'Rate limit exceeded', 
+        `All ${keyRotator.getKeyCount()} API key(s) are rate limited. Please wait 60 seconds and try again. Add more keys (GEMINI_API_KEY_2, etc.) to reduce this issue.`
+      );
     }
+    
     if (response.status === 403) {
-      throw createServiceError('API key invalid', 'Gemini API key is invalid or has insufficient permissions. Please check your API key configuration.');
+      throw createServiceError('API key invalid', `Gemini API key${keyLabel} is invalid or has insufficient permissions. Please check your API key configuration.`);
     }
     if (response.status === 400) {
       throw createServiceError('Invalid request', errorMsg || 'The request to Gemini API was malformed. Please try with different content.');
@@ -176,16 +198,28 @@ async function healthCheck() {
     }
 
     // Fallback: report healthy if Gemini is configured (production path)
-    const { apiKey } = getGeminiConfig();
-    if (apiKey) {
+    const totalKeys = keyRotator.getKeyCount();
+    const availableKeys = keyRotator.getAvailableKeyCount();
+    
+    if (totalKeys > 0) {
       return {
-        status: 'healthy',
-        service: 'AI Content Writer (Gemini fallback)',
+        status: availableKeys > 0 ? 'healthy' : 'degraded',
+        service: 'AI Content Writer (Gemini)',
         version: '1.0.0',
+        keys: {
+          total: totalKeys,
+          available: availableKeys,
+          rateLimited: totalKeys - availableKeys,
+        },
       };
     }
 
-    return null;
+    return {
+      status: 'unhealthy',
+      service: 'AI Content Writer',
+      error: 'No API keys configured',
+      help: 'Set GEMINI_API_KEY_1 in environment variables. Get free keys at https://aistudio.google.com/apikey',
+    };
   } catch (error) {
     console.error('[AI-WRITER] Health check failed:', error.message);
     return null;
