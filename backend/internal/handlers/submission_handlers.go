@@ -409,7 +409,7 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		var u models.User
 		if err := h.db.Select("email", "role").First(&u, userID).Error; err == nil {
 			email := strings.ToLower(strings.TrimSpace(u.Email))
-			if u.Role == models.RoleAdmin || email == "palkani.r@gmail.com" || email == "prooftamil@gmail.com" {
+			if u.Role == models.RoleAdmin || email == "palkani.r@gmail.com" || email == "prooftamil@gmail.com" || email == "banu.palkani@gmail.com" {
 				isAdminBypass = true
 			}
 		}

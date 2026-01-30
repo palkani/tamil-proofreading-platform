@@ -13,7 +13,7 @@
             <a href="/drafts" id="my-drafts-link" class="<%= active === 'drafts' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
               My Drafts
             </a>
-            <% if (String(user.email || '').toLowerCase() === 'palkani.r@gmail.com') { %>
+            <% if (['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com'].includes(String(user.email || '').toLowerCase())) { %>
               <a href="/my-blogs" class="<%= active === 'myBlogs' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
                 My Blogs
               </a>
@@ -21,7 +21,7 @@
             <a href="/workspace" id="nav-workspace-link" class="<%= active === 'workspace' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
               Workspace
             </a>
-            <% if (user.role === 'admin' || user.email === 'prooftamil@gmail.com') { %>
+            <% if (user.role === 'admin' || ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com'].includes(String(user.email || '').toLowerCase())) { %>
             <a href="/analytics" class="<%= active === 'analytics' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
               📊 Analytics
             </a>
