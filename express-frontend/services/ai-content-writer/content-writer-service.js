@@ -1,11 +1,97 @@
 const axios = require('axios');
 const https = require('https');
+const crypto = require('crypto');
 
 // AI Content Writer Service - Wrapper for Python Flask API
 // This service proxies requests to the Python Flask API running on port 5002
 
 const AI_WRITER_API_URL = process.env.AI_WRITER_API_URL || 'http://localhost:5002';
 const AI_WRITER_TIMEOUT = 60000; // 60 seconds for content generation
+
+// ============= RESPONSE CACHE =============
+// Cache generated content to reduce API calls and avoid rate limits
+const CONTENT_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+const CONTENT_CACHE_MAX_SIZE = 100; // Max cached responses
+
+class ContentCache {
+  constructor() {
+    this.cache = new Map();
+    this.stats = { hits: 0, misses: 0 };
+    
+    // Cleanup expired entries every 5 minutes
+    setInterval(() => this._cleanup(), 5 * 60 * 1000);
+  }
+
+  _generateKey(options) {
+    // Create a hash of the request parameters
+    const keyData = JSON.stringify({
+      prompt: options.prompt,
+      language: options.language,
+      content_type: options.content_type,
+      tone: options.tone,
+      word_count: options.word_count,
+      include_title: options.include_title,
+      include_meta: options.include_meta,
+    });
+    return crypto.createHash('md5').update(keyData).digest('hex');
+  }
+
+  get(options) {
+    const key = this._generateKey(options);
+    const entry = this.cache.get(key);
+    
+    if (entry && Date.now() < entry.expiresAt) {
+      this.stats.hits++;
+      console.log(`[CONTENT-CACHE] Hit for prompt: "${String(options.prompt).substring(0, 50)}..."`);
+      return entry.data;
+    }
+    
+    this.stats.misses++;
+    return null;
+  }
+
+  set(options, data) {
+    // Evict oldest entry if cache is full
+    if (this.cache.size >= CONTENT_CACHE_MAX_SIZE) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+
+    const key = this._generateKey(options);
+    this.cache.set(key, {
+      data,
+      expiresAt: Date.now() + CONTENT_CACHE_TTL,
+    });
+    console.log(`[CONTENT-CACHE] Cached response for prompt: "${String(options.prompt).substring(0, 50)}..."`);
+  }
+
+  _cleanup() {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [key, entry] of this.cache) {
+      if (now >= entry.expiresAt) {
+        this.cache.delete(key);
+        cleaned++;
+      }
+    }
+    if (cleaned > 0) {
+      console.log(`[CONTENT-CACHE] Cleaned ${cleaned} expired entries`);
+    }
+  }
+
+  getStats() {
+    return {
+      ...this.stats,
+      size: this.cache.size,
+      hitRate: this.stats.hits + this.stats.misses > 0 
+        ? ((this.stats.hits / (this.stats.hits + this.stats.misses)) * 100).toFixed(1) + '%'
+        : '0%',
+    };
+  }
+}
+
+const contentCache = new ContentCache();
+// ============= END RESPONSE CACHE =============
 
 // HTTPS Agent with keep-alive for stable Gemini API connections
 const httpsAgent = new https.Agent({
@@ -215,6 +301,7 @@ async function healthCheck() {
           available: availableKeys,
           rateLimited: totalKeys - availableKeys,
         },
+        cache: contentCache.getStats(),
       };
     }
 
@@ -237,6 +324,12 @@ async function healthCheck() {
  */
 async function generateContent(options) {
   try {
+    // Check cache first to avoid unnecessary API calls
+    const cachedResult = contentCache.get(options);
+    if (cachedResult) {
+      return cachedResult;
+    }
+
     // Use Python API if it's configured to a non-localhost URL (deployed service).
     if (AI_WRITER_API_URL && !isLocalhostUrl(AI_WRITER_API_URL)) {
       const response = await axios.post(
@@ -247,6 +340,10 @@ async function generateContent(options) {
           timeout: AI_WRITER_TIMEOUT,
         }
       );
+      // Cache the response
+      if (response.data && response.data.success) {
+        contentCache.set(options, response.data);
+      }
       return response.data;
     }
 
@@ -363,6 +460,10 @@ Output MUST be valid JSON only. Do not include markdown fences, explanations, or
     // Ensure metadata model is set
     result.metadata = result.metadata || {};
     result.metadata.model = result.metadata.model || 'gemini-2.5-flash';
+    
+    // Cache the successful result
+    contentCache.set(options, result);
+    
     return result;
   } catch (error) {
     console.error('[AI-WRITER] Generate content error:', error.message);
