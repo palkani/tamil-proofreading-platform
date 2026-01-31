@@ -82,12 +82,48 @@ jobs:
           --update-secrets GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest \
           --update-secrets JWT_SECRET=JWT_SECRET:latest
 
-    - name: Verify Backend Health
+    - name: Deploy Backend to Cloud Run (US Region)
+      run: |
+        # Push image to US region artifact registry
+        docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
+          us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }}
+        docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} || echo "US push skipped - registry may not exist"
+        
+        # Deploy to US Central
+        gcloud run deploy prooftamil-backend-us \
+          --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
+          --region=us-central1 \
+          --platform=managed \
+          --allow-unauthenticated \
+          --memory=512Mi \
+          --cpu=1 \
+          --timeout=300 \
+          --min-instances=1 \
+          --max-instances=100 \
+          --port=8080 \
+          --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUGGEST_MIN_LEN=2,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,REDIS_URL=${{ secrets.REDIS_URL }} \
+          --update-secrets DATABASE_URL=DATABASE_URL:latest \
+          --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
+          --update-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest \
+          --update-secrets GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest \
+          --update-secrets GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest \
+          --update-secrets JWT_SECRET=JWT_SECRET:latest || echo "US deployment skipped - may need setup"
+
+    - name: Verify Backend Health (Both Regions)
       run: |
         sleep 10
+        echo "=== Asia South (Mumbai) ==="
         BACKEND_URL=$(gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)')
         echo "Backend URL: $BACKEND_URL"
         curl -f "$BACKEND_URL/health" || echo "Health check pending..."
+        
+        echo ""
+        echo "=== US Central ==="
+        BACKEND_URL_US=$(gcloud run services describe prooftamil-backend-us --region=us-central1 --format='value(status.url)' 2>/dev/null) || echo "US backend not yet deployed"
+        if [ -n "$BACKEND_URL_US" ]; then
+          echo "Backend URL (US): $BACKEND_URL_US"
+          curl -f "$BACKEND_URL_US/health" || echo "US health check pending..."
+        fi
 
     - name: Set up Python
       uses: actions/setup-python@v5
