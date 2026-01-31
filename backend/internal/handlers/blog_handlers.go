@@ -292,6 +292,15 @@ func (h *Handlers) BlogListPublished(c *gin.Context) {
 	}
 	offset := (page - 1) * limit
 
+	// Debug: count all posts first
+	var totalCount int64
+	h.db.Model(&models.BlogPost{}).Count(&totalCount)
+	
+	var publishedCount int64
+	h.db.Model(&models.BlogPost{}).Where("status = ?", models.BlogStatusPublished).Count(&publishedCount)
+	
+	log.Printf("[BLOG] Total posts in DB: %d, Published: %d (looking for status=%q)", totalCount, publishedCount, models.BlogStatusPublished)
+
 	var posts []models.BlogPost
 	tx := h.db.
 		Where("status = ?", models.BlogStatusPublished).
@@ -300,10 +309,12 @@ func (h *Handlers) BlogListPublished(c *gin.Context) {
 		Offset(offset).
 		Find(&posts)
 	if tx.Error != nil {
+		log.Printf("[BLOG] Query error: %v", tx.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list posts"})
 		return
 	}
 
+	log.Printf("[BLOG] Returning %d posts", len(posts))
 	c.JSON(http.StatusOK, gin.H{"success": true, "posts": posts, "page": page, "limit": limit})
 }
 
