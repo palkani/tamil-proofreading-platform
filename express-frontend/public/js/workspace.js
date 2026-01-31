@@ -1604,14 +1604,7 @@ class WorkspaceController {
       return;
     }
     
-    // Log token validation success
-    console.log('[IME] ✅ Token validation passed:', {
-      token,
-      length: token.length,
-      isLatin: /^[a-z]+$/i.test(token)
-    });
-    
-    console.log('[IME] ✅ Valid Latin token found:', token, '- Will fetch suggestions');
+    // Token validated - proceed with fetch
     
     // Store token info ONLY for Latin tokens (for potential replacement)
     this.currentTokenInfo = {
@@ -1620,18 +1613,13 @@ class WorkspaceController {
       end: tokenInfo.end
     };
     
-    // Prevent duplicate requests ONLY if actively fetching the same token
-    // Allow refetching if token changed or if debounce expired
+    // Prevent duplicate requests for the same token
     if (this.lastFetchToken === token) {
-      // Only skip if actively fetching the exact same token
       if (this.fetchingSuggestions && this.currentFetchQuery === token) {
-        console.log("[IME] Already fetching for token:", token);
-        return;
+        return; // Already fetching
       }
-      // If debounce is pending for same token, let it continue (don't create new one)
       if (this.suggestDebounce) {
-        console.log("[IME] Debounce pending for token:", token, "- will use existing");
-        return;
+        return; // Debounce pending
       }
     }
     
@@ -1653,16 +1641,14 @@ class WorkspaceController {
     
     // Debounce the fetch to keep UI responsive while still updating per-keystroke.
     // Goal: suggestions should update for each letter typed (n -> na -> nam -> ...).
-    // OPTIMIZED: Reduced debounce for faster response (target <100ms total latency)
-    const debounceMs = token.length <= 2 ? 40 : 60;
-    console.log('[IME] ⏳ Setting up debounce for token:', token, 'delay:', debounceMs + 'ms');
+    // OPTIMIZED: Balance between responsiveness and avoiding cancelled requests
+    // - Short tokens (1-2 chars): 100ms debounce (user might type more)
+    // - Longer tokens (3+ chars): 150ms debounce (more likely complete word)
+    const debounceMs = token.length <= 2 ? 100 : 150;
     this.suggestDebounce = setTimeout(() => {
-      console.log('[IME] ⏰ Debounce timer fired for token:', token);
-      
       // Final check: token must still match
       if (this.lastFetchToken !== token) {
-        console.log('[IME] ⚠️ Token changed during debounce, skipping fetch. Expected:', token, 'Got:', this.lastFetchToken);
-        return;
+        return; // Token changed during debounce, skip
       }
       
       // Clear debounce reference
@@ -1670,45 +1656,25 @@ class WorkspaceController {
       
       // Final duplicate check before making the call
       if (this.fetchingSuggestions && this.currentFetchQuery === token) {
-        console.log("[IME] ⚠️ Duplicate call prevented: fetch already in progress for:", token);
-        return;
+        return; // Already fetching this token
       }
       
       // Use selected mode from UI dropdown (spoken | formal | academic)
       const mode = (this.getMode && this.getMode()) || 'spoken';
-      this.lastFetchTime = Date.now(); // Track when we last fetched
-      console.log('[IME] 🚀 DEBOUNCE COMPLETE - About to call fetchRunnerSuggestions for token:', token);
-      console.log('[IME] 🚀 API URL will be:', `/api/transliterate/suggest?q=${encodeURIComponent(token)}&limit=8&mode=${mode}`);
-      console.log('[IME] 🚀 Current state:', {
-        fetchingSuggestions: this.fetchingSuggestions,
-        currentFetchQuery: this.currentFetchQuery,
-        lastFetchToken: this.lastFetchToken,
-        justReplacedToken: this.justReplacedToken
-      });
+      this.lastFetchTime = Date.now();
       
       // Make the API call
-      console.log('[IME] 🚀 Calling fetchRunnerSuggestions NOW...');
       this.fetchRunnerSuggestions({ q: token, limit: 8, mode: mode }).then(suggestions => {
-        console.log('[IME] ✅ fetchRunnerSuggestions returned:', suggestions ? suggestions.length : 0, 'suggestions');
-        if (suggestions && suggestions.length > 0) {
-          console.log('[IME] ✅ First suggestion:', suggestions[0]);
-          console.log('[IME] ✅ All suggestions:', suggestions.map(s => s.text || s.word));
-        } else {
-          console.log('[IME] ⚠️ No suggestions returned from API');
-        }
+        // Logging handled in transliterator-runner.js
       }).catch(err => {
-        console.error('[IME] ❌ fetchRunnerSuggestions error:', err);
-        console.error('[IME] ❌ Error details:', {
-          name: err.name,
-          message: err.message,
-          stack: err.stack
-        });
+        if (err.name !== 'AbortError') {
+          console.error('[IME] Fetch error:', err.message);
+        }
         // Reset state on error so next call can proceed
         this.fetchingSuggestions = false;
         this.currentFetchQuery = null;
       });
-    }, 80); // 80ms debounce - optimized for faster response (target <100ms latency)
-    console.log('[IME] ✅ Debounce timer set, will fire in 200ms');
+    }, debounceMs);
   }
   
   clearSuggestions() {
