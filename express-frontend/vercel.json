@@ -2,6 +2,7 @@
   "version": 2,
   "installCommand": "npm install",
   "buildCommand": "npm run build:css",
+  "regions": ["bom1"],
   "headers": [
     {
       "source": "/api/v1/suggest",
