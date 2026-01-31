@@ -1118,7 +1118,15 @@
 
 <% if (!user) { %>
 <script>
-  window.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL = "https://prooftamil-runner-991187041222.asia-south1.run.app";
+  // Multi-region runner URLs for low latency
+  window.TRANSLITERATOR_URLS = {
+    'asia': 'https://prooftamil-runner-991187041222.asia-south1.run.app',
+    'us': 'https://prooftamil-runner-us-991187041222.us-central1.run.app',
+    'default': 'https://prooftamil-runner-991187041222.asia-south1.run.app'
+  };
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  const isAsia = tz.includes('Asia') || tz.includes('India') || tz.includes('Singapore') || tz.includes('Hong_Kong');
+  window.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL = isAsia ? window.TRANSLITERATOR_URLS.asia : window.TRANSLITERATOR_URLS.us;
 </script>
 <script src="/js/transliterator-runner.js?v=20260122b"></script>
 <script src="/js/transliteration.js?v=20251127b"></script>
