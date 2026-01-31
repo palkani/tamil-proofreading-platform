@@ -1814,7 +1814,13 @@ class WorkspaceController {
       }
     } else {
       this.currentSuggestions = [];
-      console.log('[IME] No suggestions provided (empty array or null)');
+    }
+
+    // CRITICAL: If no valid suggestions, hide dropdown and return early
+    if (!this.currentSuggestions || this.currentSuggestions.length === 0) {
+      this.hideSuggestions();
+      this._isRenderingDropdown = false;
+      return;
     }
 
     // CRITICAL: Double-check - if a dropdown still exists after cleanup, remove it
