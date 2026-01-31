@@ -98,6 +98,10 @@
       "destination": "/api/index.js"
     },
     {
+      "source": "/api/v1/suggest",
+      "destination": "/api/v1/suggest.js"
+    },
+    {
       "source": "/api/v1/ime/:path*",
       "destination": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/ime/:path*"
     },
