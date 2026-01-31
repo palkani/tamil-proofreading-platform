@@ -68,10 +68,10 @@ jobs:
           --region=${{ env.REGION }} \
           --platform=managed \
           --allow-unauthenticated \
-          --memory=512Mi \
+          --memory=1Gi \
           --cpu=1 \
           --timeout=300 \
-          --min-instances=1 \
+          --min-instances=0 \
           --max-instances=100 \
           --port=8080 \
           --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUGGEST_MIN_LEN=2,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,REDIS_URL=${{ secrets.REDIS_URL }} \
@@ -95,10 +95,10 @@ jobs:
           --region=us-central1 \
           --platform=managed \
           --allow-unauthenticated \
-          --memory=512Mi \
+          --memory=1Gi \
           --cpu=1 \
           --timeout=300 \
-          --min-instances=1 \
+          --min-instances=0 \
           --max-instances=100 \
           --port=8080 \
           --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUGGEST_MIN_LEN=2,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,REDIS_URL=${{ secrets.REDIS_URL }} \
