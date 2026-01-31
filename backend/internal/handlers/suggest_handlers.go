@@ -18,7 +18,13 @@ type SuggestSelectRequest struct {
 }
 
 // Suggest handles GET /api/suggest (in-process hybrid trie engine).
+// OPTIMIZED for <100ms latency with aggressive caching.
 func (h *Handlers) Suggest(c *gin.Context) {
+	// OPTIMIZATION: Set cache headers for edge caching (Vercel, CloudFlare, etc.)
+	// This allows the edge to cache identical requests, reducing backend load
+	c.Header("Cache-Control", "public, max-age=60, s-maxage=120, stale-while-revalidate=300")
+	c.Header("Vary", "Accept-Encoding")
+	
 	if h.suggestEngine == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success":     true,

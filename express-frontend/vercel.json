@@ -4,6 +4,45 @@
   "buildCommand": "npm run build:css",
   "headers": [
     {
+      "source": "/api/v1/suggest",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=60, s-maxage=120, stale-while-revalidate=300"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "public, max-age=120"
+        }
+      ]
+    },
+    {
+      "source": "/api/v1/ime/suggest",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=60, s-maxage=120, stale-while-revalidate=300"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "public, max-age=120"
+        }
+      ]
+    },
+    {
+      "source": "/api/v1/transliterate/suggest",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=60, s-maxage=120, stale-while-revalidate=300"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "public, max-age=120"
+        }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         {
