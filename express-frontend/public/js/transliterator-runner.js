@@ -2,6 +2,30 @@
 (() => {
   const IS_DEV = typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost';
   let lastSuggestions = [];
+  
+  // OPTIMIZATION: In-memory cache to avoid redundant API calls (target <100ms latency)
+  const suggestionCache = new Map();
+  const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
+  const CACHE_MAX_SIZE = 200; // Max cache entries
+  
+  function getCached(key) {
+    const entry = suggestionCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.ts > CACHE_TTL_MS) {
+      suggestionCache.delete(key);
+      return null;
+    }
+    return entry.data;
+  }
+  
+  function setCache(key, data) {
+    // Evict oldest entries if cache is full
+    if (suggestionCache.size >= CACHE_MAX_SIZE) {
+      const oldest = suggestionCache.keys().next().value;
+      if (oldest) suggestionCache.delete(oldest);
+    }
+    suggestionCache.set(key, { data, ts: Date.now() });
+  }
 
   function buildRunnerUrl(params) {
     const qs = new URLSearchParams(params).toString();
@@ -19,7 +43,17 @@
   }
 
   async function transliterateViaRunner(text, mode = 'spoken', limit = 8, signal) {
-    const requestUrl = buildRunnerUrl({ q: text, limit, mode, _ts: Date.now() });
+    // OPTIMIZATION: Check in-memory cache first (instant response for cached queries)
+    const cacheKey = `${text}|${mode}|${limit}`;
+    const cached = getCached(cacheKey);
+    if (cached) {
+      if (IS_DEV) console.debug('[TRANSLITERATOR] Cache hit for:', text);
+      lastSuggestions = cached;
+      return cached;
+    }
+    
+    // OPTIMIZATION: Don't add timestamp to allow browser caching
+    const requestUrl = buildRunnerUrl({ q: text, limit, mode });
     if (IS_DEV) {
       console.debug('[TRANSLITERATOR] CALLING RUNNER VIA PROXY', { requestUrl, text, mode, limit });
     }
@@ -28,12 +62,10 @@
       const res = await fetch(requestUrl, {
         method: 'GET',
         signal,
-        cache: 'no-store',
+        // OPTIMIZATION: Allow browser caching instead of no-store
+        cache: 'default',
         headers: {
           'Accept': 'application/json',
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
         },
       });
 
@@ -60,6 +92,8 @@
         .filter((s) => s.text);
       if (IS_DEV) console.debug('[TRANSLITERATOR] Normalized suggestions:', normalized.length, normalized);
       lastSuggestions = normalized;
+      // OPTIMIZATION: Cache the response for fast repeat lookups
+      setCache(cacheKey, normalized);
       return normalized;
     } catch (err) {
       if (err?.name === 'AbortError') {

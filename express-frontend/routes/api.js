@@ -1276,29 +1276,51 @@ router.delete('/blog/posts/:id', async (req, res) => {
 
 // ============= END BLOG PUBLISH API =============
 
+// ============= OPTIMIZED SUGGEST ENDPOINTS =============
+// These routes are critical for IME performance (target <100ms latency)
+
+// Primary suggest endpoint used by transliterator-runner.js (/api/v1/suggest)
+router.get('/v1/suggest', async (req, res) => {
+  try {
+    const { q, mode = 'spoken', limit = 8 } = req.query;
+    
+    if (!q || typeof q !== 'string' || q.trim().length === 0) {
+      return res.status(400).json({ error: 'Query parameter "q" required' });
+    }
+    
+    // Proxy to Go backend's suggest endpoint
+    const url = `${BACKEND_URL}/transliterate/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
+    
+    const response = await axiosWithPool.get(url, {
+      validateStatus: () => true,
+      timeout: 150, // OPTIMIZATION: Strict 150ms timeout for fast response
+    });
+    
+    // OPTIMIZATION: Set cache headers for browser caching (1 minute)
+    res.set('Cache-Control', 'public, max-age=60');
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    // Return empty suggestions on timeout to allow faster typing
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      res.set('Cache-Control', 'no-cache');
+      return res.status(200).json({ success: true, suggestions: [], source: 'timeout' });
+    }
+    res.status(500).json({ error: 'Suggest failed', suggestions: [] });
+  }
+});
+
 // CRITICAL: IME suggestions endpoint MUST be before router.all('/*') catch-all
-// IME suggestions endpoint - proxy to backend
+// IME suggestions endpoint - proxy to backend (OPTIMIZED for low latency)
 router.get('/ime/suggest', async (req, res) => {
   try {
-    console.log('[IME] Route handler called for GET /ime/suggest');
-    console.log('[IME] Query params:', req.query);
-    
     const { q, mode = 'smart', limit = 8 } = req.query;
     
-    // Better validation with detailed error message
+    // Quick validation
     if (!q || typeof q !== 'string' || q.trim().length === 0) {
-      console.warn('[IME] Invalid query parameter - q is missing or empty');
-      return res.status(400).json({ 
-        error: 'Query parameter "q" is required and must be a non-empty string',
-        received: { q: q, type: typeof q, length: q ? String(q).length : 0 }
-      });
+      return res.status(400).json({ error: 'Query parameter "q" required' });
     }
     
     const url = `${BACKEND_URL}/ime/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
-    
-    if (ENABLE_PROXY_LOGS) {
-      console.log(`[IME] GET ${url}`);
-    }
     
     // Forward authorization header if present
     const headers = {};
@@ -1309,11 +1331,13 @@ router.get('/ime/suggest', async (req, res) => {
     const response = await axiosWithPool.get(url, {
       headers,
       validateStatus: () => true,
+      timeout: 200, // OPTIMIZATION: Strict 200ms timeout for fast response
     });
     
+    // OPTIMIZATION: Set cache headers for browser caching (1 minute)
+    res.set('Cache-Control', 'public, max-age=60');
     res.status(response.status).json(response.data);
   } catch (error) {
-    console.error(`[IME-ERROR] ${error.message}`);
     res.status(error.response?.status || 500).json({
       error: error.response?.data || 'IME suggestion failed'
     });

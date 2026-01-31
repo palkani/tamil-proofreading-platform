@@ -85,7 +85,7 @@ func NewEngine(db *gorm.DB, opts EngineOptions) (*Engine, error) {
 		opts.CacheTTL = 5 * time.Minute // Extended TTL for better hit rate
 	}
 	if opts.RedisTimeoutMs <= 0 {
-		opts.RedisTimeoutMs = 25
+		opts.RedisTimeoutMs = 15 // OPTIMIZED: Reduced from 25ms for faster response
 	}
 
 	e := &Engine{

@@ -159,9 +159,7 @@ func (r *RedisClient) InvalidateLexiconCache(ctx context.Context) error {
 	}
 	_, err := r.client.Del(ctx, lexiconDataKey, lexiconVersionKey, lexiconCountKey).Result()
 	return err
-}
-
-// GetLexiconCacheInfo returns cache metadata (version, count) if cache exists.
+}// GetLexiconCacheInfo returns cache metadata (version, count) if cache exists.
 func (r *RedisClient) GetLexiconCacheInfo(ctx context.Context) (version string, count int, exists bool) {
 	if !r.Enabled() {
 		return "", 0, false

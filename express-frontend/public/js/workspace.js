@@ -1,9 +1,12 @@
-// v20251229b - FIXED: Disabled TransliterationTypeahead V2 to prevent duplicate dropdowns
+// v20260131 - OPTIMIZED: Reduced debounce, added caching, reduced logging for <100ms latency
 // Main Workspace Controller
-// VERIFICATION: If you see this message, the new file is loaded
-console.log('[WorkspaceJS] ✅✅✅ Loaded version v20251229b - V2 dropdown fix applied');
-console.log('[WorkspaceJS] TransliterationTypeahead V2 is DISABLED in workspace to prevent duplicate dropdowns');
-console.log('[WorkspaceJS] Workspace uses its own pipeline (handleEditorChange -> displaySuggestions)');
+
+// PERFORMANCE: Debug logging disabled in production for faster response
+// Set window.IME_DEBUG = true in console to enable verbose logging
+const IME_DEBUG = typeof window !== 'undefined' && window.IME_DEBUG === true;
+const imeLog = IME_DEBUG ? console.log.bind(console) : () => {};
+
+console.log('[WorkspaceJS] ✅ Loaded version v20260131 - optimized for <100ms latency');
 
 // CRITICAL: Ensure USE_TIPTAP_EDITOR is set to false at the very top
 // This prevents any initialization issues
@@ -1650,7 +1653,8 @@ class WorkspaceController {
     
     // Debounce the fetch to keep UI responsive while still updating per-keystroke.
     // Goal: suggestions should update for each letter typed (n -> na -> nam -> ...).
-    const debounceMs = token.length <= 2 ? 90 : 120;
+    // OPTIMIZED: Reduced debounce for faster response (target <100ms total latency)
+    const debounceMs = token.length <= 2 ? 40 : 60;
     console.log('[IME] ⏳ Setting up debounce for token:', token, 'delay:', debounceMs + 'ms');
     this.suggestDebounce = setTimeout(() => {
       console.log('[IME] ⏰ Debounce timer fired for token:', token);
@@ -1703,7 +1707,7 @@ class WorkspaceController {
         this.fetchingSuggestions = false;
         this.currentFetchQuery = null;
       });
-    }, 200); // 200ms debounce - optimized for faster response
+    }, 80); // 80ms debounce - optimized for faster response (target <100ms latency)
     console.log('[IME] ✅ Debounce timer set, will fire in 200ms');
   }
   

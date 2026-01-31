@@ -60,11 +60,8 @@ type ValidateResponse struct {
 
 // Transliterate handles English to Tamil transliteration
 func (h *Handlers) Transliterate(c *gin.Context) {
-	log.Printf("[TRANSLIT-HANDLER] Received transliteration request")
-
 	var req TransliterateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Printf("[TRANSLIT-HANDLER] ERROR: Invalid JSON: %v", err)
 		c.JSON(http.StatusBadRequest, TransliterateResponse{
 			Success: false,
 			Error:   "Invalid request format",
@@ -73,10 +70,7 @@ func (h *Handlers) Transliterate(c *gin.Context) {
 	}
 
 	englishText := strings.TrimSpace(req.Text)
-	log.Printf("[TRANSLIT-HANDLER] Input text: %q (len=%d)", englishText, len(englishText))
-
 	if englishText == "" {
-		log.Printf("[TRANSLIT-HANDLER] ERROR: Empty text")
 		c.JSON(http.StatusBadRequest, TransliterateResponse{
 			Success: false,
 			Error:   "Text is required",
@@ -85,7 +79,6 @@ func (h *Handlers) Transliterate(c *gin.Context) {
 	}
 
 	if len(englishText) > 40 {
-		log.Printf("[TRANSLIT-HANDLER] ERROR: Text too long: %d chars", len(englishText))
 		c.JSON(http.StatusBadRequest, TransliterateResponse{
 			Success: false,
 			Error:   "Text must be 40 characters or less",
@@ -96,8 +89,11 @@ func (h *Handlers) Transliterate(c *gin.Context) {
 	// Get in-memory transliteration suggestions
 	suggestions := translit.GetSuggestions(englishText)
 	suggestions = translit.ValidateSuggestions(suggestions)
+	
+	// OPTIMIZATION: Set cache headers for browser caching (1 minute)
+	c.Header("Cache-Control", "public, max-age=60")
+	
 	if len(suggestions) == 0 {
-		log.Printf("[TRANSLIT-HANDLER] No suggestions found for %q", englishText)
 		c.JSON(http.StatusOK, TransliterateResponse{
 			Success:     true,
 			Suggestions: []translit.Suggestion{},
@@ -105,7 +101,6 @@ func (h *Handlers) Transliterate(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[TRANSLIT-HANDLER] SUCCESS: %d suggestions for %q", len(suggestions), englishText)
 	c.JSON(http.StatusOK, TransliterateResponse{
 		Success:     true,
 		Suggestions: suggestions,
@@ -168,6 +163,8 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 				})
 			}
 			mapped = validateSuggestionsMap(mapped)
+			// OPTIMIZATION: Set cache headers for browser caching (1 minute)
+			c.Header("Cache-Control", "public, max-age=60")
 			c.JSON(http.StatusOK, TransliterateSuggestResponse{
 				Success:     true,
 				Query:       q,
@@ -212,9 +209,10 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 		})
 	}
 
-	// Avoid logging raw user tokens in production logs.
 	mapped = validateSuggestionsMap(mapped)
-	log.Printf("[SUGGEST] len=%d count=%d mode=%s", len(q), len(mapped), mode)
+	
+	// OPTIMIZATION: Set cache headers for browser caching (1 minute)
+	c.Header("Cache-Control", "public, max-age=60")
 
 	c.JSON(http.StatusOK, TransliterateSuggestResponse{
 		Success:     true,
@@ -253,7 +251,7 @@ func (h *Handlers) tryNodeSuggest(c *gin.Context, q, prev, mode string, limit in
 	}
 	u.RawQuery = qs.Encode()
 
-	client := &http.Client{Timeout: 250 * time.Millisecond}
+	client := &http.Client{Timeout: 100 * time.Millisecond} // OPTIMIZED: Reduced timeout for faster fallback
 	req, _ := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, u.String(), nil)
 	req.Header.Set("Accept", "application/json")
 
