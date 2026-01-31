@@ -141,9 +141,13 @@ async function geminiGenerate(systemText, userText, schema, maxOutputTokens = 20
         return geminiGenerate(systemText, userText, schema, maxOutputTokens, retryCount + 1);
       }
       
+      const waitTime = keyRotator.getSecondsUntilAvailable();
+      const status = keyRotator.getStatus();
+      console.error('[AI-WRITER] All keys rate limited:', status);
+      
       throw createServiceError(
         'Rate limit exceeded', 
-        `All ${keyRotator.getKeyCount()} API key(s) are rate limited. Please wait 60 seconds and try again. Add more keys (GEMINI_API_KEY_2, etc.) to reduce this issue.`
+        `All ${status.totalKeys} API key(s) are rate limited. Please wait ${waitTime} seconds and try again.`
       );
     }
     

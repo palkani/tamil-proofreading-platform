@@ -145,12 +145,44 @@ class GeminiKeyRotator {
    * Get status information for health checks
    */
   getStatus() {
+    const now = Date.now();
+    const keyDetails = this.keys.map((_, idx) => {
+      const status = this.keyStatus[idx];
+      if (!status) {
+        return { key: idx + 1, status: 'available' };
+      }
+      const secsRemaining = Math.max(0, Math.ceil((status.availableAt - now) / 1000));
+      return { 
+        key: idx + 1, 
+        status: 'rate_limited', 
+        availableIn: `${secsRemaining}s` 
+      };
+    });
+
     return {
       totalKeys: this.keys.length,
       availableKeys: this.getAvailableKeyCount(),
       rateLimitedKeys: this.keys.length - this.getAvailableKeyCount(),
       baseUrl: this.baseUrl,
+      keys: keyDetails,
     };
+  }
+
+  /**
+   * Get the seconds until the next key becomes available
+   */
+  getSecondsUntilAvailable() {
+    if (this.getAvailableKeyCount() > 0) return 0;
+    
+    const now = Date.now();
+    let minWait = Infinity;
+    for (const status of Object.values(this.keyStatus)) {
+      if (status && status.availableAt) {
+        const wait = (status.availableAt - now) / 1000;
+        if (wait < minWait) minWait = wait;
+      }
+    }
+    return Math.max(0, Math.ceil(minWait));
   }
 }
 
