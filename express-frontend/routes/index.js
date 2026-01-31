@@ -163,13 +163,20 @@ router.get('/blog', async (req, res) => {
     pageType: 'blogIndex',
   };
   try {
-    const backendRes = await axiosWithPool.get(`${BACKEND_URL}/blog/posts`, {
+    const blogUrl = `${BACKEND_URL}/blog/posts`;
+    console.log(`[BLOG] Fetching posts from: ${blogUrl}`);
+    
+    const backendRes = await axiosWithPool.get(blogUrl, {
       params: { page, limit: 12 },
       timeout: 10000,
       validateStatus: () => true,
     });
+    
+    console.log(`[BLOG] Backend response: status=${backendRes.status}, posts=${backendRes.data?.posts?.length || 0}`);
+    
     if (backendRes.status < 200 || backendRes.status >= 300) {
       const msg = backendRes.data?.error || `HTTP ${backendRes.status}`;
+      console.error(`[BLOG] Backend error: ${msg}`, backendRes.data);
       return res.render('pages/blog-index', {
         title: 'Blog | ProofTamil',
         seo,
@@ -179,6 +186,7 @@ router.get('/blog', async (req, res) => {
       });
     }
     const posts = backendRes.data?.posts || [];
+    console.log(`[BLOG] Rendering ${posts.length} posts`);
     return res.render('pages/blog-index', {
       title: 'Blog | ProofTamil',
       seo,
@@ -189,6 +197,7 @@ router.get('/blog', async (req, res) => {
       limit: 12,
     });
   } catch (e) {
+    console.error(`[BLOG] Error fetching posts:`, e.message);
     return res.render('pages/blog-index', {
       title: 'Blog | ProofTamil',
       seo,
