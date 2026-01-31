@@ -144,9 +144,36 @@ func (h *Handlers) BlogCreatePost(c *gin.Context) {
 
 	log.Printf("[BLOG] Creating post for user %d: title=%q slug=%q", userID, title, uniqueSlug)
 
-	if err := h.db.Create(&post).Error; err != nil {
-		log.Printf("[BLOG] Create post failed for user %d: %v", userID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create post", "details": err.Error()})
+	// Retry logic for race conditions on slug uniqueness
+	var createErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			// Re-generate unique slug on retry
+			uniqueSlug, err = h.ensureUniqueSlug(slug, 0)
+			if err != nil {
+				log.Printf("[BLOG] ensureUniqueSlug retry %d failed for user %d: %v", attempt, userID, err)
+				continue
+			}
+			post.Slug = uniqueSlug
+			log.Printf("[BLOG] Retrying with new slug: %q (attempt %d)", uniqueSlug, attempt+1)
+		}
+
+		createErr = h.db.Create(&post).Error
+		if createErr == nil {
+			break // Success
+		}
+
+		// Check if it's a duplicate key error
+		if !strings.Contains(createErr.Error(), "duplicate key") && !strings.Contains(createErr.Error(), "23505") {
+			// Not a duplicate key error, don't retry
+			break
+		}
+		log.Printf("[BLOG] Duplicate slug detected (attempt %d), retrying...", attempt+1)
+	}
+
+	if createErr != nil {
+		log.Printf("[BLOG] Create post failed for user %d after retries: %v", userID, createErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create post", "details": createErr.Error()})
 		return
 	}
 
