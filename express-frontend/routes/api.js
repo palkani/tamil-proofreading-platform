@@ -1007,6 +1007,75 @@ router.post('/submit', async (req, res) => {
   }
 });
 
+// SSE stream proxy for submission updates
+// This endpoint streams real-time updates from the Go backend using Server-Sent Events
+router.get('/submissions/:id/stream', async (req, res) => {
+  const submissionId = req.params.id;
+  const url = `${BACKEND_URL}/submissions/${submissionId}/stream`;
+  
+  console.log(`[SSE] Proxying stream for submission ${submissionId}`);
+  
+  // Set SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+  res.flushHeaders();
+  
+  try {
+    // Forward auth headers
+    const headers = {};
+    if (req.headers.authorization) {
+      headers.Authorization = req.headers.authorization;
+    }
+    if (req.headers.cookie) {
+      headers.Cookie = req.headers.cookie;
+    }
+    
+    // Make streaming request to backend
+    const response = await axiosWithPool.get(url, {
+      headers,
+      responseType: 'stream',
+      timeout: 120000, // 2 minute timeout for long analyses
+      validateStatus: () => true,
+    });
+    
+    if (response.status !== 200) {
+      console.error(`[SSE] Backend returned ${response.status} for submission ${submissionId}`);
+      res.write(`event: failure\ndata: {"message": "Backend error ${response.status}"}\n\n`);
+      res.end();
+      return;
+    }
+    
+    // Pipe the SSE stream from backend to client
+    response.data.on('data', (chunk) => {
+      res.write(chunk);
+    });
+    
+    response.data.on('end', () => {
+      console.log(`[SSE] Stream ended for submission ${submissionId}`);
+      res.end();
+    });
+    
+    response.data.on('error', (err) => {
+      console.error(`[SSE] Stream error for submission ${submissionId}:`, err.message);
+      res.write(`event: failure\ndata: {"message": "Stream error"}\n\n`);
+      res.end();
+    });
+    
+    // Handle client disconnect
+    req.on('close', () => {
+      console.log(`[SSE] Client disconnected for submission ${submissionId}`);
+      response.data.destroy();
+    });
+    
+  } catch (error) {
+    console.error(`[SSE] Error proxying stream for submission ${submissionId}:`, error.message);
+    res.write(`event: failure\ndata: {"message": "${error.message}"}\n\n`);
+    res.end();
+  }
+});
+
 // ============= AI CONTENT WRITER API ROUTES =============
 // These routes proxy requests to the Python Flask API running on port 5002
 
