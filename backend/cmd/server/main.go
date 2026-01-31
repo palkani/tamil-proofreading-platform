@@ -2,304 +2,225 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
-
-	"github.com/gin-gonic/gin"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 
 	"tamil-proofreading-platform/backend/internal/config"
 	"tamil-proofreading-platform/backend/internal/handlers"
-	"tamil-proofreading-platform/backend/internal/migrations"
 	"tamil-proofreading-platform/backend/internal/middleware"
+	"tamil-proofreading-platform/backend/internal/migrations"
 	"tamil-proofreading-platform/backend/internal/models"
-	"tamil-proofreading-platform/backend/internal/suggest"
-	"tamil-proofreading-platform/backend/internal/translit"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-// resolveLexiconPath tries env override first, then common relative locations.
-func resolveLexiconPath() string {
-	if p := os.Getenv("LEXICON_PATH"); p != "" {
-		return p
-	}
+func main() {
+	log.Println("Starting Tamil Proofreading Platform Backend...")
 
-	candidates := []string{}
+	// Load configuration
+	cfg := config.Load()
 
-	if wd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, filepath.Join(wd, "data", "tamil_lexicon.json"))
-	}
-	if execPath, err := os.Executable(); err == nil {
-		execDir := filepath.Dir(execPath)
-		candidates = append(candidates, filepath.Join(execDir, "data", "tamil_lexicon.json"))
-	}
-	// Fallback to project-relative path
-	candidates = append(candidates, "data/tamil_lexicon.json")
-
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c
+	// Set Gin mode based on environment
+	if os.Getenv("GIN_MODE") == "" {
+		if os.Getenv("ENVIRONMENT") == "production" {
+			gin.SetMode(gin.ReleaseMode)
+		} else {
+			gin.SetMode(gin.DebugMode)
 		}
 	}
-	return candidates[len(candidates)-1]
-}
 
-func main() {
+	// Initialize database with retry logic
+	var db *gorm.DB
+	var err error
+	for i := 0; i < 5; i++ {
+		db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Silent),
+		})
+		if err == nil {
+			break
+		}
+		log.Printf("Database connection attempt %d failed: %v", i+1, err)
+		time.Sleep(2 * time.Second)
+	}
+	if err != nil {
+		log.Fatal("Failed to connect to database after retries:", err)
+	}
+
+	// Run migrations
+	log.Println("Running database migrations...")
+	if err := db.AutoMigrate(
+		&models.User{},
+		&models.TamilWord{},
+		&models.Submission{},
+		&models.Usage{},
+		&models.Payment{},
+		&models.RefreshToken{},
+		&models.SuggestionLimit{},
+		&models.SuggestionAcceptEvent{},
+		&models.TamilBigram{},
+		&models.TamilPhrase{},
+	); err != nil {
+		log.Printf("Warning: AutoMigrate failed: %v", err)
+	}
+
+	// Run custom migrations
+	if err := migrations.MigrateBlogPosts(db); err != nil {
+		log.Printf("Warning: Blog posts migration failed: %v", err)
+	}
+	if err := migrations.MigrateNewsletterSubscribers(db); err != nil {
+		log.Printf("Warning: Newsletter migration failed: %v", err)
+	}
+
+	// Initialize handlers
+	h := handlers.New(db, cfg)
+
+	// Initialize Gin router
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(gin.Logger())
+
+	// CORS configuration
+	corsConfig := cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Request-ID", "Cookie"},
+		ExposeHeaders:    []string{"Content-Length", "Set-Cookie"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}
+	r.Use(cors.New(corsConfig))
+
+	// Security headers
+	r.Use(middleware.SecurityHeaders())
+
+	// Health check endpoint
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "healthy",
+			"service": "tamil-proofreading-backend",
+			"time":    time.Now().UTC().Format(time.RFC3339),
+		})
+	})
+
+	// API v1 routes
+	v1 := r.Group("/api/v1")
+	{
+		// Public endpoints
+		v1.GET("/health", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		})
+
+		// Auth routes
+		auth := v1.Group("/auth")
+		{
+			auth.POST("/register", h.Register)
+			auth.POST("/login", h.Login)
+			auth.POST("/logout", h.Logout)
+			auth.POST("/refresh", h.RefreshAccessToken)
+			auth.POST("/google/callback", h.GoogleCallback)
+			auth.POST("/forgot-password", h.ForgotPassword)
+			auth.POST("/reset-password", h.ResetPassword)
+			auth.GET("/whoami", h.WhoAmI)
+		}
+
+		// Transliteration routes (public)
+		v1.POST("/transliterate", h.Transliterate)
+		v1.GET("/transliterate/suggest", h.TransliterateSuggest)
+
+		// IME routes (public)
+		v1.GET("/ime/suggest", h.IMESuggest)
+
+		// Suggestion routes (in-process engine)
+		v1.GET("/suggest", h.Suggest)
+
+		// Tamil word routes (public read)
+		v1.GET("/tamil-words/autocomplete", h.AutocompleteTamil)
+
+		// Newsletter routes (public)
+		newsletter := v1.Group("/newsletter")
+		{
+			newsletter.POST("/subscribe", h.SubscribeNewsletter)
+			newsletter.GET("/confirm/:token", h.ConfirmSubscription)
+			newsletter.GET("/unsubscribe", h.UnsubscribeNewsletter)
+			newsletter.POST("/unsubscribe", h.UnsubscribeNewsletter)
+			newsletter.GET("/count", h.GetSubscriberCount)
+		}
+
+		// Blog routes (public read)
+		v1.GET("/blog/posts", h.BlogListPublished)
+		v1.GET("/blog/posts/:slug", h.BlogGetPublishedBySlug)
+
+		// Contact form (public)
+		v1.POST("/contact", h.SubmitContactMessage)
+
+		// Analytics routes (public for tracking)
+		v1.POST("/events/activity", h.LogActivity)
+
+		// Protected routes (require authentication)
+		protected := v1.Group("")
+		protected.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+		{
+			// User profile
+			protected.GET("/me", h.GetCurrentUser)
+
+			// Submissions
+			protected.POST("/submit", h.SubmitText)
+			protected.GET("/submissions", h.GetSubmissions)
+			protected.GET("/submissions/:id", h.GetSubmission)
+			protected.PUT("/submissions/:id/archive", h.ArchiveSubmission)
+			protected.GET("/submissions/:id/stream", h.StreamSubmission)
+
+			// Tamil word management
+			protected.POST("/tamil-words", h.AddTamilWord)
+
+			// Payment routes
+			protected.POST("/payments/create", h.CreatePayment)
+			protected.POST("/payments/verify", h.VerifyPayment)
+			protected.GET("/payments", h.GetPayments)
+
+			// Suggestion limits
+			protected.GET("/suggestion-limits", h.CheckSuggestionLimit)
+
+			// Blog routes (authenticated users can create/manage their posts)
+			protected.POST("/blog/posts", h.BlogCreatePost)
+			protected.PUT("/blog/posts/:id", h.BlogUpdatePost)
+			protected.DELETE("/blog/posts/:id", h.BlogDeletePost)
+			protected.GET("/blog/me/posts", h.BlogListMyPosts)
+
+			// IME learning routes
+			protected.POST("/transliterate/accept", h.TransliterateAccept)
+		}
+
+		// Admin routes
+		admin := v1.Group("/admin")
+		admin.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+		admin.Use(middleware.AdminMiddleware(db))
+		{
+			admin.GET("/users", h.AdminGetUsers)
+			admin.GET("/analytics", h.AdminGetAnalytics)
+			admin.GET("/dashboard", h.GetDashboardStats)
+			admin.GET("/subscribers", h.AdminListSubscribers)
+		}
+	}
+
+	// OCR proxy routes (if configured)
+	r.POST("/api/v1/ocr/upload", h.OCRUpload)
+	r.GET("/api/v1/ocr/download/:filename", h.OCRDownload)
+	r.GET("/api/v1/ocr/health", h.OCRHealth)
+
+	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	log.Printf("========================================")
-	log.Printf("[INIT] Tamil Proofreading Backend starting on port %s", port)
-	log.Printf("========================================")
-
-	// Load configuration early to wire middleware (CORS, JWT, rate limits)
-	cfg := config.Load()
-
-	// Load in-memory Tamil lexicon for transliteration
-	lexiconPath := resolveLexiconPath()
-	if err := translit.LoadLexicon(lexiconPath); err != nil {
-		log.Printf("[ERROR] Failed to load Tamil lexicon from %s: %v", lexiconPath, err)
-		log.Printf("[INFO] Transliteration will not work without lexicon. Set LEXICON_PATH if stored elsewhere.")
-	} else {
-		log.Printf("[SUCCESS] Tamil lexicon loaded from %s", lexiconPath)
-	}
-
-	// Create router with security middleware first
-	router := gin.New()
-	router.Use(
-		gin.Logger(),
-		gin.Recovery(),
-		middleware.RequestID(),
-		middleware.SecurityHeaders(),
-		middleware.BodySizeLimit(2*1024*1024), // 2MB body cap to reduce abuse
-		middleware.SanitizeInput(),
-		middleware.CORS(cfg.FrontendURL),
-	)
-
-	// Health/ready endpoints stay public and lightweight
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status":  "ok",
-			"service": "tamil-proofreading-backend",
-			"time":    time.Now().Unix(),
-		})
-	})
-	router.GET("/ready", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"ready": "checking database...",
-		})
-	})
-
-	var db *gorm.DB
-	var err error
-
-	db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
-		PrepareStmt: true, // Cache prepared statements for better performance
-	})
-	if err != nil {
-		log.Printf("[ERROR] Database connection failed: %v", err)
-		log.Printf("[INFO] Server running but database operations will fail")
-	} else {
-		log.Printf("[SUCCESS] Connected to database")
-
-		// Configure connection pool for high concurrency (1000+ users)
-		sqlDB, poolErr := db.DB()
-		if poolErr != nil {
-			log.Printf("[WARN] Failed to get underlying sql.DB for pool config: %v", poolErr)
-		} else {
-			// Max open connections - limit to prevent DB overload
-			// Rule of thumb: connections = (core_count * 2) + effective_spindle_count
-			// For cloud DB with 4 cores: ~10-25 connections is optimal
-			// We set higher to handle burst traffic but not too high
-			sqlDB.SetMaxOpenConns(50)
-
-			// Max idle connections - keep warm connections ready
-			sqlDB.SetMaxIdleConns(25)
-
-			// Connection max lifetime - prevent stale connections
-			sqlDB.SetConnMaxLifetime(30 * time.Minute)
-
-			// Connection max idle time - close idle connections faster
-			sqlDB.SetConnMaxIdleTime(5 * time.Minute)
-
-			log.Printf("[SUCCESS] Database connection pool configured: MaxOpen=50, MaxIdle=25, MaxLifetime=30m")
-		}
-
-		// Only run migrations if SKIP_MIGRATIONS is not set to "true"
-		// In production, set SKIP_MIGRATIONS=true to avoid running migrations on every deploy
-		skipMigrations := os.Getenv("SKIP_MIGRATIONS")
-		skipSchemaFixes := os.Getenv("SKIP_SCHEMA_FIXES")
-		if skipMigrations == "true" {
-			log.Printf("[INFO] Skipping database migrations (SKIP_MIGRATIONS=true)")
-		} else {
-			log.Printf("[INFO] Running database migrations...")
-			err = db.AutoMigrate(
-				&models.User{},
-				&models.Submission{},
-				&models.BlogPost{},
-				&models.Payment{},
-				&models.Usage{},
-				&models.RefreshToken{},
-				&models.ContactMessage{},
-				&models.TamilWord{},
-				&models.TamilPhrase{},
-				&models.TamilBigram{},
-				&models.SuggestionAcceptEvent{},
-				&models.VisitEvent{},
-				&models.ActivityEvent{},
-				&models.DailyVisitStats{},
-				&models.DailyActivityStats{},
-				&models.EmailVerification{},
-				&models.PasswordResetToken{},
-				&models.NewsletterSubscriber{}, // Newsletter subscription table
-			)
-			if err != nil {
-				log.Printf("[ERROR] Database migration failed: %v", err)
-			} else {
-				log.Printf("[SUCCESS] Database migrations completed")
-			}
-		}
-
-		// IMPORTANT: AutoMigrate often won't widen column types. Ensure large-text
-		// columns for blog posts are wide enough to prevent partial content saves.
-		// This is safe/idempotent and typically runs quickly.
-		if skipSchemaFixes == "true" {
-			log.Printf("[INFO] Skipping schema fixes (SKIP_SCHEMA_FIXES=true)")
-		} else {
-			if err := migrations.EnsureBlogPostTextColumns(db); err != nil {
-				log.Printf("[WARN] BlogPost schema fix did not complete: %v", err)
-			} else {
-				log.Printf("[SUCCESS] BlogPost schema verified (text columns)")
-			}
-			if err := migrations.EnsureContactMessageUserIDNullable(db); err != nil {
-				log.Printf("[WARN] ContactMessage schema fix did not complete: %v", err)
-			} else {
-				log.Printf("[SUCCESS] ContactMessage schema verified (user_id nullable)")
-			}
-		}
-	}
-
-	// Optional: seed minimal corpus on startup if DB is empty (deployment convenience).
-	if db != nil && cfg.SeedCorpusOnStartup {
-		if err := suggest.SeedCorpusIfEmpty(db, cfg.SeedCorpusFile, cfg.SeedCorpusMinCount); err != nil {
-			log.Printf("[SEED] Corpus seed failed: %v", err)
-		}
-	}
-
-	// Initialize handlers
-	h := handlers.New(db, cfg)
-	router.GET("/healthz", h.SuggestHealth)
-	router.GET("/metrics-lite", h.SuggestMetrics)
-
-	// Frontend workspace served from Cloud Run to keep auth cookies on same host
-	router.GET("/workspace", h.WorkspacePage)
-
-	// Setup API routes
-	api := router.Group("/api/v1")
-	{
-		api.GET("/whoami", h.WhoAmI) // diagnostic
-		api.GET("/ime/suggest", h.IMESuggest)
-		api.GET("/suggest", h.Suggest)
-		api.POST("/select", h.SuggestSelect)
-		// Public routes - rate limit per IP (increased for 1000+ concurrent users)
-		// 600 req/min = 10 req/sec per IP, suitable for normal browsing patterns
-		api.Use(middleware.RateLimitMiddleware(600, time.Minute))
-		api.POST("/auth/register", h.Register)
-		api.POST("/auth/login", h.Login)
-		api.POST("/auth/logout", h.Logout)
-		api.POST("/auth/refresh", h.RefreshAccessToken)
-		api.POST("/auth/otp/send", h.SendOTP)
-		api.POST("/auth/otp/verify", h.VerifyOTP)
-		api.GET("/auth/google", h.GoogleAuthStart)
-		api.POST("/auth/social", h.SocialLogin)
-		api.GET("/auth/google/callback", h.GoogleCallback)
-		api.POST("/auth/password-strength", h.CheckPasswordStrength)
-		api.POST("/auth/forgot-password", h.ForgotPassword)
-		api.POST("/auth/reset-password", h.ResetPassword)
-		// Contact form should work without login; attach user_id if available.
-		api.POST("/contact", middleware.OptionalAuthMiddleware(cfg.JWTSecret), h.SubmitContactMessage)
-		api.GET("/autocomplete", h.AutocompleteTamil)
-		api.POST("/transliterate", h.Transliterate)
-		api.POST("/tamil-words", h.AddTamilWord)
-		api.POST("/tamil-words/confirm", h.ConfirmTamilWord)
-		api.GET("/transliterate/suggest", h.TransliterateSuggest)
-		// Token-level acceptance logging for IME learning (optional auth)
-		api.POST("/transliterate/accept", middleware.OptionalAuthMiddleware(cfg.JWTSecret), h.TransliterateAccept)
-		api.POST("/validate", h.ValidateText)
-		// OCR proxy endpoints (backend -> OCR microservice). This lets Vercel only configure BACKEND_URL.
-		api.GET("/ocr/health", h.OCRHealth)
-		api.POST("/ocr/upload", h.OCRUpload)
-		api.GET("/ocr/download/:filename", h.OCRDownload)
-		api.POST("/webhooks/stripe", h.StripeWebhook)
-		api.POST("/webhooks/razorpay", h.RazorpayWebhook)
-		// IMPORTANT: Submit supports anonymous inline proofreading when save_draft=false.
-		// Auth is enforced inside the handler only for draft-saving mode.
-		api.POST("/submit", middleware.OptionalAuthMiddleware(cfg.JWTSecret), h.SubmitText)
-
-		// Public blog routes
-		api.GET("/blog/posts", h.BlogListPublished)
-		api.GET("/blog/posts/:slug", h.BlogGetPublishedBySlug)
-	}
-
-	// Protected routes enforce JWT validation before any DB access
-	// Authenticated users get higher limits: 1200 req/min = 20 req/sec
-	protected := api.Group("")
-	protected.Use(
-		middleware.AuthMiddleware(cfg.JWTSecret),
-		middleware.RateLimitMiddleware(1200, time.Minute),
-	)
-	{
-		protected.GET("/auth/me", h.GetCurrentUser)
-		protected.GET("/submissions", h.GetSubmissions)
-		protected.GET("/submissions/:id", h.GetSubmission)
-		protected.DELETE("/submissions/:id", h.ArchiveSubmission)
-		protected.GET("/stream/submissions/:id", h.StreamSubmission)
-		protected.GET("/archive", h.GetArchivedSubmissions)
-		// Blog (protected)
-		protected.POST("/blog/posts", h.BlogCreatePost)
-		protected.PUT("/blog/posts/:id", h.BlogUpdatePost)
-		protected.DELETE("/blog/posts/:id", h.BlogDeletePost)
-		protected.GET("/blog/me/posts", h.BlogListMyPosts)
-		protected.POST("/payments/create", h.CreatePayment)
-		protected.POST("/payments/verify", h.VerifyPayment)
-		protected.GET("/payments", h.GetPayments)
-		protected.GET("/dashboard/stats", h.GetDashboardStats)
-		protected.GET("/usage", h.GetUsage)
-		protected.POST("/events/activity", h.LogActivity)
-	}
-
-	// Admin routes
-	admin := protected.Group("/admin")
-	admin.Use(middleware.AdminMiddleware(db))
-	{
-		admin.GET("/users", h.AdminGetUsers)
-		admin.PUT("/users/:id", h.AdminUpdateUser)
-		admin.DELETE("/users/:id", h.AdminDeleteUser)
-		admin.GET("/payments", h.AdminGetPayments)
-		admin.GET("/analytics", h.AdminGetAnalytics)
-		admin.GET("/model-logs", h.AdminGetModelLogs)
-		admin.GET("/contact", h.AdminListContactMessages)
-		admin.GET("/analytics-dashboard", h.GetAnalyticsDashboard)
-		// IME learning aggregation endpoint (run periodically)
-		admin.POST("/ime/aggregate", h.AggregateIMEAccepts)
-	}
-
-	// Internal job endpoints (secured by shared secret; no user session required)
-	jobSecret := strings.TrimSpace(os.Getenv("IME_AGGREGATE_SECRET"))
-	internalJobs := api.Group("/internal")
-	internalJobs.Use(middleware.InternalJobSecretMiddleware(jobSecret))
-	{
-		internalJobs.POST("/ime/aggregate", h.AggregateIMEAccepts)
-	}
-
-	log.Printf("[SUCCESS] All routes registered")
-	log.Printf("[INFO] Server is ready. Press Ctrl+C to exit")
-
-	if err := router.Run(":" + port); err != nil {
-		log.Printf("[ERROR] Router failed: %v", err)
+	log.Printf("Server starting on port %s", port)
+	if err := r.Run(":" + port); err != nil {
+		log.Fatal("Failed to start server:", err)
 	}
 }

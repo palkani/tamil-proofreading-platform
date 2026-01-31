@@ -1202,7 +1202,8 @@ router.post('/blog/publish', async (req, res) => {
       });
     }
 
-    const url = `${BACKEND_URL}/api/v1/blog/posts`;
+    // Note: BACKEND_URL already includes /api/v1, so just append /blog/posts
+    const url = `${BACKEND_URL}/blog/posts`;
     const headers = {
       'Content-Type': 'application/json',
     };
@@ -1250,7 +1251,8 @@ router.delete('/blog/posts/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid id' });
     }
 
-    const url = `${BACKEND_URL}/api/v1/blog/posts/${encodeURIComponent(id)}`;
+    // Note: BACKEND_URL already includes /api/v1, so just append /blog/posts/:id
+    const url = `${BACKEND_URL}/blog/posts/${encodeURIComponent(id)}`;
     const headers = {
       'Content-Type': 'application/json',
     };
