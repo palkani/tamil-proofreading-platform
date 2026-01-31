@@ -1010,25 +1010,34 @@ router.post('/submit', async (req, res) => {
 // ============= AI CONTENT WRITER API ROUTES =============
 // These routes proxy requests to the Python Flask API running on port 5002
 
-// AI Content Writer health check
+// AI Content Writer health check - includes Gemini key status
 router.get('/ai-content-writer/health', async (req, res) => {
   try {
+    // Get key rotator status
+    const keyStatus = keyRotator.getStatus();
+    
     if (!contentWriterService) {
       return res.status(503).json({
         status: 'unhealthy',
         service: 'AI Content Writer',
-        error: 'Service not available'
+        error: 'Service not available',
+        geminiKeys: keyStatus,
       });
     }
     
     const health = await contentWriterService.healthCheck();
     if (health) {
-      return res.json(health);
+      // Add key status to health response
+      return res.json({
+        ...health,
+        geminiKeys: keyStatus,
+      });
     } else {
       return res.status(503).json({
         status: 'unhealthy',
         service: 'AI Content Writer',
-        error: 'Service health check failed'
+        error: 'Service health check failed',
+        geminiKeys: keyStatus,
       });
     }
   } catch (error) {
@@ -1036,7 +1045,8 @@ router.get('/ai-content-writer/health', async (req, res) => {
     return res.status(503).json({
       status: 'unhealthy',
       service: 'AI Content Writer',
-      error: error.message
+      error: error.message,
+      geminiKeys: keyRotator.getStatus(),
     });
   }
 });

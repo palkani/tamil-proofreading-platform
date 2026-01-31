@@ -21,9 +21,21 @@ class GeminiKeyRotator {
     this.baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
     
     if (this.keys.length > 0) {
-      console.log(`[GEMINI] Loaded ${this.keys.length} API key(s) for rotation`);
+      console.log(`[GEMINI] ✓ Loaded ${this.keys.length} API key(s) for rotation`);
+      // Log which key variables are set (without showing the actual keys)
+      for (let i = 1; i <= 10; i++) {
+        if (process.env[`GEMINI_API_KEY_${i}`]) {
+          console.log(`[GEMINI]   - GEMINI_API_KEY_${i}: configured ✓`);
+        }
+      }
     } else {
-      console.warn('[GEMINI] No API keys configured! Set GEMINI_API_KEY_1 or AI_INTEGRATIONS_GEMINI_API_KEY');
+      console.warn('[GEMINI] ⚠ No API keys configured!');
+      console.warn('[GEMINI]   Set GEMINI_API_KEY_1, GEMINI_API_KEY_2, etc. in Vercel environment variables');
+      console.warn('[GEMINI]   Or set AI_INTEGRATIONS_GEMINI_API_KEY for single key mode');
+      // Log what variables we checked
+      console.log('[GEMINI]   Checked: GEMINI_API_KEY_1 =', process.env.GEMINI_API_KEY_1 ? 'SET' : 'NOT SET');
+      console.log('[GEMINI]   Checked: AI_INTEGRATIONS_GEMINI_API_KEY =', process.env.AI_INTEGRATIONS_GEMINI_API_KEY ? 'SET' : 'NOT SET');
+      console.log('[GEMINI]   Checked: GOOGLE_GENAI_API_KEY =', process.env.GOOGLE_GENAI_API_KEY ? 'SET' : 'NOT SET');
     }
   }
 
