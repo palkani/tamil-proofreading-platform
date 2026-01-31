@@ -493,7 +493,7 @@ class WorkspaceController {
     const canSse = typeof window !== 'undefined' && typeof window.EventSource === 'function';
     if (canSse) {
       try {
-        const url = `/api/v1/stream/submissions/${submissionId}`;
+        const url = `/api/v1/submissions/${submissionId}/stream`;
         console.log('[AI] Attempting SSE stream for submission', submissionId, url);
 
         const payload = await new Promise((resolve, reject) => {
