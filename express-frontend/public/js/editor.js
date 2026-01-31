@@ -48,7 +48,18 @@ class TamilEditor {
     this.maxWords = 2000;
     this.setupEditor();
     this.setupToolbar();
-    this.setupAutocomplete();
+    
+    // CRITICAL: In workspace, skip autocomplete setup to prevent duplicate dropdowns
+    // Workspace uses its own pipeline (workspace.js -> displaySuggestions)
+    const isWorkspace = typeof window !== 'undefined' && 
+      (window.location?.pathname?.includes('/workspace') || 
+       window.location?.pathname?.includes('/draft'));
+    
+    if (isWorkspace) {
+      console.log('[TamilEditor] Skipping autocomplete setup in workspace - workspace.js handles suggestions');
+    } else {
+      this.setupAutocomplete();
+    }
   }
   
   countWords(text) {

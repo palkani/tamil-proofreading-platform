@@ -1775,6 +1775,17 @@ class WorkspaceController {
       }
     }
     
+    // CRITICAL: Also remove editor.js autocomplete boxes to prevent duplicate dropdowns
+    const editorAutocomplete = document.querySelectorAll('.autocomplete-box');
+    if (editorAutocomplete.length > 0) {
+      console.warn('[IME] ⚠️ Found', editorAutocomplete.length, 'editor.js autocomplete box(es) - removing to prevent conflicts');
+      editorAutocomplete.forEach(dd => {
+        if (dd.parentNode) {
+          dd.parentNode.removeChild(dd);
+        }
+      });
+    }
+    
     // CRITICAL: Also remove any orphaned suggestion items
     const orphanedItems = document.querySelectorAll('.tamil-suggestion-item');
     orphanedItems.forEach(item => {
@@ -2780,6 +2791,15 @@ class WorkspaceController {
         item.remove();
       }
     });
+    
+    // CRITICAL: Also remove editor.js autocomplete boxes
+    const editorAutocomplete = document.querySelectorAll('.autocomplete-box');
+    if (editorAutocomplete.length > 0) {
+      console.log('[IME] Removing', editorAutocomplete.length, 'editor.js autocomplete box(es)');
+      editorAutocomplete.forEach(dd => {
+        if (dd.parentNode) dd.parentNode.removeChild(dd);
+      });
+    }
     
     // CRITICAL: Double-check - remove any remaining dropdowns
     const remainingDropdowns = document.querySelectorAll('#tamil-suggestions-dropdown');
