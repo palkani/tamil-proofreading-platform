@@ -97,10 +97,8 @@
         .filter((s) => s.text);
       
       const totalTime = Math.round(performance.now() - startTime);
-      // Log timing for performance monitoring (visible in console)
-      if (fetchTime > 100 || IS_DEV) {
-        console.log(`[TRANSLITERATOR] ⏱️ ${text}: fetch=${fetchTime}ms, total=${totalTime}ms, count=${normalized.length}`);
-      }
+      // Log timing for performance monitoring (always visible in console)
+      console.log(`[TRANSLITERATOR] ⏱️ ${text}: fetch=${fetchTime}ms, total=${totalTime}ms, count=${normalized.length}`);
       
       lastSuggestions = normalized;
       // OPTIMIZATION: Cache the response for fast repeat lookups
