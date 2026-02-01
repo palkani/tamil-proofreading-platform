@@ -919,6 +919,45 @@ func (h *Handlers) ArchiveSubmission(c *gin.Context) {
 	})
 }
 
+// DeleteSubmission permanently deletes a submission (draft)
+func (h *Handlers) DeleteSubmission(c *gin.Context) {
+	userID, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	submissionIDStr := c.Param("id")
+	submissionID, err := strconv.ParseUint(submissionIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid submission ID"})
+		return
+	}
+
+	var submission models.Submission
+	if err := h.db.Where("id = ? AND user_id = ?", submissionID, userID).First(&submission).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Submission not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to locate submission"})
+		return
+	}
+
+	// Permanently delete the submission
+	if err := h.db.Unscoped().Delete(&submission).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete submission"})
+		return
+	}
+
+	log.Printf("[SUBMISSION] Deleted submission %d for user %d", submissionID, userID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Draft deleted successfully",
+	})
+}
+
 // GetArchivedSubmissions returns archived submissions still within retention window
 func (h *Handlers) GetArchivedSubmissions(c *gin.Context) {
 	userID, err := middleware.GetUserFromContext(c)

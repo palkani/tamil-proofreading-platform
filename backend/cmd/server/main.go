@@ -176,6 +176,7 @@ func main() {
 			protected.GET("/submissions", h.GetSubmissions)
 			protected.GET("/submissions/:id", h.GetSubmission)
 			protected.PUT("/submissions/:id/archive", h.ArchiveSubmission)
+			protected.DELETE("/submissions/:id", h.DeleteSubmission)
 			protected.GET("/submissions/:id/stream", h.StreamSubmission)
 
 			// Tamil word management
