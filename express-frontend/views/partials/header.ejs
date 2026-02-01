@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <html lang="en" itemscope itemtype="https://schema.org/WebSite">
 <head>
+  <% 
+  const baseUrl = 'https://prooftamil.com';
+  %>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta itemprop="name" content="ProofTamil - prooftamil.com">
   <meta itemprop="url" content="<%= typeof seo !== 'undefined' && seo.canonical ? seo.canonical : baseUrl + '/' %>">
   
-  <% 
-  const baseUrl = 'https://prooftamil.com';
+  <%
   const defaultKeywords = 'prooftamil, prooftamil.com, tamil proofreading tool, tamil proofreader online, tamil grammar checker, tamil grammar corrector, tamil spell checker, tamil spell check online, tamil writing assistant, tamil writing correction tool, tamil writing improvement tool, tamil grammar correction online, tamil grammar error checker, tamil AI grammar checker, tamil spelling correction tool, tamil spelling corrector online, tamil grammar and spelling checker, tamil AI writing tool, tamil text correction tool, tamil grammar fix tool, tamil grammar rewrite tool, tamil sentence correction tool, tamil content writing correction, tamil article proofreading tool, tamil blog writing checker, correct tamil grammar, fix tamil spelling, fix tamil grammar mistakes, check tamil grammar, check tamil spelling, improve tamil writing online, tamil grammar check free, tamil proofreading free, tamil grammar correction free tool';
   
   const seoTitle = typeof seo !== 'undefined' && seo.title ? seo.title : title;
