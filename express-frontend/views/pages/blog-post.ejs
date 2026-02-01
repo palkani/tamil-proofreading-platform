@@ -38,14 +38,27 @@
 
       <!-- Render sanitized HTML when available (better SEO: headings/lists), fallback to text paragraphs -->
       <section class="prose prose-lg max-w-none tamil-text">
-        <% if (post.content_html && String(post.content_html).trim()) { %>
+        <% 
+          const hasHtml = post.content_html && String(post.content_html).trim().length > 0;
+          const hasText = post.content_text && String(post.content_text).trim().length > 0;
+          console.log('[BLOG-RENDER] content_html length:', post.content_html?.length || 0, 'content_text length:', post.content_text?.length || 0);
+        %>
+        <% if (hasHtml) { %>
           <%- post.content_html %>
+        <% } else if (hasText) { %>
+          <% 
+            // Split on actual newlines (double newline = paragraph break)
+            const paragraphs = String(post.content_text).split(/\n\n+/);
+            paragraphs.forEach((para) => { 
+              const trimmed = para.trim();
+              if (trimmed) { 
+          %>
+              <p><%= trimmed %></p>
+          <%    } 
+            }); 
+          %>
         <% } else { %>
-          <% (post.content_text || '').split(/\\n\\n+/).forEach((para) => { %>
-            <% if (para && para.trim()) { %>
-              <p><%= para.trim() %></p>
-            <% } %>
-          <% }) %>
+          <p class="text-gray-500 italic">No content available.</p>
         <% } %>
       </section>
 

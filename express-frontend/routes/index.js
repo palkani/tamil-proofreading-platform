@@ -248,6 +248,11 @@ router.get('/blog/:slug', async (req, res) => {
         error: 'Invalid backend response',
       });
     }
+    
+    // Debug: log what content we received from backend
+    console.log('[BLOG-POST] Fetched post:', post.slug, 
+      'content_html length:', post.content_html?.length || 0,
+      'content_text length:', post.content_text?.length || 0);
 
     const canonical = `https://prooftamil.com/blog/${encodeURIComponent(post.slug || slug)}`;
     const desc =
