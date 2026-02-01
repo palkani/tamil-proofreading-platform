@@ -944,8 +944,35 @@ func (h *Handlers) DeleteSubmission(c *gin.Context) {
 		return
 	}
 
-	// Permanently delete the submission
-	if err := h.db.Unscoped().Delete(&submission).Error; err != nil {
+	// Use a transaction to safely delete the submission and handle related records
+	tx := h.db.Begin()
+	if tx.Error != nil {
+		log.Printf("[SUBMISSION] Failed to begin transaction for delete: %v", tx.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete submission"})
+		return
+	}
+
+	// First, nullify any foreign key references in the usage table
+	if err := tx.Model(&models.Usage{}).
+		Where("submission_id = ?", submissionID).
+		Update("submission_id", nil).Error; err != nil {
+		tx.Rollback()
+		log.Printf("[SUBMISSION] Failed to update usage records for submission %d: %v", submissionID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete submission", "details": err.Error()})
+		return
+	}
+
+	// Now permanently delete the submission
+	if err := tx.Unscoped().Delete(&submission).Error; err != nil {
+		tx.Rollback()
+		log.Printf("[SUBMISSION] Failed to delete submission %d: %v", submissionID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete submission", "details": err.Error()})
+		return
+	}
+
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		log.Printf("[SUBMISSION] Failed to commit delete transaction for submission %d: %v", submissionID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete submission"})
 		return
 	}
