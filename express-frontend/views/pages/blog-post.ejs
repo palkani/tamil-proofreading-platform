@@ -49,14 +49,7 @@
         <% } %>
       </section>
 
-      <% if (post.keywords) { %>
-        <footer class="mt-10 pt-6 border-t border-gray-200">
-          <div class="text-sm text-gray-600">
-            <span class="font-semibold text-gray-900">Keywords:</span>
-            <span><%= post.keywords %></span>
-          </div>
-        </footer>
-      <% } %>
+      <!-- Keywords moved to meta tags for SEO - not displayed on page -->
     </article>
   <% } %>
 </main>

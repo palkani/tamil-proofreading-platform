@@ -412,7 +412,7 @@ CRITICAL WORD COUNT REQUIREMENT:
 
 Output MUST be valid JSON only. Do not include markdown fences, explanations, or extra text.`;
 
-    const userText = `Topic/prompt:\n${prompt}\n\nWORD COUNT: Write EXACTLY ${safeWordCount} words of content.\n\nRequirements:\n- include_title: ${include_title}\n- include_meta: ${include_meta}\n\nReturn JSON with shape:\n{\n  \"success\": true,\n  \"content\": {\"title\": \"\", \"meta_description\": \"\", \"keywords\": \"\", \"content\": \"\"},\n  \"metadata\": {\"word_count\": <actual_word_count>, \"language\": \"${language}\", \"content_type\": \"${content_type}\", \"model\": \"gemini-2.5-flash\"}\n}\n\nRules:\n- If include_title is false, set title to empty string.\n- If include_meta is false, set meta_description and keywords to empty string.\n- content should use paragraphs separated by blank lines.\n- IMPORTANT: metadata.word_count should reflect the ACTUAL word count of the content you wrote.`;
+    const userText = `Topic/prompt:\n${prompt}\n\nWORD COUNT: Write EXACTLY ${safeWordCount} words of content.\n\nRequirements:\n- include_title: ${include_title}\n- include_meta: ${include_meta}\n\nReturn JSON with shape:\n{\n  \"success\": true,\n  \"content\": {\"title\": \"\", \"meta_description\": \"\", \"keywords\": \"\", \"content\": \"\"},\n  \"metadata\": {\"word_count\": <actual_word_count>, \"language\": \"${language}\", \"content_type\": \"${content_type}\", \"model\": \"gemini-2.5-flash\"}\n}\n\nRules:\n- If include_title is false, set title to empty string.\n- If include_meta is false, set meta_description and keywords to empty string.\n- IMPORTANT: keywords MUST ALWAYS be in English (for SEO), even if content is in Tamil. Use comma-separated English keywords.\n- content should use paragraphs separated by blank lines.\n- Write the COMPLETE content with ALL ${safeWordCount} words. Do NOT truncate or abbreviate.\n- IMPORTANT: metadata.word_count should reflect the ACTUAL word count of the content you wrote.`;
 
     // Try with schema first; if schema causes provider-side failure, fall back to plain JSON mime type.
     let result;
@@ -648,6 +648,7 @@ async function renderBlogTemplate(options) {
     subhead = `${readMins} min read • ${escapeHtml(language)}`;
   }
 
+  // Note: Keywords are NOT included in HTML - they go to meta tags only for SEO
   const html = `
 <article class="prooftamil-blog ${escapeHtml(template_id)}" data-template="${escapeHtml(template_id)}">
   <header>
@@ -655,7 +656,6 @@ async function renderBlogTemplate(options) {
     <h1>${escapeHtml(safeTitle)}</h1>
     <div class="subhead">${subhead}</div>
     ${excerpt ? `<p class="excerpt">${escapeHtml(excerpt)}</p>` : ''}
-    ${keywords ? `<p class="keywords">${escapeHtml(keywords)}</p>` : ''}
   </header>
   <section class="content">
     ${bodyHtml}
