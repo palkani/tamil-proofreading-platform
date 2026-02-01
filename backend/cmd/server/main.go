@@ -11,6 +11,7 @@ import (
 	"tamil-proofreading-platform/backend/internal/middleware"
 	"tamil-proofreading-platform/backend/internal/migrations"
 	"tamil-proofreading-platform/backend/internal/models"
+	"tamil-proofreading-platform/backend/internal/services/billing"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -18,6 +19,37 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+// initBillingHandlers initializes all billing-related services and handlers
+func initBillingHandlers(db *gorm.DB, cfg *config.Config) *handlers.BillingHandlers {
+	// Get billing configuration from environment
+	stripeAPIKey := os.Getenv("STRIPE_SECRET_KEY")
+	stripeWebhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
+	razorpayKeyID := os.Getenv("RAZORPAY_KEY_ID")
+	razorpayKeySecret := os.Getenv("RAZORPAY_KEY_SECRET")
+	razorpayWebhookSecret := os.Getenv("RAZORPAY_WEBHOOK_SECRET")
+	quoteSecret := os.Getenv("BILLING_QUOTE_SECRET")
+	
+	successURL := os.Getenv("BILLING_SUCCESS_URL")
+	if successURL == "" {
+		successURL = "https://prooftamil.com/billing/success"
+	}
+	cancelURL := os.Getenv("BILLING_CANCEL_URL")
+	if cancelURL == "" {
+		cancelURL = "https://prooftamil.com/billing/cancel"
+	}
+	
+	// Initialize services
+	pricingService := billing.NewPricingService(db, quoteSecret)
+	stripeAdapter := billing.NewStripeAdapter(db, stripeAPIKey, stripeWebhookSecret, successURL, cancelURL)
+	razorpayAdapter := billing.NewRazorpayAdapter(db, razorpayKeyID, razorpayKeySecret, razorpayWebhookSecret)
+	billingService := billing.NewBillingService(db, pricingService, stripeAdapter, razorpayAdapter)
+	webhookService := billing.NewWebhookService(billingService, stripeAdapter, razorpayAdapter)
+	
+	log.Println("[BILLING] Services initialized")
+	
+	return handlers.NewBillingHandlers(billingService, webhookService, pricingService)
+}
 
 func main() {
 	log.Println("Starting Tamil Proofreading Platform Backend...")
@@ -78,9 +110,15 @@ func main() {
 	if err := migrations.MigrateAffiliates(db); err != nil {
 		log.Printf("Warning: Affiliate migration failed: %v", err)
 	}
+	if err := migrations.MigrateBilling(db); err != nil {
+		log.Printf("Warning: Billing migration failed: %v", err)
+	}
 
 	// Initialize handlers
 	h := handlers.New(db, cfg)
+	
+	// Initialize billing services
+	billingHandlers := initBillingHandlers(db, cfg)
 
 	// Initialize Gin router
 	r := gin.New()
@@ -215,6 +253,11 @@ func main() {
 			admin.GET("/affiliates", h.AdminListAffiliates)
 			admin.PATCH("/affiliates/:id/status", h.AdminUpdateAffiliateStatus)
 			admin.POST("/affiliates/:id/regenerate-code", h.AdminRegenerateAffiliateCode)
+			
+			// Billing admin endpoints
+			admin.GET("/feature-flags/premium_enabled", billingHandlers.AdminGetGlobalPremiumStatus)
+			admin.PATCH("/feature-flags/premium_enabled", billingHandlers.AdminSetGlobalPremium)
+			admin.PATCH("/users/:id/premium_override", billingHandlers.AdminSetUserPremiumOverride)
 		}
 
 		// Affiliate user routes (authenticated affiliates can view their own data)
@@ -224,6 +267,27 @@ func main() {
 			affiliateRoutes.GET("/me", h.AffiliateGetMe)
 			affiliateRoutes.GET("/stats", h.AffiliateGetStats)
 			affiliateRoutes.GET("/earnings", h.AffiliateGetEarnings)
+		}
+		
+		// Billing routes
+		billingRoutes := v1.Group("/billing")
+		{
+			// Public billing endpoints
+			billingRoutes.GET("/plans", billingHandlers.GetPlans)
+			billingRoutes.GET("/pricing", billingHandlers.GetPricing)
+			
+			// Authenticated billing endpoints
+			billingRoutes.POST("/checkout-session", middleware.AuthMiddleware(cfg.JWTSecret), billingHandlers.CreateCheckoutSession)
+			billingRoutes.GET("/me", middleware.AuthMiddleware(cfg.JWTSecret), billingHandlers.GetBillingStatus)
+			billingRoutes.POST("/cancel", middleware.AuthMiddleware(cfg.JWTSecret), billingHandlers.CancelSubscription)
+			billingRoutes.POST("/verify-razorpay", middleware.AuthMiddleware(cfg.JWTSecret), billingHandlers.VerifyRazorpayPayment)
+		}
+		
+		// Webhook routes (no auth - signature verified in handler)
+		webhooks := v1.Group("/webhooks")
+		{
+			webhooks.POST("/stripe", billingHandlers.StripeWebhook)
+			webhooks.POST("/razorpay", billingHandlers.RazorpayWebhook)
 		}
 	}
 
