@@ -1962,16 +1962,21 @@ router.get('/newsletter/count', async (req, res) => {
 // Proxy other API calls to Go backend
 // IMPORTANT: This catch-all must be LAST to avoid intercepting specific routes like /submit
 router.all('/*', async (req, res) => {
-  // CRITICAL: Also skip /ime/suggest to prevent double handling
-  if (req.path === '/ime/suggest' && req.method === 'GET') {
-    console.warn('[API-ROUTER] /ime/suggest route was intercepted by catch-all - this should not happen!');
-    return res.status(404).json({ error: 'Route not found - check route order' });
-  }
-  // Skip if this is a route we've already handled
-  if (req.path === '/submit' && req.method === 'POST') {
-    // This should never happen if routes are in correct order, but log if it does
-    console.warn('[API-ROUTER] /submit route was intercepted by catch-all - this should not happen!');
-    return res.status(404).json({ error: 'Route not found - check route order' });
+  // CRITICAL: Skip routes that are handled locally (not proxied to backend)
+  const localRoutes = [
+    { path: '/ime/suggest', method: 'GET' },
+    { path: '/submit', method: 'POST' },
+    { path: '/spam-check', method: 'POST' },
+    { path: '/seo/validate', method: 'POST' },
+    { path: '/seo/generate-meta', method: 'POST' },
+    { path: '/seo/extract-keywords', method: 'POST' },
+  ];
+  
+  for (const route of localRoutes) {
+    if (req.path === route.path && req.method === route.method) {
+      console.warn(`[API-ROUTER] ${route.path} route was intercepted by catch-all - this should not happen! Check route order.`);
+      return res.status(404).json({ error: 'Route not found - check route order', path: req.path });
+    }
   }
   try {
     // Normalize path to avoid double /v1 when BACKEND_URL already has /api/v1

@@ -33,6 +33,11 @@ type User struct {
         SubscriptionEnd *time.Time       `json:"subscription_end,omitempty"`
         IsActive        bool             `gorm:"default:true" json:"is_active"`
         EmailVerified   bool             `gorm:"default:false" json:"email_verified"`
+        
+        // Referral tracking (immutable after signup)
+        ReferredByUserID  *uint   `gorm:"index" json:"referred_by_user_id,omitempty"`
+        AffiliateCodeUsed *string `gorm:"size:20;index" json:"affiliate_code_used,omitempty"`
+        
         CreatedAt       time.Time        `json:"created_at"`
         UpdatedAt       time.Time        `json:"updated_at"`
         DeletedAt       gorm.DeletedAt   `gorm:"index" json:"-"`
