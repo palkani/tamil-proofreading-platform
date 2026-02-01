@@ -81,17 +81,23 @@ func normalizeStatus(s string) models.BlogPostStatus {
 }
 
 func (h *Handlers) BlogCreatePost(c *gin.Context) {
+	log.Printf("[BLOG] BlogCreatePost called")
+	
 	userID, ok := getUserIDFromContext(c)
 	if !ok || userID == 0 {
+		log.Printf("[BLOG] Unauthorized: user_id not found in context (ok=%v, userID=%d)", ok, userID)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
+	log.Printf("[BLOG] User ID from context: %d", userID)
 
 	var req blogCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		log.Printf("[BLOG] Invalid request body: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "details": err.Error()})
 		return
 	}
+	log.Printf("[BLOG] Request: title=%q, slug=%q, status=%q", req.Title, req.Slug, req.Status)
 
 	title := strings.TrimSpace(req.Title)
 	contentText := strings.TrimSpace(req.ContentText)
@@ -173,6 +179,7 @@ func (h *Handlers) BlogCreatePost(c *gin.Context) {
 
 	if createErr != nil {
 		log.Printf("[BLOG] Create post failed for user %d after retries: %v", userID, createErr)
+		log.Printf("[BLOG] Post data: title=%q, slug=%q, content_text_len=%d", post.Title, post.Slug, len(post.ContentText))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create post", "details": createErr.Error()})
 		return
 	}
