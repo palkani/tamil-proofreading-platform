@@ -164,6 +164,7 @@ func main() {
 			auth.POST("/logout", h.Logout)
 			auth.POST("/refresh", h.RefreshAccessToken)
 			auth.POST("/google/callback", h.GoogleCallback)
+			auth.GET("/google/callback", h.GoogleCallback)
 			auth.POST("/forgot-password", h.ForgotPassword)
 			auth.POST("/reset-password", h.ResetPassword)
 			auth.GET("/whoami", h.WhoAmI)
