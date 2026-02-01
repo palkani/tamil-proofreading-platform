@@ -68,9 +68,24 @@
                 <%= p.status === 'published' ? 'Published' : 'Draft' %>
               </span>
               <% if (p.status === 'published') { %>
-                <a href="/blog/<%= p.slug %>" class="text-sm font-semibold text-primary-600 hover:text-primary-700">Open</a>
+                <a href="/blog/<%= p.slug %>" class="text-sm font-semibold text-primary-600 hover:text-primary-700">View</a>
+                <button
+                  type="button"
+                  class="text-sm font-semibold text-amber-600 hover:text-amber-700"
+                  data-unpublish-post="1"
+                  data-post-id="<%= p.id %>"
+                >
+                  Unpublish
+                </button>
               <% } else { %>
-                <span class="text-sm font-semibold text-gray-400">Not public</span>
+                <button
+                  type="button"
+                  class="text-sm font-semibold text-green-600 hover:text-green-700"
+                  data-publish-post="1"
+                  data-post-id="<%= p.id %>"
+                >
+                  Publish
+                </button>
               <% } %>
               <button
                 type="button"
@@ -95,17 +110,47 @@
       try { return localStorage.getItem('access_token'); } catch { return null; }
     }
 
+    function getHeaders() {
+      const token = getAccessToken();
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      return headers;
+    }
+
+    async function updatePostStatus(id, status) {
+      const resp = await fetch(`/api/blog/posts/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ status }),
+      });
+
+      const raw = await resp.text();
+      let json = null;
+      try { json = raw ? JSON.parse(raw) : null; } catch {}
+
+      if (resp.status === 401) {
+        const redirect = encodeURIComponent('/my-blogs');
+        window.location.href = `/login?redirect=${redirect}`;
+        return;
+      }
+
+      if (!resp.ok || !json?.success) {
+        const msg = json?.error || json?.message || raw || `Update failed (HTTP ${resp.status})`;
+        throw new Error(msg);
+      }
+
+      // Reload page to show updated status
+      window.location.reload();
+    }
+
     async function deletePostById(id, title) {
       const ok = window.confirm(`Delete this blog post?\n\n${title || ''}\n\nThis cannot be undone.`);
       if (!ok) return;
 
-      const token = getAccessToken();
-      const headers = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const resp = await fetch(`/api/blog/posts/${encodeURIComponent(id)}`, {
         method: 'DELETE',
-        headers,
+        headers: getHeaders(),
         credentials: 'include',
       });
 
@@ -134,21 +179,62 @@
     }
 
     document.addEventListener('click', async (e) => {
-      const btn = e.target && e.target.closest && e.target.closest('[data-delete-post="1"]');
-      if (!btn) return;
-      const id = btn.getAttribute('data-post-id');
-      const title = btn.getAttribute('data-post-title') || '';
-      if (!id) return;
-      btn.disabled = true;
-      const oldText = btn.textContent;
-      btn.textContent = 'Deleting...';
-      try {
-        await deletePostById(id, title);
-      } catch (err) {
-        console.error(err);
-        alert(err.message || 'Failed to delete post');
-        btn.disabled = false;
-        btn.textContent = oldText;
+      // Handle Publish button
+      const publishBtn = e.target && e.target.closest && e.target.closest('[data-publish-post="1"]');
+      if (publishBtn) {
+        const id = publishBtn.getAttribute('data-post-id');
+        if (!id) return;
+        publishBtn.disabled = true;
+        const oldText = publishBtn.textContent;
+        publishBtn.textContent = 'Publishing...';
+        try {
+          await updatePostStatus(id, 'published');
+        } catch (err) {
+          console.error(err);
+          alert(err.message || 'Failed to publish post');
+          publishBtn.disabled = false;
+          publishBtn.textContent = oldText;
+        }
+        return;
+      }
+
+      // Handle Unpublish button
+      const unpublishBtn = e.target && e.target.closest && e.target.closest('[data-unpublish-post="1"]');
+      if (unpublishBtn) {
+        const id = unpublishBtn.getAttribute('data-post-id');
+        if (!id) return;
+        unpublishBtn.disabled = true;
+        const oldText = unpublishBtn.textContent;
+        unpublishBtn.textContent = 'Unpublishing...';
+        try {
+          await updatePostStatus(id, 'draft');
+        } catch (err) {
+          console.error(err);
+          alert(err.message || 'Failed to unpublish post');
+          unpublishBtn.disabled = false;
+          unpublishBtn.textContent = oldText;
+        }
+        return;
+      }
+
+      // Handle Delete button
+      const deleteBtn = e.target && e.target.closest && e.target.closest('[data-delete-post="1"]');
+      if (deleteBtn) {
+        const id = deleteBtn.getAttribute('data-post-id');
+        const title = deleteBtn.getAttribute('data-post-title') || '';
+        if (!id) return;
+        deleteBtn.disabled = true;
+        const oldText = deleteBtn.textContent;
+        deleteBtn.textContent = 'Deleting...';
+        try {
+          await deletePostById(id, title);
+        } catch (err) {
+          console.error(err);
+          alert(err.message || 'Failed to delete post');
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = oldText;
+        }
+        return;
       }
     });
   })();

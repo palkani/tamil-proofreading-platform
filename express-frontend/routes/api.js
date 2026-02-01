@@ -1345,6 +1345,49 @@ router.delete('/blog/posts/:id', async (req, res) => {
   }
 });
 
+// Update a blog post by id (requires auth - ADMIN ONLY)
+router.put('/blog/posts/:id', async (req, res) => {
+  try {
+    // Check if user is allowed to update (admin only)
+    const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : '';
+    if (!userEmail || !BLOG_PUBLISH_ALLOWED_EMAILS.includes(userEmail)) {
+      return res.status(403).json({ error: 'Blog updates are restricted to administrators.' });
+    }
+
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      return res.status(400).json({ error: 'Invalid id' });
+    }
+
+    const url = `${BACKEND_URL}/blog/posts/${encodeURIComponent(id)}`;
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    if (req.headers.authorization) {
+      headers.Authorization = req.headers.authorization;
+    }
+    if (req.headers.cookie) {
+      headers.Cookie = req.headers.cookie;
+    }
+
+    console.log('[BLOG-UPDATE] Updating post:', id, 'status:', req.body.status);
+
+    const backendRes = await axiosWithPool.put(url, req.body, {
+      headers,
+      validateStatus: () => true,
+    });
+
+    if (backendRes.status !== 200) {
+      console.error('[BLOG-UPDATE] Backend error:', backendRes.status, backendRes.data);
+    }
+
+    return res.status(backendRes.status).json(backendRes.data);
+  } catch (error) {
+    console.error('[BLOG-UPDATE] error:', error.message);
+    return res.status(502).json({ error: 'Blog update failed', details: error.message });
+  }
+});
+
 // ============= END BLOG PUBLISH API =============
 
 // ============= OPTIMIZED SUGGEST ENDPOINTS =============
