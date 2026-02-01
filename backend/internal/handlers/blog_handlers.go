@@ -417,9 +417,10 @@ func (h *Handlers) ensureUniqueSlug(base string, excludeID uint) (string, error)
 		base = "post"
 	}
 
-	// quick check base
+	// IMPORTANT: Use Unscoped() to include soft-deleted records in the check
+	// because the database unique constraint includes all records
 	var count int64
-	q := h.db.Model(&models.BlogPost{}).Where("slug = ?", base)
+	q := h.db.Unscoped().Model(&models.BlogPost{}).Where("slug = ?", base)
 	if excludeID > 0 {
 		q = q.Where("id <> ?", excludeID)
 	}
@@ -430,10 +431,20 @@ func (h *Handlers) ensureUniqueSlug(base string, excludeID uint) (string, error)
 		return base, nil
 	}
 
-	for i := 2; i <= 50; i++ {
-		trySlug := base + "-" + strconv.Itoa(i)
+	// Try appending timestamp for more uniqueness
+	timestamp := strconv.FormatInt(time.Now().UnixNano()%100000, 10)
+	
+	for i := 2; i <= 100; i++ {
+		var trySlug string
+		if i <= 10 {
+			trySlug = base + "-" + strconv.Itoa(i)
+		} else {
+			// After 10 attempts, use timestamp + counter for uniqueness
+			trySlug = base + "-" + timestamp + "-" + strconv.Itoa(i)
+		}
+		
 		var c2 int64
-		q2 := h.db.Model(&models.BlogPost{}).Where("slug = ?", trySlug)
+		q2 := h.db.Unscoped().Model(&models.BlogPost{}).Where("slug = ?", trySlug)
 		if excludeID > 0 {
 			q2 = q2.Where("id <> ?", excludeID)
 		}
@@ -441,6 +452,7 @@ func (h *Handlers) ensureUniqueSlug(base string, excludeID uint) (string, error)
 			return "", err
 		}
 		if c2 == 0 {
+			log.Printf("[BLOG] Generated unique slug: %q (attempt %d)", trySlug, i)
 			return trySlug, nil
 		}
 	}
