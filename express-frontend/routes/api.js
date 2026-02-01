@@ -1395,6 +1395,7 @@ router.put('/blog/posts/:id', async (req, res) => {
 
 // Primary suggest endpoint used by transliterator-runner.js (/api/v1/suggest)
 router.get('/v1/suggest', async (req, res) => {
+  const startTime = Date.now();
   try {
     const { q, mode = 'spoken', limit = 8 } = req.query;
     
@@ -1402,30 +1403,41 @@ router.get('/v1/suggest', async (req, res) => {
       return res.status(400).json({ error: 'Query parameter "q" required' });
     }
     
+    // Use AbortController for reliable timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second hard timeout
+    
     // Proxy to Go backend's suggest endpoint
     const url = `${BACKEND_URL}/transliterate/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
     
     const response = await axiosWithPool.get(url, {
       validateStatus: () => true,
-      timeout: 150, // OPTIMIZATION: Strict 150ms timeout for fast response
+      timeout: 1500, // 1.5 second axios timeout
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     
     // OPTIMIZATION: Set cache headers for browser caching (1 minute)
     res.set('Cache-Control', 'public, max-age=60');
     res.status(response.status).json(response.data);
   } catch (error) {
-    // Return empty suggestions on timeout to allow faster typing
-    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+    const elapsed = Date.now() - startTime;
+    // Return empty suggestions on timeout/abort to allow faster typing
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
+      console.log(`[SUGGEST] Timeout after ${elapsed}ms for q=${req.query.q}`);
       res.set('Cache-Control', 'no-cache');
-      return res.status(200).json({ success: true, suggestions: [], source: 'timeout' });
+      return res.status(200).json({ success: true, suggestions: [], source: 'timeout', elapsed_ms: elapsed });
     }
-    res.status(500).json({ error: 'Suggest failed', suggestions: [] });
+    console.error(`[SUGGEST] Error after ${elapsed}ms:`, error.message);
+    res.status(200).json({ success: true, suggestions: [], source: 'error', error: error.message });
   }
 });
 
 // CRITICAL: IME suggestions endpoint MUST be before router.all('/*') catch-all
 // IME suggestions endpoint - proxy to backend (OPTIMIZED for low latency)
 router.get('/ime/suggest', async (req, res) => {
+  const startTime = Date.now();
   try {
     const { q, mode = 'smart', limit = 8 } = req.query;
     
@@ -1433,6 +1445,10 @@ router.get('/ime/suggest', async (req, res) => {
     if (!q || typeof q !== 'string' || q.trim().length === 0) {
       return res.status(400).json({ error: 'Query parameter "q" required' });
     }
+    
+    // Use AbortController for reliable timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second hard timeout
     
     const url = `${BACKEND_URL}/ime/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
     
@@ -1445,16 +1461,25 @@ router.get('/ime/suggest', async (req, res) => {
     const response = await axiosWithPool.get(url, {
       headers,
       validateStatus: () => true,
-      timeout: 200, // OPTIMIZATION: Strict 200ms timeout for fast response
+      timeout: 1500, // 1.5 second axios timeout
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     
     // OPTIMIZATION: Set cache headers for browser caching (1 minute)
     res.set('Cache-Control', 'public, max-age=60');
     res.status(response.status).json(response.data);
   } catch (error) {
-    res.status(error.response?.status || 500).json({
-      error: error.response?.data || 'IME suggestion failed'
-    });
+    const elapsed = Date.now() - startTime;
+    // Return empty suggestions on timeout to allow faster typing
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
+      console.log(`[IME] Timeout after ${elapsed}ms for q=${req.query.q}`);
+      res.set('Cache-Control', 'no-cache');
+      return res.status(200).json({ success: true, suggestions: [], source: 'timeout', elapsed_ms: elapsed });
+    }
+    console.error(`[IME] Error after ${elapsed}ms:`, error.message);
+    res.status(200).json({ success: true, suggestions: [], source: 'error', error: error.message });
   }
 });
 
