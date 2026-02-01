@@ -15,6 +15,7 @@ import (
 
 	"tamil-proofreading-platform/backend/internal/middleware"
 	"tamil-proofreading-platform/backend/internal/models"
+	"tamil-proofreading-platform/backend/internal/services/affiliate"
 	"tamil-proofreading-platform/backend/internal/services/auth"
 	"tamil-proofreading-platform/backend/internal/util/auditlog"
 	"tamil-proofreading-platform/backend/internal/util/securecookie"
@@ -231,9 +232,10 @@ func sessionMetadataFromContext(c *gin.Context) auth.SessionMetadata {
 }
 
 type RegisterRequest struct {
-        Email    string `json:"email" binding:"required,email"`
-        Password string `json:"password" binding:"required,min=8"`
-        Name     string `json:"name" binding:"required"`
+        Email        string `json:"email" binding:"required,email"`
+        Password     string `json:"password" binding:"required,min=8"`
+        Name         string `json:"name" binding:"required"`
+        ReferralCode string `json:"ref,omitempty"` // Optional referral/affiliate code
 }
 
 type LoginRequest struct {
@@ -294,9 +296,21 @@ func (h *Handlers) Register(c *gin.Context) {
                 return
         }
 
+        // Track referral if a referral code was provided
+        if req.ReferralCode != "" {
+                affiliateSvc := affiliate.NewAffiliateService(h.db)
+                if err := affiliateSvc.TrackReferral(user.ID, req.Email, req.ReferralCode); err != nil {
+                        // Log but don't fail registration
+                        slog.Warn("Failed to track referral", "error", err, "user_id", user.ID, "ref_code", req.ReferralCode)
+                } else {
+                        slog.Info("Referral tracked", "user_id", user.ID, "ref_code", req.ReferralCode)
+                }
+        }
+
         auditlog.Info(c, "auth_register_success", map[string]any{
-                "user_email": req.Email,
-                "user_id":    user.ID,
+                "user_email":    req.Email,
+                "user_id":       user.ID,
+                "referral_code": req.ReferralCode,
         })
 
         // Create session and issue tokens
@@ -641,6 +655,18 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_login_failed")
                 return
         }
+
+	// Track referral if a referral cookie exists (set when user landed on signup page with ?ref=CODE)
+	if refCode, err := c.Cookie("prooftamil_ref"); err == nil && refCode != "" {
+		affiliateSvc := affiliate.NewAffiliateService(h.db)
+		if trackErr := affiliateSvc.TrackReferral(user.ID, user.Email, refCode); trackErr != nil {
+			log.Printf("[OAUTH-WARN] step=referral_track request_id=%s user_id=%d ref=%s err=%v", reqID, user.ID, refCode, trackErr)
+		} else {
+			log.Printf("[OAUTH-DEBUG] step=referral_tracked request_id=%s user_id=%d ref=%s", reqID, user.ID, refCode)
+			// Clear the referral cookie after successful tracking
+			c.SetCookie("prooftamil_ref", "", -1, "/", "", true, false)
+		}
+	}
 
         // Create session
         tokenPair, err := h.authService.IssueSession(user, sessionMetadataFromContext(c))

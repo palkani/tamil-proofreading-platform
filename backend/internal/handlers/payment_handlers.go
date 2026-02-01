@@ -3,11 +3,13 @@ package handlers
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 
 	"tamil-proofreading-platform/backend/internal/middleware"
 	"tamil-proofreading-platform/backend/internal/models"
+	"tamil-proofreading-platform/backend/internal/services/affiliate"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stripe/stripe-go/v76"
@@ -42,6 +44,21 @@ func (h *Handlers) CreatePayment(c *gin.Context) {
 		return
 	}
 
+	// Check for referral discount
+	affiliateSvc := affiliate.NewAffiliateService(h.db)
+	hasDiscount, discountRate := affiliateSvc.CheckReferralDiscount(userID)
+	
+	originalAmount := req.Amount
+	discountAmount := 0.0
+	finalAmount := req.Amount
+	
+	if hasDiscount && discountRate > 0 {
+		discountAmount = req.Amount * discountRate
+		finalAmount = req.Amount - discountAmount
+		log.Printf("[PAYMENT] Applying referral discount: user=%d original=%.2f discount=%.2f%% final=%.2f",
+			userID, originalAmount, discountRate*100, finalAmount)
+	}
+
 	metadata := map[string]string{
 		"user_id": strconv.Itoa(int(userID)),
 		"type":    string(req.PaymentType),
@@ -50,13 +67,19 @@ func (h *Handlers) CreatePayment(c *gin.Context) {
 	if req.SubmissionID != nil {
 		metadata["submission_id"] = strconv.Itoa(int(*req.SubmissionID))
 	}
+	
+	// Add discount metadata for auditing
+	if hasDiscount {
+		metadata["referral_discount"] = strconv.FormatFloat(discountRate*100, 'f', 0, 64) + "%"
+		metadata["original_amount"] = strconv.FormatFloat(originalAmount, 'f', 2, 64)
+	}
 
 	var paymentIntent interface{}
 	var gatewayPaymentID string
 
 	switch req.PaymentMethod {
 	case models.PaymentMethodStripe:
-		intent, err := h.paymentService.CreateStripePaymentIntent(req.Amount, req.Currency, metadata)
+		intent, err := h.paymentService.CreateStripePaymentIntent(finalAmount, req.Currency, metadata)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create payment intent"})
 			return
@@ -65,7 +88,7 @@ func (h *Handlers) CreatePayment(c *gin.Context) {
 		gatewayPaymentID = intent.ID
 
 	case models.PaymentMethodRazorpay:
-		order, err := h.paymentService.CreateRazorpayOrder(req.Amount, req.Currency, metadata)
+		order, err := h.paymentService.CreateRazorpayOrder(finalAmount, req.Currency, metadata)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create order"})
 			return
@@ -78,10 +101,10 @@ func (h *Handlers) CreatePayment(c *gin.Context) {
 		return
 	}
 
-	// Create payment record
+	// Create payment record with discounted amount
 	payment, err := h.paymentService.CreatePaymentRecord(
 		userID,
-		req.Amount,
+		finalAmount,
 		req.Currency,
 		req.PaymentMethod,
 		req.PaymentType,
@@ -93,10 +116,20 @@ func (h *Handlers) CreatePayment(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"payment":        payment,
 		"payment_intent": paymentIntent,
-	})
+	}
+	
+	// Include discount information in response
+	if hasDiscount {
+		response["discount_applied"] = true
+		response["discount_percent"] = discountRate * 100
+		response["original_amount"] = originalAmount
+		response["discount_amount"] = discountAmount
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // VerifyPayment verifies a payment
@@ -178,6 +211,8 @@ func (h *Handlers) StripeWebhook(c *gin.Context) {
 	}
 
 	// Handle different event types
+	affiliateSvc := affiliate.NewAffiliateService(h.db)
+
 	switch event.Type {
 	case "payment_intent.succeeded":
 		var paymentIntent stripe.PaymentIntent
@@ -191,6 +226,11 @@ func (h *Handlers) StripeWebhook(c *gin.Context) {
 		payment, err := h.paymentService.GetPaymentByGatewayID(paymentIntent.ID)
 		if err == nil {
 			h.paymentService.UpdatePaymentStatus(payment.ID, models.PaymentStatusCompleted, paymentIntent.ID)
+			
+			// Record affiliate commission if applicable
+			if err := affiliateSvc.RecordCommission(payment); err != nil {
+				log.Printf("[AFFILIATE] Failed to record commission for payment %d: %v", payment.ID, err)
+			}
 		}
 
 	case "payment_intent.payment_failed":
@@ -205,6 +245,29 @@ func (h *Handlers) StripeWebhook(c *gin.Context) {
 		payment, err := h.paymentService.GetPaymentByGatewayID(paymentIntent.ID)
 		if err == nil {
 			h.paymentService.UpdatePaymentStatus(payment.ID, models.PaymentStatusFailed, paymentIntent.ID)
+		}
+
+	case "charge.refunded", "charge.refund.updated":
+		// Handle refunds - void affiliate commissions if within void period
+		var charge stripe.Charge
+		err := json.Unmarshal(event.Data.Raw, &charge)
+		if err != nil {
+			log.Printf("[AFFILIATE] Failed to parse refund event: %v", err)
+			break
+		}
+
+		// Try to find the payment by the payment intent ID from the charge
+		if charge.PaymentIntent != nil {
+			payment, err := h.paymentService.GetPaymentByGatewayID(charge.PaymentIntent.ID)
+			if err == nil {
+				// Update payment status to refunded
+				h.paymentService.UpdatePaymentStatus(payment.ID, models.PaymentStatusRefunded, charge.ID)
+				
+				// Void affiliate commission
+				if err := affiliateSvc.VoidCommission(payment.ID, "Payment refunded"); err != nil {
+					log.Printf("[AFFILIATE] Failed to void commission for payment %d: %v", payment.ID, err)
+				}
+			}
 		}
 	}
 

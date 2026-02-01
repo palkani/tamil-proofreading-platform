@@ -75,6 +75,9 @@ func main() {
 	if err := migrations.MigrateNewsletterSubscribers(db); err != nil {
 		log.Printf("Warning: Newsletter migration failed: %v", err)
 	}
+	if err := migrations.MigrateAffiliates(db); err != nil {
+		log.Printf("Warning: Affiliate migration failed: %v", err)
+	}
 
 	// Initialize handlers
 	h := handlers.New(db, cfg)
@@ -205,6 +208,21 @@ func main() {
 			admin.GET("/analytics", h.AdminGetAnalytics)
 			admin.GET("/dashboard", h.GetDashboardStats)
 			admin.GET("/subscribers", h.AdminListSubscribers)
+			
+			// Affiliate management (admin only)
+			admin.POST("/affiliates", h.AdminCreateAffiliate)
+			admin.GET("/affiliates", h.AdminListAffiliates)
+			admin.PATCH("/affiliates/:id/status", h.AdminUpdateAffiliateStatus)
+			admin.POST("/affiliates/:id/regenerate-code", h.AdminRegenerateAffiliateCode)
+		}
+
+		// Affiliate user routes (authenticated affiliates can view their own data)
+		affiliateRoutes := v1.Group("/affiliate")
+		affiliateRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+		{
+			affiliateRoutes.GET("/me", h.AffiliateGetMe)
+			affiliateRoutes.GET("/stats", h.AffiliateGetStats)
+			affiliateRoutes.GET("/earnings", h.AffiliateGetEarnings)
 		}
 	}
 
