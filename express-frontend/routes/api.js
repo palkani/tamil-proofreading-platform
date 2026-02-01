@@ -9,6 +9,9 @@ const FormData = require('form-data');
 // Shared Gemini key rotator for multi-key support
 const { keyRotator } = require('../utils/gemini-key-rotator');
 
+// SEO automation service
+const seoAutomation = require('../services/seo-automation');
+
 // HTTP Agent pooling for high concurrency (1000+ users)
 // This reuses TCP connections instead of creating new ones per request
 const httpAgent = new http.Agent({
@@ -1164,6 +1167,51 @@ router.post('/ai-content-writer/render-blog-template', async (req, res) => {
   }
 });
 
+// SEO validation endpoint - check if content is SEO-optimized before publishing
+router.post('/seo/validate', (req, res) => {
+  try {
+    const { title, meta_description, content_text, keywords, slug } = req.body;
+    
+    const result = seoAutomation.validateSEO({
+      title,
+      meta_description,
+      content_text,
+      keywords,
+      slug,
+    });
+    
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    console.error('[SEO] Validation error:', error.message);
+    res.status(500).json({ error: 'SEO validation failed', details: error.message });
+  }
+});
+
+// SEO helper - generate meta description from content
+router.post('/seo/generate-meta', (req, res) => {
+  try {
+    const { content, maxLength = 155 } = req.body;
+    const metaDescription = seoAutomation.generateMetaDescription(content, maxLength);
+    res.json({ success: true, meta_description: metaDescription });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate meta description' });
+  }
+});
+
+// SEO helper - extract keywords from content
+router.post('/seo/extract-keywords', (req, res) => {
+  try {
+    const { content, maxKeywords = 8 } = req.body;
+    const keywords = seoAutomation.extractKeywords(content, maxKeywords);
+    res.json({ success: true, keywords });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to extract keywords' });
+  }
+});
+
 // Generate social variants (LinkedIn/Facebook/Instagram Reels) - copy/export only
 router.post('/ai-content-writer/social-variants', async (req, res) => {
   try {
@@ -1300,6 +1348,20 @@ router.post('/blog/publish', async (req, res) => {
     console.log('[BLOG-PUBLISH] Backend response status:', backendRes.status);
     if (backendRes.status !== 200 && backendRes.status !== 201) {
       console.error('[BLOG-PUBLISH] Backend error:', backendRes.status, JSON.stringify(backendRes.data));
+    }
+
+    // If published successfully with status = 'published', ping search engines
+    if ((backendRes.status === 200 || backendRes.status === 201) && 
+        backendRes.data?.success && 
+        req.body?.status === 'published') {
+      // Ping search engines asynchronously (don't block the response)
+      seoAutomation.pingSitemapToSearchEngines()
+        .then(results => {
+          console.log('[SEO] Sitemap ping results:', JSON.stringify(results));
+        })
+        .catch(err => {
+          console.error('[SEO] Sitemap ping failed:', err.message);
+        });
     }
 
     res.status(backendRes.status).json(backendRes.data);
