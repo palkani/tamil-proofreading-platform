@@ -1285,15 +1285,21 @@ router.post('/blog/publish', async (req, res) => {
     }
 
     console.log('[BLOG-PUBLISH] Admin publishing:', userEmail, 'to URL:', url);
+    console.log('[BLOG-PUBLISH] Request body keys:', Object.keys(req.body || {}));
+    console.log('[BLOG-PUBLISH] Title:', req.body?.title?.substring(0, 50));
+    console.log('[BLOG-PUBLISH] Content length:', req.body?.content_text?.length || 0);
+    console.log('[BLOG-PUBLISH] Auth header present:', !!headers.Authorization);
 
     const backendRes = await axiosWithPool.post(url, req.body, {
       headers,
       validateStatus: () => true,
+      timeout: 30000, // 30 second timeout for blog creation
     });
 
     // Log backend response for debugging
+    console.log('[BLOG-PUBLISH] Backend response status:', backendRes.status);
     if (backendRes.status !== 200 && backendRes.status !== 201) {
-      console.error('[BLOG-PUBLISH] Backend error:', backendRes.status, backendRes.data);
+      console.error('[BLOG-PUBLISH] Backend error:', backendRes.status, JSON.stringify(backendRes.data));
     }
 
     res.status(backendRes.status).json(backendRes.data);
