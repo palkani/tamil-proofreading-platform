@@ -544,6 +544,26 @@ router.get('/analytics', (req, res) => {
   });
 });
 
+// Admin Affiliates page
+router.get('/admin/affiliates', (req, res) => {
+  const user = req.user;
+  const adminEmails = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com'];
+  const userEmail = String(user?.email || '').toLowerCase();
+  
+  if (!user || (!adminEmails.includes(userEmail) && user.role !== 'admin')) {
+    return res.status(403).render('pages/error', {
+      title: 'Access Denied',
+      message: 'You do not have permission to access this page.',
+      user: user
+    });
+  }
+  
+  res.render('pages/admin-affiliates', { 
+    title: 'Affiliate Management - ProofTamil',
+    user: user
+  });
+});
+
 // Archive removed: redirect to Drafts
 router.get('/archive', (req, res) => {
   return res.redirect(302, '/drafts');
