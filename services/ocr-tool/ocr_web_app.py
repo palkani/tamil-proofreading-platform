@@ -8,8 +8,8 @@ from flask import Flask, render_template, request, send_file, jsonify
 from werkzeug.utils import secure_filename
 import os
 from PIL import Image
-import pytesseract
 from pdf2image import convert_from_path
+from ocr_engine import run_ocr
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -27,19 +27,17 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def extract_text_from_image(image_path, lang='eng+tam'):
-    """Extract text from image using OCR with Tamil support"""
+    """Extract text from image using OCR (native C++ module or pytesseract) with Tamil support"""
     try:
         image = Image.open(image_path)
-        # Support both English and Tamil by default
-        text = pytesseract.image_to_string(image, lang=lang)
+        text = run_ocr(image, lang=lang)
         return text
     except Exception as e:
-        # Fallback to English only if Tamil not available
         if 'tam' in lang:
             try:
-                text = pytesseract.image_to_string(image, lang='eng')
+                text = run_ocr(image, lang='eng')
                 return text
-            except:
+            except Exception:
                 pass
         return f"Error: {str(e)}"
 
@@ -51,10 +49,9 @@ def extract_text_from_pdf(pdf_path, lang='eng+tam'):
         
         for i, image in enumerate(images, 1):
             try:
-                text = pytesseract.image_to_string(image, lang=lang)
-            except:
-                # Fallback to English only if Tamil not available
-                text = pytesseract.image_to_string(image, lang='eng')
+                text = run_ocr(image, lang=lang)
+            except Exception:
+                text = run_ocr(image, lang='eng')
             all_text.append(f"--- Page {i} ---\n{text}\n")
         
         return "\n".join(all_text)

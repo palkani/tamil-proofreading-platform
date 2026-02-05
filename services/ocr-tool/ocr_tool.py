@@ -7,8 +7,8 @@ Extracts text from images (JPEG, PNG) and PDFs, then converts to Word format
 import os
 import sys
 from PIL import Image
-import pytesseract
 from pdf2image import convert_from_path
+from ocr_engine import run_ocr
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -37,10 +37,8 @@ class ImageToTextConverter:
         try:
             # Open image
             image = Image.open(image_path)
-            
-            # Perform OCR
-            text = pytesseract.image_to_string(image)
-            
+            # Perform OCR (native C++ or pytesseract)
+            text = run_ocr(image)
             return text
         except Exception as e:
             print(f"Error extracting text from image: {e}")
@@ -67,9 +65,7 @@ class ImageToTextConverter:
             # Process each page
             for i, image in enumerate(images, 1):
                 print(f"Processing page {i} of {len(images)}...")
-                
-                # Extract text from page image
-                text = pytesseract.image_to_string(image)
+                text = run_ocr(image)
                 all_text.append(f"--- Page {i} ---\n{text}\n")
             
             return "\n".join(all_text)
