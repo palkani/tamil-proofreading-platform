@@ -5,11 +5,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://backend:8080/api/v1
+        - NEXT_PUBLIC_SITE_URL=http://localhost:5000
     ports:
       - "5000:5000"
     environment:
       - NODE_ENV=production
-      - BACKEND_URL=http://backend:8080
+      - NEXT_PUBLIC_API_URL=http://backend:8080/api/v1
       - DATABASE_URL=${DATABASE_URL:-postgresql://prooftamil:localdev123@db:5432/prooftamil_local}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
@@ -37,34 +40,6 @@ services:
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
       - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - ADVANCED_SUGGEST_URL=http://suggest-service:8080
-      - USE_ADVANCED_SUGGEST=${USE_ADVANCED_SUGGEST:-false}
-    depends_on:
-      db:
-        condition: service_healthy
-      suggest-service:
-        condition: service_healthy
-    networks:
-      - prooftamil
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  suggest-service:
-    build:
-      context: ./backend/services/suggest-service
-      dockerfile: Dockerfile
-    ports:
-      - "8081:8080"
-    environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://prooftamil:localdev123@db:5432/prooftamil_local}
-      - PORT=8080
-      - SUGGEST_TOP_K=50000
-      - ENABLE_LLM_SUGGEST=false
-      - NODE_ENV=production
     depends_on:
       db:
         condition: service_healthy

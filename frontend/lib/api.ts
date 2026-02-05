@@ -201,5 +201,23 @@ export const adminAPI = {
   },
 };
 
+// Blog API (public and authenticated)
+export const blogAPI = {
+  listPublished: async (): Promise<{ posts: { id: number; slug: string; title: string; excerpt?: string; published_at?: string }[] }> => {
+    const response = await apiClient.get('/blog/posts');
+    return response.data;
+  },
+
+  getBySlug: async (slug: string): Promise<{ post: { id: number; slug: string; title: string; body?: string; published_at?: string } }> => {
+    const response = await apiClient.get(`/blog/posts/${encodeURIComponent(slug)}`);
+    return response.data;
+  },
+
+  listMyPosts: async (): Promise<{ posts: { id: number; slug: string; title: string; published_at?: string }[] }> => {
+    const response = await apiClient.get('/blog/me/posts');
+    return response.data;
+  },
+};
+
 export { transliterateViaRunner, readBaseUrl } from './transliterator-runner';
 

@@ -1,0 +1,33 @@
+# Fly.io deployment for Tamil Proofreading Go API
+# Run from repo root: fly launch (or fly deploy)
+# Build uses backend/Dockerfile with context = repo root (backend Dockerfile copies backend/...)
+# Set secrets: fly secrets set DATABASE_URL=... JWT_SECRET=... OPENAI_API_KEY=... GOOGLE_GENAI_API_KEY=...
+
+app = "tamil-api"
+
+[build]
+  dockerfile = "backend/Dockerfile"
+
+[env]
+  PORT = "8080"
+  GIN_MODE = "release"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  process_group = "app"
+
+  [[http_service.checks]]
+    grace_period = "5s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

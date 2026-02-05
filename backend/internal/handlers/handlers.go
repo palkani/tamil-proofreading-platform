@@ -33,8 +33,6 @@ type Handlers struct {
 	streamHub           *submissionStreamHub
 	imeSvc              *ime.Service
 	imeEnabled          bool
-	advancedClient      *ime.AdvancedClient // NEW: Advanced suggestion service
-	useAdvancedSuggest  bool                // NEW: Feature flag for advanced service
 	suggestEngine       *suggest.Engine
 	tamilWordCache      *tamil_word_cache.CacheService // NEW: Tamil word cache service
 }
@@ -71,37 +69,20 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 		}
 	}
 
-	// Create IME service with corpus database connection
+	// Create IME service with corpus database connection (advanced suggest service retired for cost consolidation)
 	imeSvc := ime.NewServiceWithDB(".", cfg.AksharaURL, sqlDB, cfg.IMEEnabled, cfg.IMECacheEnabled)
 
-	// Create advanced suggestion client if URL configured
-	var advancedClient *ime.AdvancedClient
-	useAdvancedSuggest := false
-	if cfg.AdvancedSuggestURL != "" {
-		advancedClient = ime.NewAdvancedClient(cfg.AdvancedSuggestURL)
-		useAdvancedSuggest = cfg.UseAdvancedSuggest
-		if useAdvancedSuggest {
-			log.Printf("[IME] Advanced suggestion service enabled: %s ✓", cfg.AdvancedSuggestURL)
-		} else {
-			log.Printf("[IME] Advanced suggestion service available but disabled (set USE_ADVANCED_SUGGEST=true to enable)")
-		}
-	} else {
-		log.Printf("[IME] Advanced suggestion service not configured (set ADVANCED_SUGGEST_URL to enable)")
-	}
-
 	h := &Handlers{
-		db:                 db,
-		cfg:                cfg,
-		authService:        authService,
-		emailService:       emailService,
-		nlpService:         nlpService,
-		llmService:         llmService,
-		paymentService:     paymentService,
-		streamHub:          newSubmissionStreamHub(),
-		imeSvc:             imeSvc,
-		imeEnabled:         cfg.IMEEnabled,
-		advancedClient:     advancedClient,
-		useAdvancedSuggest: useAdvancedSuggest,
+		db:            db,
+		cfg:           cfg,
+		authService:   authService,
+		emailService:  emailService,
+		nlpService:    nlpService,
+		llmService:    llmService,
+		paymentService: paymentService,
+		streamHub:     newSubmissionStreamHub(),
+		imeSvc:        imeSvc,
+		imeEnabled:    cfg.IMEEnabled,
 	}
 
 	// Initialize in-process suggestion engine (Hybrid Trie + ID tables)

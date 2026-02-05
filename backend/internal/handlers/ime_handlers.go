@@ -31,7 +31,6 @@ func NewIMEHandler(svc *ime.Service, enabled bool) *IMEHandler {
 func (h *Handlers) IMESuggest(c *gin.Context) {
 	reqID := c.GetString("request_id")
 	q := strings.TrimSpace(c.Query("q"))
-	prev := strings.TrimSpace(c.Query("prev")) // NEW: For context awareness
 	mode := strings.TrimSpace(c.Query("mode"))
 	if mode == "" {
 		mode = "spoken"
@@ -73,38 +72,14 @@ func (h *Handlers) IMESuggest(c *gin.Context) {
 		ctx = context.WithValue(ctx, "request_id", reqID)
 	}
 
-	// Try advanced service first if enabled
-	var cands []ime.Candidate
-	var meta map[string]interface{}
-	usedAdvanced := false
-
-	if h.useAdvancedSuggest && h.advancedClient != nil {
-		advCands, advMeta, err := h.advancedClient.Suggest(ctx, q, prev, limit)
-		if err == nil && len(advCands) > 0 {
-			// Success! Use advanced suggestions
-			cands = advCands
-			meta = advMeta
-			usedAdvanced = true
-			log.Printf(`[IME] event=advanced_success request_id=%s q=%q prev=%q count=%d latency_ms=%v`,
-				reqID, q, prev, len(cands), meta["latency_ms"])
-		} else {
-			// Advanced failed, log and fallback
-			log.Printf(`[IME] event=advanced_fallback request_id=%s q=%q error=%v - using basic service`,
-				reqID, q, err)
-		}
-	}
-
-	// Fallback to existing Aksharamukha service if advanced not used/failed
-	if !usedAdvanced {
-		cands, meta = h.imeSvc.Suggest(ctx, q, mode, limit)
-	}
+	// Use in-process IME service (Aksharamukha-backed + corpus). Advanced suggest service retired for cost consolidation.
+	cands, meta := h.imeSvc.Suggest(ctx, q, mode, limit)
 
 	meta["request_id"] = reqID
 	meta["duration_ms"] = time.Since(start).Milliseconds()
-	meta["used_advanced"] = usedAdvanced
 	cacheState, _ := meta["cache"]
-	log.Printf(`[IME] event=response request_id=%s q=%q mode=%s limit=%d cache=%v count=%d latency_ms=%v advanced=%v`,
-		reqID, q, mode, limit, cacheState, len(cands), meta["latency_ms"], usedAdvanced)
+	log.Printf(`[IME] event=response request_id=%s q=%q mode=%s limit=%d cache=%v count=%d latency_ms=%v`,
+		reqID, q, mode, limit, cacheState, len(cands), meta["latency_ms"])
 
 	suggestions := make([]map[string]interface{}, 0, len(cands))
 	for _, cnd := range cands {

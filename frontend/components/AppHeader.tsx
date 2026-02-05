@@ -44,6 +44,8 @@ export default function AppHeader({ showAdmin = false, userEmail, onLogout }: Ap
   const navLinks: NavLink[] = useMemo(() => {
     const base: NavLink[] = [
       { name: 'Home', href: '/' },
+      { name: 'Blog', href: '/blog' },
+      { name: 'OCR', href: '/tools/ocr' },
       { name: 'Contact', href: '/contact' },
     ];
 
