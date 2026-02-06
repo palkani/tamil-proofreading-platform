@@ -21,6 +21,7 @@ import (
 	"tamil-proofreading-platform/backend/internal/util/securecookie"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/api/idtoken"
 )
 
@@ -266,8 +267,13 @@ type ForgotPasswordRequest struct {
 }
 
 type ResetPasswordRequest struct {
-        Token    string `json:"token" binding:"required"`
-        Password string `json:"password" binding:"required,min=8"`
+	Token    string `json:"token" binding:"required"`
+	Password string `json:"password" binding:"required,min=8"`
+}
+
+// SupabaseTokenRequest is the body for exchanging a Supabase Auth JWT for our app session (Google sign-in via Supabase; existing users matched by email).
+type SupabaseTokenRequest struct {
+	AccessToken string `json:"access_token" binding:"required"`
 }
 
 // CheckPasswordStrength validates password strength without registration
@@ -575,6 +581,81 @@ func (h *Handlers) googleOAuthLogin(ctx context.Context, token string) (*models.
         name, _ := payload.Claims["name"].(string)
 
         return h.authService.EnsureOAuthUser(email, name)
+}
+
+// supabaseJWTClaims extracts email and display name from a Supabase Auth JWT payload (e.g. after Google sign-in).
+// Supabase JWT has: sub, email, user_metadata (full_name, name, etc.).
+func (h *Handlers) parseSupabaseJWT(accessToken string) (email, name string, err error) {
+        if h.cfg.SupabaseJWTSecret == "" {
+                return "", "", errors.New("supabase jwt secret not configured")
+        }
+        token, err := jwt.Parse(accessToken, func(token *jwt.Token) (interface{}, error) {
+                if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+                        return nil, errors.New("unexpected signing method")
+                }
+                return []byte(h.cfg.SupabaseJWTSecret), nil
+        })
+        if err != nil {
+                return "", "", err
+        }
+        claims, ok := token.Claims.(jwt.MapClaims)
+        if !ok || !token.Valid {
+                return "", "", errors.New("invalid supabase token")
+        }
+        email, _ = claims["email"].(string)
+        email = strings.TrimSpace(strings.ToLower(email))
+        if email == "" {
+                return "", "", errors.New("supabase token missing email")
+        }
+        if um, ok := claims["user_metadata"].(map[string]interface{}); ok {
+                if n, _ := um["full_name"].(string); n != "" {
+                        name = strings.TrimSpace(n)
+                }
+                if name == "" {
+                        if n, _ := um["name"].(string); n != "" {
+                                name = strings.TrimSpace(n)
+                        }
+                }
+        }
+        return email, name, nil
+}
+
+// SupabaseTokenExchange exchanges a Supabase Auth access_token (e.g. from Google sign-in via Supabase) for our app session.
+// Existing users are matched by email so the 40 migrated users continue to work without breaking.
+func (h *Handlers) SupabaseTokenExchange(c *gin.Context) {
+        var req SupabaseTokenRequest
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "access_token required"})
+                return
+        }
+        email, name, err := h.parseSupabaseJWT(req.AccessToken)
+        if err != nil {
+                log.Printf("[SUPABASE-AUTH] token_verify_failed err=%v", err)
+                c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired Supabase token"})
+                return
+        }
+        user, err := h.authService.EnsureOAuthUser(email, name)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to ensure user"})
+                return
+        }
+        if !user.IsActive {
+                c.JSON(http.StatusForbidden, gin.H{"error": "account is inactive"})
+                return
+        }
+        tokenPair, err := h.authService.IssueSession(user, sessionMetadataFromContext(c))
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
+                return
+        }
+        h.setRefreshCookie(c, tokenPair.RefreshToken, tokenPair.RefreshExpiresAt)
+        h.setAccessTokenCookie(c, tokenPair.AccessToken, tokenPair.AccessExpiresAt)
+        c.JSON(http.StatusOK, gin.H{
+                "user":                    user,
+                "access_token":            tokenPair.AccessToken,
+                "access_token_expires_at": tokenPair.AccessExpiresAt.UTC(),
+                "refresh_expires_at":      tokenPair.RefreshExpiresAt.UTC(),
+        })
 }
 
 // GoogleCallback handles the OAuth2 callback from Google

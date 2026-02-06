@@ -55,6 +55,9 @@ type Config struct {
 	SeedCorpusOnStartup       bool
 	SeedCorpusFile            string
 	SeedCorpusMinCount        int
+	// Supabase Auth (Google sign-in via Supabase; existing users matched by email)
+	SupabaseURL      string
+	SupabaseJWTSecret string
 }
 
 func Load() *Config {
@@ -151,6 +154,8 @@ func Load() *Config {
 		SeedCorpusOnStartup:    strings.ToLower(getEnv("SEED_CORPUS_ON_STARTUP", "false")) == "true",
 		SeedCorpusFile:         strings.TrimSpace(getEnv("SEED_CORPUS_FILE", "/root/seed_corpus_minimal.sql")),
 		SeedCorpusMinCount:     getEnvAsInt("SEED_CORPUS_MIN_COUNT", 1),
+		SupabaseURL:            strings.TrimRight(getEnv("SUPABASE_URL", ""), "/"),
+		SupabaseJWTSecret:      strings.TrimSpace(getEnv("SUPABASE_JWT_SECRET", "")),
 	}
 }
 

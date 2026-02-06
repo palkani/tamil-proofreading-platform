@@ -163,6 +163,7 @@ func main() {
 			auth.POST("/login", h.Login)
 			auth.POST("/logout", h.Logout)
 			auth.POST("/refresh", h.RefreshAccessToken)
+			auth.POST("/supabase-token", h.SupabaseTokenExchange)
 			auth.POST("/google/callback", h.GoogleCallback)
 			auth.GET("/google/callback", h.GoogleCallback)
 			auth.POST("/forgot-password", h.ForgotPassword)
