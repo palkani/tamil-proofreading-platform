@@ -1482,23 +1482,28 @@ router.get('/v1/suggest', async (req, res) => {
       return res.status(400).json({ error: 'Query parameter "q" required' });
     }
     
-    // Use AbortController for reliable timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second hard timeout
-    
-    // Proxy to Go backend's suggest endpoint
     const url = `${BACKEND_URL}/transliterate/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
-    
-    const response = await axiosWithPool.get(url, {
-      validateStatus: () => true,
-      timeout: 1500, // 1.5 second axios timeout
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeoutId);
-    
-    // OPTIMIZATION: Set cache headers for browser caching (1 minute)
+    const maxRetries = 4;
+    const retryDelayMs = 1000;
+    let response;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      response = await axiosWithPool.get(url, {
+        validateStatus: () => true,
+        timeout: 1500,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (response.status !== 503) break;
+      if (attempt < maxRetries) await new Promise((r) => setTimeout(r, retryDelayMs));
+    }
+
     res.set('Cache-Control', 'public, max-age=60');
+    if (response.status === 503) {
+      return res.status(200).json({ success: true, suggestions: [], source: 'backend_starting' });
+    }
     res.status(response.status).json(response.data);
   } catch (error) {
     const elapsed = Date.now() - startTime;
