@@ -1,4 +1,6 @@
-name: Deploy to Cloud Run
+# UI (Node.js) → Vercel | OAuth & DB → Supabase | Backend (Go) → Cloud Run
+
+name: Deploy to Cloud Run + Vercel
 
 on:
   push:
@@ -24,192 +26,168 @@ jobs:
       id-token: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
-      with:
-        credentials_json: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
 
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
-    - name: Configure Docker for Artifact Registry
-      run: |
-        gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
-    - name: Go build precheck (fail fast)
-      working-directory: backend
-      run: |
-        go env
-        go version
-        go mod tidy
-        go mod verify
-        CGO_ENABLED=0 GOOS=linux go build ./cmd/server
+      - name: Go build precheck (fail fast)
+        working-directory: backend
+        run: |
+          go env
+          go version
+          go mod tidy
+          go mod verify
+          CGO_ENABLED=0 GOOS=linux go build ./cmd/server
 
-    - name: Build Backend Image
-      run: |
-        docker build \
-          -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
-          -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:latest \
-          -f backend/Dockerfile \
-          .
+      - name: Build Backend Image
+        run: |
+          docker build \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:latest \
+            -f backend/Dockerfile \
+            .
 
-    - name: Push Backend Image
-      run: |
-        docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }}
-        docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:latest
+      - name: Push Backend Image
+        run: |
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }}
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:latest
 
-    - name: Deploy Backend to Cloud Run
-      run: |
-        gcloud run deploy prooftamil-backend \
-          --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
-          --region=${{ env.REGION }} \
-          --platform=managed \
-          --allow-unauthenticated \
-          --memory=1Gi \
-          --cpu=1 \
-          --timeout=300 \
-          --min-instances=0 \
-          --max-instances=100 \
-          --port=8080 \
-          --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUGGEST_MIN_LEN=2,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,REDIS_URL=${{ secrets.REDIS_URL }} \
-          --update-secrets DATABASE_URL=DATABASE_URL:latest \
-          --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
-          --update-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest \
-          --update-secrets GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest \
-          --update-secrets GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest \
-          --update-secrets JWT_SECRET=JWT_SECRET:latest
+      - name: Deploy Backend to Cloud Run
+        run: |
+          gcloud run deploy prooftamil-backend \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --memory=1Gi \
+            --cpu=1 \
+            --timeout=300 \
+            --min-instances=0 \
+            --max-instances=100 \
+            --port=8080 \
+            --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUGGEST_MIN_LEN=2,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,REDIS_URL=${{ secrets.REDIS_URL }} \
+            --update-secrets DATABASE_URL=DATABASE_URL:latest \
+            --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
+            --update-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest \
+            --update-secrets GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest \
+            --update-secrets GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest \
+            --update-secrets JWT_SECRET=JWT_SECRET:latest
 
-    - name: Deploy Backend to Cloud Run (US Region)
-      run: |
-        # Push image to US region artifact registry
-        docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
-          us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }}
-        docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} || echo "US push skipped - registry may not exist"
-        
-        # Deploy to US Central
-        gcloud run deploy prooftamil-backend-us \
-          --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
-          --region=us-central1 \
-          --platform=managed \
-          --allow-unauthenticated \
-          --memory=1Gi \
-          --cpu=1 \
-          --timeout=300 \
-          --min-instances=0 \
-          --max-instances=100 \
-          --port=8080 \
-          --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUGGEST_MIN_LEN=2,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,REDIS_URL=${{ secrets.REDIS_URL }} \
-          --update-secrets DATABASE_URL=DATABASE_URL:latest \
-          --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
-          --update-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest \
-          --update-secrets GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest \
-          --update-secrets GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest \
-          --update-secrets JWT_SECRET=JWT_SECRET:latest || echo "US deployment skipped - may need setup"
+      - name: Deploy Backend to Cloud Run (US Region)
+        run: |
+          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
+            us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }}
+          docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} || echo "US push skipped - registry may not exist"
 
-    - name: Verify Backend Health (Both Regions)
-      run: |
-        sleep 10
-        echo "=== Asia South (Mumbai) ==="
-        BACKEND_URL=$(gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)')
-        echo "Backend URL: $BACKEND_URL"
-        curl -f "$BACKEND_URL/health" || echo "Health check pending..."
-        
-        echo ""
-        echo "=== US Central ==="
-        BACKEND_URL_US=$(gcloud run services describe prooftamil-backend-us --region=us-central1 --format='value(status.url)' 2>/dev/null) || echo "US backend not yet deployed"
-        if [ -n "$BACKEND_URL_US" ]; then
-          echo "Backend URL (US): $BACKEND_URL_US"
-          curl -f "$BACKEND_URL_US/health" || echo "US health check pending..."
-        fi
+          gcloud run deploy prooftamil-backend-us \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
+            --region=us-central1 \
+            --platform=managed \
+            --allow-unauthenticated \
+            --memory=1Gi \
+            --cpu=1 \
+            --timeout=300 \
+            --min-instances=0 \
+            --max-instances=100 \
+            --port=8080 \
+            --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUGGEST_MIN_LEN=2,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,REDIS_URL=${{ secrets.REDIS_URL }} \
+            --update-secrets DATABASE_URL=DATABASE_URL:latest \
+            --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
+            --update-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest \
+            --update-secrets GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest \
+            --update-secrets GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest \
+            --update-secrets JWT_SECRET=JWT_SECRET:latest || echo "US deployment skipped - may need setup"
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
-
-    - name: Seed Tamil Wikipedia Corpus (One-time)
-      id: seed-corpus
-      continue-on-error: true
-      run: |
-        echo "📦 Seeding tamil_words from Tamil Wikipedia (one-time)..."
-        
-        # Get DATABASE_URL from Secret Manager
-        DATABASE_URL=$(gcloud secrets versions access latest --secret=DATABASE_URL --project=${{ env.PROJECT_ID }})
-        
-        if [ -z "$DATABASE_URL" ]; then
-          echo "⚠️  DATABASE_URL secret not found - skipping corpus seed"
-          exit 0
-        fi
-
-        COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM tamil_words;" | tr -d '[:space:]')
-        if [ -z "$COUNT" ]; then
-          echo "⚠️  Could not read tamil_words count - skipping corpus seed"
-          exit 0
-        fi
-        echo "tamil_words current count: $COUNT"
-        if [ "$COUNT" -ge 100000 ]; then
-          echo "✅ tamil_words already populated (>= 100000). Skipping."
-          exit 0
-        fi
-        
-        echo "Building SQL from tawiki dump..."
-        python3 scripts/build_tamil_wiki_corpus.py --max-words 100000 --output /tmp/seed_corpus_wiki.sql
-
-        echo "Running SQL seed script..."
-        psql "$DATABASE_URL" -f /tmp/seed_corpus_wiki.sql || {
-          echo "⚠️  SQL seeding failed - may need Cloud SQL Auth Proxy"
-          echo "Tables may already be populated or connection failed"
-        }
-        
-        echo "✅ Corpus seed step complete"
-
-    
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-
-    - name: Install frontend dependencies
-      working-directory: express-frontend
-      run: |
-        npm config set registry https://registry.npmjs.org
-        npm config set fetch-retries 5
-        npm config set fetch-retry-factor 2
-        npm config set fetch-retry-mintimeout 20000
-        npm config set fetch-timeout 600000
-        for i in 1 2 3; do
-          npm ci && break
-          echo "npm ci failed (attempt $i), retrying in 10s..."
+      - name: Verify Backend Health (Both Regions)
+        run: |
           sleep 10
-        done
-        # Verify tailwindcss is installed
-        npm list tailwindcss || npm install tailwindcss
+          echo "=== Asia South (Mumbai) ==="
+          BACKEND_URL=$(gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)')
+          echo "Backend URL: $BACKEND_URL"
+          curl -f "$BACKEND_URL/health" || echo "Health check pending..."
 
-    - name: Build frontend assets
-      working-directory: express-frontend
-      run: |
-        npm run build:css
+          echo ""
+          echo "=== US Central ==="
+          BACKEND_URL_US=$(gcloud run services describe prooftamil-backend-us --region=us-central1 --format='value(status.url)' 2>/dev/null) || echo "US backend not yet deployed"
+          if [ -n "$BACKEND_URL_US" ]; then
+            echo "Backend URL (US): $BACKEND_URL_US"
+            curl -f "$BACKEND_URL_US/health" || echo "US health check pending..."
+          fi
 
-    - name: Check Vercel credentials
-      run: |
-        if [ -z "${VERCEL_TOKEN}" ] || [ -z "${VERCEL_ORG_ID}" ] || [ -z "${VERCEL_PROJECT_ID}" ]; then
-          echo "Missing Vercel secrets. Ensure VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID are set in GitHub secrets."
-          exit 1
-        fi
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
 
-    - name: Deploy Frontend to Vercel
-      run: |
-        npm install --global vercel@latest
-        vercel pull --yes --environment=production --token=$VERCEL_TOKEN
-        # Force deployment (--force ensures fresh build)
-        vercel deploy --prod --token=$VERCEL_TOKEN --yes --force
-        echo "Deployment complete. Cache headers are configured in vercel.json."
+      - name: Seed Tamil Wikipedia Corpus (One-time)
+        id: seed-corpus
+        continue-on-error: true
+        run: |
+          echo "Seeding tamil_words from Tamil Wikipedia (one-time)..."
+          DATABASE_URL=$(gcloud secrets versions access latest --secret=DATABASE_URL --project=${{ env.PROJECT_ID }}) || exit 0
+          [ -z "$DATABASE_URL" ] && echo "DATABASE_URL not found - skipping" && exit 0
+          COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM tamil_words;" 2>/dev/null | tr -d '[:space:]') || exit 0
+          [ -z "$COUNT" ] && exit 0
+          echo "tamil_words count: $COUNT"
+          [ "$COUNT" -ge 100000 ] && echo "Already populated. Skipping." && exit 0
+          python3 scripts/build_tamil_wiki_corpus.py --max-words 100000 --output /tmp/seed_corpus_wiki.sql
+          psql "$DATABASE_URL" -f /tmp/seed_corpus_wiki.sql || echo "SQL seed failed - tables may exist"
+          echo "Corpus seed step complete"
 
-    - name: Deployment Complete
-      run: |
-        echo "✅ Deployment Complete!"
-        echo "Backend Service: $(gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)')"
-        echo "Frontend Service: Deployed via Vercel"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install frontend dependencies
+        working-directory: express-frontend
+        run: |
+          npm config set registry https://registry.npmjs.org
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-timeout 600000
+          for i in 1 2 3; do
+            npm ci && break
+            echo "npm ci failed (attempt $i), retrying in 10s..."
+            sleep 10
+          done
+          npm list tailwindcss || npm install tailwindcss
+
+      - name: Build frontend assets
+        working-directory: express-frontend
+        run: npm run build:css
+
+      - name: Check Vercel credentials
+        run: |
+          if [ -z "${VERCEL_TOKEN}" ] || [ -z "${VERCEL_ORG_ID}" ] || [ -z "${VERCEL_PROJECT_ID}" ]; then
+            echo "Missing Vercel secrets. Ensure VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID are set in GitHub secrets."
+            exit 1
+          fi
+
+      - name: Deploy Frontend to Vercel
+        run: |
+          npm install --global vercel@latest
+          vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+          vercel deploy --prod --token=$VERCEL_TOKEN --yes --force
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deployment Complete
+        run: |
+          echo "Deployment Complete"
+          echo "Backend (Cloud Run): $(gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)')"
+          echo "Frontend: Deployed via Vercel"
