@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"tamil-proofreading-platform/backend/internal/config"
@@ -66,6 +67,35 @@ func main() {
 		}
 	}
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	// Listen on 8080 immediately so Cloud Run startup TCP probe succeeds.
+	// Until DB + migrations + handlers are ready, /health returns 200; other paths return 503.
+	var readyHandler atomic.Value
+	wrapper := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if v := readyHandler.Load(); v != nil {
+			v.(http.Handler).ServeHTTP(w, req)
+			return
+		}
+		if req.URL.Path == "/health" || req.URL.Path == "/api/v1/health" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"ok"}`))
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"status":"starting"}`))
+	})
+	go func() {
+		log.Printf("Listening on port %s (startup probe ready)", port)
+		if err := http.ListenAndServe(":"+port, wrapper); err != nil {
+			log.Fatal("HTTP server failed:", err)
+		}
+	}()
+
 	// Initialize database with retry logic
 	var db *gorm.DB
 	var err error
@@ -96,14 +126,12 @@ func main() {
 		&models.SuggestionAcceptEvent{},
 		&models.TamilBigram{},
 		&models.TamilPhrase{},
+		&models.BlogPost{},
 	); err != nil {
 		log.Printf("Warning: AutoMigrate failed: %v", err)
 	}
 
-	// Run custom migrations
-	if err := migrations.MigrateBlogPosts(db); err != nil {
-		log.Printf("Warning: Blog posts migration failed: %v", err)
-	}
+	// Run custom migrations (one-off / schema fixes only)
 	if err := migrations.MigrateNewsletterSubscribers(db); err != nil {
 		log.Printf("Warning: Newsletter migration failed: %v", err)
 	}
@@ -298,14 +326,9 @@ func main() {
 	r.GET("/api/v1/ocr/download/:filename", h.OCRDownload)
 	r.GET("/api/v1/ocr/health", h.OCRHealth)
 
-	// Start server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	// Switch traffic to full app (Cloud Run startup probe already passed)
+	readyHandler.Store(r)
+	log.Println("Backend ready; full router active")
 
-	log.Printf("Server starting on port %s", port)
-	if err := r.Run(":" + port); err != nil {
-		log.Fatal("Failed to start server:", err)
-	}
+	select {} // block forever
 }
