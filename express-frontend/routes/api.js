@@ -403,15 +403,26 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     console.log('[OAUTH-HANDOFF] callback handled on frontend host=', req.hostname);
     console.log('[OAUTH-PROXY] forwarding to:', target);
 
-    const response = await axios({
-      method: 'get',
-      url: target,
-      params: req.query,
-      headers: forwardHeaders,
-      withCredentials: true,
-      validateStatus: () => true,
-      maxRedirects: 0, // Don't follow redirects automatically
-    });
+    const maxRetries = 5;
+    const retryDelayMs = 2000;
+    let response;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      response = await axios({
+        method: 'get',
+        url: target,
+        params: req.query,
+        headers: forwardHeaders,
+        withCredentials: true,
+        validateStatus: () => true,
+        maxRedirects: 0, // Don't follow redirects automatically
+      });
+      if (response.status !== 503) break;
+      if (attempt < maxRetries) {
+        console.log(`[OAUTH-PROXY] backend 503 (starting), retry ${attempt}/${maxRetries} in ${retryDelayMs}ms`);
+        await new Promise((r) => setTimeout(r, retryDelayMs));
+      }
+    }
 
     // Log all response headers for debugging
     console.log('[OAUTH-HANDOFF] Response status:', response.status);
