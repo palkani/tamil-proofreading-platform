@@ -78,7 +78,7 @@ func NewCacheService(db *gorm.DB, redisURL string) *CacheService {
 	return cs
 }
 
-// isRetryableDBError returns true for transient connection errors (e.g. pool exhausted, EOF, connection reset).
+// isRetryableDBError returns true for transient connection errors (e.g. pool exhausted, EOF, deadline exceeded).
 func isRetryableDBError(err error) bool {
 	if err == nil {
 		return false
@@ -90,7 +90,9 @@ func isRetryableDBError(err error) bool {
 		strings.Contains(s, "connection refused") ||
 		strings.Contains(s, "max clients") ||
 		strings.Contains(s, "MaxClientsInSessionMode") ||
-		strings.Contains(s, "too many connections")
+		strings.Contains(s, "too many connections") ||
+		strings.Contains(s, "deadline exceeded") ||
+		strings.Contains(s, "context canceled")
 }
 
 // InitializeCache preloads Tamil words from database into cache

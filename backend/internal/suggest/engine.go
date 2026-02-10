@@ -18,6 +18,7 @@ type Engine struct {
 	cache         *LRUCache[*SuggestResponse]
 	metrics       *LatencyMetrics
 	redis         *RedisClient
+	localSel      *LocalSelectionStore // in-memory personalization when Redis is disabled
 	minLen        int
 	limitDefault  int
 	maxTopPerNode int
@@ -88,17 +89,22 @@ func NewEngine(db *gorm.DB, opts EngineOptions) (*Engine, error) {
 		opts.RedisTimeoutMs = 15 // OPTIMIZED: Reduced from 25ms for faster response
 	}
 
+	redisClient := NewRedisClient(opts.RedisURL)
 	e := &Engine{
 		db:            db,
 		cache:         NewLRUCache[*SuggestResponse](opts.CacheEntries, opts.CacheTTL),
 		metrics:       NewLatencyMetrics(1000),
-		redis:         NewRedisClient(opts.RedisURL),
+		redis:         redisClient,
+		localSel:      nil,
 		minLen:        opts.MinLen,
 		limitDefault:  opts.LimitDefault,
 		maxTopPerNode: opts.MaxTopPerNode,
 		refreshSec:    opts.RefreshSec,
 		vowelCollapse: opts.VowelCollapse,
 		redisTimeout:  time.Duration(opts.RedisTimeoutMs) * time.Millisecond,
+	}
+	if redisClient == nil || !redisClient.Enabled() {
+		e.localSel = NewLocalSelectionStore()
 	}
 
 	if err := e.reload(context.Background()); err != nil {
@@ -132,17 +138,22 @@ func NewEngineWithEmptyData(db *gorm.DB, opts EngineOptions) *Engine {
 	if opts.RedisTimeoutMs <= 0 {
 		opts.RedisTimeoutMs = 15
 	}
+	redisClient := NewRedisClient(opts.RedisURL)
 	e := &Engine{
 		db:            db,
 		cache:         NewLRUCache[*SuggestResponse](opts.CacheEntries, opts.CacheTTL),
 		metrics:       NewLatencyMetrics(1000),
-		redis:         NewRedisClient(opts.RedisURL),
+		redis:         redisClient,
+		localSel:      nil,
 		minLen:        opts.MinLen,
 		limitDefault:  opts.LimitDefault,
 		maxTopPerNode: opts.MaxTopPerNode,
 		refreshSec:    opts.RefreshSec,
 		vowelCollapse: opts.VowelCollapse,
 		redisTimeout:  time.Duration(opts.RedisTimeoutMs) * time.Millisecond,
+	}
+	if redisClient == nil || !redisClient.Enabled() {
+		e.localSel = NewLocalSelectionStore()
 	}
 	empty := &SuggestData{
 		Tables:       NewIDTables(1),
@@ -153,7 +164,10 @@ func NewEngineWithEmptyData(db *gorm.DB, opts EngineOptions) *Engine {
 	}
 	e.data.Store(empty)
 	go func() {
-		if err := e.reload(context.Background()); err != nil {
+		// 15 min timeout for initial load of large lexicon (227k+ rows) over pooler
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+		if err := e.reload(ctx); err != nil {
 			return
 		}
 		if e.refreshSec > 0 {
@@ -198,17 +212,20 @@ func (e *Engine) RedisEnabled() bool {
 }
 
 func (e *Engine) RecordSelection(ctx context.Context, uid, prefix string, id int32) {
-	if !e.RedisEnabled() || uid == "" || id <= 0 {
+	if uid == "" || id <= 0 {
 		return
 	}
 	norm := NormalizeRoman(prefix, NormalizeOptions{EnableVowelCollapse: e.vowelCollapse})
-	if norm == "" {
+	member := idToMember(id)
+	if e.RedisEnabled() {
+		e.redis.ZIncrBy(ctx, "sg:u:"+uid+":sel", member, 1)
+		e.redis.ZIncrBy(ctx, "sg:u:"+uid+":p:"+norm, member, 1)
+		e.redis.ZIncrBy(ctx, "sg:g:sel", member, 1)
 		return
 	}
-	member := idToMember(id)
-	e.redis.ZIncrBy(ctx, "sg:u:"+uid+":sel", member, 1)
-	e.redis.ZIncrBy(ctx, "sg:u:"+uid+":p:"+norm, member, 1)
-	e.redis.ZIncrBy(ctx, "sg:g:sel", member, 1)
+	if e.localSel != nil {
+		e.localSel.Record(uid, norm, member)
+	}
 }
 
 func (e *Engine) Suggest(ctx context.Context, req SuggestRequest) (*SuggestResponse, error) {
@@ -344,23 +361,25 @@ func (e *Engine) buildSuggestions(ctx context.Context, prefix string, ids []int3
 		limit = 10
 	}
 
-	// Redis personalization (optional)
+	// Personalization: Redis or in-memory (when Redis disabled)
 	userSel := map[string]float64{}
 	userPref := map[string]float64{}
 	globalSel := map[string]float64{}
 	redisMs := 0.0
+	memberIDs := make([]string, 0, len(ids))
+	for _, id := range ids {
+		memberIDs = append(memberIDs, idToMember(id))
+	}
 	if e.redis.Enabled() && uid != "" {
 		rctx, cancel := e.redis.WithTimeout(ctx, e.redisTimeout)
 		defer cancel()
-		memberIDs := make([]string, 0, len(ids))
-		for _, id := range ids {
-			memberIDs = append(memberIDs, idToMember(id))
-		}
 		rs := time.Now()
 		userSel = e.redis.ZMScore(rctx, "sg:u:"+uid+":sel", memberIDs)
 		userPref = e.redis.ZMScore(rctx, "sg:u:"+uid+":p:"+prefix, memberIDs)
 		globalSel = e.redis.ZMScore(rctx, "sg:g:sel", memberIDs)
 		redisMs = msSince(rs)
+	} else if e.localSel != nil && uid != "" {
+		userSel, userPref, globalSel = e.localSel.GetScores(uid, prefix, memberIDs)
 	}
 
 	scoredList := make([]scoredEntry, 0, len(ids))
@@ -419,10 +438,8 @@ func (e *Engine) buildSuggestions(ctx context.Context, prefix string, ids []int3
 			break
 		}
 	}
-	if e.redis.Enabled() && uid != "" {
-		if len(out) > 0 {
-			out[0].Score = 1.0
-		}
+	if (e.redis.Enabled() || e.localSel != nil) && uid != "" && len(out) > 0 {
+		out[0].Score = 1.0
 	}
 	return out, redisMs
 }

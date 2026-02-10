@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// isRetryableDBError returns true for transient connection errors (e.g. unexpected EOF).
+// isRetryableDBError returns true for transient connection errors (e.g. unexpected EOF, deadline exceeded).
 func isRetryableDBError(err error) bool {
 	if err == nil {
 		return false
@@ -19,7 +19,9 @@ func isRetryableDBError(err error) bool {
 	return strings.Contains(s, "EOF") ||
 		strings.Contains(s, "connection reset") ||
 		strings.Contains(s, "broken pipe") ||
-		strings.Contains(s, "connection refused")
+		strings.Contains(s, "connection refused") ||
+		strings.Contains(s, "deadline exceeded") ||
+		strings.Contains(s, "context canceled")
 }
 
 type LexiconRow struct {

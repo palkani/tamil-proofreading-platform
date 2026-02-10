@@ -108,15 +108,29 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	// Initialize Tamil word cache service
 	tamilWordCache := tamil_word_cache.NewCacheService(db, cfg.RedisURL)
 	h.tamilWordCache = tamilWordCache
-	
-	// Preload cache in background (non-blocking)
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		if err := tamilWordCache.InitializeCache(ctx); err != nil {
-			log.Printf("[TamilWordCache] Failed to initialize cache: %v", err)
+
+	const cacheLoadTimeout = 15 * time.Minute
+	if cfg.PreloadTamilCacheAtStartup {
+		// Load cache at startup (block until done). Like JVM preload: first requests get warm cache; startup takes longer.
+		log.Printf("[TamilWordCache] Preloading at startup (PRELOAD_TAMIL_CACHE_AT_STARTUP=true)...")
+		ctx, cancel := context.WithTimeout(context.Background(), cacheLoadTimeout)
+		err := tamilWordCache.InitializeCache(ctx)
+		cancel()
+		if err != nil {
+			log.Printf("[TamilWordCache] Preload failed: %v (app will serve; cache may load later)", err)
+		} else {
+			log.Printf("[TamilWordCache] Preload complete ✓")
 		}
-	}()
+	} else {
+		// Preload in background (non-blocking). 15 min timeout for large corpus (227k+ rows) over pooler.
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), cacheLoadTimeout)
+			defer cancel()
+			if err := tamilWordCache.InitializeCache(ctx); err != nil {
+				log.Printf("[TamilWordCache] Failed to initialize cache: %v", err)
+			}
+		}()
+	}
 
 	h.startArchiveCleanup()
 	h.startIMEAggregateJob()

@@ -56,6 +56,8 @@ type Config struct {
 	SeedCorpusOnStartup       bool
 	SeedCorpusFile            string
 	SeedCorpusMinCount        int
+	// Preload Tamil word cache at startup (block until loaded). Like JVM -X preload; first requests get warm cache. Default false to avoid long startup (e.g. Cloud Run).
+	PreloadTamilCacheAtStartup bool
 	// Supabase Auth (Google sign-in via Supabase; existing users matched by email)
 	SupabaseURL      string
 	SupabaseJWTSecret string
@@ -155,6 +157,7 @@ func Load() *Config {
 		SeedCorpusOnStartup:    strings.ToLower(getEnv("SEED_CORPUS_ON_STARTUP", "false")) == "true",
 		SeedCorpusFile:         strings.TrimSpace(getEnv("SEED_CORPUS_FILE", "/root/seed_corpus_minimal.sql")),
 		SeedCorpusMinCount:     getEnvAsInt("SEED_CORPUS_MIN_COUNT", 1),
+		PreloadTamilCacheAtStartup: strings.ToLower(getEnv("PRELOAD_TAMIL_CACHE_AT_STARTUP", "false")) == "true",
 		SupabaseURL:            strings.TrimRight(getEnv("SUPABASE_URL", ""), "/"),
 		SupabaseJWTSecret:      strings.TrimSpace(getEnv("SUPABASE_JWT_SECRET", "")),
 	}
