@@ -70,19 +70,35 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 		}
 	}
 
-	// Fallback to PostgreSQL if cache miss
+	// Fallback to PostgreSQL if cache miss — load in 10k batches to avoid statement timeout / unexpected EOF
 	if !loadedFromCache {
-		// Limit + order so query finishes within Supabase/default statement timeout (e.g. 8s).
-		// Load up to 100k words for full lexicon; reduce if DB times out.
 		const loadLimit = 100000
+		const batchSize = 10000
 		var loadErr error
 		for attempt := 0; attempt < 3; attempt++ {
-			rows = nil
-			loadErr = db.WithContext(ctx).Table("tamil_words").
-				Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
-				Order("frequency DESC, user_confirmed DESC").
-				Limit(loadLimit).
-				Find(&rows).Error
+			rows = make([]LexiconRow, 0, loadLimit)
+			offset := 0
+			for {
+				var batch []LexiconRow
+				batchErr := db.WithContext(ctx).Table("tamil_words").
+					Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
+					Order("frequency DESC, user_confirmed DESC").
+					Limit(batchSize).
+					Offset(offset).
+					Find(&batch).Error
+				if batchErr != nil {
+					loadErr = batchErr
+					break
+				}
+				rows = append(rows, batch...)
+				if len(batch) < batchSize {
+					break
+				}
+				offset += len(batch)
+				if len(rows) >= loadLimit {
+					break
+				}
+			}
 			if loadErr == nil {
 				break
 			}
@@ -105,11 +121,10 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 
 		// Generate version timestamp
 		version = time.Now().UTC().Format(time.RFC3339)
-		
+
 		// Cache in Redis for next time (async, don't block on error)
 		if opts.UseRedisCache && opts.RedisClient != nil && opts.RedisClient.Enabled() {
 			go func() {
-				// Use background context with timeout for caching
 				cacheCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
 				_ = opts.RedisClient.CacheLexiconRows(cacheCtx, rows, version)

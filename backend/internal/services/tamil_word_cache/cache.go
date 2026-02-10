@@ -95,22 +95,42 @@ func isRetryableDBError(err error) bool {
 		strings.Contains(s, "context canceled")
 }
 
-// InitializeCache preloads Tamil words from database into cache
-// Organized by first letter of transliteration for fast prefix lookups
+const batchSize = 10000 // load 10k rows per query to avoid statement timeout / unexpected EOF
+
+// InitializeCache preloads Tamil words from database into cache (in batches of 10k).
+// Organized by first letter of transliteration for fast prefix lookups.
 func (cs *CacheService) InitializeCache(ctx context.Context) error {
 	start := time.Now()
-	log.Printf("[TamilWordCache] Starting cache initialization...")
+	log.Printf("[TamilWordCache] Starting cache initialization (batch size %d)...", batchSize)
 
-	var words []models.TamilWord
+	words := make([]models.TamilWord, 0, maxWordsLoadLimit)
 	const maxAttempts = 5
 	var err error
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		words = nil
-		err = cs.db.WithContext(ctx).
-			Select("tamil_text, transliteration, frequency, category, user_confirmed").
-			Order("frequency DESC, user_confirmed DESC").
-			Limit(maxWordsLoadLimit).
-			Find(&words).Error
+		words = words[:0]
+		offset := 0
+		for {
+			var batch []models.TamilWord
+			batchErr := cs.db.WithContext(ctx).
+				Select("tamil_text, transliteration, frequency, category, user_confirmed").
+				Order("frequency DESC, user_confirmed DESC").
+				Limit(batchSize).
+				Offset(offset).
+				Find(&batch).Error
+			if batchErr != nil {
+				err = batchErr
+				break
+			}
+			words = append(words, batch...)
+			if len(batch) < batchSize {
+				break
+			}
+			offset += len(batch)
+			if len(words) >= maxWordsLoadLimit {
+				break
+			}
+			log.Printf("[TamilWordCache] Loaded %d words so far...", len(words))
+		}
 		if err == nil {
 			break
 		}

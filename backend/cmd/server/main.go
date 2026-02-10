@@ -130,8 +130,10 @@ func main() {
 		const maxIdle = 5
 		sqlDB.SetMaxOpenConns(maxOpen)
 		sqlDB.SetMaxIdleConns(maxIdle)
-		sqlDB.SetConnMaxLifetime(0) // no limit; pooler handles reconnects
-		log.Printf("Database pool: max_open=%d max_idle=%d (Supabase-friendly)", maxOpen, maxIdle)
+		// Recycle connections before pooler/server closes them (avoids "unexpected EOF" on long loads).
+		sqlDB.SetConnMaxLifetime(5 * time.Minute)
+		sqlDB.SetConnMaxIdleTime(1 * time.Minute)
+		log.Printf("Database pool: max_open=%d max_idle=%d conn_max_lifetime=5m conn_max_idle=1m (Supabase-friendly)", maxOpen, maxIdle)
 		log.Println("Database connected and ping OK (Supabase/Postgres)")
 	}
 
