@@ -73,16 +73,21 @@ func main() {
 	}
 
 	// Listen on 8080 immediately so Cloud Run startup TCP probe succeeds.
-	// Until DB + migrations + handlers are ready, /health returns 200; other paths return 503.
+	// Until DB + migrations + handlers are ready, /health returns 503; suggest endpoints return 200 with empty suggestions.
 	var readyHandler atomic.Value
-	// When not ready: return 503 for all paths (including /health) so Cloud Run
-	// HTTP startup probe to /health won't pass until we're ready and traffic is held.
 	wrapper := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if v := readyHandler.Load(); v != nil {
 			v.(http.Handler).ServeHTTP(w, req)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
+		path := req.URL.Path
+		// Suggest endpoints: return 200 with empty suggestions during startup so clients don't see 503.
+		if path == "/api/v1/suggest" || path == "/api/v1/transliterate/suggest" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"success":true,"suggestions":[],"source":"starting","q":"","query":""}`))
+			return
+		}
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte(`{"status":"starting"}`))
 	})

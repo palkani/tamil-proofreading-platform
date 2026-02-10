@@ -78,6 +78,18 @@ func NewCacheService(db *gorm.DB, redisURL string) *CacheService {
 	return cs
 }
 
+// isRetryableDBError returns true for transient connection errors (e.g. unexpected EOF, connection reset).
+func isRetryableDBError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "EOF") ||
+		strings.Contains(s, "connection reset") ||
+		strings.Contains(s, "broken pipe") ||
+		strings.Contains(s, "connection refused")
+}
+
 // InitializeCache preloads Tamil words from database into cache
 // Organized by first letter of transliteration for fast prefix lookups
 func (cs *CacheService) InitializeCache(ctx context.Context) error {
@@ -85,13 +97,24 @@ func (cs *CacheService) InitializeCache(ctx context.Context) error {
 	log.Printf("[TamilWordCache] Starting cache initialization...")
 
 	var words []models.TamilWord
-	// Read-only load: avoid Transaction so we don't hit 25P02 (aborted transaction) if
-	// SET LOCAL fails on managed Postgres (e.g. Supabase). Limit keeps the query bounded.
-	err := cs.db.WithContext(ctx).
-		Select("tamil_text, transliteration, frequency, category, user_confirmed").
-		Order("frequency DESC, user_confirmed DESC").
-		Limit(maxWordsLoadLimit).
-		Find(&words).Error
+	const maxAttempts = 3
+	var err error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		words = nil
+		err = cs.db.WithContext(ctx).
+			Select("tamil_text, transliteration, frequency, category, user_confirmed").
+			Order("frequency DESC, user_confirmed DESC").
+			Limit(maxWordsLoadLimit).
+			Find(&words).Error
+		if err == nil {
+			break
+		}
+		if !isRetryableDBError(err) || attempt == maxAttempts-1 {
+			break
+		}
+		log.Printf("[TamilWordCache] Load failed (attempt %d/%d), retrying: %v", attempt+1, maxAttempts, err)
+		time.Sleep(time.Duration(attempt+1) * time.Second)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to load words from database: %w", err)
 	}

@@ -10,6 +10,18 @@ import (
 	"gorm.io/gorm"
 )
 
+// isRetryableDBError returns true for transient connection errors (e.g. unexpected EOF).
+func isRetryableDBError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "EOF") ||
+		strings.Contains(s, "connection reset") ||
+		strings.Contains(s, "broken pipe") ||
+		strings.Contains(s, "connection refused")
+}
+
 type LexiconRow struct {
 	ID                 uint
 	TamilText          string
@@ -59,13 +71,26 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 	// Fallback to PostgreSQL if cache miss
 	if !loadedFromCache {
 		// Limit + order so query finishes within Supabase/default statement timeout (e.g. 8s).
-		const loadLimit = 100000
-		if err := db.WithContext(ctx).Table("tamil_words").
-			Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
-			Order("frequency DESC, user_confirmed DESC").
-			Limit(loadLimit).
-			Find(&rows).Error; err != nil {
-			log.Printf("[SUGGEST] LoadSuggestData DB error (using empty lexicon): %v", err)
+		const loadLimit = 50000
+		var loadErr error
+		for attempt := 0; attempt < 3; attempt++ {
+			rows = nil
+			loadErr = db.WithContext(ctx).Table("tamil_words").
+				Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
+				Order("frequency DESC, user_confirmed DESC").
+				Limit(loadLimit).
+				Find(&rows).Error
+			if loadErr == nil {
+				break
+			}
+			if !isRetryableDBError(loadErr) || attempt == 2 {
+				break
+			}
+			log.Printf("[SUGGEST] LoadSuggestData retry %d/3 after: %v", attempt+1, loadErr)
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+		}
+		if loadErr != nil {
+			log.Printf("[SUGGEST] LoadSuggestData DB error (using empty lexicon): %v", loadErr)
 			return &SuggestData{
 				Tables:       NewIDTables(1),
 				Trie:         NewTrie(opts.MaxTopPerNode, NewIDTables(1)),
