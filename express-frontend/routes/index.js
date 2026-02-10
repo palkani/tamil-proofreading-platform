@@ -459,10 +459,14 @@ router.get('/login', (req, res) => {
     return res.redirect(target);
   }
   const seo = getSeoData('login');
+  const rawError = req.query.error || null;
+  const errorMessage = rawError === 'backend_starting'
+    ? 'Backend is starting. Please try again in 30 seconds.'
+    : rawError;
   res.render('pages/login', {
     title: seo.title,
     seo: seo,
-    error: req.query.error || null,
+    error: errorMessage,
     googleClientId: GOOGLE_CLIENT_ID,
     supabaseUrl: SUPABASE_URL,
     supabaseAnonKey: SUPABASE_ANON_KEY,

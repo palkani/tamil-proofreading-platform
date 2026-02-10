@@ -42,6 +42,10 @@ const (
 	cacheTTL = 24 * time.Hour
 	// Max words to cache per letter (top N by frequency)
 	maxWordsPerLetter = 10000
+	// Max rows to load from DB (avoids statement timeout on large tables)
+	maxWordsLoadLimit = 100000
+	// DB statement timeout for cache load (Supabase default can be 8s)
+	cacheLoadStatementTimeout = "120000" // 120 seconds, in ms
 )
 
 func NewCacheService(db *gorm.DB, redisURL string) *CacheService {
@@ -82,12 +86,18 @@ func (cs *CacheService) InitializeCache(ctx context.Context) error {
 	start := time.Now()
 	log.Printf("[TamilWordCache] Starting cache initialization...")
 
-	// Fetch all Tamil words from database, ordered by frequency
 	var words []models.TamilWord
-	err := cs.db.
-		Select("tamil_text, transliteration, frequency, category, user_confirmed").
-		Order("frequency DESC, user_confirmed DESC").
-		Find(&words).Error
+	err := cs.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Raise statement_timeout for this transaction so large loads don't hit DB default (e.g. Supabase 8s)
+		if err := tx.Exec("SET LOCAL statement_timeout = ?", cacheLoadStatementTimeout).Error; err != nil {
+			log.Printf("[TamilWordCache] Could not set statement_timeout (continuing): %v", err)
+		}
+		return tx.
+			Select("tamil_text, transliteration, frequency, category, user_confirmed").
+			Order("frequency DESC, user_confirmed DESC").
+			Limit(maxWordsLoadLimit).
+			Find(&words).Error
+	})
 
 	if err != nil {
 		return fmt.Errorf("failed to load words from database: %w", err)

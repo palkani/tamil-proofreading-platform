@@ -403,8 +403,8 @@ router.get('/v1/auth/google/callback', async (req, res) => {
     console.log('[OAUTH-HANDOFF] callback handled on frontend host=', req.hostname);
     console.log('[OAUTH-PROXY] forwarding to:', target);
 
-    const maxRetries = 5;
-    const retryDelayMs = 2000;
+    const maxRetries = 10;
+    const retryDelayMs = 2500;
     let response;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -415,13 +415,19 @@ router.get('/v1/auth/google/callback', async (req, res) => {
         headers: forwardHeaders,
         withCredentials: true,
         validateStatus: () => true,
-        maxRedirects: 0, // Don't follow redirects automatically
+        maxRedirects: 0,
+        timeout: 15000,
       });
       if (response.status !== 503) break;
       if (attempt < maxRetries) {
         console.log(`[OAUTH-PROXY] backend 503 (starting), retry ${attempt}/${maxRetries} in ${retryDelayMs}ms`);
         await new Promise((r) => setTimeout(r, retryDelayMs));
       }
+    }
+
+    if (response.status === 503) {
+      console.warn('[OAUTH-PROXY] backend still 503 after', maxRetries, 'retries; redirect to login');
+      return res.redirect(302, '/login?error=backend_starting&message=Backend+is+starting.+Please+try+again+in+30+seconds.');
     }
 
     // Log all response headers for debugging

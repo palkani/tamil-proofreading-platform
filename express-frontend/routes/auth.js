@@ -15,12 +15,21 @@ function getBackendApiUrl() {
 }
 
 const BACKEND_URL = getBackendApiUrl();
+const AUTH_RETRY_PATHS = ['/auth/login', '/auth/register', '/auth/refresh'];
+const AUTH_RETRY_MAX = 8;
+const AUTH_RETRY_DELAY_MS = 2500;
 
 const forward = async (req, res, path, method = 'post') => {
   try {
     const url = `${BACKEND_URL}${path}`;
-    
-    // Log cookie presence for refresh endpoint
+    const doRetry = AUTH_RETRY_PATHS.includes(path);
+    const headers = {
+      ...req.headers,
+      host: undefined,
+      cookie: req.headers.cookie,
+      origin: undefined,
+    };
+
     if (path === '/auth/refresh') {
       const cookies = req.headers.cookie || '';
       const hasRefreshToken = cookies.includes('proof_refresh_token') || cookies.includes('refresh_token');
@@ -29,21 +38,25 @@ const forward = async (req, res, path, method = 'post') => {
         console.log(`[AUTH-PROXY] Cookie header preview: ${cookies.substring(0, 200)}...`);
       }
     }
-    
-    const backendRes = await axios({
-      method,
-      url,
-      data: req.body,
-      params: req.query,
-      headers: {
-        ...req.headers,
-        host: undefined,
-        cookie: req.headers.cookie, // Explicitly forward cookie header
-        origin: undefined,
-      },
-      withCredentials: true,
-      validateStatus: () => true, // forward backend status as-is
-    });
+
+    let backendRes;
+    for (let attempt = 1; attempt <= (doRetry ? AUTH_RETRY_MAX : 1); attempt++) {
+      backendRes = await axios({
+        method,
+        url,
+        data: req.body,
+        params: req.query,
+        headers,
+        withCredentials: true,
+        validateStatus: () => true,
+        timeout: 15000,
+      });
+      if (backendRes.status !== 503 || !doRetry || attempt === AUTH_RETRY_MAX) break;
+      if (attempt < AUTH_RETRY_MAX) {
+        console.log(`[AUTH-PROXY] ${path} backend 503 (starting), retry ${attempt}/${AUTH_RETRY_MAX} in ${AUTH_RETRY_DELAY_MS}ms`);
+        await new Promise((r) => setTimeout(r, AUTH_RETRY_DELAY_MS));
+      }
+    }
 
     // Log response for refresh endpoint
     if (path === '/auth/refresh') {

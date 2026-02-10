@@ -109,6 +109,13 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to connect to database after retries:", err)
 	}
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		if pingErr := sqlDB.Ping(); pingErr != nil {
+			log.Fatalf("Database ping failed (connection not usable): %v", pingErr)
+		}
+		log.Println("Database connected and ping OK (Supabase/Postgres)")
+	}
 
 	// Run migrations
 	log.Println("Running database migrations...")

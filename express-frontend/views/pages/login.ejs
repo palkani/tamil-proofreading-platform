@@ -243,7 +243,10 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
     const data = await response.json();
     
     if (!response.ok) {
-      const errorMessage = data?.error || data?.message || 'Login failed';
+      var errorMessage = data?.error || data?.message || 'Login failed';
+      if (response.status === 503 || data?.status === 'starting') {
+        errorMessage = 'Backend is starting. Please try again in 30 seconds.';
+      }
       throw new Error(String(errorMessage));
     }
     

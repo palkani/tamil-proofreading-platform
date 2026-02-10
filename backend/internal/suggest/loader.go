@@ -3,6 +3,7 @@ package suggest
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"strings"
 	"time"
 
@@ -60,9 +61,16 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 		if err := db.WithContext(ctx).Table("tamil_words").
 			Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
 			Find(&rows).Error; err != nil {
-			return nil, err
+			log.Printf("[SUGGEST] LoadSuggestData DB error (using empty lexicon): %v", err)
+			return &SuggestData{
+				Tables:       NewIDTables(1),
+				Trie:         NewTrie(opts.MaxTopPerNode, NewIDTables(1)),
+				LexiconCount: 0,
+				LoadedAt:     time.Now(),
+				TrieVersion:  time.Now().UTC().Format(time.RFC3339),
+			}, nil
 		}
-		
+
 		// Generate version timestamp
 		version = time.Now().UTC().Format(time.RFC3339)
 		

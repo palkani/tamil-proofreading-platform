@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"log"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -109,8 +110,11 @@ func Load() *Config {
 		imeEnabled = strings.TrimSpace(aksharaURL) != ""
 	}
 
+	dbURL := getEnv("DATABASE_URL", "postgres://user:password@localhost:5432/tamil_proofreading?sslmode=disable")
+	dbURL = ensureSupabaseSSL(dbURL)
+
 	return &Config{
-		DatabaseURL:               getEnv("DATABASE_URL", "postgres://user:password@localhost:5432/tamil_proofreading?sslmode=disable"),
+		DatabaseURL:               dbURL,
 		Port:                      getEnv("PORT", "8080"),
 		FrontendURL:               getEnv("FRONTEND_URL", "http://localhost:3000"),
 		GoogleOAuthRedirectDomain: getEnv("GOOGLE_OAUTH_REDIRECT_DOMAIN", "https://prooftamil.com"),
@@ -157,6 +161,33 @@ func Load() *Config {
 		SupabaseURL:            strings.TrimRight(getEnv("SUPABASE_URL", ""), "/"),
 		SupabaseJWTSecret:      strings.TrimSpace(getEnv("SUPABASE_JWT_SECRET", "")),
 	}
+}
+
+// ensureSupabaseSSL forces sslmode=require for Supabase hosts so the DB connection succeeds.
+func ensureSupabaseSSL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	host := u.Hostname()
+	if host == "" || !strings.Contains(host, "supabase.co") {
+		return raw
+	}
+	q := u.Query()
+	if q.Get("sslmode") == "" {
+		q.Set("sslmode", "require")
+	}
+	if q.Get("connect_timeout") == "" {
+		q.Set("connect_timeout", "10")
+	}
+	u.RawQuery = q.Encode()
+	out := u.String()
+	log.Printf("[CONFIG] Supabase DB detected; using sslmode=require, connect_timeout=10 for %s", host)
+	return out
 }
 
 func getEnv(key, defaultValue string) string {
