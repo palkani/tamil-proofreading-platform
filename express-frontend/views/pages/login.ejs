@@ -1,9 +1,11 @@
 <%- include('../partials/header') %>
 
-<!-- Google Client ID for OAuth (injected for runtime use on the browser) -->
+<!-- Supabase (Google sign-in) and legacy Google Client ID -->
 <script>
-  // Injected from server env (NEXT_PUBLIC_GOOGLE_CLIENT_ID preferred)
-  window.GOOGLE_CLIENT_ID = "<%= googleClientId || '' %>";
+  window.GOOGLE_CLIENT_ID = "<%= typeof googleClientId !== 'undefined' ? googleClientId : '' %>";
+  window.SUPABASE_URL = "<%= typeof supabaseUrl !== 'undefined' ? supabaseUrl : '' %>";
+  window.SUPABASE_ANON_KEY = "<%= typeof supabaseAnonKey !== 'undefined' ? supabaseAnonKey : '' %>";
+  window.SUPABASE_REDIRECT_TO = "<%= typeof redirectTo !== 'undefined' ? redirectTo : '/drafts' %>";
 
   // Early token capture + safe redirect handling:
   // - supports backend OAuth redirect to /drafts?access_token=...
@@ -202,9 +204,13 @@
   </div>
 </div>
 
+<% if (typeof supabaseUrl !== 'undefined' && supabaseUrl && typeof supabaseAnonKey !== 'undefined' && supabaseAnonKey) { %>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<% } %>
 <script src="/js/google-auth.js?v=20251215b"></script>
+<script src="/js/supabase-google-auth.js?v=20260204"></script>
 <script>
-document.getElementById('google-signin-btn')?.addEventListener('click', () => {
+document.getElementById('google-signin-btn')?.addEventListener('click', function () {
   if (window.triggerGoogleSignIn) {
     window.triggerGoogleSignIn();
   } else {

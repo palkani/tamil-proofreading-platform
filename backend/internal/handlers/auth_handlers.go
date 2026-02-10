@@ -621,7 +621,8 @@ func (h *Handlers) parseSupabaseJWT(accessToken string) (email, name string, err
 }
 
 // SupabaseTokenExchange exchanges a Supabase Auth access_token (e.g. from Google sign-in via Supabase) for our app session.
-// Existing users are matched by email so the 40 migrated users continue to work without breaking.
+// EnsureOAuthUser(email, name) looks up by email first; existing registered users (email/password or legacy Google OAuth)
+// are found by email and get a session—no duplicate account is created. New Google sign-ins create a user only if email is not in DB.
 func (h *Handlers) SupabaseTokenExchange(c *gin.Context) {
         var req SupabaseTokenRequest
         if err := c.ShouldBindJSON(&req); err != nil {

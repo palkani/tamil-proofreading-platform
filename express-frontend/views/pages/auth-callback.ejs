@@ -1,0 +1,69 @@
+<%- include('../partials/header') %>
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white p-4">
+  <div class="max-w-md w-full text-center">
+    <p id="status" class="text-gray-600">Signing you in…</p>
+    <p id="error" class="hidden text-red-600 mt-2"></p>
+    <a id="back-link" href="/login" class="hidden mt-4 inline-block text-primary-600 font-semibold hover:underline">Back to login</a>
+  </div>
+</div>
+<script>
+(function () {
+  var redirectTo = <%- JSON.stringify(redirectTo || '/drafts') %>;
+  if (typeof redirectTo !== 'string' || !redirectTo.startsWith('/') || redirectTo.startsWith('//')) redirectTo = '/drafts';
+
+  var statusEl = document.getElementById('status');
+  var errorEl = document.getElementById('error');
+  var backLink = document.getElementById('back-link');
+
+  function showError(msg) {
+    statusEl.textContent = '';
+    errorEl.textContent = msg || 'Sign-in failed. Try again.';
+    errorEl.classList.remove('hidden');
+    backLink.classList.remove('hidden');
+  }
+
+  // Supabase OAuth redirect puts tokens in hash: #access_token=...&refresh_token=...&expires_in=...
+  var hash = window.location.hash || '';
+  var params = new URLSearchParams(hash.replace(/^#/, ''));
+  var accessToken = params.get('access_token');
+  var errorParam = params.get('error_description') || params.get('error');
+
+  if (errorParam) {
+    showError(errorParam);
+    return;
+  }
+
+  if (!accessToken) {
+    showError('No session. Try signing in again.');
+    return;
+  }
+
+  fetch('/auth/supabase-token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ access_token: accessToken })
+  })
+    .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+    .then(function (result) {
+      if (!result.ok) {
+        showError(result.data && result.data.error ? result.data.error : 'Sign-in failed.');
+        return;
+      }
+      var token = result.data && result.data.access_token;
+      if (token && typeof localStorage !== 'undefined') {
+        localStorage.setItem('access_token', token);
+      }
+      if (window.authUtils && window.authUtils.handleAuthSuccess) {
+        window.authUtils.handleAuthSuccess(token, redirectTo);
+      } else {
+        document.cookie = 'access_token=' + encodeURIComponent(token) + '; path=/; SameSite=Lax; Max-Age=900';
+        window.location.replace(redirectTo);
+      }
+    })
+    .catch(function () {
+      showError('Network error. Try again.');
+    });
+})();
+</script>
+<%- include('../partials/footer') %>

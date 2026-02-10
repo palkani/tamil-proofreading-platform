@@ -133,6 +133,9 @@ router.post('/forgot-password', (req, res) => forward(req, res, '/auth/forgot-pa
 router.post('/reset-password', (req, res) => forward(req, res, '/auth/reset-password', 'post'));
 router.get('/me', (req, res) => forward(req, res, '/auth/me', 'get'));
 
+// Supabase: exchange Supabase Auth JWT (e.g. from Google sign-in via Supabase) for app session
+router.post('/supabase-token', (req, res) => forward(req, res, '/auth/supabase-token', 'post'));
+
 router.get('/google', (req, res) => {
   const redirectUri = 'https://www.prooftamil.com/api/v1/auth/google/callback';
   const clientId = '991187041222-dp582s8kvqqktpq3t0bihl43e4iv8m5i.apps.googleusercontent.com';

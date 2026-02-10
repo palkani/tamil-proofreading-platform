@@ -50,5 +50,6 @@ if (document.readyState === 'loading') {
   initializeGoogleAuth();
 }
 
-// Export global function
+// Export: Supabase script uses triggerGoogleSignInLegacy when Supabase is not configured
 window.triggerGoogleSignIn = triggerGoogleSignIn;
+window.triggerGoogleSignInLegacy = triggerGoogleSignIn;

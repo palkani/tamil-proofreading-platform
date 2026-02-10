@@ -459,11 +459,13 @@ router.get('/login', (req, res) => {
     return res.redirect(target);
   }
   const seo = getSeoData('login');
-  res.render('pages/login', { 
+  res.render('pages/login', {
     title: seo.title,
     seo: seo,
     error: req.query.error || null,
-    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    googleClientId: GOOGLE_CLIENT_ID,
+    supabaseUrl: SUPABASE_URL,
+    supabaseAnonKey: SUPABASE_ANON_KEY,
     redirectTo: req.query.redirect || '/drafts',
     demoMode: isDemoModeEnabled(),
   });
@@ -471,6 +473,21 @@ router.get('/login', (req, res) => {
 
 // Resolve Google Client ID once (prefer NEXT_PUBLIC_* so Vercel runtime matches frontend expectation)
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
+// Supabase (for Google sign-in via Supabase)
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+// Auth callback: Supabase OAuth redirect lands here with hash (#access_token=...). Exchange for app session and redirect.
+router.get('/auth/callback', (req, res) => {
+  const redirectTo = (typeof req.query.redirect === 'string' && req.query.redirect.startsWith('/'))
+    ? req.query.redirect
+    : '/drafts';
+  res.render('pages/auth-callback', {
+    title: 'Signing you in',
+    redirectTo,
+    supabaseUsed: !!(SUPABASE_URL && SUPABASE_ANON_KEY),
+  });
+});
 
 // Register page - redirect authenticated users to drafts
 router.get('/register', (req, res) => {
@@ -486,10 +503,12 @@ router.get('/register', (req, res) => {
     return res.redirect(target);
   }
   const seo = getSeoData('register');
-  res.render('pages/register', { 
+  res.render('pages/register', {
     title: seo.title,
     seo: seo,
     googleClientId: GOOGLE_CLIENT_ID,
+    supabaseUrl: SUPABASE_URL,
+    supabaseAnonKey: SUPABASE_ANON_KEY,
     redirectTo: req.query.redirect || '/drafts',
     demoMode: isDemoModeEnabled(),
   });

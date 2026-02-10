@@ -62,6 +62,7 @@ const ensureAppReadyMiddleware = (req, res, next) => {
     path.startsWith('/api/v1/auth/google/callback') ||
     path.startsWith('/v1/auth/google/callback') ||
     path.startsWith('/auth/google/callback') ||
+    path === '/auth/callback' ||
     path.startsWith('/workspace')
   ) {
     return next();
