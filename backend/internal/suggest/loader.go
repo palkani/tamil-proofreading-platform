@@ -58,8 +58,12 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 
 	// Fallback to PostgreSQL if cache miss
 	if !loadedFromCache {
+		// Limit + order so query finishes within Supabase/default statement timeout (e.g. 8s).
+		const loadLimit = 100000
 		if err := db.WithContext(ctx).Table("tamil_words").
 			Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
+			Order("frequency DESC, user_confirmed DESC").
+			Limit(loadLimit).
 			Find(&rows).Error; err != nil {
 			log.Printf("[SUGGEST] LoadSuggestData DB error (using empty lexicon): %v", err)
 			return &SuggestData{

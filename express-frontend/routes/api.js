@@ -1478,7 +1478,7 @@ router.put('/blog/posts/:id', async (req, res) => {
 // ============= OPTIMIZED SUGGEST ENDPOINTS =============
 // These routes are critical for IME performance (target <100ms latency)
 
-// Primary suggest endpoint used by transliterator-runner.js (/api/v1/suggest)
+// Primary suggest endpoint used by workspace.js for IME (proxies to backend in-process: trie + translit fallback).
 router.get('/v1/suggest', async (req, res) => {
   const startTime = Date.now();
   try {
