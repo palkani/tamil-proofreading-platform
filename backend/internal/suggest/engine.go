@@ -110,6 +110,59 @@ func NewEngine(db *gorm.DB, opts EngineOptions) (*Engine, error) {
 	return e, nil
 }
 
+// NewEngineWithEmptyData creates an engine with empty lexicon and starts a background reload.
+// The engine is usable immediately (returns empty suggestions); once reload completes, suggestions are populated.
+// Use this so the API never returns source "disabled" (engine is never nil).
+func NewEngineWithEmptyData(db *gorm.DB, opts EngineOptions) *Engine {
+	if opts.MinLen < 1 {
+		opts.MinLen = 2
+	}
+	if opts.LimitDefault <= 0 {
+		opts.LimitDefault = 5
+	}
+	if opts.MaxTopPerNode <= 0 {
+		opts.MaxTopPerNode = 15
+	}
+	if opts.CacheEntries <= 0 {
+		opts.CacheEntries = 2000
+	}
+	if opts.CacheTTL <= 0 {
+		opts.CacheTTL = 5 * time.Minute
+	}
+	if opts.RedisTimeoutMs <= 0 {
+		opts.RedisTimeoutMs = 15
+	}
+	e := &Engine{
+		db:            db,
+		cache:         NewLRUCache[*SuggestResponse](opts.CacheEntries, opts.CacheTTL),
+		metrics:       NewLatencyMetrics(1000),
+		redis:         NewRedisClient(opts.RedisURL),
+		minLen:        opts.MinLen,
+		limitDefault:  opts.LimitDefault,
+		maxTopPerNode: opts.MaxTopPerNode,
+		refreshSec:    opts.RefreshSec,
+		vowelCollapse: opts.VowelCollapse,
+		redisTimeout:  time.Duration(opts.RedisTimeoutMs) * time.Millisecond,
+	}
+	empty := &SuggestData{
+		Tables:       NewIDTables(1),
+		Trie:         NewTrie(opts.MaxTopPerNode, NewIDTables(1)),
+		LexiconCount: 0,
+		LoadedAt:     time.Now(),
+		TrieVersion:  time.Now().UTC().Format(time.RFC3339),
+	}
+	e.data.Store(empty)
+	go func() {
+		if err := e.reload(context.Background()); err != nil {
+			return
+		}
+		if e.refreshSec > 0 {
+			go e.refreshLoop()
+		}
+	}()
+	return e
+}
+
 func (e *Engine) reload(ctx context.Context) error {
 	data, err := LoadSuggestData(ctx, e.db, LoaderOptions{
 		MaxTopPerNode:      e.maxTopPerNode,

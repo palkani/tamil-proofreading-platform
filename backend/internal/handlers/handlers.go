@@ -87,29 +87,23 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 		imeEnabled:    cfg.IMEEnabled,
 	}
 
-	// Initialize suggest engine in background so server becomes "ready" quickly and stops returning 503.
-	// /api/v1/suggest returns 200 with empty suggestions until the engine is loaded.
-	go func() {
-		eng, err := suggest.NewEngine(db, suggest.EngineOptions{
-			MinLen:         cfg.SuggestMinLen,
-			LimitDefault:   cfg.SuggestTopK,
-			MaxTopPerNode:  cfg.SuggestTrieTopK,
-			CacheEntries:   cfg.SuggestCacheEntries,
-			CacheTTL:       time.Duration(cfg.SuggestCacheTTLMS) * time.Millisecond,
-			RefreshSec:     cfg.LexiconRefreshSec,
-			VowelCollapse:  cfg.SuggestVowelCollapse,
-			RedisURL:       cfg.RedisURL,
-			RedisTimeoutMs: cfg.SuggestRedisTimeoutMS,
-		})
-		if err != nil {
-			log.Printf("[SUGGEST] Failed to initialize suggest engine: %v", err)
-			return
-		}
-		h.suggestEngineMu.Lock()
-		h.suggestEngine = eng
-		h.suggestEngineMu.Unlock()
-		log.Printf("[SUGGEST] In-process suggest engine ready (min_len=%d, top_k=%d)", cfg.SuggestMinLen, cfg.SuggestTopK)
-	}()
+	// Suggest engine is created immediately with empty lexicon, then loaded in background.
+	// API never returns source "disabled"; returns lexicon_count 0 until load completes.
+	eng := suggest.NewEngineWithEmptyData(db, suggest.EngineOptions{
+		MinLen:         cfg.SuggestMinLen,
+		LimitDefault:   cfg.SuggestTopK,
+		MaxTopPerNode:  cfg.SuggestTrieTopK,
+		CacheEntries:   cfg.SuggestCacheEntries,
+		CacheTTL:       time.Duration(cfg.SuggestCacheTTLMS) * time.Millisecond,
+		RefreshSec:     cfg.LexiconRefreshSec,
+		VowelCollapse:  cfg.SuggestVowelCollapse,
+		RedisURL:       cfg.RedisURL,
+		RedisTimeoutMs: cfg.SuggestRedisTimeoutMS,
+	})
+	h.suggestEngineMu.Lock()
+	h.suggestEngine = eng
+	h.suggestEngineMu.Unlock()
+	log.Printf("[SUGGEST] In-process suggest engine registered (lexicon loads in background, min_len=%d, top_k=%d)", cfg.SuggestMinLen, cfg.SuggestTopK)
 
 	// Initialize Tamil word cache service
 	tamilWordCache := tamil_word_cache.NewCacheService(db, cfg.RedisURL)
