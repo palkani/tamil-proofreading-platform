@@ -1555,8 +1555,8 @@ class HomeEditor {
         const reason = c.reason || '';
         const type = c.type || 'grammar';
         const start = c.start_index ?? c.startIndex ?? c.start ?? '';
-        // Use unique key WITHOUT start position to detect true duplicates
-        const key = `${normalizeComparable(type).toLowerCase()}|${normalizeComparable(original)}|${normalizeComparable(corrected)}|${normalizeComparable(reason)}`;
+        // Dedupe by (type, original, corrected) only so same correction shows once even if reason text differs
+        const key = `${normalizeComparable(type).toLowerCase()}|${normalizeComparable(original)}|${normalizeComparable(corrected)}`;
         return {
           id: `home-${hashString(key) || index}`,
           original,
@@ -1567,7 +1567,7 @@ class HomeEditor {
           alternatives: [],
         };
       });
-      // Deduplicate based on ID (which doesn't include position)
+      // Deduplicate by (type, original, corrected) so same correction shows once even if reason differs
       const seen = new Set();
       return mapped.filter((s) => {
         if (!s?.id) return false;
@@ -1599,17 +1599,17 @@ class HomeEditor {
         return o && c && o !== c;
       });
 
-    // Dedupe repeated suggestions (same original/corrected/type/reason)
-    const seen = new Set();
+    // Dedupe by (type, original, corrected) only so same correction shows once
+    const seen = new Map();
     return mapped
       .map((s, idx) => {
-        const key = `${normalizeComparable(s.type).toLowerCase()}|${normalizeComparable(s.original)}|${normalizeComparable(s.corrected)}|${normalizeComparable(s.reason)}`;
+        const key = `${normalizeComparable(s.type).toLowerCase()}|${normalizeComparable(s.original)}|${normalizeComparable(s.corrected)}`;
         return { ...s, id: `home-${hashString(key) || idx}` };
       })
       .filter((s) => {
         if (!s?.id) return false;
         if (seen.has(s.id)) return false;
-        seen.add(s.id);
+        seen.set(s.id, s);
         return true;
       });
   }
@@ -1678,22 +1678,28 @@ class HomeEditor {
 
       // Home page always calls /api/submit.
       // If user is logged out, the server-side /api/submit route will fallback to Gemini.
+      const submitOpts = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, save_draft: false }),
+        signal: this.abortController.signal,
+      };
+      // Don't send cookies when token is expired so backend/proxy treats request as anonymous (avoids 401).
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('access_token') : null;
+      if (token && typeof isTokenExpired === 'function' && isTokenExpired(token)) {
+        submitOpts.credentials = 'omit';
+      }
       const response = await apiFetch(
         '/api/submit',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, save_draft: false }),
-          signal: this.abortController.signal,
-        },
-        false // requireAuth=false to avoid homepage redirect loops; token still sent if present
+        submitOpts,
+        false // requireAuth=false to avoid homepage redirect loops; token still sent if present and valid
       );
       
       if (!response.ok) {
-        // Home has a demo mode (no login) via /api/submit server-side. If we still get 401,
-        // it means the backend is seeing a token but rejecting it (expired/mismatch).
+        // Home page AI Assistant works without login. If we get 401 (e.g. expired token was sent),
+        // show a neutral message and do not block anonymous usage.
         if (response.status === 401) {
-          this.showError('Session expired. Please login again.');
+          this.showError('AI analysis failed. Please try again.');
           return;
         }
         const rawErr = await response.text();

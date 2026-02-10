@@ -2,11 +2,9 @@ package handlers
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"hash/fnv"
 	"html"
 	"io"
 	"log"
@@ -65,8 +63,13 @@ var (
 )
 
 func submitCacheKey(normalizedText string, includeAlternatives bool) string {
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s|alt=%t", normalizedText, includeAlternatives)))
-	return hex.EncodeToString(h[:])
+	// FNV-1a is much faster than SHA256 for in-memory cache keys; collision risk is acceptable.
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(normalizedText))
+	if includeAlternatives {
+		h.Write([]byte("|alt=1"))
+	}
+	return strconv.FormatUint(h.Sum64(), 36)
 }
 
 func getSubmitCache(key string) []submitCachedCorrection {
@@ -192,6 +195,7 @@ func buildCorrectionsForSubmission(sub models.Submission) []gin.H {
 	}
 
 	used := []usedRange{}
+	seenKey := make(map[string]bool)
 	for _, s := range suggs {
 		orig := s.Original
 		corr := s.Corrected
@@ -208,6 +212,11 @@ func buildCorrectionsForSubmission(sub models.Submission) []gin.H {
 			// skip no-op / duplicate suggestions
 			continue
 		}
+		key := oNorm + "|" + cNorm
+		if seenKey[key] {
+			continue
+		}
+		seenKey[key] = true
 
 		startIdx := s.StartIndex
 		endIdx := s.EndIndex
@@ -288,36 +297,14 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		return
 	}
 
-	// Count words
-	wordCount := h.nlpService.CountWords(req.Text)
-	if wordCount == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No valid words found in text"})
-		return
-	}
-
-	// Fast path: if there are no Tamil characters, don't call AI.
-	// This improves latency and avoids unnecessary provider calls.
-	if !tamilCharRegex.MatchString(req.Text) {
-		c.Header("Cache-Control", "no-store, max-age=0")
-		c.Header("Pragma", "no-cache")
-		c.Header("Expires", "0")
-		c.JSON(http.StatusOK, gin.H{
-			"success":     true,
-			"request_id":  requestID,
-			"corrections": []any{},
-			"message":     "No Tamil text detected.",
-		})
-		return
-	}
-
 	saveDraft := true
 	if req.SaveDraft != nil {
 		saveDraft = *req.SaveDraft
 	}
 
-	// For inline analysis (demo/homepage), no auth required
+	// For inline analysis (demo/homepage): check cache first so cache hits return in <100ms
+	// (no word count or Tamil check on cache hit path)
 	if !saveDraft {
-		// Cache-first: same text (normalized) returns in <100ms without calling LLM
 		normalizedForCache := strings.TrimSpace(strings.Join(strings.Fields(req.Text), " "))
 		cacheKey := submitCacheKey(normalizedForCache, req.IncludeAlternatives)
 		if cached := getSubmitCache(cacheKey); cached != nil {
@@ -327,6 +314,26 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 				"success":     true,
 				"request_id":  requestID,
 				"corrections": cached,
+			})
+			return
+		}
+
+		// Cache miss: validate and call LLM
+		wordCount := h.nlpService.CountWords(req.Text)
+		if wordCount == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No valid words found in text"})
+			return
+		}
+		// Fast path: no Tamil characters → skip AI
+		if !tamilCharRegex.MatchString(req.Text) {
+			c.Header("Cache-Control", "no-store, max-age=0")
+			c.Header("Pragma", "no-cache")
+			c.Header("Expires", "0")
+			c.JSON(http.StatusOK, gin.H{
+				"success":     true,
+				"request_id":  requestID,
+				"corrections": []any{},
+				"message":     "No Tamil text detected.",
 			})
 			return
 		}
@@ -353,11 +360,22 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 			"word_count": wordCount,
 		})
 
-		// Map to required corrections format (stable schema)
+		// Map to required corrections format (stable schema); dedupe by (original, corrected) so same fix shows once
 		blockID := "0"
 		used := []usedRange{}
+		seenKey := make(map[string]bool)
 		corrections := []submitCachedCorrection{}
 		for _, s := range result.Suggestions {
+			oNorm := normalizeComparableText(s.Original)
+			cNorm := normalizeComparableText(s.Corrected)
+			if oNorm == "" || cNorm == "" || oNorm == cNorm {
+				continue
+			}
+			key := oNorm + "|" + cNorm
+			if seenKey[key] {
+				continue
+			}
+			seenKey[key] = true
 			startIdx := s.StartIndex
 			endIdx := s.EndIndex
 			if startIdx <= 0 || endIdx <= 0 || startIdx >= endIdx {
@@ -394,6 +412,12 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	userID, err := middleware.GetUserFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - please login"})
+		return
+	}
+
+	wordCount := h.nlpService.CountWords(req.Text)
+	if wordCount == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No valid words found in text"})
 		return
 	}
 

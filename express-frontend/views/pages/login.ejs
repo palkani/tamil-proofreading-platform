@@ -1,8 +1,12 @@
 <%- include('../partials/header') %>
 
-<!-- Supabase (Google sign-in) and legacy Google Client ID -->
+<!-- Supabase (Google sign-in) and legacy Google Client ID. Must be xxx.apps.googleusercontent.com, never a domain. -->
 <script>
-  window.GOOGLE_CLIENT_ID = "<%= typeof googleClientId !== 'undefined' ? googleClientId : '' %>";
+  (function() {
+    var raw = "<%= typeof googleClientId !== 'undefined' ? (googleClientId || '') : '' %>";
+    var fallback = '991187041222-dp582s8kvqqktpq3t0bihl43e4iv8m5i.apps.googleusercontent.com';
+    window.GOOGLE_CLIENT_ID = (raw && raw.indexOf('.apps.googleusercontent.com') !== -1) ? raw : fallback;
+  })();
   window.SUPABASE_URL = "<%= typeof supabaseUrl !== 'undefined' ? supabaseUrl : '' %>";
   window.SUPABASE_ANON_KEY = "<%= typeof supabaseAnonKey !== 'undefined' ? supabaseAnonKey : '' %>";
   window.SUPABASE_REDIRECT_TO = "<%= typeof redirectTo !== 'undefined' ? redirectTo : '/drafts' %>";

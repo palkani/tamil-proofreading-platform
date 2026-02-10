@@ -977,6 +977,55 @@ func extractFromInterface(v any) (string, []Suggestion, []Change, []string) {
         }
 }
 
+// Type-specific default reasons in Tamil so each suggestion shows a relevant description
+// (AI sometimes returns the same/generic reason for different correction types)
+var typeDefaultReason = map[string]string{
+	"spelling":     "எழுத்துப்பிழை சரிசெய்யப்பட்டது",
+	"grammar":      "இலக்கண பிழை சரிசெய்யப்பட்டது",
+	"phonetic":     "ஒலியியல்/வல்லினம் மிகுதல் சரிசெய்யப்பட்டது",
+	"punctuation":  "நிறுத்தக்குறி பிழை சரிசெய்யப்பட்டது",
+	"space":        "இடைவெளி பிழை சரிசெய்யப்பட்டது",
+	"sandhi":       "புணர்ச்சி பிழை சரிசெய்யப்பட்டது",
+	"case":         "வேற்றுமை உருபு சரிசெய்யப்பட்டது",
+	"correction":   "சரி செய்யப்பட்ட சொல்",
+	"addition":     "சேர்க்கப்பட்ட வார்த்தைகள்",
+}
+
+// Phrases that are clearly about punctuation; if reason contains these but type is not punctuation, use type default
+var punctuationOnlyPhrases = []string{
+	"முற்றுப்புள்ளிகள் தேவையில்லை", "தொடர்ச்சியான முற்றுப்புள்ளி", "ஒரு புள்ளி போதுமானது",
+	"காற்புள்ளிக்குப் பிறகு", "காற்புள்ளி", "முற்றுப்புள்ளி",
+}
+
+func normalizeSuggestionReason(s *Suggestion) {
+	reason := strings.TrimSpace(s.Reason)
+	typ := strings.ToLower(strings.TrimSpace(s.Type))
+	if typ == "" {
+		typ = "grammar"
+	}
+	defaultReason, hasDefault := typeDefaultReason[typ]
+	if !hasDefault {
+		defaultReason = typeDefaultReason["grammar"]
+	}
+	// Empty reason: use type default
+	if reason == "" {
+		s.Reason = defaultReason
+		return
+	}
+	// Reason looks like a punctuation-only explanation but this suggestion is not punctuation type
+	for _, phrase := range punctuationOnlyPhrases {
+		if strings.Contains(reason, phrase) && typ != "punctuation" && typ != "space" {
+			s.Reason = defaultReason
+			return
+		}
+	}
+	// Reason looks like "space after comma" but type is not space
+	if strings.Contains(reason, "காற்புள்ளிக்குப் பிறகு இடைவெளி") && typ != "space" {
+		s.Reason = defaultReason
+		return
+	}
+}
+
 func toSuggestionSlice(val any) ([]Suggestion, bool) {
         array, ok := val.([]any)
         if !ok {
@@ -1061,6 +1110,9 @@ func toSuggestionSlice(val any) ([]Suggestion, bool) {
 				suggestion.Original, suggestion.Corrected, suggestion.Reason, suggestion.Type)
 			continue
 		}
+		
+		// Ensure each suggestion has a type-appropriate reason (AI sometimes returns same/generic reason for different types)
+		normalizeSuggestionReason(&suggestion)
 		
 		// Log each suggestion being added to verify it's from API
 		log.Printf("[PARSE-SUGGESTION] Adding suggestion from API: type=%q original=%q corrected=%q reason=%q", 

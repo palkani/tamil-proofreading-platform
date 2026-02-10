@@ -472,11 +472,11 @@ async function apiFetch(url, options = {}, requireAuth = true) {
     }
   }
   
-  // Make initial request
+  // Make initial request (allow options.credentials e.g. 'omit' for homepage submit when token expired)
   let response = await fetch(url, {
     ...options,
     headers,
-    credentials: 'include',
+    credentials: options.credentials ?? 'include',
   });
   
   // Handle 401 with automatic token refresh

@@ -149,9 +149,17 @@ router.get('/me', (req, res) => forward(req, res, '/auth/me', 'get'));
 // Supabase: exchange Supabase Auth JWT (e.g. from Google sign-in via Supabase) for app session
 router.post('/supabase-token', (req, res) => forward(req, res, '/auth/supabase-token', 'post'));
 
+// Valid Google OAuth client IDs end with .apps.googleusercontent.com (never use a domain like prooftamil.com)
+const VALID_GOOGLE_CLIENT_ID = '991187041222-dp582s8kvqqktpq3t0bihl43e4iv8m5i.apps.googleusercontent.com';
+function getGoogleClientId() {
+  const env = process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+  if (env && typeof env === 'string' && env.includes('.apps.googleusercontent.com')) return env.trim();
+  return VALID_GOOGLE_CLIENT_ID;
+}
+
 router.get('/google', (req, res) => {
   const redirectUri = 'https://www.prooftamil.com/api/v1/auth/google/callback';
-  const clientId = '991187041222-dp582s8kvqqktpq3t0bihl43e4iv8m5i.apps.googleusercontent.com';
+  const clientId = getGoogleClientId();
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,

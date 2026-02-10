@@ -1,20 +1,26 @@
 // Google OAuth Authentication Handler
 let googleClientId = null;
 
+// Fallback client ID (must end with .apps.googleusercontent.com; never use a domain like prooftamil.com)
+var FALLBACK_GOOGLE_CLIENT_ID = '991187041222-dp582s8kvqqktpq3t0bihl43e4iv8m5i.apps.googleusercontent.com';
+
 // Initialize Google Auth (single, browser-safe source: window.GOOGLE_CLIENT_ID)
 async function initializeGoogleAuth() {
   try {
-    googleClientId = typeof window !== 'undefined' ? window.GOOGLE_CLIENT_ID || '' : '';
+    var raw = typeof window !== 'undefined' ? (window.GOOGLE_CLIENT_ID || '') : '';
+    // Never use a domain as client_id; use fallback if invalid
+    googleClientId = (raw && raw.indexOf('.apps.googleusercontent.com') !== -1) ? raw : FALLBACK_GOOGLE_CLIENT_ID;
 
     // Debug (non-secret): log only presence
     console.log('[GOOGLE-AUTH] Client ID present:', !!googleClientId);
 
-    // If missing, warn but do not block rendering or throw
     if (!googleClientId) {
-      console.warn('[GOOGLE-AUTH] Client ID not provided via window.GOOGLE_CLIENT_ID');
+      googleClientId = FALLBACK_GOOGLE_CLIENT_ID;
+      console.warn('[GOOGLE-AUTH] Using fallback client ID');
     }
   } catch (error) {
     console.error('Failed to initialize Google Auth:', error);
+    googleClientId = FALLBACK_GOOGLE_CLIENT_ID;
   }
 }
 

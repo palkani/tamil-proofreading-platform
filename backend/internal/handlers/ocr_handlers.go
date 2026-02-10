@@ -15,7 +15,7 @@ import (
 
 func (h *Handlers) OCRHealth(c *gin.Context) {
 	if strings.TrimSpace(h.cfg.OCRServiceURL) == "" {
-		c.JSON(503, gin.H{
+		c.JSON(200, gin.H{
 			"status": "unconfigured",
 			"error":  "OCR_SERVICE_URL is not set on the backend",
 		})
@@ -30,9 +30,12 @@ func (h *Handlers) OCRHealth(c *gin.Context) {
 func (h *Handlers) OCRUpload(c *gin.Context) {
 	ocrBase := strings.TrimSpace(h.cfg.OCRServiceURL)
 	if ocrBase == "" {
-		c.JSON(503, gin.H{
-			"error":   "OCR is not configured on the backend.",
-			"details": "Set OCR_SERVICE_URL on the Cloud Run backend service to your OCR microservice base URL.",
+		// Return 200 so clients get a clear "not configured" response instead of 503
+		c.JSON(200, gin.H{
+			"success": false,
+			"error":   "ocr_not_configured",
+			"message": "OCR is not configured on the backend.",
+			"details": "Set OCR_SERVICE_URL on the Cloud Run backend to enable server-side OCR. You can still use client-side OCR for images.",
 		})
 		return
 	}
@@ -104,9 +107,11 @@ func (h *Handlers) OCRUpload(c *gin.Context) {
 func (h *Handlers) OCRDownload(c *gin.Context) {
 	ocrBase := strings.TrimSpace(h.cfg.OCRServiceURL)
 	if ocrBase == "" {
-		c.JSON(503, gin.H{
-			"error":   "OCR is not configured on the backend.",
-			"details": "Set OCR_SERVICE_URL on the Cloud Run backend service to your OCR microservice base URL.",
+		c.JSON(200, gin.H{
+			"success": false,
+			"error":   "ocr_not_configured",
+			"message": "OCR is not configured on the backend.",
+			"details": "Set OCR_SERVICE_URL on the Cloud Run backend to enable server-side OCR.",
 		})
 		return
 	}

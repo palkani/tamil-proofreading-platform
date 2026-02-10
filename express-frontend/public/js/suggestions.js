@@ -42,10 +42,17 @@ class SuggestionsPanel {
 
   stableKeyFromSuggestion(s) {
     const type = this.normalizeComparable(s?.type || 'grammar').toLowerCase();
-    const title = this.normalizeComparable(s?.title || '');
-    const desc = this.normalizeComparable(s?.description || '');
     const src = this.normalizeComparable(s?.sourceText || '');
     const prev = this.normalizeComparable(s?.preview || '');
+    // Dedupe by (type, original, corrected) so same correction shows once even if reason differs
+    if (prev && prev.includes('→')) {
+      const parts = prev.split('→').map(p => this.normalizeComparable(p));
+      const original = src || parts[0] || '';
+      const corrected = parts[1] || '';
+      if (original && corrected) return `${type}|${original}|${corrected}`;
+    }
+    const title = this.normalizeComparable(s?.title || '');
+    const desc = this.normalizeComparable(s?.description || '');
     return `${type}|${title}|${desc}|${src}|${prev}`;
   }
 

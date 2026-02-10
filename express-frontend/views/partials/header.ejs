@@ -41,9 +41,12 @@
   <meta name="geo.region" content="IN-TN">
   <meta name="geo.placename" content="Tamil Nadu, India">
   <meta name="theme-color" content="#1e3a8a">
-  <!-- Global injection of Google Client ID for browser usage (forces single source of truth) -->
+  <!-- Global injection of Google Client ID for browser usage (must be xxx.apps.googleusercontent.com, never a domain) -->
   <script>
-    window.GOOGLE_CLIENT_ID = "<%= process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '' %>";
+    (function() {
+      var raw = typeof googleClientId !== 'undefined' && googleClientId ? (typeof googleClientId === 'string' ? googleClientId : '') : '';
+      window.GOOGLE_CLIENT_ID = (raw && raw.indexOf('.apps.googleusercontent.com') !== -1) ? raw : '991187041222-dp582s8kvqqktpq3t0bihl43e4iv8m5i.apps.googleusercontent.com';
+    })();
     // CRITICAL FIX: Disable Tamil IME to prevent reverse typing bug
     // Enable unified transliteration IME V2 across pages (Home/Free Editor/Workspace)
     window.TRANS_SUGGEST_V2 = false; // DISABLED until reverse text bug is fixed

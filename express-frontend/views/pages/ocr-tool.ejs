@@ -194,7 +194,9 @@
 
   function shouldFallbackToClientOcr(resp, data) {
     const status = resp?.status;
-    const msg = (data?.error || '') + ' ' + (data?.details || '');
+    const msg = (data?.error || '') + ' ' + (data?.details || '') + ' ' + (data?.message || '');
+    // Backend now returns 200 with success: false when OCR is not configured (no more 503)
+    if (status === 200 && data?.success === false && (data?.error === 'ocr_not_configured' || /not configured/i.test(msg))) return true;
     return status === 503 && /OCR_SERVICE_URL|not configured for production|On Vercel/i.test(msg);
   }
 

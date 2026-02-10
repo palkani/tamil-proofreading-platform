@@ -47,8 +47,9 @@ func (h *Handlers) GoogleAuthStart(c *gin.Context) {
 		log.Printf("[OAUTH-CONFIG] client_id=%s redirect_uri=%s", h.cfg.GoogleClientID, googleRedirectURI)
 	})
 
-	if h.cfg.GoogleClientID == "" {
-		log.Printf("[OAUTH-ERROR] step=auth_start_missing_client request_id=%s", reqID)
+	// Google OAuth client_id must be xxx.apps.googleusercontent.com, never a domain (e.g. prooftamil.com)
+	if h.cfg.GoogleClientID == "" || !strings.Contains(h.cfg.GoogleClientID, ".apps.googleusercontent.com") {
+		log.Printf("[OAUTH-ERROR] step=auth_start_invalid_client request_id=%s (client_id must end with .apps.googleusercontent.com)", reqID)
 		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=oauth_not_configured")
 		return
 	}

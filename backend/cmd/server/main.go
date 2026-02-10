@@ -140,15 +140,23 @@ func main() {
 		log.Printf("Warning: AutoMigrate failed: %v", err)
 	}
 
-	// Run custom migrations (one-off / schema fixes only)
-	if err := migrations.MigrateNewsletterSubscribers(db); err != nil {
-		log.Printf("Warning: Newsletter migration failed: %v", err)
+	// Run custom migrations in parallel (newsletter, affiliate, billing — all used by handlers)
+	var newsletterErr, affiliateErr, billingErr error
+	doneCh := make(chan struct{}, 3)
+	go func() { newsletterErr = migrations.MigrateNewsletterSubscribers(db); doneCh <- struct{}{} }()
+	go func() { affiliateErr = migrations.MigrateAffiliates(db); doneCh <- struct{}{} }()
+	go func() { billingErr = migrations.MigrateBilling(db); doneCh <- struct{}{} }()
+	for i := 0; i < 3; i++ {
+		<-doneCh
 	}
-	if err := migrations.MigrateAffiliates(db); err != nil {
-		log.Printf("Warning: Affiliate migration failed: %v", err)
+	if newsletterErr != nil {
+		log.Printf("Warning: Newsletter migration failed: %v", newsletterErr)
 	}
-	if err := migrations.MigrateBilling(db); err != nil {
-		log.Printf("Warning: Billing migration failed: %v", err)
+	if affiliateErr != nil {
+		log.Printf("Warning: Affiliate migration failed: %v", affiliateErr)
+	}
+	if billingErr != nil {
+		log.Printf("Warning: Billing migration failed: %v", billingErr)
 	}
 
 	// Initialize handlers
@@ -241,6 +249,11 @@ func main() {
 		// Analytics routes (public for tracking)
 		v1.POST("/events/activity", h.LogActivity)
 
+		// Submit: optional auth so home page AI Assistant works without login (save_draft=false).
+		// Do NOT use AuthMiddleware here: expired/invalid token must be treated as anonymous, not 401.
+		// When save_draft=true the handler requires user and returns 401 if not authenticated.
+		v1.POST("/submit", middleware.OptionalAuthMiddleware(cfg.JWTSecret), h.SubmitText)
+
 		// Protected routes (require authentication)
 		protected := v1.Group("")
 		protected.Use(middleware.AuthMiddleware(cfg.JWTSecret))
@@ -248,8 +261,7 @@ func main() {
 			// User profile
 			protected.GET("/me", h.GetCurrentUser)
 
-			// Submissions
-			protected.POST("/submit", h.SubmitText)
+			// Submissions (draft list, get/update/delete) - submit is above with optional auth
 			protected.GET("/submissions", h.GetSubmissions)
 			protected.GET("/submissions/:id", h.GetSubmission)
 			protected.PUT("/submissions/:id/archive", h.ArchiveSubmission)

@@ -3930,12 +3930,8 @@ class WorkspaceController {
             }
             return (h >>> 0).toString(16);
           };
-          const startIdxForKey =
-            result.start_index ??
-            result.startIndex ??
-            result.StartIndex ??
-            '';
-          const stableKey = `${normalizeComparable(result.type || result.Type || 'grammar').toLowerCase()}|${normalizeComparable(original)}|${normalizeComparable(corrected)}|${normalizeComparable(reason)}|${startIdxForKey}`;
+          // Dedupe by (type, original, corrected) only so same correction shows once even if reason/position differs
+          const stableKey = `${normalizeComparable(result.type || result.Type || 'grammar').toLowerCase()}|${normalizeComparable(original)}|${normalizeComparable(corrected)}`;
           const stableId = `gemini-${hashString(stableKey)}`;
 
           return {

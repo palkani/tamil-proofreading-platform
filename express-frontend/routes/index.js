@@ -475,8 +475,11 @@ router.get('/login', (req, res) => {
   });
 });
 
-// Resolve Google Client ID once (prefer NEXT_PUBLIC_* so Vercel runtime matches frontend expectation)
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
+// Resolve Google Client ID once. Must be xxx.apps.googleusercontent.com (never a domain like prooftamil.com).
+const _rawGoogleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_ID = (_rawGoogleClientId && _rawGoogleClientId.includes('.apps.googleusercontent.com'))
+  ? _rawGoogleClientId.trim()
+  : '991187041222-dp582s8kvqqktpq3t0bihl43e4iv8m5i.apps.googleusercontent.com';
 // Supabase (for Google sign-in via Supabase)
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
