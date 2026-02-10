@@ -16,6 +16,13 @@ import (
 	"gorm.io/gorm"
 )
 
+// CacheLoadOptions tunes DB load (batch size, limit, per-batch timeout). Nil = use defaults.
+type CacheLoadOptions struct {
+	BatchSize       int           // rows per query (default 10000)
+	LoadLimit       int           // max rows (default 500000)
+	BatchTimeout    time.Duration // per-batch deadline (default 30s)
+}
+
 type CacheService struct {
 	db          *gorm.DB
 	redisClient *redis.Client
@@ -24,6 +31,10 @@ type CacheService struct {
 	memoryCache map[string][]CachedWord
 	memoryMu    sync.RWMutex
 	initialized bool
+	// Load tuning (used by InitializeCache)
+	loadBatchSize    int
+	loadLimit        int
+	batchTimeout     time.Duration
 }
 
 type CachedWord struct {
@@ -46,12 +57,26 @@ const (
 	maxWordsLoadLimit = 500000
 )
 
-func NewCacheService(db *gorm.DB, redisURL string) *CacheService {
+func NewCacheService(db *gorm.DB, redisURL string, loadOpts *CacheLoadOptions) *CacheService {
 	cs := &CacheService{
 		db:          db,
 		memoryCache: make(map[string][]CachedWord),
 		enabled:     false,
 		initialized: false,
+		loadBatchSize: 10000,
+		loadLimit:     maxWordsLoadLimit,
+		batchTimeout:  30 * time.Second,
+	}
+	if loadOpts != nil {
+		if loadOpts.BatchSize > 0 {
+			cs.loadBatchSize = loadOpts.BatchSize
+		}
+		if loadOpts.LoadLimit > 0 {
+			cs.loadLimit = loadOpts.LoadLimit
+		}
+		if loadOpts.BatchTimeout > 0 {
+			cs.batchTimeout = loadOpts.BatchTimeout
+		}
 	}
 
 	// Initialize Redis if URL provided
@@ -95,28 +120,41 @@ func isRetryableDBError(err error) bool {
 		strings.Contains(s, "context canceled")
 }
 
-const batchSize = 10000 // load 10k rows per query to avoid statement timeout / unexpected EOF
-
-// InitializeCache preloads Tamil words from database into cache (in batches of 10k).
+// InitializeCache preloads Tamil words from database into cache (batched, with per-batch timeout).
 // Organized by first letter of transliteration for fast prefix lookups.
 func (cs *CacheService) InitializeCache(ctx context.Context) error {
 	start := time.Now()
-	log.Printf("[TamilWordCache] Starting cache initialization (batch size %d)...", batchSize)
+	batchSize := cs.loadBatchSize
+	loadLimit := cs.loadLimit
+	log.Printf("[TamilWordCache] Starting cache initialization (batch=%d limit=%d timeout=%v)...", batchSize, loadLimit, cs.batchTimeout)
 
-	words := make([]models.TamilWord, 0, maxWordsLoadLimit)
+	words := make([]models.TamilWord, 0, loadLimit)
 	const maxAttempts = 5
 	var err error
+	// Keyset pagination: (frequency, user_confirmed, id) < last row — each batch is O(limit), not O(offset).
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		words = words[:0]
-		offset := 0
+		var lastFreq int
+		var lastUC int
+		var lastID uint
+		firstBatch := true
 		for {
+			batchCtx := ctx
+			var cancel context.CancelFunc
+			if cs.batchTimeout > 0 {
+				batchCtx, cancel = context.WithTimeout(ctx, cs.batchTimeout)
+			}
+			q := cs.db.WithContext(batchCtx).
+				Select("id, tamil_text, transliteration, frequency, category, user_confirmed").
+				Order("frequency DESC, user_confirmed DESC, id")
+			if !firstBatch {
+				q = q.Where("(frequency, user_confirmed, id) < (?, ?, ?)", lastFreq, lastUC, lastID)
+			}
 			var batch []models.TamilWord
-			batchErr := cs.db.WithContext(ctx).
-				Select("tamil_text, transliteration, frequency, category, user_confirmed").
-				Order("frequency DESC, user_confirmed DESC").
-				Limit(batchSize).
-				Offset(offset).
-				Find(&batch).Error
+			batchErr := q.Limit(batchSize).Find(&batch).Error
+			if cancel != nil {
+				cancel()
+			}
 			if batchErr != nil {
 				err = batchErr
 				break
@@ -125,8 +163,10 @@ func (cs *CacheService) InitializeCache(ctx context.Context) error {
 			if len(batch) < batchSize {
 				break
 			}
-			offset += len(batch)
-			if len(words) >= maxWordsLoadLimit {
+			last := batch[len(batch)-1]
+			lastFreq, lastUC, lastID = last.Frequency, last.UserConfirmed, last.ID
+			firstBatch = false
+			if len(words) >= loadLimit {
 				break
 			}
 			log.Printf("[TamilWordCache] Loaded %d words so far...", len(words))

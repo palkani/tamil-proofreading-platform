@@ -14,17 +14,20 @@ import (
 )
 
 type Engine struct {
-	db            *gorm.DB
-	cache         *LRUCache[*SuggestResponse]
-	metrics       *LatencyMetrics
-	redis         *RedisClient
-	localSel      *LocalSelectionStore // in-memory personalization when Redis is disabled
-	minLen        int
-	limitDefault  int
-	maxTopPerNode int
-	refreshSec    int
-	vowelCollapse bool
-	redisTimeout  time.Duration
+	db              *gorm.DB
+	cache           *LRUCache[*SuggestResponse]
+	metrics         *LatencyMetrics
+	redis           *RedisClient
+	localSel        *LocalSelectionStore // in-memory personalization when Redis is disabled
+	minLen          int
+	limitDefault    int
+	maxTopPerNode   int
+	refreshSec      int
+	vowelCollapse   bool
+	redisTimeout    time.Duration
+	loadBatchSize   int
+	loadLimit       int
+	batchTimeoutSec int
 
 	data atomic.Value // *SuggestData
 }
@@ -58,15 +61,18 @@ type scoredEntry struct {
 }
 
 type EngineOptions struct {
-	MinLen         int
-	LimitDefault   int
-	MaxTopPerNode  int
-	CacheEntries   int
-	CacheTTL       time.Duration
-	RefreshSec     int
-	VowelCollapse  bool
-	RedisURL       string
-	RedisTimeoutMs int
+	MinLen            int
+	LimitDefault      int
+	MaxTopPerNode     int
+	CacheEntries      int
+	CacheTTL          time.Duration
+	RefreshSec        int
+	VowelCollapse     bool
+	RedisURL          string
+	RedisTimeoutMs    int
+	LoadBatchSize     int           // suggest lexicon batch size (0 = 10000)
+	LoadLimit         int           // max rows to load (0 = 100000)
+	BatchTimeoutSec   int           // per-batch timeout in seconds (0 = 30)
 }
 
 func NewEngine(db *gorm.DB, opts EngineOptions) (*Engine, error) {
@@ -91,17 +97,20 @@ func NewEngine(db *gorm.DB, opts EngineOptions) (*Engine, error) {
 
 	redisClient := NewRedisClient(opts.RedisURL)
 	e := &Engine{
-		db:            db,
-		cache:         NewLRUCache[*SuggestResponse](opts.CacheEntries, opts.CacheTTL),
-		metrics:       NewLatencyMetrics(1000),
-		redis:         redisClient,
-		localSel:      nil,
-		minLen:        opts.MinLen,
-		limitDefault:  opts.LimitDefault,
-		maxTopPerNode: opts.MaxTopPerNode,
-		refreshSec:    opts.RefreshSec,
-		vowelCollapse: opts.VowelCollapse,
-		redisTimeout:  time.Duration(opts.RedisTimeoutMs) * time.Millisecond,
+		db:              db,
+		cache:           NewLRUCache[*SuggestResponse](opts.CacheEntries, opts.CacheTTL),
+		metrics:         NewLatencyMetrics(1000),
+		redis:           redisClient,
+		localSel:        nil,
+		minLen:          opts.MinLen,
+		limitDefault:    opts.LimitDefault,
+		maxTopPerNode:   opts.MaxTopPerNode,
+		refreshSec:      opts.RefreshSec,
+		vowelCollapse:   opts.VowelCollapse,
+		redisTimeout:    time.Duration(opts.RedisTimeoutMs) * time.Millisecond,
+		loadBatchSize:   opts.LoadBatchSize,
+		loadLimit:       opts.LoadLimit,
+		batchTimeoutSec: opts.BatchTimeoutSec,
 	}
 	if redisClient == nil || !redisClient.Enabled() {
 		e.localSel = NewLocalSelectionStore()
@@ -140,17 +149,20 @@ func NewEngineWithEmptyData(db *gorm.DB, opts EngineOptions) *Engine {
 	}
 	redisClient := NewRedisClient(opts.RedisURL)
 	e := &Engine{
-		db:            db,
-		cache:         NewLRUCache[*SuggestResponse](opts.CacheEntries, opts.CacheTTL),
-		metrics:       NewLatencyMetrics(1000),
-		redis:         redisClient,
-		localSel:      nil,
-		minLen:        opts.MinLen,
-		limitDefault:  opts.LimitDefault,
-		maxTopPerNode: opts.MaxTopPerNode,
-		refreshSec:    opts.RefreshSec,
-		vowelCollapse: opts.VowelCollapse,
-		redisTimeout:  time.Duration(opts.RedisTimeoutMs) * time.Millisecond,
+		db:              db,
+		cache:           NewLRUCache[*SuggestResponse](opts.CacheEntries, opts.CacheTTL),
+		metrics:         NewLatencyMetrics(1000),
+		redis:           redisClient,
+		localSel:        nil,
+		minLen:          opts.MinLen,
+		limitDefault:    opts.LimitDefault,
+		maxTopPerNode:   opts.MaxTopPerNode,
+		refreshSec:      opts.RefreshSec,
+		vowelCollapse:   opts.VowelCollapse,
+		redisTimeout:    time.Duration(opts.RedisTimeoutMs) * time.Millisecond,
+		loadBatchSize:   opts.LoadBatchSize,
+		loadLimit:       opts.LoadLimit,
+		batchTimeoutSec: opts.BatchTimeoutSec,
 	}
 	if redisClient == nil || !redisClient.Enabled() {
 		e.localSel = NewLocalSelectionStore()
@@ -178,17 +190,29 @@ func NewEngineWithEmptyData(db *gorm.DB, opts EngineOptions) *Engine {
 }
 
 func (e *Engine) reload(ctx context.Context) error {
-	data, err := LoadSuggestData(ctx, e.db, LoaderOptions{
-		MaxTopPerNode:      e.maxTopPerNode,
-		EnableVowelCollapse: e.vowelCollapse,
-		RedisClient:        e.redis,
-		UseRedisCache:      e.redis != nil && e.redis.Enabled(), // Use cache if Redis is enabled
-	})
+	opts := e.loaderOpts()
+	data, err := LoadSuggestData(ctx, e.db, opts)
 	if err != nil {
 		return err
 	}
 	e.data.Store(data)
 	return nil
+}
+
+func (e *Engine) loaderOpts() LoaderOptions {
+	batchTimeout := time.Duration(e.batchTimeoutSec) * time.Second
+	if e.batchTimeoutSec <= 0 {
+		batchTimeout = 30 * time.Second
+	}
+	return LoaderOptions{
+		MaxTopPerNode:      e.maxTopPerNode,
+		EnableVowelCollapse: e.vowelCollapse,
+		RedisClient:        e.redis,
+		UseRedisCache:      e.redis != nil && e.redis.Enabled(),
+		BatchSize:          e.loadBatchSize,
+		LoadLimit:          e.loadLimit,
+		BatchTimeout:       batchTimeout,
+	}
 }
 
 func (e *Engine) refreshLoop() {
@@ -293,6 +317,7 @@ func (e *Engine) Suggest(ctx context.Context, req SuggestRequest) (*SuggestRespo
 }
 
 // suggestFromDB returns suggestions by querying tamil_words when in-memory cache is not loaded yet.
+// Uses LOWER(transliteration) LIKE so idx_tamil_words_lower_trans can be used; 5s timeout so one slow query doesn't hang.
 func (e *Engine) suggestFromDB(ctx context.Context, start time.Time, qRaw, norm string, limit int) (*SuggestResponse, error) {
 	if e.db == nil {
 		return &SuggestResponse{
@@ -305,11 +330,17 @@ func (e *Engine) suggestFromDB(ctx context.Context, start time.Time, qRaw, norm 
 			Meta:        e.meta(),
 		}, nil
 	}
-	prefixPattern := norm + "%"
+	reqCtx := ctx
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 5*time.Second {
+		var cancel context.CancelFunc
+		reqCtx, cancel = context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+	}
 	var rows []LexiconRow
-	err := e.db.WithContext(ctx).Table("tamil_words").
+	// LOWER(transliteration) LIKE LOWER(norm)||'%' uses idx_tamil_words_lower_trans (expression index)
+	err := e.db.WithContext(reqCtx).Table("tamil_words").
 		Select("id, tamil_text, transliteration, frequency, user_confirmed").
-		Where("transliteration ILIKE ?", prefixPattern).
+		Where("LOWER(transliteration) LIKE LOWER(?) || '%'", norm).
 		Order("frequency DESC, user_confirmed DESC").
 		Limit(limit).
 		Find(&rows).Error

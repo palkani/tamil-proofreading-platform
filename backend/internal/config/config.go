@@ -53,6 +53,14 @@ type Config struct {
 	SuggestVowelCollapse      bool
 	RedisURL                  string
 	SuggestRedisTimeoutMS     int
+	// Suggest lexicon load tuning (batch size, limit, per-batch timeout)
+	SuggestLoadBatchSize      int
+	SuggestLoadLimit          int
+	SuggestBatchTimeoutSec    int
+	// Tamil word cache load tuning
+	TamilCacheBatchSize       int
+	TamilCacheLoadLimit       int
+	TamilCacheBatchTimeoutSec int
 	SeedCorpusOnStartup       bool
 	SeedCorpusFile            string
 	SeedCorpusMinCount        int
@@ -154,6 +162,12 @@ func Load() *Config {
 		SuggestVowelCollapse:   strings.ToLower(getEnv("SUGGEST_VOWEL_COLLAPSE", "false")) == "true",
 		RedisURL:               strings.TrimSpace(getEnv("REDIS_URL", "")),
 		SuggestRedisTimeoutMS:  getEnvAsInt("SUGGEST_REDIS_TIMEOUT_MS", 25),
+		SuggestLoadBatchSize:    getEnvAsInt("SUGGEST_LOAD_BATCH_SIZE", 10000),
+		SuggestLoadLimit:       getEnvAsInt("SUGGEST_LOAD_LIMIT", 100000),
+		SuggestBatchTimeoutSec:  getEnvAsInt("SUGGEST_BATCH_TIMEOUT_SEC", 30),
+		TamilCacheBatchSize:     getEnvAsInt("TAMIL_CACHE_BATCH_SIZE", 10000),
+		TamilCacheLoadLimit:     getEnvAsInt("TAMIL_CACHE_LOAD_LIMIT", 500000),
+		TamilCacheBatchTimeoutSec: getEnvAsInt("TAMIL_CACHE_BATCH_TIMEOUT_SEC", 30),
 		SeedCorpusOnStartup:    strings.ToLower(getEnv("SEED_CORPUS_ON_STARTUP", "false")) == "true",
 		SeedCorpusFile:         strings.TrimSpace(getEnv("SEED_CORPUS_FILE", "/root/seed_corpus_minimal.sql")),
 		SeedCorpusMinCount:     getEnvAsInt("SEED_CORPUS_MIN_COUNT", 1),

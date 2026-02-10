@@ -90,47 +90,58 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	// Suggest engine is created immediately with empty lexicon, then loaded in background.
 	// API never returns source "disabled"; returns lexicon_count 0 until load completes.
 	eng := suggest.NewEngineWithEmptyData(db, suggest.EngineOptions{
-		MinLen:         cfg.SuggestMinLen,
-		LimitDefault:   cfg.SuggestTopK,
-		MaxTopPerNode:  cfg.SuggestTrieTopK,
-		CacheEntries:   cfg.SuggestCacheEntries,
-		CacheTTL:       time.Duration(cfg.SuggestCacheTTLMS) * time.Millisecond,
-		RefreshSec:     cfg.LexiconRefreshSec,
-		VowelCollapse:  cfg.SuggestVowelCollapse,
-		RedisURL:       cfg.RedisURL,
-		RedisTimeoutMs: cfg.SuggestRedisTimeoutMS,
+		MinLen:           cfg.SuggestMinLen,
+		LimitDefault:     cfg.SuggestTopK,
+		MaxTopPerNode:    cfg.SuggestTrieTopK,
+		CacheEntries:     cfg.SuggestCacheEntries,
+		CacheTTL:         time.Duration(cfg.SuggestCacheTTLMS) * time.Millisecond,
+		RefreshSec:       cfg.LexiconRefreshSec,
+		VowelCollapse:    cfg.SuggestVowelCollapse,
+		RedisURL:         cfg.RedisURL,
+		RedisTimeoutMs:   cfg.SuggestRedisTimeoutMS,
+		LoadBatchSize:    cfg.SuggestLoadBatchSize,
+		LoadLimit:        cfg.SuggestLoadLimit,
+		BatchTimeoutSec:  cfg.SuggestBatchTimeoutSec,
 	})
 	h.suggestEngineMu.Lock()
 	h.suggestEngine = eng
 	h.suggestEngineMu.Unlock()
 	log.Printf("[SUGGEST] In-process suggest engine registered (lexicon loads in background, min_len=%d, top_k=%d)", cfg.SuggestMinLen, cfg.SuggestTopK)
 
-	// Initialize Tamil word cache service
-	tamilWordCache := tamil_word_cache.NewCacheService(db, cfg.RedisURL)
+	// Initialize Tamil word cache service (with optional load tuning from config)
+	tamilCacheOpts := &tamil_word_cache.CacheLoadOptions{
+		BatchSize:   cfg.TamilCacheBatchSize,
+		LoadLimit:   cfg.TamilCacheLoadLimit,
+		BatchTimeout: time.Duration(cfg.TamilCacheBatchTimeoutSec) * time.Second,
+	}
+	if tamilCacheOpts.BatchSize <= 0 {
+		tamilCacheOpts.BatchSize = 10000
+	}
+	if tamilCacheOpts.LoadLimit <= 0 {
+		tamilCacheOpts.LoadLimit = 500000
+	}
+	if tamilCacheOpts.BatchTimeout <= 0 {
+		tamilCacheOpts.BatchTimeout = 30 * time.Second
+	}
+	tamilWordCache := tamil_word_cache.NewCacheService(db, cfg.RedisURL, tamilCacheOpts)
 	h.tamilWordCache = tamilWordCache
 
+	// Always preload Tamil cache in background so handlers.New returns immediately and the server
+	// becomes "ready" (suggest/API get real handler). Otherwise PRELOAD=true would block startup
+	// and clients would keep seeing "source": "starting" with empty suggestions.
 	const cacheLoadTimeout = 15 * time.Minute
-	if cfg.PreloadTamilCacheAtStartup {
-		// Load cache at startup (block until done). Like JVM preload: first requests get warm cache; startup takes longer.
-		log.Printf("[TamilWordCache] Preloading at startup (PRELOAD_TAMIL_CACHE_AT_STARTUP=true)...")
-		ctx, cancel := context.WithTimeout(context.Background(), cacheLoadTimeout)
-		err := tamilWordCache.InitializeCache(ctx)
-		cancel()
-		if err != nil {
-			log.Printf("[TamilWordCache] Preload failed: %v (app will serve; cache may load later)", err)
-		} else {
-			log.Printf("[TamilWordCache] Preload complete ✓")
+	go func() {
+		if cfg.PreloadTamilCacheAtStartup {
+			log.Printf("[TamilWordCache] Preloading at startup (background, PRELOAD_TAMIL_CACHE_AT_STARTUP=true)...")
 		}
-	} else {
-		// Preload in background (non-blocking). 15 min timeout for large corpus (227k+ rows) over pooler.
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), cacheLoadTimeout)
-			defer cancel()
-			if err := tamilWordCache.InitializeCache(ctx); err != nil {
-				log.Printf("[TamilWordCache] Failed to initialize cache: %v", err)
-			}
-		}()
-	}
+		ctx, cancel := context.WithTimeout(context.Background(), cacheLoadTimeout)
+		defer cancel()
+		if err := tamilWordCache.InitializeCache(ctx); err != nil {
+			log.Printf("[TamilWordCache] Failed to initialize cache: %v", err)
+		} else {
+			log.Printf("[TamilWordCache] Cache load complete ✓")
+		}
+	}()
 
 	h.startArchiveCleanup()
 	h.startIMEAggregateJob()

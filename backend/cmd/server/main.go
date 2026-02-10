@@ -177,7 +177,7 @@ func main() {
 		log.Printf("Warning: Billing migration failed: %v", billingErr)
 	}
 
-	// Initialize handlers
+	// Initialize handlers (do not block on index migration — run it after server is ready)
 	h := handlers.New(db, cfg)
 	
 	// Initialize billing services
@@ -365,9 +365,17 @@ func main() {
 	r.GET("/api/v1/ocr/download/:filename", h.OCRDownload)
 	r.GET("/api/v1/ocr/health", h.OCRHealth)
 
-	// Switch traffic to full app (Cloud Run startup probe already passed)
+	// Switch traffic to full app (Cloud Run startup probe already passed).
+	// Do this before any slow optional work so /api/v1/suggest gets the real handler immediately.
 	readyHandler.Store(r)
 	log.Println("Backend ready; full router active")
+
+	// Run Tamil words index migration in background (CREATE INDEX on 227k+ rows can take 1–2 min).
+	go func() {
+		if idxErr := migrations.MigrateTamilWordsIndex(db); idxErr != nil {
+			log.Printf("Warning: Tamil words index migration: %v", idxErr)
+		}
+	}()
 
 	select {} // block forever
 }

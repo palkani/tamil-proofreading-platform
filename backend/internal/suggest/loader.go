@@ -70,22 +70,46 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 		}
 	}
 
-	// Fallback to PostgreSQL if cache miss — load in 10k batches to avoid statement timeout / unexpected EOF
+	// Fallback to PostgreSQL if cache miss — load in batches with per-batch timeout
 	if !loadedFromCache {
-		const loadLimit = 100000
-		const batchSize = 10000
+		loadLimit := opts.LoadLimit
+		if loadLimit <= 0 {
+			loadLimit = 100000
+		}
+		batchSize := opts.BatchSize
+		if batchSize <= 0 {
+			batchSize = 10000
+		}
+		batchTimeout := opts.BatchTimeout
+		if batchTimeout <= 0 {
+			batchTimeout = 30 * time.Second
+		}
+		// Keyset pagination: (frequency, user_confirmed, id) < last row — each batch is O(limit), not O(offset).
+		// Requires index: idx_tamil_words_freq_uc_id ON (frequency DESC, user_confirmed DESC, id).
 		var loadErr error
 		for attempt := 0; attempt < 3; attempt++ {
 			rows = make([]LexiconRow, 0, loadLimit)
-			offset := 0
+			var lastFreq int
+			var lastUC int
+			var lastID uint
+			firstBatch := true
 			for {
-				var batch []LexiconRow
-				batchErr := db.WithContext(ctx).Table("tamil_words").
+				batchCtx := ctx
+				var cancel context.CancelFunc
+				if batchTimeout > 0 {
+					batchCtx, cancel = context.WithTimeout(ctx, batchTimeout)
+				}
+				q := db.WithContext(batchCtx).Table("tamil_words").
 					Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
-					Order("frequency DESC, user_confirmed DESC").
-					Limit(batchSize).
-					Offset(offset).
-					Find(&batch).Error
+					Order("frequency DESC, user_confirmed DESC, id")
+				if !firstBatch {
+					q = q.Where("(frequency, user_confirmed, id) < (?, ?, ?)", lastFreq, lastUC, lastID)
+				}
+				var batch []LexiconRow
+				batchErr := q.Limit(batchSize).Find(&batch).Error
+				if cancel != nil {
+					cancel()
+				}
 				if batchErr != nil {
 					loadErr = batchErr
 					break
@@ -94,7 +118,9 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 				if len(batch) < batchSize {
 					break
 				}
-				offset += len(batch)
+				last := batch[len(batch)-1]
+				lastFreq, lastUC, lastID = last.Frequency, last.UserConfirmed, last.ID
+				firstBatch = false
 				if len(rows) >= loadLimit {
 					break
 				}
@@ -183,10 +209,14 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 }
 
 type LoaderOptions struct {
-	MaxTopPerNode      int
+	MaxTopPerNode       int
 	EnableVowelCollapse bool
-	RedisClient        *RedisClient // Optional: for caching lexicon
-	UseRedisCache      bool         // Whether to use Redis cache
+	RedisClient         *RedisClient // Optional: for caching lexicon
+	UseRedisCache       bool         // Whether to use Redis cache
+	// Tuning: batch size and limit for DB load; BatchTimeout per batch (0 = no timeout)
+	BatchSize     int           // rows per query (default 10000)
+	LoadLimit     int           // max rows to load (default 100000)
+	BatchTimeout  time.Duration // per-batch deadline (default 30s)
 }
 
 func parseAlternateSpellings(raw string) []string {
