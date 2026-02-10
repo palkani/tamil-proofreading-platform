@@ -79,7 +79,7 @@ func NewEngine(db *gorm.DB, opts EngineOptions) (*Engine, error) {
 		opts.MaxTopPerNode = 15
 	}
 	if opts.CacheEntries <= 0 {
-		opts.CacheEntries = 2000 // Increased for high concurrency
+		opts.CacheEntries = 3000 // LRU response cache for lower latency
 	}
 	if opts.CacheTTL <= 0 {
 		opts.CacheTTL = 5 * time.Minute // Extended TTL for better hit rate
@@ -124,7 +124,7 @@ func NewEngineWithEmptyData(db *gorm.DB, opts EngineOptions) *Engine {
 		opts.MaxTopPerNode = 15
 	}
 	if opts.CacheEntries <= 0 {
-		opts.CacheEntries = 2000
+		opts.CacheEntries = 3000
 	}
 	if opts.CacheTTL <= 0 {
 		opts.CacheTTL = 5 * time.Minute
@@ -243,8 +243,9 @@ func (e *Engine) Suggest(ctx context.Context, req SuggestRequest) (*SuggestRespo
 	}
 
 	data := e.Data()
-	if data == nil || data.Trie == nil {
-		return nil, errors.New("suggest engine not ready")
+	// When in-memory cache (trie) is not loaded yet, fallback to DB so suggestions still work
+	if data == nil || data.Trie == nil || data.LexiconCount == 0 {
+		return e.suggestFromDB(ctx, start, qRaw, norm, limit)
 	}
 
 	trieStart := time.Now()
@@ -270,6 +271,61 @@ func (e *Engine) Suggest(ctx context.Context, req SuggestRequest) (*SuggestRespo
 		Meta: e.meta(),
 	}
 	e.cache.Set(cacheKey, out)
+	e.metrics.Add(msSince(start))
+	return out, nil
+}
+
+// suggestFromDB returns suggestions by querying tamil_words when in-memory cache is not loaded yet.
+func (e *Engine) suggestFromDB(ctx context.Context, start time.Time, qRaw, norm string, limit int) (*SuggestResponse, error) {
+	if e.db == nil {
+		return &SuggestResponse{
+			Success:     true,
+			Q:           qRaw,
+			Normalized:  norm,
+			Suggestions: []Suggestion{},
+			Source:      "db",
+			Timing:      map[string]float64{"total_ms": msSince(start)},
+			Meta:        e.meta(),
+		}, nil
+	}
+	prefixPattern := norm + "%"
+	var rows []LexiconRow
+	err := e.db.WithContext(ctx).Table("tamil_words").
+		Select("id, tamil_text, transliteration, frequency, user_confirmed").
+		Where("transliteration ILIKE ?", prefixPattern).
+		Order("frequency DESC, user_confirmed DESC").
+		Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return &SuggestResponse{
+			Success:     true,
+			Q:           qRaw,
+			Normalized:  norm,
+			Suggestions: []Suggestion{},
+			Source:      "db",
+			Timing:      map[string]float64{"total_ms": msSince(start)},
+			Meta:        e.meta(),
+		}, nil
+	}
+	suggestions := make([]Suggestion, 0, len(rows))
+	for _, r := range rows {
+		score := float64(r.Frequency) + float64(r.UserConfirmed)*0.5
+		suggestions = append(suggestions, Suggestion{
+			ID:    int32(r.ID),
+			Text:  strings.TrimSpace(r.TamilText),
+			Latin: strings.TrimSpace(r.Transliteration),
+			Score: score,
+		})
+	}
+	out := &SuggestResponse{
+		Success:     true,
+		Q:           qRaw,
+		Normalized:  norm,
+		Suggestions: suggestions,
+		Source:      "db",
+		Timing:      map[string]float64{"total_ms": msSince(start)},
+		Meta:        e.meta(),
+	}
 	e.metrics.Add(msSince(start))
 	return out, nil
 }

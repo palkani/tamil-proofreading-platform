@@ -145,7 +145,7 @@ func Load() *Config {
 		UseAdvancedSuggest:     strings.ToLower(getEnv("USE_ADVANCED_SUGGEST", "false")) == "true",
 		SuggestMinLen:          getEnvAsInt("SUGGEST_MIN_LEN", 2),
 		SuggestTopK:            getEnvAsInt("SUGGEST_TOP_K", 5),
-		SuggestCacheEntries:    getEnvAsInt("SUGGEST_CACHE_ENTRIES", 2000),  // Increased for 1000+ concurrent users
+		SuggestCacheEntries:    getEnvAsInt("SUGGEST_CACHE_ENTRIES", 3000),  // LRU response cache for lower latency
 		SuggestCacheTTLMS:      getEnvAsInt("SUGGEST_CACHE_TTL_MS", 300000), // 5 minutes TTL
 		SuggestTrieTopK:        getEnvAsInt("SUGGEST_TRIE_TOP_K", 25),
 		LexiconRefreshSec:      getEnvAsInt("LEXICON_REFRESH_SEC", 600),

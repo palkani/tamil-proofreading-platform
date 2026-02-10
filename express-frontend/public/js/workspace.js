@@ -1641,10 +1641,10 @@ class WorkspaceController {
     
     // Debounce the fetch to keep UI responsive while still updating per-keystroke.
     // Goal: suggestions should update for each letter typed (n -> na -> nam -> ...).
-    // OPTIMIZED: Balance between responsiveness and avoiding cancelled requests
-    // - Short tokens (1-2 chars): 100ms debounce (user might type more)
-    // - Longer tokens (3+ chars): 150ms debounce (more likely complete word)
-    const debounceMs = token.length <= 2 ? 100 : 150;
+    // OPTIMIZED: Longer debounce reduces cancelled API calls when user types quickly
+    // - Short tokens (1-2 chars): 150ms debounce
+    // - Longer tokens (3+ chars): 200ms debounce
+    const debounceMs = token.length <= 2 ? 150 : 200;
     this.suggestDebounce = setTimeout(() => {
       // Final check: token must still match
       if (this.lastFetchToken !== token) {
@@ -2024,6 +2024,14 @@ class WorkspaceController {
         return (e) => {
           e.preventDefault();
           e.stopPropagation();
+          // CRITICAL: Prevent double-insert from duplicate click/touch events (same selection within 500ms)
+          if (this._suggestionClickGuard) {
+            console.log('[IME] Ignoring duplicate click (guard active)');
+            return;
+          }
+          this._suggestionClickGuard = true;
+          const guardClear = () => { this._suggestionClickGuard = false; };
+          setTimeout(guardClear, 500);
           console.log('[IME] Clicked suggestion', index + 1, ':', suggestionText, 'index:', index);
           console.log('[IME] Current suggestions available:', this.currentSuggestions ? this.currentSuggestions.length : 0);
           
@@ -3325,6 +3333,16 @@ class WorkspaceController {
   replaceTokenAtCaret(replacement, appendSpace = false) {
     // TipTap mode: replace directly via TipTap commands/transaction.
     if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
+      // Prevent double-insert: same replacement text within 400ms is ignored
+      const key = (replacement || '') + (appendSpace ? '|space' : '');
+      const now = Date.now();
+      if (this._lastReplaceKey === key && (now - (this._lastReplaceTime || 0)) < 400) {
+        console.log('[IME] Skipping duplicate TipTap replace within 400ms');
+        this.hideSuggestions?.();
+        return;
+      }
+      this._lastReplaceKey = key;
+      this._lastReplaceTime = now;
       const ok = replaceTipTapTokenAtCaret(replacement, appendSpace);
       if (!ok) {
         console.warn('[IME] TipTap replaceTokenAtCaret failed (no token before caret)');
@@ -3342,6 +3360,16 @@ class WorkspaceController {
       });
       return;
     }
+    // Prevent double-insert: same replacement within 400ms (legacy/textarea path)
+    const replaceKey = (replacement || '') + (appendSpace ? '|space' : '');
+    const now = Date.now();
+    if (this._lastReplaceKey === replaceKey && (now - (this._lastReplaceTime || 0)) < 400) {
+      window.logger?.debug?.('[IME] Skipping duplicate replace within 400ms');
+      this.hideSuggestions?.();
+      return;
+    }
+    this._lastReplaceKey = replaceKey;
+    this._lastReplaceTime = now;
     const text = this.getEditorText() || '';
 
     // Prefer a fresh token read at commit-time (prevents partial replacements when tokenInfo is stale)

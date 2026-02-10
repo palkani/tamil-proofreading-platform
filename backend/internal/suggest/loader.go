@@ -71,7 +71,8 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 	// Fallback to PostgreSQL if cache miss
 	if !loadedFromCache {
 		// Limit + order so query finishes within Supabase/default statement timeout (e.g. 8s).
-		const loadLimit = 50000
+		// Load up to 100k words for full lexicon; reduce if DB times out.
+		const loadLimit = 100000
 		var loadErr error
 		for attempt := 0; attempt < 3; attempt++ {
 			rows = nil
