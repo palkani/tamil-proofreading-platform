@@ -89,13 +89,11 @@ func Load() *Config {
 		log.Printf("[CONFIG] WARNING: OpenAI API key is empty - no fallback available for rate limits")
 	}
 
-	// IME / Transliterator configuration:
-	// - Runner (ProofTamilRunner) exposes API under /api/v1
-	// - If AKSHARA_URL isn't explicitly set, default to TRANSLITERATOR_BASE_URL + "/api/v1"
-	// - If IME_ENABLED isn't explicitly set, enable automatically when runner URL is present
-	transBase := getEnv("TRANSLITERATOR_BASE_URL", "https://prooftamil-runner-991187041222.asia-south1.run.app")
+	// IME / Transliterator: ProofTamilRunner logic is in-process (backend/prooftamil-runner code
+	// is retired as a separate service). Use in-process suggest engine + translit only; no external runner API.
+	transBase := strings.TrimSpace(getEnv("TRANSLITERATOR_BASE_URL", ""))
 	aksharaURL := strings.TrimSpace(getEnv("AKSHARA_URL", ""))
-	if aksharaURL == "" {
+	if aksharaURL == "" && transBase != "" {
 		aksharaURL = strings.TrimRight(transBase, "/")
 		if !strings.HasSuffix(aksharaURL, "/api/v1") {
 			aksharaURL = aksharaURL + "/api/v1"
@@ -106,7 +104,6 @@ func Load() *Config {
 	if imeEnabledSet {
 		imeEnabled = strings.ToLower(strings.TrimSpace(imeEnabledStr)) == "true"
 	} else {
-		// Auto-enable when Akshara/runner URL is available
 		imeEnabled = strings.TrimSpace(aksharaURL) != ""
 	}
 

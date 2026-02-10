@@ -1,5 +1,19 @@
 # Tamil AI Proofreading Platform - Backend
 
+## ProofTamilRunner (IME / transliteration)
+
+The **ProofTamilRunner** Python app (FastAPI IME / transliteration service) is now part of this repo under **`prooftamil-runner/`**. The Go backend can call it via `TRANSLITERATOR_BASE_URL` / `AKSHARA_URL` when IME is enabled. To run the runner locally:
+
+```bash
+cd prooftamil-runner
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+export API_KEY_SECRET=change-me API_KEY=demo-key CLIENT_ID=demo-client
+uvicorn app.main:app --host 0.0.0.0 --port 8088
+```
+
+See `prooftamil-runner/README.md` for API, auth, and deploy notes.
+
 ## Getting Started
 
 1. Install Go dependencies:

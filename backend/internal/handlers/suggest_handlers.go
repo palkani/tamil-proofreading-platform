@@ -25,7 +25,8 @@ func (h *Handlers) Suggest(c *gin.Context) {
 	c.Header("Cache-Control", "public, max-age=60, s-maxage=120, stale-while-revalidate=300")
 	c.Header("Vary", "Accept-Encoding")
 	
-	if h.suggestEngine == nil {
+	engine := h.getSuggestEngine()
+	if engine == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success":     true,
 			"q":           strings.TrimSpace(c.Query("q")),
@@ -41,7 +42,7 @@ func (h *Handlers) Suggest(c *gin.Context) {
 	uid := strings.TrimSpace(c.Query("uid"))
 	limit := parseLimit(c.Query("limit"))
 
-	out, err := h.suggestEngine.Suggest(c.Request.Context(), suggest.SuggestRequest{
+	out, err := engine.Suggest(c.Request.Context(), suggest.SuggestRequest{
 		Query: q,
 		UID:   uid,
 		Limit: limit,
@@ -63,7 +64,8 @@ func (h *Handlers) Suggest(c *gin.Context) {
 
 // SuggestSelect handles POST /api/select (selection logging + personalization).
 func (h *Handlers) SuggestSelect(c *gin.Context) {
-	if h.suggestEngine == nil {
+	engine := h.getSuggestEngine()
+	if engine == nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "error": "suggest engine disabled"})
 		return
 	}
@@ -78,8 +80,8 @@ func (h *Handlers) SuggestSelect(c *gin.Context) {
 	}
 
 	// Redis personalization (best-effort)
-	if h.suggestEngine.RedisEnabled() {
-		h.suggestEngine.RecordSelection(c.Request.Context(), req.UID, req.Prefix, req.SuggestionID)
+	if engine.RedisEnabled() {
+		engine.RecordSelection(c.Request.Context(), req.UID, req.Prefix, req.SuggestionID)
 		c.JSON(http.StatusOK, gin.H{"success": true, "source": "redis"})
 		return
 	}
@@ -87,7 +89,7 @@ func (h *Handlers) SuggestSelect(c *gin.Context) {
 	// Fallback: persist selection event asynchronously in Postgres
 	if h.db != nil {
 		selected := strconv.Itoa(int(req.SuggestionID))
-		if data := h.suggestEngine.Data(); data != nil && data.Tables != nil {
+		if data := engine.Data(); data != nil && data.Tables != nil {
 			if int(req.SuggestionID) < len(data.Tables.TamilByID) {
 				if t := strings.TrimSpace(data.Tables.TamilByID[req.SuggestionID]); t != "" {
 					selected = t
@@ -105,18 +107,19 @@ func (h *Handlers) SuggestSelect(c *gin.Context) {
 
 // SuggestMetrics handles GET /metrics-lite.
 func (h *Handlers) SuggestMetrics(c *gin.Context) {
-	if h.suggestEngine == nil {
+	engine := h.getSuggestEngine()
+	if engine == nil {
 		c.JSON(http.StatusOK, gin.H{"ready": false})
 		return
 	}
-	c.JSON(http.StatusOK, h.suggestEngine.MetricsSnapshot())
+	c.JSON(http.StatusOK, engine.MetricsSnapshot())
 }
 
 // SuggestHealth handles GET /healthz.
 func (h *Handlers) SuggestHealth(c *gin.Context) {
 	meta := gin.H{"ready": false, "lexicon_count": 0}
-	if h.suggestEngine != nil && h.suggestEngine.Data() != nil {
-		data := h.suggestEngine.Data()
+	if engine := h.getSuggestEngine(); engine != nil && engine.Data() != nil {
+		data := engine.Data()
 		meta["ready"] = true
 		meta["lexicon_count"] = data.LexiconCount
 		meta["trie_version"] = data.TrieVersion

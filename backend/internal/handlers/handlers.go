@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"tamil-proofreading-platform/backend/internal/config"
@@ -34,6 +35,7 @@ type Handlers struct {
 	imeSvc              *ime.Service
 	imeEnabled          bool
 	suggestEngine       *suggest.Engine
+	suggestEngineMu     sync.RWMutex
 	tamilWordCache      *tamil_word_cache.CacheService // NEW: Tamil word cache service
 }
 
@@ -85,24 +87,29 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 		imeEnabled:    cfg.IMEEnabled,
 	}
 
-	// Initialize in-process suggestion engine (Hybrid Trie + ID tables)
-	suggestEngine, err := suggest.NewEngine(db, suggest.EngineOptions{
-		MinLen:         cfg.SuggestMinLen,
-		LimitDefault:   cfg.SuggestTopK,
-		MaxTopPerNode:  cfg.SuggestTrieTopK,
-		CacheEntries:   cfg.SuggestCacheEntries,
-		CacheTTL:       time.Duration(cfg.SuggestCacheTTLMS) * time.Millisecond,
-		RefreshSec:     cfg.LexiconRefreshSec,
-		VowelCollapse:  cfg.SuggestVowelCollapse,
-		RedisURL:       cfg.RedisURL,
-		RedisTimeoutMs: cfg.SuggestRedisTimeoutMS,
-	})
-	if err != nil {
-		log.Printf("[SUGGEST] Failed to initialize suggest engine: %v", err)
-	} else {
-		h.suggestEngine = suggestEngine
+	// Initialize suggest engine in background so server becomes "ready" quickly and stops returning 503.
+	// /api/v1/suggest returns 200 with empty suggestions until the engine is loaded.
+	go func() {
+		eng, err := suggest.NewEngine(db, suggest.EngineOptions{
+			MinLen:         cfg.SuggestMinLen,
+			LimitDefault:   cfg.SuggestTopK,
+			MaxTopPerNode:  cfg.SuggestTrieTopK,
+			CacheEntries:   cfg.SuggestCacheEntries,
+			CacheTTL:       time.Duration(cfg.SuggestCacheTTLMS) * time.Millisecond,
+			RefreshSec:     cfg.LexiconRefreshSec,
+			VowelCollapse:  cfg.SuggestVowelCollapse,
+			RedisURL:       cfg.RedisURL,
+			RedisTimeoutMs: cfg.SuggestRedisTimeoutMS,
+		})
+		if err != nil {
+			log.Printf("[SUGGEST] Failed to initialize suggest engine: %v", err)
+			return
+		}
+		h.suggestEngineMu.Lock()
+		h.suggestEngine = eng
+		h.suggestEngineMu.Unlock()
 		log.Printf("[SUGGEST] In-process suggest engine ready (min_len=%d, top_k=%d)", cfg.SuggestMinLen, cfg.SuggestTopK)
-	}
+	}()
 
 	// Initialize Tamil word cache service
 	tamilWordCache := tamil_word_cache.NewCacheService(db, cfg.RedisURL)
@@ -121,6 +128,13 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	h.startIMEAggregateJob()
 
 	return h
+}
+
+// suggestEngine returns the in-process suggest engine, or nil if not yet loaded.
+func (h *Handlers) getSuggestEngine() *suggest.Engine {
+	h.suggestEngineMu.RLock()
+	defer h.suggestEngineMu.RUnlock()
+	return h.suggestEngine
 }
 
 func (h *Handlers) startArchiveCleanup() {

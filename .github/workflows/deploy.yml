@@ -15,7 +15,6 @@ env:
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
   GOOGLE_OAUTH_REDIRECT_DOMAIN: https://prooftamil.com
   NEXT_PUBLIC_TRANSLITERATOR_BASE_URL: ${{ secrets.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL }}
-  TRANSLITERATOR_BASE_URL: https://prooftamil-runner-991187041222.asia-south1.run.app
 
 jobs:
   deploy:
