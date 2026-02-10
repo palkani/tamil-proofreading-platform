@@ -2,12 +2,27 @@ package migrations
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	"tamil-proofreading-platform/backend/internal/models"
 
 	"gorm.io/gorm"
 )
+
+func isAlreadyExistsOrBind(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "already exists") ||
+		strings.Contains(s, "42701") ||
+		strings.Contains(s, "42P07") ||
+		strings.Contains(s, "bind message") ||
+		strings.Contains(s, "result format") ||
+		strings.Contains(s, "stmtcache_") ||
+		strings.Contains(s, "prepared statement")
+}
 
 // MigrateBilling creates/updates all billing-related tables
 func MigrateBilling(db *gorm.DB) error {
@@ -18,50 +33,44 @@ func MigrateBilling(db *gorm.DB) error {
 		log.Printf("[MIGRATIONS] Warning: Failed to add user billing columns: %v", err)
 	}
 
-	// Create plans table
-	if err := db.AutoMigrate(&models.Plan{}); err != nil {
+	// Create plans table (ignore already-exists / bind format errors with pooler)
+	if err := db.AutoMigrate(&models.Plan{}); err != nil && !isAlreadyExistsOrBind(err) {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate Plan table: %v", err)
 		return err
 	}
 	log.Println("[MIGRATIONS] Plan table migrated successfully")
 
-	// Create fx_rates table
-	if err := db.AutoMigrate(&models.FXRate{}); err != nil {
+	if err := db.AutoMigrate(&models.FXRate{}); err != nil && !isAlreadyExistsOrBind(err) {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate FXRate table: %v", err)
 		return err
 	}
 	log.Println("[MIGRATIONS] FXRate table migrated successfully")
 
-	// Create subscriptions table
-	if err := db.AutoMigrate(&models.Subscription{}); err != nil {
+	if err := db.AutoMigrate(&models.Subscription{}); err != nil && !isAlreadyExistsOrBind(err) {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate Subscription table: %v", err)
 		return err
 	}
 	log.Println("[MIGRATIONS] Subscription table migrated successfully")
 
-	// Create invoices table
-	if err := db.AutoMigrate(&models.Invoice{}); err != nil {
+	if err := db.AutoMigrate(&models.Invoice{}); err != nil && !isAlreadyExistsOrBind(err) {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate Invoice table: %v", err)
 		return err
 	}
 	log.Println("[MIGRATIONS] Invoice table migrated successfully")
 
-	// Create payment_events table
-	if err := db.AutoMigrate(&models.PaymentEvent{}); err != nil {
+	if err := db.AutoMigrate(&models.PaymentEvent{}); err != nil && !isAlreadyExistsOrBind(err) {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate PaymentEvent table: %v", err)
 		return err
 	}
 	log.Println("[MIGRATIONS] PaymentEvent table migrated successfully")
 
-	// Create feature_flags table
-	if err := db.AutoMigrate(&models.FeatureFlag{}); err != nil {
+	if err := db.AutoMigrate(&models.FeatureFlag{}); err != nil && !isAlreadyExistsOrBind(err) {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate FeatureFlag table: %v", err)
 		return err
 	}
 	log.Println("[MIGRATIONS] FeatureFlag table migrated successfully")
 
-	// Create billing_audit_logs table
-	if err := db.AutoMigrate(&models.BillingAuditLog{}); err != nil {
+	if err := db.AutoMigrate(&models.BillingAuditLog{}); err != nil && !isAlreadyExistsOrBind(err) {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate BillingAuditLog table: %v", err)
 		return err
 	}
@@ -97,7 +106,9 @@ func migrateUserBillingColumns(db *gorm.DB) error {
 	for _, col := range columns {
 		if !db.Migrator().HasColumn(&models.User{}, col.column) {
 			if err := db.Migrator().AddColumn(&models.User{}, col.model); err != nil {
-				log.Printf("[MIGRATIONS] Warning: Failed to add %s column: %v", col.column, err)
+				if !isAlreadyExistsOrBind(err) {
+					log.Printf("[MIGRATIONS] Warning: Failed to add %s column: %v", col.column, err)
+				}
 			} else {
 				log.Printf("[MIGRATIONS] Added %s column to users table", col.column)
 			}

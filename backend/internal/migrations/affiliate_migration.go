@@ -2,11 +2,25 @@ package migrations
 
 import (
 	"log"
+	"strings"
 
 	"tamil-proofreading-platform/backend/internal/models"
 
 	"gorm.io/gorm"
 )
+
+func isAlreadyExistsOrPreparedStmt(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "already exists") ||
+		strings.Contains(s, "42701") || // duplicate_column
+		strings.Contains(s, "42P07") ||
+		strings.Contains(s, "stmtcache_") ||
+		strings.Contains(s, "prepared statement") ||
+		strings.Contains(s, "does not exist")
+}
 
 // MigrateAffiliates creates/updates all affiliate-related tables
 func MigrateAffiliates(db *gorm.DB) error {
@@ -15,7 +29,9 @@ func MigrateAffiliates(db *gorm.DB) error {
 	// Add referral fields to users table (if not exists)
 	if !db.Migrator().HasColumn(&models.User{}, "referred_by_user_id") {
 		if err := db.Migrator().AddColumn(&models.User{}, "referred_by_user_id"); err != nil {
-			log.Printf("[MIGRATIONS] Warning: Failed to add referred_by_user_id column: %v", err)
+			if !isAlreadyExistsOrPreparedStmt(err) {
+				log.Printf("[MIGRATIONS] Warning: Failed to add referred_by_user_id column: %v", err)
+			}
 		} else {
 			log.Println("[MIGRATIONS] Added referred_by_user_id column to users table")
 		}
@@ -23,35 +39,34 @@ func MigrateAffiliates(db *gorm.DB) error {
 
 	if !db.Migrator().HasColumn(&models.User{}, "affiliate_code_used") {
 		if err := db.Migrator().AddColumn(&models.User{}, "affiliate_code_used"); err != nil {
-			log.Printf("[MIGRATIONS] Warning: Failed to add affiliate_code_used column: %v", err)
+			if !isAlreadyExistsOrPreparedStmt(err) {
+				log.Printf("[MIGRATIONS] Warning: Failed to add affiliate_code_used column: %v", err)
+			}
 		} else {
 			log.Println("[MIGRATIONS] Added affiliate_code_used column to users table")
 		}
 	}
 
-	// Create affiliates table
-	if err := db.AutoMigrate(&models.Affiliate{}); err != nil {
+	// Create affiliates table (ignore already-exists / prepared-statement errors)
+	if err := db.AutoMigrate(&models.Affiliate{}); err != nil && !isAlreadyExistsOrPreparedStmt(err) {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate Affiliate table: %v", err)
 		return err
 	}
 	log.Println("[MIGRATIONS] Affiliate table migrated successfully")
 
-	// Create referrals table
-	if err := db.AutoMigrate(&models.Referral{}); err != nil {
+	if err := db.AutoMigrate(&models.Referral{}); err != nil && !isAlreadyExistsOrPreparedStmt(err) {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate Referral table: %v", err)
 		return err
 	}
 	log.Println("[MIGRATIONS] Referral table migrated successfully")
 
-	// Create affiliate_earnings table
-	if err := db.AutoMigrate(&models.AffiliateEarning{}); err != nil {
+	if err := db.AutoMigrate(&models.AffiliateEarning{}); err != nil && !isAlreadyExistsOrPreparedStmt(err) {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate AffiliateEarning table: %v", err)
 		return err
 	}
 	log.Println("[MIGRATIONS] AffiliateEarning table migrated successfully")
 
-	// Create affiliate_audit_logs table
-	if err := db.AutoMigrate(&models.AffiliateAuditLog{}); err != nil {
+	if err := db.AutoMigrate(&models.AffiliateAuditLog{}); err != nil && !isAlreadyExistsOrPreparedStmt(err) {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate AffiliateAuditLog table: %v", err)
 		return err
 	}

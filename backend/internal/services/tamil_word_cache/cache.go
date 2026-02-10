@@ -41,9 +41,9 @@ const (
 	// Cache TTL - 24 hours
 	cacheTTL = 24 * time.Hour
 	// Max words to cache per letter (top N by frequency)
-	maxWordsPerLetter = 10000
-	// Max rows to load from DB (avoids statement timeout on large tables)
-	maxWordsLoadLimit = 100000
+	maxWordsPerLetter = 50000
+	// Max rows to load from DB — set high enough to load full corpus (e.g. 227k+ tawiki titles)
+	maxWordsLoadLimit = 500000
 )
 
 func NewCacheService(db *gorm.DB, redisURL string) *CacheService {
@@ -78,7 +78,7 @@ func NewCacheService(db *gorm.DB, redisURL string) *CacheService {
 	return cs
 }
 
-// isRetryableDBError returns true for transient connection errors (e.g. unexpected EOF, connection reset).
+// isRetryableDBError returns true for transient connection errors (e.g. pool exhausted, EOF, connection reset).
 func isRetryableDBError(err error) bool {
 	if err == nil {
 		return false
@@ -87,7 +87,10 @@ func isRetryableDBError(err error) bool {
 	return strings.Contains(s, "EOF") ||
 		strings.Contains(s, "connection reset") ||
 		strings.Contains(s, "broken pipe") ||
-		strings.Contains(s, "connection refused")
+		strings.Contains(s, "connection refused") ||
+		strings.Contains(s, "max clients") ||
+		strings.Contains(s, "MaxClientsInSessionMode") ||
+		strings.Contains(s, "too many connections")
 }
 
 // InitializeCache preloads Tamil words from database into cache
@@ -97,7 +100,7 @@ func (cs *CacheService) InitializeCache(ctx context.Context) error {
 	log.Printf("[TamilWordCache] Starting cache initialization...")
 
 	var words []models.TamilWord
-	const maxAttempts = 3
+	const maxAttempts = 5
 	var err error
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		words = nil
@@ -112,8 +115,9 @@ func (cs *CacheService) InitializeCache(ctx context.Context) error {
 		if !isRetryableDBError(err) || attempt == maxAttempts-1 {
 			break
 		}
-		log.Printf("[TamilWordCache] Load failed (attempt %d/%d), retrying: %v", attempt+1, maxAttempts, err)
-		time.Sleep(time.Duration(attempt+1) * time.Second)
+		backoff := time.Duration(attempt+1) * 2 * time.Second
+		log.Printf("[TamilWordCache] Load failed (attempt %d/%d), retrying in %v: %v", attempt+1, maxAttempts, backoff, err)
+		time.Sleep(backoff)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to load words from database: %w", err)

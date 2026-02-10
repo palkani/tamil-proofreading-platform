@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -98,11 +99,15 @@ func main() {
 		}
 	}()
 
-	// Initialize database with retry logic
+	// Initialize database with retry logic.
+	// PreferSimpleProtocol: true avoids prepared-statement errors with Supabase pooler (stmtcache_* does not exist, bind message format).
 	var db *gorm.DB
 	var err error
 	for i := 0; i < 5; i++ {
-		db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
+		db, err = gorm.Open(postgres.New(postgres.Config{
+			DSN:                   cfg.DatabaseURL,
+			PreferSimpleProtocol:  true,
+		}), &gorm.Config{
 			Logger: logger.Default.LogMode(logger.Silent),
 		})
 		if err == nil {
@@ -119,10 +124,18 @@ func main() {
 		if pingErr := sqlDB.Ping(); pingErr != nil {
 			log.Fatalf("Database ping failed (connection not usable): %v", pingErr)
 		}
+		// Limit pool size so we don't exceed Supabase Session mode (pooler port 5432) max clients.
+		// Use Transaction mode (port 6543) in DATABASE_URL if you need more concurrency.
+		const maxOpen = 10
+		const maxIdle = 5
+		sqlDB.SetMaxOpenConns(maxOpen)
+		sqlDB.SetMaxIdleConns(maxIdle)
+		sqlDB.SetConnMaxLifetime(0) // no limit; pooler handles reconnects
+		log.Printf("Database pool: max_open=%d max_idle=%d (Supabase-friendly)", maxOpen, maxIdle)
 		log.Println("Database connected and ping OK (Supabase/Postgres)")
 	}
 
-	// Run migrations
+	// Run migrations (constraint/table "already exists" is normal on re-run; PreferSimpleProtocol avoids pooler prepared-statement errors)
 	log.Println("Running database migrations...")
 	if err := db.AutoMigrate(
 		&models.User{},
@@ -137,7 +150,10 @@ func main() {
 		&models.TamilPhrase{},
 		&models.BlogPost{},
 	); err != nil {
-		log.Printf("Warning: AutoMigrate failed: %v", err)
+		// Don't fail on "already exists" (e.g. fk_users_submissions)
+		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "42710") {
+			log.Printf("Warning: AutoMigrate failed: %v", err)
+		}
 	}
 
 	// Run custom migrations in parallel (newsletter, affiliate, billing — all used by handlers)

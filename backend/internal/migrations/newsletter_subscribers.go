@@ -2,11 +2,22 @@ package migrations
 
 import (
 	"log"
+	"strings"
 
 	"tamil-proofreading-platform/backend/internal/models"
 
 	"gorm.io/gorm"
 )
+
+func isAlreadyExists(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "already exists") ||
+		strings.Contains(s, "42P07") || // duplicate_table
+		strings.Contains(s, "42710")   // duplicate_object
+}
 
 // MigrateNewsletterSubscribers creates the newsletter_subscribers table if it doesn't exist
 func MigrateNewsletterSubscribers(db *gorm.DB) error {
@@ -18,8 +29,13 @@ func MigrateNewsletterSubscribers(db *gorm.DB) error {
 
 	// Auto-migrate the NewsletterSubscriber model
 	if err := db.AutoMigrate(&models.NewsletterSubscriber{}); err != nil {
-		log.Printf("[MIGRATIONS] Failed to migrate newsletter_subscribers: %v", err)
-		return err
+		if isAlreadyExists(err) {
+			log.Println("[MIGRATIONS] newsletter_subscribers table already exists, skipping")
+			// Still create indexes below
+		} else {
+			log.Printf("[MIGRATIONS] Failed to migrate newsletter_subscribers: %v", err)
+			return err
+		}
 	}
 
 	// Add indexes if they don't exist (AutoMigrate should handle this, but just in case)
