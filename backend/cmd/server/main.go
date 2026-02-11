@@ -137,44 +137,45 @@ func main() {
 		log.Println("Database connected and ping OK (Supabase/Postgres)")
 	}
 
-	// Run migrations (constraint/table "already exists" is normal on re-run; PreferSimpleProtocol avoids pooler prepared-statement errors)
-	log.Println("Running database migrations...")
-	if err := db.AutoMigrate(
-		&models.User{},
-		&models.TamilWord{},
-		&models.Submission{},
-		&models.Usage{},
-		&models.Payment{},
-		&models.RefreshToken{},
-		&models.SuggestionLimit{},
-		&models.SuggestionAcceptEvent{},
-		&models.TamilBigram{},
-		&models.TamilPhrase{},
-		&models.BlogPost{},
-	); err != nil {
-		// Don't fail on "already exists" (e.g. fk_users_submissions)
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "42710") {
-			log.Printf("Warning: AutoMigrate failed: %v", err)
+	// Run migrations only when RUN_MIGRATIONS=true (set false in prod after first deploy to avoid running on every cold start).
+	if cfg.RunMigrations {
+		log.Println("Running database migrations...")
+		if err := db.AutoMigrate(
+			&models.User{},
+			&models.TamilWord{},
+			&models.Submission{},
+			&models.Usage{},
+			&models.Payment{},
+			&models.RefreshToken{},
+			&models.SuggestionLimit{},
+			&models.SuggestionAcceptEvent{},
+			&models.TamilBigram{},
+			&models.TamilPhrase{},
+			&models.BlogPost{},
+		); err != nil {
+			if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "42710") {
+				log.Printf("Warning: AutoMigrate failed: %v", err)
+			}
 		}
-	}
-
-	// Run custom migrations in parallel (newsletter, affiliate, billing — all used by handlers)
-	var newsletterErr, affiliateErr, billingErr error
-	doneCh := make(chan struct{}, 3)
-	go func() { newsletterErr = migrations.MigrateNewsletterSubscribers(db); doneCh <- struct{}{} }()
-	go func() { affiliateErr = migrations.MigrateAffiliates(db); doneCh <- struct{}{} }()
-	go func() { billingErr = migrations.MigrateBilling(db); doneCh <- struct{}{} }()
-	for i := 0; i < 3; i++ {
-		<-doneCh
-	}
-	if newsletterErr != nil {
-		log.Printf("Warning: Newsletter migration failed: %v", newsletterErr)
-	}
-	if affiliateErr != nil {
-		log.Printf("Warning: Affiliate migration failed: %v", affiliateErr)
-	}
-	if billingErr != nil {
-		log.Printf("Warning: Billing migration failed: %v", billingErr)
+		var newsletterErr, affiliateErr, billingErr error
+		doneCh := make(chan struct{}, 3)
+		go func() { newsletterErr = migrations.MigrateNewsletterSubscribers(db); doneCh <- struct{}{} }()
+		go func() { affiliateErr = migrations.MigrateAffiliates(db); doneCh <- struct{}{} }()
+		go func() { billingErr = migrations.MigrateBilling(db); doneCh <- struct{}{} }()
+		for i := 0; i < 3; i++ {
+			<-doneCh
+		}
+		if newsletterErr != nil {
+			log.Printf("Warning: Newsletter migration failed: %v", newsletterErr)
+		}
+		if affiliateErr != nil {
+			log.Printf("Warning: Affiliate migration failed: %v", affiliateErr)
+		}
+		if billingErr != nil {
+			log.Printf("Warning: Billing migration failed: %v", billingErr)
+		}
+	} else {
+		log.Println("Skipping migrations (RUN_MIGRATIONS=false)")
 	}
 
 	// Initialize handlers (do not block on index migration — run it after server is ready)
@@ -227,6 +228,7 @@ func main() {
 			auth.POST("/logout", h.Logout)
 			auth.POST("/refresh", h.RefreshAccessToken)
 			auth.POST("/supabase-token", h.SupabaseTokenExchange)
+			auth.GET("/google", h.GoogleAuthStart)       // Start OAuth (redirect to Google; use BACKEND_URL so callback matches)
 			auth.POST("/google/callback", h.GoogleCallback)
 			auth.GET("/google/callback", h.GoogleCallback)
 			auth.POST("/forgot-password", h.ForgotPassword)
@@ -370,12 +372,14 @@ func main() {
 	readyHandler.Store(r)
 	log.Println("Backend ready; full router active")
 
-	// Run Tamil words index migration in background (CREATE INDEX on 227k+ rows can take 1–2 min).
-	go func() {
-		if idxErr := migrations.MigrateTamilWordsIndex(db); idxErr != nil {
-			log.Printf("Warning: Tamil words index migration: %v", idxErr)
-		}
-	}()
+	// Run Tamil words index migration in background only when migrations are enabled (skips quickly if indexes exist).
+	if cfg.RunMigrations {
+		go func() {
+			if idxErr := migrations.MigrateTamilWordsIndex(db); idxErr != nil {
+				log.Printf("Warning: Tamil words index migration: %v", idxErr)
+			}
+		}()
+	}
 
 	select {} // block forever
 }

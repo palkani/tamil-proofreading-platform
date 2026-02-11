@@ -16,6 +16,8 @@ type Config struct {
 	DatabaseURL               string
 	Port                      string
 	FrontendURL               string
+	// BackendURL is the public URL of this API (e.g. https://xxx.run.app). Used for Google OAuth redirect_uri. If empty, uses https://www.prooftamil.com.
+	BackendURL                string
 	GoogleOAuthRedirectDomain string
 	JWTSecret                 string
 	RefreshTokenSecret        string
@@ -69,6 +71,8 @@ type Config struct {
 	// Supabase Auth (Google sign-in via Supabase; existing users matched by email)
 	SupabaseURL      string
 	SupabaseJWTSecret string
+	// RunMigrations: if false, skip AutoMigrate and custom migrations at startup (set false in prod after first deploy to avoid running on every cold start).
+	RunMigrations   bool
 }
 
 func Load() *Config {
@@ -124,6 +128,7 @@ func Load() *Config {
 		DatabaseURL:               dbURL,
 		Port:                      getEnv("PORT", "8080"),
 		FrontendURL:               getEnv("FRONTEND_URL", "http://localhost:3000"),
+		BackendURL:                strings.TrimRight(getEnv("BACKEND_URL", ""), "/"),
 		GoogleOAuthRedirectDomain: getEnv("GOOGLE_OAUTH_REDIRECT_DOMAIN", "https://prooftamil.com"),
 		JWTSecret:                 getEnv("JWT_SECRET", "change-this-secret-key-in-production"),
 		RefreshTokenSecret:        getEnv("REFRESH_TOKEN_SECRET", ""),
@@ -174,6 +179,7 @@ func Load() *Config {
 		PreloadTamilCacheAtStartup: strings.ToLower(getEnv("PRELOAD_TAMIL_CACHE_AT_STARTUP", "false")) == "true",
 		SupabaseURL:            strings.TrimRight(getEnv("SUPABASE_URL", ""), "/"),
 		SupabaseJWTSecret:      strings.TrimSpace(getEnv("SUPABASE_JWT_SECRET", "")),
+		RunMigrations:          strings.ToLower(getEnv("RUN_MIGRATIONS", "true")) == "true",
 	}
 }
 

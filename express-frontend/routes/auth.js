@@ -157,8 +157,14 @@ function getGoogleClientId() {
   return VALID_GOOGLE_CLIENT_ID;
 }
 
+// OAuth callback URL must match Google Console. Use BACKEND_URL when API is on Cloud Run (e.g. https://xxx.run.app).
+function getGoogleCallbackUrl() {
+  const base = process.env.BACKEND_URL || 'https://www.prooftamil.com';
+  return base.replace(/\/$/, '') + '/api/v1/auth/google/callback';
+}
+
 router.get('/google', (req, res) => {
-  const redirectUri = 'https://www.prooftamil.com/api/v1/auth/google/callback';
+  const redirectUri = getGoogleCallbackUrl();
   const clientId = getGoogleClientId();
   const params = new URLSearchParams({
     client_id: clientId,

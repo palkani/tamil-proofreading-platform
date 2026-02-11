@@ -34,17 +34,26 @@ type googleTokens struct {
 	Scope        string
 }
 
-const googleRedirectURI = "https://www.prooftamil.com/api/v1/auth/google/callback"
+const defaultGoogleCallbackURL = "https://www.prooftamil.com/api/v1/auth/google/callback"
 const googleFrontendWorkspace = "https://www.prooftamil.com/workspace"
 
 var logOAuthConfigOnce sync.Once
 
+// googleCallbackURL returns the OAuth redirect_uri (must match Google Console). Use BACKEND_URL when API is on Cloud Run.
+func (h *Handlers) googleCallbackURL() string {
+	if h.cfg.BackendURL != "" {
+		return strings.TrimRight(h.cfg.BackendURL, "/") + "/api/v1/auth/google/callback"
+	}
+	return defaultGoogleCallbackURL
+}
+
 // GoogleAuthStart initiates OAuth by redirecting directly to Google with backend callback
 func (h *Handlers) GoogleAuthStart(c *gin.Context) {
 	reqID := c.GetString("request_id")
+	redirectURI := h.googleCallbackURL()
 
 	logOAuthConfigOnce.Do(func() {
-		log.Printf("[OAUTH-CONFIG] client_id=%s redirect_uri=%s", h.cfg.GoogleClientID, googleRedirectURI)
+		log.Printf("[OAUTH-CONFIG] client_id=%s redirect_uri=%s", h.cfg.GoogleClientID, redirectURI)
 	})
 
 	// Google OAuth client_id must be xxx.apps.googleusercontent.com, never a domain (e.g. prooftamil.com)
@@ -54,10 +63,10 @@ func (h *Handlers) GoogleAuthStart(c *gin.Context) {
 		return
 	}
 
-	// Build Google authorize URL with canonical redirect_uri (backend Cloud Run)
+	// Build Google authorize URL with canonical redirect_uri (backend or Cloud Run)
 	params := url.Values{}
 	params.Set("client_id", h.cfg.GoogleClientID)
-	params.Set("redirect_uri", googleRedirectURI)
+	params.Set("redirect_uri", redirectURI)
 	params.Set("response_type", "code")
 	params.Set("scope", "openid email profile")
 	params.Set("access_type", "offline")
@@ -677,7 +686,7 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 
 	log.Printf("[OAUTH-DEBUG] step=callback_hit request_id=%s host=%s originalUrl=%s code_len=%d error_param=%s query_keys=%v",
 		reqID, c.Request.Host, c.Request.URL.String(), len(code), errParam, c.Request.URL.Query())
-	log.Printf("[OAUTH-DEBUG] step=callback_redirect_uri request_id=%s received=%s using=%s", reqID, c.Query("redirect_uri"), googleRedirectURI)
+	log.Printf("[OAUTH-DEBUG] step=callback_redirect_uri request_id=%s received=%s using=%s", reqID, c.Query("redirect_uri"), h.googleCallbackURL())
 
         if errParam != "" {
                 c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error="+errParam)
@@ -696,8 +705,8 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
                 return
         }
 
-	// Force canonical redirect URI to match Google Console configuration
-	redirectURI := "https://www.prooftamil.com/api/v1/auth/google/callback"
+	// Use same redirect_uri as in GoogleAuthStart (must match Google Console; use BACKEND_URL when API is on Cloud Run)
+	redirectURI := h.googleCallbackURL()
 	log.Printf("[OAUTH-DEBUG] step=redirect_uri request_id=%s redirect_uri=%s client_id_present=%v client_secret_present=%v code_present=%v",
 		reqID, redirectURI, h.cfg.GoogleClientID != "", h.cfg.GoogleClientSecret != "", code != "")
 
@@ -783,12 +792,14 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 }
 
 func (h *Handlers) exchangeCodeForToken(ctx context.Context, code string, redirectURI string, reqID string) (*googleTokens, error) {
-	// Force canonical redirect URI to match Google Console configuration
+	// Use configured callback URL (must match Google Console; use BACKEND_URL when API is on Cloud Run)
+	canonical := h.googleCallbackURL()
 	if redirectURI == "" {
-		redirectURI = "https://www.prooftamil.com/api/v1/auth/google/callback"
+		redirectURI = canonical
 	}
-	if redirectURI != "https://www.prooftamil.com/api/v1/auth/google/callback" {
-		log.Printf("[OAUTH-WARN] redirect URI mismatch provided=%s expected=%s request_id=%s", redirectURI, "https://www.prooftamil.com/api/v1/auth/google/callback", reqID)
+	if redirectURI != canonical {
+		log.Printf("[OAUTH-WARN] redirect URI mismatch provided=%s expected=%s request_id=%s", redirectURI, canonical, reqID)
+		redirectURI = canonical
 	}
 
 	clientID := h.cfg.GoogleClientID
