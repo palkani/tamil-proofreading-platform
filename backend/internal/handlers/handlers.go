@@ -121,7 +121,7 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 		tamilCacheOpts.LoadLimit = 500000
 	}
 	if tamilCacheOpts.BatchTimeout <= 0 {
-		tamilCacheOpts.BatchTimeout = 30 * time.Second
+		tamilCacheOpts.BatchTimeout = 2 * time.Minute
 	}
 	tamilWordCache := tamil_word_cache.NewCacheService(db, cfg.RedisURL, tamilCacheOpts)
 	h.tamilWordCache = tamilWordCache

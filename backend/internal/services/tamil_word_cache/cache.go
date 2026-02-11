@@ -55,6 +55,10 @@ const (
 	maxWordsPerLetter = 50000
 	// Max rows to load from DB — set high enough to load full corpus (e.g. 227k+ tawiki titles)
 	maxWordsLoadLimit = 500000
+	// If load fails after retries, accept partial cache when we have at least this many words
+	minWordsForPartialInit = 1000
+	// Per-batch retries before advancing or giving up
+	maxBatchRetries = 3
 )
 
 func NewCacheService(db *gorm.DB, redisURL string, loadOpts *CacheLoadOptions) *CacheService {
@@ -65,7 +69,7 @@ func NewCacheService(db *gorm.DB, redisURL string, loadOpts *CacheLoadOptions) *
 		initialized: false,
 		loadBatchSize: 10000,
 		loadLimit:     maxWordsLoadLimit,
-		batchTimeout:  30 * time.Second,
+		batchTimeout:  2 * time.Minute, // generous per-batch for cold/slow DB
 	}
 	if loadOpts != nil {
 		if loadOpts.BatchSize > 0 {
@@ -121,6 +125,8 @@ func isRetryableDBError(err error) bool {
 }
 
 // InitializeCache preloads Tamil words from database into cache (batched, with per-batch timeout).
+// Uses per-batch retries so a single slow batch doesn't force a full restart. Accepts partial
+// cache if load fails after retries but we have at least minWordsForPartialInit words.
 // Organized by first letter of transliteration for fast prefix lookups.
 func (cs *CacheService) InitializeCache(ctx context.Context) error {
 	start := time.Now()
@@ -129,60 +135,85 @@ func (cs *CacheService) InitializeCache(ctx context.Context) error {
 	log.Printf("[TamilWordCache] Starting cache initialization (batch=%d limit=%d timeout=%v)...", batchSize, loadLimit, cs.batchTimeout)
 
 	words := make([]models.TamilWord, 0, loadLimit)
-	const maxAttempts = 5
-	var err error
-	// Keyset pagination: (frequency, user_confirmed, id) < last row — each batch is O(limit), not O(offset).
+	const maxAttempts = 3 // full-load retries (each attempt can make progress with per-batch retries)
+	var loadErr error
+	var lastFreq int
+	var lastUC int
+	var lastID uint
+	firstBatch := true
+
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		words = words[:0]
-		var lastFreq int
-		var lastUC int
-		var lastID uint
-		firstBatch := true
 		for {
-			batchCtx := ctx
-			var cancel context.CancelFunc
-			if cs.batchTimeout > 0 {
-				batchCtx, cancel = context.WithTimeout(ctx, cs.batchTimeout)
-			}
-			q := cs.db.WithContext(batchCtx).
-				Select("id, tamil_text, transliteration, frequency, category, user_confirmed").
-				Order("frequency DESC, user_confirmed DESC, id")
-			if !firstBatch {
-				q = q.Where("(frequency, user_confirmed, id) < (?, ?, ?)", lastFreq, lastUC, lastID)
-			}
+			// Per-batch retry: retry same batch up to maxBatchRetries before giving up this batch
 			var batch []models.TamilWord
-			batchErr := q.Limit(batchSize).Find(&batch).Error
-			if cancel != nil {
-				cancel()
+			var batchErr error
+			for batchAttempt := 0; batchAttempt < maxBatchRetries; batchAttempt++ {
+				batchCtx := ctx
+				var cancel context.CancelFunc
+				if cs.batchTimeout > 0 {
+					batchCtx, cancel = context.WithTimeout(ctx, cs.batchTimeout)
+				}
+				q := cs.db.WithContext(batchCtx).
+					Select("id, tamil_text, transliteration, frequency, category, user_confirmed").
+					Order("frequency DESC, user_confirmed DESC, id")
+				if !firstBatch {
+					q = q.Where("(frequency, user_confirmed, id) < (?, ?, ?)", lastFreq, lastUC, lastID)
+				}
+				batch = nil
+				batchErr = q.Limit(batchSize).Find(&batch).Error
+				if cancel != nil {
+					cancel()
+				}
+				if batchErr == nil {
+					break
+				}
+				if !isRetryableDBError(batchErr) {
+					break
+				}
+				backoff := time.Duration(batchAttempt+1) * 2 * time.Second
+				log.Printf("[TamilWordCache] Batch failed (attempt %d/%d), retrying in %v: %v", batchAttempt+1, maxBatchRetries, backoff, batchErr)
+				time.Sleep(backoff)
 			}
 			if batchErr != nil {
-				err = batchErr
+				loadErr = batchErr
 				break
 			}
 			words = append(words, batch...)
 			if len(batch) < batchSize {
+				loadErr = nil
 				break
 			}
 			last := batch[len(batch)-1]
 			lastFreq, lastUC, lastID = last.Frequency, last.UserConfirmed, last.ID
 			firstBatch = false
 			if len(words) >= loadLimit {
+				loadErr = nil
 				break
 			}
-			log.Printf("[TamilWordCache] Loaded %d words so far...", len(words))
+			if len(words)%20000 == 0 || len(words) < 20000 {
+				log.Printf("[TamilWordCache] Loaded %d words so far...", len(words))
+			}
 		}
-		if err == nil {
+		if loadErr == nil {
 			break
 		}
-		if !isRetryableDBError(err) || attempt == maxAttempts-1 {
+		if !isRetryableDBError(loadErr) {
 			break
 		}
-		backoff := time.Duration(attempt+1) * 2 * time.Second
-		log.Printf("[TamilWordCache] Load failed (attempt %d/%d), retrying in %v: %v", attempt+1, maxAttempts, backoff, err)
+		// Full-load retry: restart from beginning after backoff
+		backoff := time.Duration(attempt+1) * 3 * time.Second
+		log.Printf("[TamilWordCache] Load failed (attempt %d/%d), retrying in %v: %v", attempt+1, maxAttempts, backoff, loadErr)
+		words = words[:0]
+		lastFreq, lastUC, lastID = 0, 0, 0
+		firstBatch = true
 		time.Sleep(backoff)
 	}
-	if err != nil {
-		return fmt.Errorf("failed to load words from database: %w", err)
+
+	if loadErr != nil && len(words) < minWordsForPartialInit {
+		return fmt.Errorf("failed to load words from database: %w", loadErr)
+	}
+	if loadErr != nil {
+		log.Printf("[TamilWordCache] Using partial cache after load error: %v (words=%d)", loadErr, len(words))
 	}
 
 	log.Printf("[TamilWordCache] Loaded %d words from database", len(words))

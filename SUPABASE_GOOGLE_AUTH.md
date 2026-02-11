@@ -17,6 +17,8 @@ When **SUPABASE_URL** and **SUPABASE_ANON_KEY** are set, the app uses **Supabase
 
 Supabase will only redirect to URLs listed here.
 
+**If you see "requested path is invalid" or a URL like `https://YOUR_PROJECT.supabase.co/www.prooftamil.com`:** You entered a redirect URL **without** `https://`. In **Redirect URLs**, use the **full** URL: `https://www.prooftamil.com/auth/callback` (with `https://`). Remove any entry that is just `www.prooftamil.com` or `www.prooftamil.com/auth/callback`.
+
 ### Authentication → Providers → Google
 
 1. Enable the **Google** provider.

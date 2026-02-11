@@ -70,7 +70,7 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 		}
 	}
 
-	// Fallback to PostgreSQL if cache miss — load in batches with per-batch timeout
+	// Fallback to PostgreSQL if cache miss — load in batches with per-batch timeout and per-batch retries
 	if !loadedFromCache {
 		loadLimit := opts.LoadLimit
 		if loadLimit <= 0 {
@@ -82,57 +82,77 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 		}
 		batchTimeout := opts.BatchTimeout
 		if batchTimeout <= 0 {
-			batchTimeout = 30 * time.Second
+			batchTimeout = 2 * time.Minute
 		}
+		const maxBatchRetries = 3
+		const maxAttempts = 3
 		// Keyset pagination: (frequency, user_confirmed, id) < last row — each batch is O(limit), not O(offset).
 		// Requires index: idx_tamil_words_freq_uc_id ON (frequency DESC, user_confirmed DESC, id).
 		var loadErr error
-		for attempt := 0; attempt < 3; attempt++ {
+		var lastFreq int
+		var lastUC int
+		var lastID uint
+		firstBatch := true
+		for attempt := 0; attempt < maxAttempts; attempt++ {
 			rows = make([]LexiconRow, 0, loadLimit)
-			var lastFreq int
-			var lastUC int
-			var lastID uint
-			firstBatch := true
+			lastFreq, lastUC, lastID = 0, 0, 0
+			firstBatch = true
 			for {
-				batchCtx := ctx
-				var cancel context.CancelFunc
-				if batchTimeout > 0 {
-					batchCtx, cancel = context.WithTimeout(ctx, batchTimeout)
-				}
-				q := db.WithContext(batchCtx).Table("tamil_words").
-					Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
-					Order("frequency DESC, user_confirmed DESC, id")
-				if !firstBatch {
-					q = q.Where("(frequency, user_confirmed, id) < (?, ?, ?)", lastFreq, lastUC, lastID)
-				}
 				var batch []LexiconRow
-				batchErr := q.Limit(batchSize).Find(&batch).Error
-				if cancel != nil {
-					cancel()
-				}
-				if batchErr != nil {
+				loadErr = nil
+				for batchAttempt := 0; batchAttempt < maxBatchRetries; batchAttempt++ {
+					batchCtx := ctx
+					var cancel context.CancelFunc
+					if batchTimeout > 0 {
+						batchCtx, cancel = context.WithTimeout(ctx, batchTimeout)
+					}
+					q := db.WithContext(batchCtx).Table("tamil_words").
+						Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
+						Order("frequency DESC, user_confirmed DESC, id")
+					if !firstBatch {
+						q = q.Where("(frequency, user_confirmed, id) < (?, ?, ?)", lastFreq, lastUC, lastID)
+					}
+					batch = nil
+					batchErr := q.Limit(batchSize).Find(&batch).Error
+					if cancel != nil {
+						cancel()
+					}
+					if batchErr == nil {
+						loadErr = nil
+						break
+					}
 					loadErr = batchErr
+					if !isRetryableDBError(batchErr) {
+						break
+					}
+					backoff := time.Duration(batchAttempt+1) * 2 * time.Second
+					log.Printf("[SUGGEST] LoadSuggestData batch retry %d/%d in %v: %v", batchAttempt+1, maxBatchRetries, backoff, batchErr)
+					time.Sleep(backoff)
+				}
+				if loadErr != nil {
 					break
 				}
 				rows = append(rows, batch...)
 				if len(batch) < batchSize {
+					loadErr = nil
 					break
 				}
 				last := batch[len(batch)-1]
 				lastFreq, lastUC, lastID = last.Frequency, last.UserConfirmed, last.ID
 				firstBatch = false
 				if len(rows) >= loadLimit {
+					loadErr = nil
 					break
 				}
 			}
 			if loadErr == nil {
 				break
 			}
-			if !isRetryableDBError(loadErr) || attempt == 2 {
+			if !isRetryableDBError(loadErr) || attempt == maxAttempts-1 {
 				break
 			}
-			log.Printf("[SUGGEST] LoadSuggestData retry %d/3 after: %v", attempt+1, loadErr)
-			time.Sleep(time.Duration(attempt+1) * time.Second)
+			log.Printf("[SUGGEST] LoadSuggestData full retry %d/%d after: %v", attempt+1, maxAttempts, loadErr)
+			time.Sleep(time.Duration(attempt+1) * 3 * time.Second)
 		}
 		if loadErr != nil {
 			log.Printf("[SUGGEST] LoadSuggestData DB error (using empty lexicon): %v", loadErr)

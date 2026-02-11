@@ -202,7 +202,7 @@ func (e *Engine) reload(ctx context.Context) error {
 func (e *Engine) loaderOpts() LoaderOptions {
 	batchTimeout := time.Duration(e.batchTimeoutSec) * time.Second
 	if e.batchTimeoutSec <= 0 {
-		batchTimeout = 30 * time.Second
+		batchTimeout = 2 * time.Minute
 	}
 	return LoaderOptions{
 		MaxTopPerNode:      e.maxTopPerNode,

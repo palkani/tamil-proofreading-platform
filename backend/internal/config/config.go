@@ -169,17 +169,17 @@ func Load() *Config {
 		SuggestRedisTimeoutMS:  getEnvAsInt("SUGGEST_REDIS_TIMEOUT_MS", 25),
 		SuggestLoadBatchSize:    getEnvAsInt("SUGGEST_LOAD_BATCH_SIZE", 10000),
 		SuggestLoadLimit:       getEnvAsInt("SUGGEST_LOAD_LIMIT", 100000),
-		SuggestBatchTimeoutSec:  getEnvAsInt("SUGGEST_BATCH_TIMEOUT_SEC", 30),
+		SuggestBatchTimeoutSec:  getEnvAsInt("SUGGEST_BATCH_TIMEOUT_SEC", 120),
 		TamilCacheBatchSize:     getEnvAsInt("TAMIL_CACHE_BATCH_SIZE", 10000),
 		TamilCacheLoadLimit:     getEnvAsInt("TAMIL_CACHE_LOAD_LIMIT", 500000),
-		TamilCacheBatchTimeoutSec: getEnvAsInt("TAMIL_CACHE_BATCH_TIMEOUT_SEC", 30),
+		TamilCacheBatchTimeoutSec: getEnvAsInt("TAMIL_CACHE_BATCH_TIMEOUT_SEC", 120),
 		SeedCorpusOnStartup:    strings.ToLower(getEnv("SEED_CORPUS_ON_STARTUP", "false")) == "true",
 		SeedCorpusFile:         strings.TrimSpace(getEnv("SEED_CORPUS_FILE", "/root/seed_corpus_minimal.sql")),
 		SeedCorpusMinCount:     getEnvAsInt("SEED_CORPUS_MIN_COUNT", 1),
 		PreloadTamilCacheAtStartup: strings.ToLower(getEnv("PRELOAD_TAMIL_CACHE_AT_STARTUP", "false")) == "true",
 		SupabaseURL:            strings.TrimRight(getEnv("SUPABASE_URL", ""), "/"),
 		SupabaseJWTSecret:      strings.TrimSpace(getEnv("SUPABASE_JWT_SECRET", "")),
-		RunMigrations:          strings.ToLower(getEnv("RUN_MIGRATIONS", "true")) == "true",
+		RunMigrations:          parseRunMigrations(getEnv("RUN_MIGRATIONS", "true")),
 	}
 }
 
@@ -215,6 +215,15 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// parseRunMigrations: only "true", "1", "yes", "on" (case-insensitive) enable migrations; "false", "0", "no", "off" or anything else disables.
+// Logs the raw value so Cloud Run env can be verified.
+func parseRunMigrations(raw string) bool {
+	v := strings.TrimSpace(strings.ToLower(raw))
+	enabled := (v == "true" || v == "1" || v == "yes" || v == "on")
+	log.Printf("[CONFIG] RUN_MIGRATIONS=%q -> RunMigrations=%v", raw, enabled)
+	return enabled
 }
 
 func getEnvAsInt(key string, defaultValue int) int {

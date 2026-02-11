@@ -9,7 +9,10 @@
   var useSupabase = supabaseUrl && supabaseAnonKey;
 
   var redirectTo = (typeof window !== 'undefined' && window.SUPABASE_REDIRECT_TO) || '/drafts';
-  var callbackUrl = (typeof window !== 'undefined' && window.location.origin) + '/auth/callback';
+  // Must be a full URL (https://...) so Supabase redirects to your app, not to supabase.co/www.prooftamil.com
+  var origin = (typeof window !== 'undefined' && window.location && window.location.origin) || 'https://www.prooftamil.com';
+  if (origin && !/^https?:\/\//i.test(origin)) origin = 'https://' + origin;
+  var callbackUrl = origin.replace(/\/$/, '') + '/auth/callback';
   if (redirectTo && redirectTo.startsWith('/')) {
     callbackUrl += '?redirect=' + encodeURIComponent(redirectTo);
   }
