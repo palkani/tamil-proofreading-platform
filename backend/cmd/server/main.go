@@ -59,6 +59,10 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 
+	if cfg.SupabaseURL != "" && cfg.SupabaseJWTSecret == "" {
+		log.Printf("[CONFIG] SUPABASE_URL is set but SUPABASE_JWT_SECRET is empty — Google sign-in will work if your project uses JWT Signing Keys (RS256/ES256). If you still see 'Invalid or expired Supabase token', set SUPABASE_JWT_SECRET (Project Settings → API → JWT Secret) for legacy HS256 tokens.")
+	}
+
 	// Set Gin mode based on environment
 	if os.Getenv("GIN_MODE") == "" {
 		if os.Getenv("ENVIRONMENT") == "production" {

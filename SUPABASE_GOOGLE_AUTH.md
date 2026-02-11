@@ -43,9 +43,11 @@ Supabase will only redirect to URLs listed here.
 |-------------|------------------------|--------|
 | **Frontend** (Express / Vercel) | `SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | **Frontend** | `SUPABASE_ANON_KEY` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (used by signInWithOAuth) |
-| **Backend**  | `SUPABASE_JWT_SECRET`  | Used to verify the Supabase access_token when exchanging for your app session |
+| **Backend**  | `SUPABASE_JWT_SECRET`  | Used to verify the Supabase access_token when exchanging for your app session. **Must be set in the deployment environment** (e.g. Cloud Run env vars). Get it from Supabase Dashboard → **Project Settings → API** → **JWT Secret** (the long secret, not the anon key). |
 
 You do **not** need `BACKEND_URL` or `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in the backend for the Supabase Google flow.
+
+**If you see "Invalid or expired Supabase token" after Google sign-in:** The backend verifies the token in two ways: (1) **JWT Signing Keys (RS256/ES256)** — the backend fetches public keys from `SUPABASE_URL/auth/v1/.well-known/jwks.json`; ensure **SUPABASE_URL** is set in the backend. (2) **Legacy JWT secret (HS256)** — set **SUPABASE_JWT_SECRET** in the backend to the value from Supabase **Project Settings → API → JWT Secret**. If your project has migrated to JWT Signing Keys in the dashboard, (1) is used and you do not need the secret. Restart the backend after changing env vars.
 
 ---
 

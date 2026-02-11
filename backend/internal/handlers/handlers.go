@@ -19,6 +19,7 @@ import (
 	tamil_word_cache "tamil-proofreading-platform/backend/internal/services/tamil_word_cache"
 	"tamil-proofreading-platform/backend/internal/suggest"
 
+	"github.com/MicahParks/keyfunc/v2"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -36,7 +37,10 @@ type Handlers struct {
 	imeEnabled          bool
 	suggestEngine       *suggest.Engine
 	suggestEngineMu     sync.RWMutex
-	tamilWordCache      *tamil_word_cache.CacheService // NEW: Tamil word cache service
+	tamilWordCache      *tamil_word_cache.CacheService
+	// supabaseJWKS is lazily initialized for RS256/ES256 token verification (Supabase JWT Signing Keys)
+	supabaseJWKS   *keyfunc.JWKS
+	supabaseJWKSMu sync.Mutex
 }
 
 func New(db *gorm.DB, cfg *config.Config) *Handlers {

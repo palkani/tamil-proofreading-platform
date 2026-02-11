@@ -20,6 +20,7 @@ import (
 	"tamil-proofreading-platform/backend/internal/util/auditlog"
 	"tamil-proofreading-platform/backend/internal/util/securecookie"
 
+	"github.com/MicahParks/keyfunc/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/api/idtoken"
@@ -593,18 +594,33 @@ func (h *Handlers) googleOAuthLogin(ctx context.Context, token string) (*models.
         return h.authService.EnsureOAuthUser(email, name)
 }
 
-// supabaseJWTClaims extracts email and display name from a Supabase Auth JWT payload (e.g. after Google sign-in).
-// Supabase JWT has: sub, email, user_metadata (full_name, name, etc.).
+// parseSupabaseJWT extracts email and display name from a Supabase Auth JWT (Google sign-in).
+// Supports both legacy HS256 (SUPABASE_JWT_SECRET) and Supabase JWT Signing Keys (RS256/ES256 via JWKS).
 func (h *Handlers) parseSupabaseJWT(accessToken string) (email, name string, err error) {
-        if h.cfg.SupabaseJWTSecret == "" {
-                return "", "", errors.New("supabase jwt secret not configured")
-        }
-        token, err := jwt.Parse(accessToken, func(token *jwt.Token) (interface{}, error) {
-                if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-                        return nil, errors.New("unexpected signing method")
+        keyFunc := func(token *jwt.Token) (interface{}, error) {
+                if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
+                        if h.cfg.SupabaseJWTSecret != "" {
+                                return []byte(h.cfg.SupabaseJWTSecret), nil
+                        }
+                        return nil, errors.New("supabase jwt secret not configured for HS256")
                 }
-                return []byte(h.cfg.SupabaseJWTSecret), nil
-        })
+                // RS256, ES256, etc.: use JWKS from Supabase (JWT Signing Keys)
+                if h.cfg.SupabaseURL == "" {
+                        return nil, errors.New("supabase url not set; cannot fetch JWKS for asymmetric token")
+                }
+                h.supabaseJWKSMu.Lock()
+                defer h.supabaseJWKSMu.Unlock()
+                if h.supabaseJWKS == nil {
+                        jwksURL := strings.TrimSuffix(h.cfg.SupabaseURL, "/") + "/auth/v1/.well-known/jwks.json"
+                        jwks, jwksErr := keyfunc.Get(jwksURL, keyfunc.Options{})
+                        if jwksErr != nil {
+                                return nil, jwksErr
+                        }
+                        h.supabaseJWKS = jwks
+                }
+                return h.supabaseJWKS.Keyfunc(token)
+        }
+        token, err := jwt.Parse(accessToken, keyFunc)
         if err != nil {
                 return "", "", err
         }
@@ -641,7 +657,7 @@ func (h *Handlers) SupabaseTokenExchange(c *gin.Context) {
         }
         email, name, err := h.parseSupabaseJWT(req.AccessToken)
         if err != nil {
-                log.Printf("[SUPABASE-AUTH] token_verify_failed err=%v", err)
+                log.Printf("[SUPABASE-AUTH] token_verify_failed err=%v (hint: ensure SUPABASE_JWT_SECRET is set and matches Supabase Project Settings → API → JWT Secret)", err)
                 c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired Supabase token"})
                 return
         }
