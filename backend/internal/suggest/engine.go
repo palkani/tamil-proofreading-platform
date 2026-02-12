@@ -30,7 +30,8 @@ type Engine struct {
 	batchTimeoutSec int
 	lexiconFile     string // optional pre-built lexicon path (baked in image for fast cold start)
 
-	data atomic.Value // *SuggestData
+	data    atomic.Value // *SuggestData
+	readyCh chan struct{} // closed when first reload completes (success or fail)
 }
 
 type SuggestRequest struct {
@@ -178,18 +179,37 @@ func NewEngineWithEmptyData(db *gorm.DB, opts EngineOptions) *Engine {
 		TrieVersion:  time.Now().UTC().Format(time.RFC3339),
 	}
 	e.data.Store(empty)
+	e.readyCh = make(chan struct{})
 	go func() {
-		// 15 min timeout for initial load of large lexicon (227k+ rows) over pooler
+		defer close(e.readyCh)
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
 		if err := e.reload(ctx); err != nil {
+			log.Printf("[SUGGEST] Lexicon load failed: %v; cache has 0 words", err)
 			return
 		}
+		data := e.Data()
+		n := 0
+		if data != nil {
+			n = data.LexiconCount
+		}
+		log.Printf("[SUGGEST] Lexicon load complete: %d words in cache", n)
 		if e.refreshSec > 0 {
 			go e.refreshLoop()
 		}
 	}()
 	return e
+}
+
+// Ready returns a channel that is closed when the first lexicon load completes (success or fail).
+// Used by the server to delay "ready" until suggest has data so the first request is fast.
+func (e *Engine) Ready() <-chan struct{} {
+	if e.readyCh == nil {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}
+	return e.readyCh
 }
 
 func (e *Engine) reload(ctx context.Context) error {
@@ -296,9 +316,17 @@ func (e *Engine) Suggest(ctx context.Context, req SuggestRequest) (*SuggestRespo
 	}
 
 	data := e.Data()
-	// When in-memory cache (trie) is not loaded yet, fallback to DB so suggestions still work
+	// When lexicon not loaded yet, return empty immediately (no DB fallback — we use file-only; DB path was slow and caused ~5s first request)
 	if data == nil || data.Trie == nil || data.LexiconCount == 0 {
-		return e.suggestFromDB(ctx, start, qRaw, norm, limit)
+		return &SuggestResponse{
+			Success:     true,
+			Q:           qRaw,
+			Normalized:  norm,
+			Suggestions: []Suggestion{},
+			Source:      "starting",
+			Timing:      map[string]float64{"total_ms": msSince(start)},
+			Meta:        e.meta(),
+		}, nil
 	}
 
 	trieStart := time.Now()

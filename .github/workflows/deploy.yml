@@ -60,7 +60,7 @@ jobs:
             touch ../data/lexicon.json
             echo "[]" > ../data/lexicon.json
           else
-            go run ./cmd/build_lexicon -output ../data/lexicon.json -limit=500000 -batch=10000
+            go run ./cmd/build_lexicon -output ../data/lexicon.json -limit=0 -batch=10000
             ls -lh ../data/lexicon.json
           fi
 

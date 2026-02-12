@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -374,8 +375,11 @@ func main() {
 	r.GET("/api/v1/ocr/download/:filename", h.OCRDownload)
 	r.GET("/api/v1/ocr/health", h.OCRHealth)
 
+	// Wait for suggest engine lexicon load (up to 30s) so first suggest request is fast (no 5s DB fallback).
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	h.WaitSuggestReady(ctx)
+	cancel()
 	// Switch traffic to full app (Cloud Run startup probe already passed).
-	// Do this before any slow optional work so /api/v1/suggest gets the real handler immediately.
 	readyHandler.Store(r)
 	log.Println("Backend ready; full router active")
 

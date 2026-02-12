@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"strings"
@@ -90,6 +91,7 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 
 	// Suggest engine is created immediately with empty lexicon, then loaded in background.
 	// API never returns source "disabled"; returns lexicon_count 0 until load completes.
+	// Redis disabled for suggest: use in-memory LocalSelectionStore only (avoids ~5s DialTimeout when Redis unreachable).
 	eng := suggest.NewEngineWithEmptyData(db, suggest.EngineOptions{
 		MinLen:           cfg.SuggestMinLen,
 		LimitDefault:     cfg.SuggestTopK,
@@ -98,7 +100,7 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 		CacheTTL:         time.Duration(cfg.SuggestCacheTTLMS) * time.Millisecond,
 		RefreshSec:       cfg.LexiconRefreshSec,
 		VowelCollapse:    cfg.SuggestVowelCollapse,
-		RedisURL:         cfg.RedisURL,
+		RedisURL:         "", // not used; suggest uses in-memory personalization only
 		RedisTimeoutMs:   cfg.SuggestRedisTimeoutMS,
 		LoadBatchSize:    cfg.SuggestLoadBatchSize,
 		LoadLimit:        cfg.SuggestLoadLimit,
@@ -118,11 +120,26 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	return h
 }
 
-// suggestEngine returns the in-process suggest engine, or nil if not yet loaded.
+// getSuggestEngine returns the in-process suggest engine, or nil if not yet loaded.
 func (h *Handlers) getSuggestEngine() *suggest.Engine {
 	h.suggestEngineMu.RLock()
 	defer h.suggestEngineMu.RUnlock()
 	return h.suggestEngine
+}
+
+// WaitSuggestReady blocks until the suggest engine's first lexicon load completes or ctx is done.
+// Call before marking the server ready so the first suggest request is fast (no 5s DB fallback).
+func (h *Handlers) WaitSuggestReady(ctx context.Context) {
+	eng := h.getSuggestEngine()
+	if eng == nil {
+		return
+	}
+	select {
+	case <-ctx.Done():
+		log.Printf("[SUGGEST] Wait for lexicon load timed out; backend ready with empty suggest until load completes")
+	case <-eng.Ready():
+		log.Printf("[SUGGEST] Lexicon load complete; first suggest request will be fast")
+	}
 }
 
 func (h *Handlers) startArchiveCleanup() {

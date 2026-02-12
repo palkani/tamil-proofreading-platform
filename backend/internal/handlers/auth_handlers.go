@@ -675,6 +675,14 @@ func (h *Handlers) SupabaseTokenExchange(c *gin.Context) {
         email, name, err := h.parseSupabaseJWT(req.AccessToken)
         if err != nil {
                 log.Printf("[SUPABASE-AUTH] token_verify_failed err=%v — check Cloud Run logs for [SUPABASE-AUTH] token header (alg, kid, supabase_url_set, jwt_secret_set) and fix env vars or JWKS", err)
+                errMsg := err.Error()
+                // Return actionable message when failure is due to missing backend config (so deployers know what to set)
+                if strings.Contains(errMsg, "supabase url not set") || strings.Contains(errMsg, "jwt secret not configured") {
+                        c.JSON(http.StatusServiceUnavailable, gin.H{
+                                "error": "Supabase auth not configured. Set SUPABASE_URL (and SUPABASE_JWT_SECRET if using HS256) in the backend environment.",
+                        })
+                        return
+                }
                 c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired Supabase token"})
                 return
         }

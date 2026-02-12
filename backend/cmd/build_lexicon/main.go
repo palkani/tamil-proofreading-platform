@@ -27,7 +27,7 @@ import (
 
 func main() {
 	output := flag.String("output", "data/lexicon.json", "Output path for lexicon JSON")
-	limit := flag.Int("limit", 500000, "Max rows to export (0 = no limit)")
+	limit := flag.Int("limit", 0, "Max rows to export (0 = no limit, load entire tamil_words into file)")
 	batchSize := flag.Int("batch", 10000, "Batch size for DB fetch")
 	flag.Parse()
 

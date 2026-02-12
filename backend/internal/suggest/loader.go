@@ -92,7 +92,8 @@ func BuildSuggestDataFromRows(rows []LexiconRow, opts LoaderOptions, version str
 	}
 }
 
-// LoadSuggestDataFromFile loads lexicon from a pre-built JSON file (baked into image in CI).
+// LoadSuggestDataFromFile loads the entire lexicon from a pre-built JSON file (baked into image in CI).
+// The full file is read and unmarshalled; all rows are loaded into the in-memory cache (trie + ID tables).
 // Returns nil, nil if file is missing or empty (caller should fall back to DB).
 func LoadSuggestDataFromFile(path string, opts LoaderOptions) (*SuggestData, error) {
 	if path == "" {
@@ -113,7 +114,7 @@ func LoadSuggestDataFromFile(path string, opts LoaderOptions) (*SuggestData, err
 		return nil, nil
 	}
 	version := "file:" + path
-	log.Printf("[SUGGEST] LoadSuggestDataFromFile loaded %d rows from %s", len(rows), path)
+	log.Printf("[SUGGEST] LoadSuggestDataFromFile: loading entire file into cache — %d rows from %s", len(rows), path)
 	return BuildSuggestDataFromRows(rows, opts, version), nil
 }
 
