@@ -11,20 +11,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// isRetryableDBError returns true for transient connection errors (e.g. unexpected EOF, deadline exceeded).
-func isRetryableDBError(err error) bool {
-	if err == nil {
-		return false
-	}
-	s := err.Error()
-	return strings.Contains(s, "EOF") ||
-		strings.Contains(s, "connection reset") ||
-		strings.Contains(s, "broken pipe") ||
-		strings.Contains(s, "connection refused") ||
-		strings.Contains(s, "deadline exceeded") ||
-		strings.Contains(s, "context canceled")
-}
-
 type LexiconRow struct {
 	ID                 uint
 	TamilText          string
@@ -42,144 +28,15 @@ type SuggestData struct {
 	TrieVersion   string
 }
 
+// LoadSuggestData returns empty lexicon; lexicon is loaded from baked file (LoadSuggestDataFromFile) in engine.reload.
 func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*SuggestData, error) {
-	if db == nil {
-		return &SuggestData{
-			Tables:       NewIDTables(1),
-			Trie:         NewTrie(opts.MaxTopPerNode, NewIDTables(1)),
-			LexiconCount: 0,
-			LoadedAt:     time.Now(),
-			TrieVersion:  time.Now().UTC().Format(time.RFC3339),
-		}, nil
-	}
-
-	var rows []LexiconRow
-	var version string
-	var loadedFromCache bool
-
-	// Try loading from Redis cache first
-	if opts.UseRedisCache && opts.RedisClient != nil && opts.RedisClient.Enabled() {
-		cachedRows, cachedVersion, _, found, err := opts.RedisClient.LoadLexiconRowsFromCache(ctx)
-		if err == nil && found && len(cachedRows) > 0 {
-			rows = cachedRows
-			version = cachedVersion
-			loadedFromCache = true
-			// Use cached version or generate new one
-			if version == "" {
-				version = time.Now().UTC().Format(time.RFC3339)
-			}
-		}
-	}
-
-	// Fallback to PostgreSQL if cache miss — load in batches with per-batch timeout and per-batch retries
-	if !loadedFromCache {
-		loadLimit := opts.LoadLimit
-		if loadLimit <= 0 {
-			loadLimit = 100000
-		}
-		batchSize := opts.BatchSize
-		if batchSize <= 0 {
-			batchSize = 10000
-		}
-		batchTimeout := opts.BatchTimeout
-		if batchTimeout <= 0 {
-			batchTimeout = 2 * time.Minute
-		}
-		const maxBatchRetries = 3
-		const maxAttempts = 3
-		// Keyset pagination: (frequency, user_confirmed, id) < last row — each batch is O(limit), not O(offset).
-		// Requires index: idx_tamil_words_freq_uc_id ON (frequency DESC, user_confirmed DESC, id).
-		var loadErr error
-		var lastFreq int
-		var lastUC int
-		var lastID uint
-		firstBatch := true
-		for attempt := 0; attempt < maxAttempts; attempt++ {
-			rows = make([]LexiconRow, 0, loadLimit)
-			lastFreq, lastUC, lastID = 0, 0, 0
-			firstBatch = true
-			for {
-				var batch []LexiconRow
-				loadErr = nil
-				for batchAttempt := 0; batchAttempt < maxBatchRetries; batchAttempt++ {
-					batchCtx := ctx
-					var cancel context.CancelFunc
-					if batchTimeout > 0 {
-						batchCtx, cancel = context.WithTimeout(ctx, batchTimeout)
-					}
-					q := db.WithContext(batchCtx).Table("tamil_words").
-						Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
-						Order("frequency DESC, user_confirmed DESC, id")
-					if !firstBatch {
-						q = q.Where("(frequency, user_confirmed, id) < (?, ?, ?)", lastFreq, lastUC, lastID)
-					}
-					batch = nil
-					batchErr := q.Limit(batchSize).Find(&batch).Error
-					if cancel != nil {
-						cancel()
-					}
-					if batchErr == nil {
-						loadErr = nil
-						break
-					}
-					loadErr = batchErr
-					if !isRetryableDBError(batchErr) {
-						break
-					}
-					backoff := time.Duration(batchAttempt+1) * 2 * time.Second
-					log.Printf("[SUGGEST] LoadSuggestData batch retry %d/%d in %v: %v", batchAttempt+1, maxBatchRetries, backoff, batchErr)
-					time.Sleep(backoff)
-				}
-				if loadErr != nil {
-					break
-				}
-				rows = append(rows, batch...)
-				if len(batch) < batchSize {
-					loadErr = nil
-					break
-				}
-				last := batch[len(batch)-1]
-				lastFreq, lastUC, lastID = last.Frequency, last.UserConfirmed, last.ID
-				firstBatch = false
-				if len(rows) >= loadLimit {
-					loadErr = nil
-					break
-				}
-			}
-			if loadErr == nil {
-				break
-			}
-			if !isRetryableDBError(loadErr) || attempt == maxAttempts-1 {
-				break
-			}
-			log.Printf("[SUGGEST] LoadSuggestData full retry %d/%d after: %v", attempt+1, maxAttempts, loadErr)
-			time.Sleep(time.Duration(attempt+1) * 3 * time.Second)
-		}
-		if loadErr != nil {
-			log.Printf("[SUGGEST] LoadSuggestData DB error (using empty lexicon): %v", loadErr)
-			return &SuggestData{
-				Tables:       NewIDTables(1),
-				Trie:         NewTrie(opts.MaxTopPerNode, NewIDTables(1)),
-				LexiconCount: 0,
-				LoadedAt:     time.Now(),
-				TrieVersion:  time.Now().UTC().Format(time.RFC3339),
-			}, nil
-		}
-
-		// Generate version timestamp
-		version = time.Now().UTC().Format(time.RFC3339)
-
-		// Cache in Redis for next time (async, don't block on error)
-		if opts.UseRedisCache && opts.RedisClient != nil && opts.RedisClient.Enabled() {
-			go func() {
-				cacheCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-				_ = opts.RedisClient.CacheLexiconRows(cacheCtx, rows, version)
-			}()
-		}
-	}
-
-	return BuildSuggestDataFromRows(rows, opts, version), nil
+	return &SuggestData{
+		Tables:       NewIDTables(1),
+		Trie:         NewTrie(opts.MaxTopPerNode, NewIDTables(1)),
+		LexiconCount: 0,
+		LoadedAt:     time.Now(),
+		TrieVersion:  time.Now().UTC().Format(time.RFC3339),
+	}, nil
 }
 
 // BuildSuggestDataFromRows builds SuggestData (IDTables + Trie) from lexicon rows.
@@ -263,12 +120,9 @@ func LoadSuggestDataFromFile(path string, opts LoaderOptions) (*SuggestData, err
 type LoaderOptions struct {
 	MaxTopPerNode       int
 	EnableVowelCollapse bool
-	RedisClient         *RedisClient // Optional: for caching lexicon
-	UseRedisCache       bool         // Whether to use Redis cache
-	// Tuning: batch size and limit for DB load; BatchTimeout per batch (0 = no timeout)
-	BatchSize     int           // rows per query (default 10000)
-	LoadLimit     int           // max rows to load (default 100000)
-	BatchTimeout  time.Duration // per-batch deadline (default 30s)
+	BatchSize           int           // unused (kept for API compatibility)
+	LoadLimit           int           // unused (kept for API compatibility)
+	BatchTimeout        time.Duration // unused (kept for API compatibility)
 }
 
 func parseAlternateSpellings(raw string) []string {

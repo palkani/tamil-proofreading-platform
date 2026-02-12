@@ -2,7 +2,6 @@ package suggest
 
 import (
 	"context"
-	"encoding/json"
 	"math"
 	"strconv"
 	"strings"
@@ -76,103 +75,4 @@ func (r *RedisClient) WithTimeout(ctx context.Context, timeout time.Duration) (c
 
 func idToMember(id int32) string {
 	return strconv.Itoa(int(id))
-}
-
-// Lexicon cache keys
-const (
-	lexiconDataKey    = "sg:lexicon:data"
-	lexiconVersionKey = "sg:lexicon:version"
-	lexiconCountKey   = "sg:lexicon:count"
-)
-
-// CacheLexiconRows stores all lexicon rows in Redis as JSON.
-// This allows fast loading without querying PostgreSQL.
-func (r *RedisClient) CacheLexiconRows(ctx context.Context, rows []LexiconRow, version string) error {
-	if !r.Enabled() {
-		return nil
-	}
-	
-	// Serialize rows to JSON
-	data, err := json.Marshal(rows)
-	if err != nil {
-		return err
-	}
-	
-	// Use pipeline for atomic updates
-	pipe := r.client.Pipeline()
-	pipe.Set(ctx, lexiconDataKey, data, 0) // No expiration - manual invalidation
-	pipe.Set(ctx, lexiconVersionKey, version, 0)
-	pipe.Set(ctx, lexiconCountKey, len(rows), 0)
-	
-	_, err = pipe.Exec(ctx)
-	return err
-}
-
-// LoadLexiconRowsFromCache loads lexicon rows from Redis cache.
-// Returns (rows, version, count, found, error)
-func (r *RedisClient) LoadLexiconRowsFromCache(ctx context.Context) ([]LexiconRow, string, int, bool, error) {
-	if !r.Enabled() {
-		return nil, "", 0, false, nil
-	}
-	
-	// Check if cache exists
-	exists, err := r.client.Exists(ctx, lexiconDataKey, lexiconVersionKey, lexiconCountKey).Result()
-	if err != nil || exists == 0 {
-		return nil, "", 0, false, err
-	}
-	
-	// Load data
-	data, err := r.client.Get(ctx, lexiconDataKey).Result()
-	if err != nil {
-		if err == redis.Nil {
-			return nil, "", 0, false, nil
-		}
-		return nil, "", 0, false, err
-	}
-	
-	// Load version
-	version, err := r.client.Get(ctx, lexiconVersionKey).Result()
-	if err != nil {
-		return nil, "", 0, false, err
-	}
-	
-	// Load count
-	countStr, err := r.client.Get(ctx, lexiconCountKey).Result()
-	if err != nil {
-		return nil, "", 0, false, err
-	}
-	count, _ := strconv.Atoi(countStr)
-	
-	// Deserialize rows
-	var rows []LexiconRow
-	if err := json.Unmarshal([]byte(data), &rows); err != nil {
-		return nil, "", 0, false, err
-	}
-	
-	return rows, version, count, true, nil
-}
-
-// InvalidateLexiconCache clears the lexicon cache from Redis.
-func (r *RedisClient) InvalidateLexiconCache(ctx context.Context) error {
-	if !r.Enabled() {
-		return nil
-	}
-	_, err := r.client.Del(ctx, lexiconDataKey, lexiconVersionKey, lexiconCountKey).Result()
-	return err
-}// GetLexiconCacheInfo returns cache metadata (version, count) if cache exists.
-func (r *RedisClient) GetLexiconCacheInfo(ctx context.Context) (version string, count int, exists bool) {
-	if !r.Enabled() {
-		return "", 0, false
-	}
-	
-	existsKey, err := r.client.Exists(ctx, lexiconDataKey).Result()
-	if err != nil || existsKey == 0 {
-		return "", 0, false
-	}
-	
-	version, _ = r.client.Get(ctx, lexiconVersionKey).Result()
-	countStr, _ := r.client.Get(ctx, lexiconCountKey).Result()
-	count, _ = strconv.Atoi(countStr)
-	
-	return version, count, true
 }
