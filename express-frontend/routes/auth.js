@@ -15,7 +15,7 @@ function getBackendApiUrl() {
 }
 
 const BACKEND_URL = getBackendApiUrl();
-const AUTH_RETRY_PATHS = ['/auth/login', '/auth/register', '/auth/refresh'];
+const AUTH_RETRY_PATHS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/supabase-token'];
 const AUTH_RETRY_MAX = 8;
 const AUTH_RETRY_DELAY_MS = 2500;
 

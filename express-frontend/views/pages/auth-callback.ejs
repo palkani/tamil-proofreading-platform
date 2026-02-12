@@ -47,7 +47,11 @@
     .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
     .then(function (result) {
       if (!result.ok) {
-        showError(result.data && result.data.error ? result.data.error : 'Sign-in failed.');
+        var msg = (result.data && result.data.error) ? result.data.error : 'Sign-in failed.';
+        if (result.data && result.data.status === 'starting') {
+          msg = 'Backend is starting. Please wait a moment and try again.';
+        }
+        showError(msg);
         return;
       }
       var token = result.data && result.data.access_token;
