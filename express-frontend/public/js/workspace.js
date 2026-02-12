@@ -923,23 +923,42 @@ class WorkspaceController {
         }
       }
 
+      // Deduplicate by text so the same word never appears twice (prevents double-insert when user selects)
+      const seen = new Set();
+      finalSuggestions = finalSuggestions.filter(s => {
+        const t = (s.text || s.word || '').toString().trim();
+        if (!t || seen.has(t)) return false;
+        seen.add(t);
+        return true;
+      });
       // Limit to 4 suggestions for better performance and smaller dropdown
       finalSuggestions = finalSuggestions.slice(0, 4);
       
-      // CRITICAL: If we still have no suggestions but rawSuggestions had items, use them
+      // CRITICAL: If we still have no suggestions but rawSuggestions had items, use them (deduped)
       if (finalSuggestions.length === 0 && rawSuggestions.length > 0) {
         console.warn('[IME] ⚠️ All suggestions filtered out, using raw suggestions');
-        finalSuggestions = rawSuggestions.slice(0, 4);
+        const rawSeen = new Set();
+        finalSuggestions = rawSuggestions.filter(s => {
+          const t = (s.text || s.word || '').toString().trim();
+          if (!t || rawSeen.has(t)) return false;
+          rawSeen.add(t);
+          return true;
+        }).slice(0, 4);
       }
       
       console.log('[IME] Final suggestions after filtering:', finalSuggestions.length, finalSuggestions);
 
-      // Cache results
+      // Cache results (cap size so recent queries stay hot and we avoid unbounded growth)
       if (this.suggestionCache && cacheKey) {
-      this.suggestionCache.set(cacheKey, {
+        this.suggestionCache.set(cacheKey, {
           suggestions: finalSuggestions,
-        timestamp: Date.now(),
-      });
+          timestamp: Date.now(),
+        });
+        const maxCacheSize = 80;
+        if (this.suggestionCache.size > maxCacheSize) {
+          const firstKey = this.suggestionCache.keys().next().value;
+          if (firstKey !== undefined) this.suggestionCache.delete(firstKey);
+        }
       }
 
       // Update state
@@ -1641,10 +1660,10 @@ class WorkspaceController {
     
     // Debounce the fetch to keep UI responsive while still updating per-keystroke.
     // Goal: suggestions should update for each letter typed (n -> na -> nam -> ...).
-    // OPTIMIZED: Longer debounce reduces cancelled API calls when user types quickly
-    // - Short tokens (1-2 chars): 150ms debounce
-    // - Longer tokens (3+ chars): 200ms debounce
-    const debounceMs = token.length <= 2 ? 150 : 200;
+    // OPTIMIZED: Slightly longer debounce reduces cancelled/slow API calls when user types quickly
+    // - Short tokens (1-2 chars): 180ms debounce
+    // - Longer tokens (3+ chars): 220ms debounce
+    const debounceMs = token.length <= 2 ? 180 : 220;
     this.suggestDebounce = setTimeout(() => {
       // Final check: token must still match
       if (this.lastFetchToken !== token) {
@@ -2433,7 +2452,10 @@ class WorkspaceController {
           }
         }
       } else {
-        console.error('[IME] ❌❌❌ Dropdown element not found in DOM!');
+        // Expected when a newer displaySuggestions() replaced this dropdown within 300ms (e.g. new query or empty list)
+        if (window.logger && window.logger.debug) {
+          window.logger.debug('[IME] Dropdown element no longer in DOM (likely replaced by newer suggestions)');
+        }
       }
     }, 300);
 
@@ -3124,13 +3146,12 @@ class WorkspaceController {
         e.preventDefault();
         e.stopPropagation();
             this.selectSuggestion(this.activeSuggestionIndex || 0);
-            // Insert space after Tamil word
+            // Insert space after Tamil word (use insertSpaceAtCaret to avoid replacing the next token)
             setTimeout(() => {
-              this.replaceTokenAtCaret(' ', false);
-              // Trigger editor change for next word suggestions
+              this.insertSpaceAtCaret();
               if (this.editor && this.editor.onChange) {
                 this.editor.onChange();
-        } else {
+              } else {
                 this.handleEditorChange();
               }
             }, 10);
@@ -3327,6 +3348,45 @@ class WorkspaceController {
     box.style.left = `${left}px`;
     box.style.top = `${Math.max(8, top)}px`;
     box.style.visibility = 'visible';
+  }
+
+  // Insert a single space at the current caret (no replacement). Used after committing a suggestion.
+  insertSpaceAtCaret() {
+    if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
+      try {
+        tiptapWorkspaceEditor.chain().focus().insertContent(' ').run();
+        if (this.editor && this.editor.onChange) this.editor.onChange();
+        return;
+      } catch (_e) {
+        // fallback to legacy path
+      }
+    }
+    const text = this.getEditorText() || '';
+    let pos = 0;
+    try {
+      pos = (this.editor && typeof this.editor.getCursorPosition === 'function' && this.editor.getCursorPosition()) || text.length;
+    } catch (_e) {
+      pos = text.length;
+    }
+    pos = Math.max(0, Math.min(pos, text.length));
+    const newText = text.slice(0, pos) + ' ' + text.slice(pos);
+    if (this.editor && this.editor.setText) {
+      this.editor.setText(newText);
+    } else if (this.editorElement) {
+      this.editorElement.textContent = newText;
+      this.editorElement.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    const newPos = pos + 1;
+    if (this.editor && this.editor.setCursorPosition) {
+      this.editor.setCursorPosition(newPos);
+    } else if (this.editorElement && this.editorElement.firstChild) {
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.setStart(this.editorElement.firstChild, Math.min(newPos, this.editorElement.textContent.length));
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
   }
 
   // Replace token at caret position with replacement
