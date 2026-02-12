@@ -72,7 +72,7 @@ type Config struct {
 	// Supabase Auth (Google sign-in via Supabase; existing users matched by email)
 	SupabaseURL      string
 	SupabaseJWTSecret string
-	// RunMigrations: if false, skip AutoMigrate and custom migrations at startup (set false in prod after first deploy to avoid running on every cold start).
+	// RunMigrations: if false, skip AutoMigrate and custom migrations at startup. Default false so backend becomes ready quickly (avoids "Backend is starting" / 503 on auth). Set RUN_MIGRATIONS=true only for first deploy or when schema changes are needed.
 	RunMigrations   bool
 }
 
@@ -181,7 +181,7 @@ func Load() *Config {
 		PreloadTamilCacheAtStartup: strings.ToLower(getEnv("PRELOAD_TAMIL_CACHE_AT_STARTUP", "false")) == "true",
 		SupabaseURL:            strings.TrimRight(getEnv("SUPABASE_URL", ""), "/"),
 		SupabaseJWTSecret:      strings.TrimSpace(getEnv("SUPABASE_JWT_SECRET", "")),
-		RunMigrations:          parseRunMigrations(getEnv("RUN_MIGRATIONS", "true")),
+		RunMigrations:          parseRunMigrations(getEnv("RUN_MIGRATIONS", "false")),
 	}
 }
 
