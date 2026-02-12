@@ -59,16 +59,10 @@ type Config struct {
 	SuggestLoadBatchSize      int
 	SuggestLoadLimit          int
 	SuggestBatchTimeoutSec    int
-	LexiconFile               string // optional: path to pre-built lexicon JSON (baked in image for fast cold start)
-	// Tamil word cache load tuning
-	TamilCacheBatchSize       int
-	TamilCacheLoadLimit       int
-	TamilCacheBatchTimeoutSec int
-	SeedCorpusOnStartup       bool
+	LexiconFile          string // optional: path to pre-built lexicon JSON (baked in image for fast cold start)
+	SeedCorpusOnStartup   bool
 	SeedCorpusFile            string
-	SeedCorpusMinCount        int
-	// Preload Tamil word cache at startup (block until loaded). Like JVM -X preload; first requests get warm cache. Default false to avoid long startup (e.g. Cloud Run).
-	PreloadTamilCacheAtStartup bool
+	SeedCorpusMinCount int
 	// Supabase Auth (Google sign-in via Supabase; existing users matched by email)
 	SupabaseURL      string
 	SupabaseJWTSecret string
@@ -171,15 +165,11 @@ func Load() *Config {
 		SuggestLoadBatchSize:    getEnvAsInt("SUGGEST_LOAD_BATCH_SIZE", 10000),
 		SuggestLoadLimit:       getEnvAsInt("SUGGEST_LOAD_LIMIT", 100000),
 		SuggestBatchTimeoutSec:  getEnvAsInt("SUGGEST_BATCH_TIMEOUT_SEC", 120),
-		LexiconFile:             strings.TrimSpace(getEnv("LEXICON_FILE", "")),
-		TamilCacheBatchSize:     getEnvAsInt("TAMIL_CACHE_BATCH_SIZE", 10000),
-		TamilCacheLoadLimit:     getEnvAsInt("TAMIL_CACHE_LOAD_LIMIT", 500000),
-		TamilCacheBatchTimeoutSec: getEnvAsInt("TAMIL_CACHE_BATCH_TIMEOUT_SEC", 120),
-		SeedCorpusOnStartup:    strings.ToLower(getEnv("SEED_CORPUS_ON_STARTUP", "false")) == "true",
-		SeedCorpusFile:         strings.TrimSpace(getEnv("SEED_CORPUS_FILE", "/root/seed_corpus_minimal.sql")),
-		SeedCorpusMinCount:     getEnvAsInt("SEED_CORPUS_MIN_COUNT", 1),
-		PreloadTamilCacheAtStartup: strings.ToLower(getEnv("PRELOAD_TAMIL_CACHE_AT_STARTUP", "false")) == "true",
-		SupabaseURL:            strings.TrimRight(getEnv("SUPABASE_URL", ""), "/"),
+		LexiconFile:        strings.TrimSpace(getEnv("LEXICON_FILE", "")),
+		SeedCorpusOnStartup: strings.ToLower(getEnv("SEED_CORPUS_ON_STARTUP", "false")) == "true",
+		SeedCorpusFile:      strings.TrimSpace(getEnv("SEED_CORPUS_FILE", "/root/seed_corpus_minimal.sql")),
+		SeedCorpusMinCount:  getEnvAsInt("SEED_CORPUS_MIN_COUNT", 1),
+		SupabaseURL:         strings.TrimRight(getEnv("SUPABASE_URL", ""), "/"),
 		SupabaseJWTSecret:      strings.TrimSpace(getEnv("SUPABASE_JWT_SECRET", "")),
 		RunMigrations:          parseRunMigrations(getEnv("RUN_MIGRATIONS", "false")),
 	}
