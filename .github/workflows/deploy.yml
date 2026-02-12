@@ -49,6 +49,21 @@ jobs:
           go mod verify
           CGO_ENABLED=0 GOOS=linux go build ./cmd/server
 
+      - name: Build lexicon for baked image (fast cold start)
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          mkdir -p ../data
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL not set - skipping lexicon build; backend will load from DB at startup"
+            touch ../data/lexicon.json
+            echo "[]" > ../data/lexicon.json
+          else
+            go run ./cmd/build_lexicon -output ../data/lexicon.json -limit=500000 -batch=10000
+            ls -lh ../data/lexicon.json
+          fi
+
       - name: Build Backend Image
         run: |
           docker build \
@@ -75,7 +90,7 @@ jobs:
             --min-instances=0 \
             --max-instances=100 \
             --port=8080 \
-            --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUGGEST_MIN_LEN=2,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,REDIS_URL=${{ secrets.REDIS_URL }} \
+            --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUGGEST_MIN_LEN=2,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,LEXICON_FILE=/root/data/lexicon.json,REDIS_URL=${{ secrets.REDIS_URL }} \
             --update-secrets DATABASE_URL=DATABASE_URL:latest \
             --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
             --update-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest \
@@ -100,7 +115,7 @@ jobs:
             --min-instances=0 \
             --max-instances=100 \
             --port=8080 \
-            --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUGGEST_MIN_LEN=2,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,REDIS_URL=${{ secrets.REDIS_URL }} \
+            --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUGGEST_MIN_LEN=2,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,LEXICON_FILE=/root/data/lexicon.json,REDIS_URL=${{ secrets.REDIS_URL }} \
             --update-secrets DATABASE_URL=DATABASE_URL:latest \
             --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
             --update-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest \

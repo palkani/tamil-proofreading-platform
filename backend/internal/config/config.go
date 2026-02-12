@@ -59,6 +59,7 @@ type Config struct {
 	SuggestLoadBatchSize      int
 	SuggestLoadLimit          int
 	SuggestBatchTimeoutSec    int
+	LexiconFile               string // optional: path to pre-built lexicon JSON (baked in image for fast cold start)
 	// Tamil word cache load tuning
 	TamilCacheBatchSize       int
 	TamilCacheLoadLimit       int
@@ -170,6 +171,7 @@ func Load() *Config {
 		SuggestLoadBatchSize:    getEnvAsInt("SUGGEST_LOAD_BATCH_SIZE", 10000),
 		SuggestLoadLimit:       getEnvAsInt("SUGGEST_LOAD_LIMIT", 100000),
 		SuggestBatchTimeoutSec:  getEnvAsInt("SUGGEST_BATCH_TIMEOUT_SEC", 120),
+		LexiconFile:             strings.TrimSpace(getEnv("LEXICON_FILE", "")),
 		TamilCacheBatchSize:     getEnvAsInt("TAMIL_CACHE_BATCH_SIZE", 10000),
 		TamilCacheLoadLimit:     getEnvAsInt("TAMIL_CACHE_LOAD_LIMIT", 500000),
 		TamilCacheBatchTimeoutSec: getEnvAsInt("TAMIL_CACHE_BATCH_TIMEOUT_SEC", 120),

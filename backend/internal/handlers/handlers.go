@@ -106,6 +106,7 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 		LoadBatchSize:    cfg.SuggestLoadBatchSize,
 		LoadLimit:        cfg.SuggestLoadLimit,
 		BatchTimeoutSec:  cfg.SuggestBatchTimeoutSec,
+		LexiconFile:      cfg.LexiconFile,
 	})
 	h.suggestEngineMu.Lock()
 	h.suggestEngine = eng

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -178,6 +179,12 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 		}
 	}
 
+	return BuildSuggestDataFromRows(rows, opts, version), nil
+}
+
+// BuildSuggestDataFromRows builds SuggestData (IDTables + Trie) from lexicon rows.
+// Used by both LoadSuggestData (DB) and LoadSuggestDataFromFile (baked file).
+func BuildSuggestDataFromRows(rows []LexiconRow, opts LoaderOptions, version string) *SuggestData {
 	maxID := 0
 	for _, r := range rows {
 		if int(r.ID) > maxID {
@@ -225,7 +232,32 @@ func LoadSuggestData(ctx context.Context, db *gorm.DB, opts LoaderOptions) (*Sug
 		LexiconCount: len(rows),
 		LoadedAt:     time.Now(),
 		TrieVersion:  version,
-	}, nil
+	}
+}
+
+// LoadSuggestDataFromFile loads lexicon from a pre-built JSON file (baked into image in CI).
+// Returns nil, nil if file is missing or empty (caller should fall back to DB).
+func LoadSuggestDataFromFile(path string, opts LoaderOptions) (*SuggestData, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var rows []LexiconRow
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	version := "file:" + path
+	log.Printf("[SUGGEST] LoadSuggestDataFromFile loaded %d rows from %s", len(rows), path)
+	return BuildSuggestDataFromRows(rows, opts, version), nil
 }
 
 type LoaderOptions struct {

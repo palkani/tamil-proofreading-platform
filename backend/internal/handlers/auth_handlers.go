@@ -597,6 +597,14 @@ func (h *Handlers) googleOAuthLogin(ctx context.Context, token string) (*models.
 // parseSupabaseJWT extracts email and display name from a Supabase Auth JWT (Google sign-in).
 // Supports both legacy HS256 (SUPABASE_JWT_SECRET) and Supabase JWT Signing Keys (RS256/ES256 via JWKS).
 func (h *Handlers) parseSupabaseJWT(accessToken string) (email, name string, err error) {
+        // Parse header without verification to log alg/kid for debugging
+        unverified, _, parseErr := jwt.NewParser().ParseUnverified(accessToken, jwt.MapClaims{})
+        if parseErr == nil {
+                alg, _ := unverified.Header["alg"].(string)
+                kid, _ := unverified.Header["kid"].(string)
+                log.Printf("[SUPABASE-AUTH] token header alg=%q kid=%q supabase_url_set=%v jwt_secret_set=%v", alg, kid, h.cfg.SupabaseURL != "", h.cfg.SupabaseJWTSecret != "")
+        }
+
         keyFunc := func(token *jwt.Token) (interface{}, error) {
                 if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
                         if h.cfg.SupabaseJWTSecret != "" {
@@ -612,6 +620,7 @@ func (h *Handlers) parseSupabaseJWT(accessToken string) (email, name string, err
                 defer h.supabaseJWKSMu.Unlock()
                 if h.supabaseJWKS == nil {
                         jwksURL := strings.TrimSuffix(h.cfg.SupabaseURL, "/") + "/auth/v1/.well-known/jwks.json"
+                        log.Printf("[SUPABASE-AUTH] fetching JWKS from %s", jwksURL)
                         jwks, jwksErr := keyfunc.Get(jwksURL, keyfunc.Options{})
                         if jwksErr != nil {
                                 return nil, jwksErr
@@ -630,6 +639,14 @@ func (h *Handlers) parseSupabaseJWT(accessToken string) (email, name string, err
         }
         email, _ = claims["email"].(string)
         email = strings.TrimSpace(strings.ToLower(email))
+        if email == "" {
+                // Fallback: some providers put email in user_metadata
+                if um, ok := claims["user_metadata"].(map[string]interface{}); ok {
+                        if e, _ := um["email"].(string); e != "" {
+                                email = strings.TrimSpace(strings.ToLower(e))
+                        }
+                }
+        }
         if email == "" {
                 return "", "", errors.New("supabase token missing email")
         }
@@ -657,7 +674,7 @@ func (h *Handlers) SupabaseTokenExchange(c *gin.Context) {
         }
         email, name, err := h.parseSupabaseJWT(req.AccessToken)
         if err != nil {
-                log.Printf("[SUPABASE-AUTH] token_verify_failed err=%v (hint: ensure SUPABASE_JWT_SECRET is set and matches Supabase Project Settings → API → JWT Secret)", err)
+                log.Printf("[SUPABASE-AUTH] token_verify_failed err=%v — check Cloud Run logs for [SUPABASE-AUTH] token header (alg, kid, supabase_url_set, jwt_secret_set) and fix env vars or JWKS", err)
                 c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired Supabase token"})
                 return
         }

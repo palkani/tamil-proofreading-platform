@@ -3,6 +3,7 @@ package suggest
 import (
 	"context"
 	"errors"
+	"log"
 	"math"
 	"sort"
 	"strconv"
@@ -28,6 +29,7 @@ type Engine struct {
 	loadBatchSize   int
 	loadLimit       int
 	batchTimeoutSec int
+	lexiconFile     string // optional pre-built lexicon path (baked in image for fast cold start)
 
 	data atomic.Value // *SuggestData
 }
@@ -70,9 +72,10 @@ type EngineOptions struct {
 	VowelCollapse     bool
 	RedisURL          string
 	RedisTimeoutMs    int
-	LoadBatchSize     int           // suggest lexicon batch size (0 = 10000)
-	LoadLimit         int           // max rows to load (0 = 100000)
-	BatchTimeoutSec   int           // per-batch timeout in seconds (0 = 30)
+	LoadBatchSize     int   // suggest lexicon batch size (0 = 10000)
+	LoadLimit         int   // max rows to load (0 = 100000)
+	BatchTimeoutSec   int   // per-batch timeout in seconds (0 = 30)
+	LexiconFile       string // optional: path to pre-built lexicon JSON (baked in image for fast cold start)
 }
 
 func NewEngine(db *gorm.DB, opts EngineOptions) (*Engine, error) {
@@ -163,6 +166,7 @@ func NewEngineWithEmptyData(db *gorm.DB, opts EngineOptions) *Engine {
 		loadBatchSize:   opts.LoadBatchSize,
 		loadLimit:       opts.LoadLimit,
 		batchTimeoutSec: opts.BatchTimeoutSec,
+		lexiconFile:     opts.LexiconFile,
 	}
 	if redisClient == nil || !redisClient.Enabled() {
 		e.localSel = NewLocalSelectionStore()
@@ -191,6 +195,17 @@ func NewEngineWithEmptyData(db *gorm.DB, opts EngineOptions) *Engine {
 
 func (e *Engine) reload(ctx context.Context) error {
 	opts := e.loaderOpts()
+	// Try pre-built lexicon file first (baked in image in CI) for fast cold start
+	if e.lexiconFile != "" {
+		data, err := LoadSuggestDataFromFile(e.lexiconFile, opts)
+		if err != nil {
+			log.Printf("[SUGGEST] LoadSuggestDataFromFile %s failed: %v; falling back to DB", e.lexiconFile, err)
+		}
+		if data != nil {
+			e.data.Store(data)
+			return nil
+		}
+	}
 	data, err := LoadSuggestData(ctx, e.db, opts)
 	if err != nil {
 		return err
