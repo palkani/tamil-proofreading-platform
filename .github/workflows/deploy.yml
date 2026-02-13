@@ -1,4 +1,8 @@
 # UI (Node.js) → Vercel | OAuth & DB → Supabase | Backend (Go) → Cloud Run
+#
+# Required GitHub repo secrets (Settings → Secrets and variables → Actions):
+#   DATABASE_URL - Postgres connection string (Supabase pooler) for lexicon build and Cloud Run
+#   GOOGLE_CREDENTIALS_JSON, VERCEL_*, GOOGLE_GENAI_API_KEY, OPENAI_API_KEY, etc.
 
 name: Deploy to Cloud Run + Vercel
 
@@ -56,12 +60,15 @@ jobs:
         run: |
           mkdir -p ../data
           if [ -z "$DATABASE_URL" ]; then
-            echo "DATABASE_URL not set - skipping lexicon build; backend will load from DB at startup"
+            echo "::warning::DATABASE_URL not set - lexicon will be empty; backend will load from DB at startup (slower). Set DATABASE_URL in GitHub repo secrets so the image is baked with a full lexicon."
             touch ../data/lexicon.json
             echo "[]" > ../data/lexicon.json
           else
             go run ./cmd/build_lexicon -output ../data/lexicon.json -limit=0 -batch=10000
             ls -lh ../data/lexicon.json
+            if [ ! -s ../data/lexicon.json ] || [ "$(cat ../data/lexicon.json)" = "[]" ]; then
+              echo "::warning::Lexicon is empty after build (tamil_words may be empty or DB unreachable). Backend will load from DB at startup."
+            fi
           fi
 
       - name: Build Backend Image

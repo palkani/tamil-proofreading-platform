@@ -224,6 +224,7 @@ func (e *Engine) reload(ctx context.Context) error {
 			e.data.Store(data)
 			return nil
 		}
+		log.Printf("[SUGGEST] Lexicon file %s empty or missing; loading from DB (set DATABASE_URL in CI to bake a full lexicon into the image)", e.lexiconFile)
 	}
 	data, err := LoadSuggestData(ctx, e.db, opts)
 	if err != nil {
