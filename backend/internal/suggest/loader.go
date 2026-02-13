@@ -167,8 +167,10 @@ func BuildSuggestDataFromRows(rows []LexiconRow, opts LoaderOptions, version str
 	}
 }
 
-// LoadSuggestDataFromFile loads the entire lexicon from a pre-built JSON file (baked into image in CI).
-// The full file is read and unmarshalled; all rows are loaded into the in-memory cache (trie + ID tables).
+// LoadSuggestDataFromFile loads the entire lexicon from a pre-built JSON file (baked in image).
+// Uses streaming JSON decode (Decoder) to reduce peak memory and often load faster on Cloud Run
+// than one big Unmarshal (Cloud Run is slower than local: less CPU, shared disk, smaller memory).
+// Then builds trie + ID tables in memory.
 // Returns nil, nil if file is missing or empty (caller should fall back to DB).
 func LoadSuggestDataFromFile(path string, opts LoaderOptions) (*SuggestData, error) {
 	if path == "" {
@@ -184,23 +186,39 @@ func LoadSuggestDataFromFile(path string, opts LoaderOptions) (*SuggestData, err
 		log.Printf("[SUGGEST] LoadSuggestDataFromFile: stat failed path=%s err=%v", path, err)
 		return nil, err
 	}
-	log.Printf("[SUGGEST] LoadSuggestDataFromFile: reading path=%s size_bytes=%d size_mb=%.2f", path, info.Size(), float64(info.Size())/(1024*1024))
-	data, err := os.ReadFile(path)
+	log.Printf("[SUGGEST] LoadSuggestDataFromFile: streaming JSON path=%s size_mb=%.2f", path, float64(info.Size())/(1024*1024))
+	f, err := os.Open(path)
 	if err != nil {
-		log.Printf("[SUGGEST] LoadSuggestDataFromFile: read failed path=%s err=%v", path, err)
+		log.Printf("[SUGGEST] LoadSuggestDataFromFile: open failed path=%s err=%v", path, err)
 		return nil, err
 	}
-	log.Printf("[SUGGEST] LoadSuggestDataFromFile: parsing JSON (%d bytes)...", len(data))
-	var rows []LexiconRow
-	if err := json.Unmarshal(data, &rows); err != nil {
-		log.Printf("[SUGGEST] LoadSuggestDataFromFile: unmarshal failed err=%v", err)
+	defer f.Close()
+	dec := json.NewDecoder(f)
+	// consume opening '['
+	if _, err := dec.Token(); err != nil {
+		log.Printf("[SUGGEST] LoadSuggestDataFromFile: token '[' failed err=%v", err)
+		return nil, err
+	}
+	// Pre-allocate to avoid many reallocs (495k rows typical)
+	rows := make([]LexiconRow, 0, 600000)
+	for dec.More() {
+		var r LexiconRow
+		if err := dec.Decode(&r); err != nil {
+			log.Printf("[SUGGEST] LoadSuggestDataFromFile: decode row failed at len=%d err=%v", len(rows), err)
+			return nil, err
+		}
+		rows = append(rows, r)
+	}
+	// consume closing ']'
+	if _, err := dec.Token(); err != nil {
+		log.Printf("[SUGGEST] LoadSuggestDataFromFile: token ']' failed err=%v", err)
 		return nil, err
 	}
 	if len(rows) == 0 {
 		log.Printf("[SUGGEST] LoadSuggestDataFromFile: file has 0 rows path=%s", path)
 		return nil, nil
 	}
-	log.Printf("[SUGGEST] LoadSuggestDataFromFile: building trie for %d rows from %s", len(rows), path)
+	log.Printf("[SUGGEST] LoadSuggestDataFromFile: decoded %d rows, building trie...", len(rows))
 	version := "file:" + path
 	out := BuildSuggestDataFromRows(rows, opts, version)
 	log.Printf("[SUGGEST] LoadSuggestDataFromFile: done — %d rows in cache, trie_version=%s", out.LexiconCount, out.TrieVersion)

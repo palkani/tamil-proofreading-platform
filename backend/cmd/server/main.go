@@ -376,8 +376,8 @@ func main() {
 	r.GET("/api/v1/ocr/health", h.OCRHealth)
 
 	// Wait for suggest engine lexicon load so first suggest request has full cache.
-	// Full lexicon (~500k rows) can take 1–3 min on Cloud Run; 5 min timeout ensures we don't mark ready with empty suggest.
-	const suggestReadyTimeout = 5 * time.Minute
+	// Full lexicon (~500k rows, 85MB JSON) can take 7–10 min on Cloud Run (read + parse + trie build).
+	const suggestReadyTimeout = 10 * time.Minute
 	log.Printf("[STARTUP] Waiting up to %v for suggest lexicon load...", suggestReadyTimeout)
 	ctx, cancel := context.WithTimeout(context.Background(), suggestReadyTimeout)
 	h.WaitSuggestReady(ctx)
