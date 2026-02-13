@@ -172,25 +172,39 @@ func BuildSuggestDataFromRows(rows []LexiconRow, opts LoaderOptions, version str
 // Returns nil, nil if file is missing or empty (caller should fall back to DB).
 func LoadSuggestDataFromFile(path string, opts LoaderOptions) (*SuggestData, error) {
 	if path == "" {
+		log.Printf("[SUGGEST] LoadSuggestDataFromFile: path empty, skipping")
 		return nil, nil
 	}
-	data, err := os.ReadFile(path)
+	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			log.Printf("[SUGGEST] LoadSuggestDataFromFile: file missing path=%s", path)
 			return nil, nil
 		}
+		log.Printf("[SUGGEST] LoadSuggestDataFromFile: stat failed path=%s err=%v", path, err)
 		return nil, err
 	}
+	log.Printf("[SUGGEST] LoadSuggestDataFromFile: reading path=%s size_bytes=%d size_mb=%.2f", path, info.Size(), float64(info.Size())/(1024*1024))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Printf("[SUGGEST] LoadSuggestDataFromFile: read failed path=%s err=%v", path, err)
+		return nil, err
+	}
+	log.Printf("[SUGGEST] LoadSuggestDataFromFile: parsing JSON (%d bytes)...", len(data))
 	var rows []LexiconRow
 	if err := json.Unmarshal(data, &rows); err != nil {
+		log.Printf("[SUGGEST] LoadSuggestDataFromFile: unmarshal failed err=%v", err)
 		return nil, err
 	}
 	if len(rows) == 0 {
+		log.Printf("[SUGGEST] LoadSuggestDataFromFile: file has 0 rows path=%s", path)
 		return nil, nil
 	}
+	log.Printf("[SUGGEST] LoadSuggestDataFromFile: building trie for %d rows from %s", len(rows), path)
 	version := "file:" + path
-	log.Printf("[SUGGEST] LoadSuggestDataFromFile: loading entire file into cache — %d rows from %s", len(rows), path)
-	return BuildSuggestDataFromRows(rows, opts, version), nil
+	out := BuildSuggestDataFromRows(rows, opts, version)
+	log.Printf("[SUGGEST] LoadSuggestDataFromFile: done — %d rows in cache, trie_version=%s", out.LexiconCount, out.TrieVersion)
+	return out, nil
 }
 
 type LoaderOptions struct {

@@ -182,6 +182,7 @@ func NewEngineWithEmptyData(db *gorm.DB, opts EngineOptions) *Engine {
 	e.readyCh = make(chan struct{})
 	go func() {
 		defer close(e.readyCh)
+		log.Printf("[SUGGEST] Lexicon load started (lexicon_file=%q)", e.lexiconFile)
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
 		if err := e.reload(ctx); err != nil {
@@ -193,7 +194,7 @@ func NewEngineWithEmptyData(db *gorm.DB, opts EngineOptions) *Engine {
 		if data != nil {
 			n = data.LexiconCount
 		}
-		log.Printf("[SUGGEST] Lexicon load complete: %d words in cache", n)
+		log.Printf("[SUGGEST] Lexicon load complete: %d words in cache (readyCh closing)", n)
 		if e.refreshSec > 0 {
 			go e.refreshLoop()
 		}
@@ -216,15 +217,17 @@ func (e *Engine) reload(ctx context.Context) error {
 	opts := e.loaderOpts()
 	// Try pre-built lexicon file first (baked in image in CI) for fast cold start
 	if e.lexiconFile != "" {
+		log.Printf("[SUGGEST] reload: trying lexicon file path=%s", e.lexiconFile)
 		data, err := LoadSuggestDataFromFile(e.lexiconFile, opts)
 		if err != nil {
-			log.Printf("[SUGGEST] LoadSuggestDataFromFile %s failed: %v; falling back to DB", e.lexiconFile, err)
+			log.Printf("[SUGGEST] reload: LoadSuggestDataFromFile failed path=%s err=%v; falling back to DB", e.lexiconFile, err)
 		}
 		if data != nil {
 			e.data.Store(data)
+			log.Printf("[SUGGEST] reload: stored %d words from file", data.LexiconCount)
 			return nil
 		}
-		log.Printf("[SUGGEST] Lexicon file %s empty or missing; loading from DB (set DATABASE_URL in CI to bake a full lexicon into the image)", e.lexiconFile)
+		log.Printf("[SUGGEST] reload: lexicon file %s empty or missing; loading from DB", e.lexiconFile)
 	}
 	data, err := LoadSuggestData(ctx, e.db, opts)
 	if err != nil {

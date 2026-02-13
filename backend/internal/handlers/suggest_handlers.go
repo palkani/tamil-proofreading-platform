@@ -127,6 +127,16 @@ func (h *Handlers) SuggestHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, meta)
 }
 
+// SuggestLexiconCount returns the current suggest engine lexicon count (0 if not loaded).
+func (h *Handlers) SuggestLexiconCount() int {
+	if engine := h.getSuggestEngine(); engine != nil {
+		if data := engine.Data(); data != nil {
+			return data.LexiconCount
+		}
+	}
+	return 0
+}
+
 func parseLimit(raw string) int {
 	if raw == "" {
 		return 0

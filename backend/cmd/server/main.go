@@ -378,13 +378,15 @@ func main() {
 	// Wait for suggest engine lexicon load so first suggest request has full cache.
 	// Full lexicon (~500k rows) can take 1–3 min on Cloud Run; 5 min timeout ensures we don't mark ready with empty suggest.
 	const suggestReadyTimeout = 5 * time.Minute
+	log.Printf("[STARTUP] Waiting up to %v for suggest lexicon load...", suggestReadyTimeout)
 	ctx, cancel := context.WithTimeout(context.Background(), suggestReadyTimeout)
 	h.WaitSuggestReady(ctx)
 	cancel()
-	log.Printf("[STARTUP] Suggest ready wait completed (timeout was %v)", suggestReadyTimeout)
+	lexiconCount := h.SuggestLexiconCount()
+	log.Printf("[STARTUP] Suggest ready wait completed (timeout=%v) lexicon_count=%d", suggestReadyTimeout, lexiconCount)
 	// Switch traffic to full app (Cloud Run startup probe already passed).
 	readyHandler.Store(r)
-	log.Println("Backend ready; full router active")
+	log.Printf("[STARTUP] Backend ready; full router active (suggest cache: %d words)", lexiconCount)
 
 	// Run Tamil words index migration in background only when migrations are enabled (skips quickly if indexes exist).
 	if cfg.RunMigrations {
