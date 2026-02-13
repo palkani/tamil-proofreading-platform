@@ -163,7 +163,7 @@ func Load() *Config {
 		RedisURL:               strings.TrimSpace(getEnv("REDIS_URL", "")),
 		SuggestRedisTimeoutMS:  getEnvAsInt("SUGGEST_REDIS_TIMEOUT_MS", 25),
 		SuggestLoadBatchSize:    getEnvAsInt("SUGGEST_LOAD_BATCH_SIZE", 10000),
-		SuggestLoadLimit:       getEnvAsInt("SUGGEST_LOAD_LIMIT", 100000),
+		SuggestLoadLimit:       getEnvAsInt("SUGGEST_LOAD_LIMIT", 0), // 0 = no limit (load full tamil_words)
 		SuggestBatchTimeoutSec:  getEnvAsInt("SUGGEST_BATCH_TIMEOUT_SEC", 120),
 		LexiconFile:        strings.TrimSpace(getEnv("LEXICON_FILE", "")),
 		SeedCorpusOnStartup: strings.ToLower(getEnv("SEED_CORPUS_ON_STARTUP", "false")) == "true",

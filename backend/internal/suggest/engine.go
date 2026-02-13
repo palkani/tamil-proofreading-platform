@@ -73,7 +73,7 @@ type EngineOptions struct {
 	RedisURL          string
 	RedisTimeoutMs    int
 	LoadBatchSize     int   // suggest lexicon batch size (0 = 10000)
-	LoadLimit         int   // max rows to load (0 = 100000)
+	LoadLimit         int   // max rows to load (0 = no limit)
 	BatchTimeoutSec   int   // per-batch timeout in seconds (0 = 30)
 	LexiconFile       string // optional: path to pre-built lexicon JSON (baked in image for fast cold start)
 }

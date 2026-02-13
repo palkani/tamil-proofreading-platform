@@ -375,8 +375,8 @@ func main() {
 	r.GET("/api/v1/ocr/download/:filename", h.OCRDownload)
 	r.GET("/api/v1/ocr/health", h.OCRHealth)
 
-	// Wait for suggest engine lexicon load (up to 30s) so first suggest request is fast (no 5s DB fallback).
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Wait for suggest engine lexicon load so first suggest request has full cache (file load can take 1–5 min for 100k–500k rows).
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	h.WaitSuggestReady(ctx)
 	cancel()
 	// Switch traffic to full app (Cloud Run startup probe already passed).
