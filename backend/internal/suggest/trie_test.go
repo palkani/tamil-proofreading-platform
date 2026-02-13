@@ -11,16 +11,18 @@ func TestTrieTopIDsOrdering(t *testing.T) {
 	tables.GlobalFreqByID[2] = 30
 	tables.GlobalFreqByID[3] = 20
 
-	trie := NewTrie(2, tables)
+	// NewTrie enforces min maxTopPerNode=5, so we use 5
+	trie := NewTrie(5, tables)
 	trie.Insert("a", 1)
 	trie.Insert("a", 2)
 	trie.Insert("a", 3)
 
-	out := trie.Lookup("a", 3)
-	if len(out) != 2 {
-		t.Fatalf("expected top2, got %d", len(out))
+	out := trie.Lookup("a", 5)
+	if len(out) != 3 {
+		t.Fatalf("expected 3 ids, got %d", len(out))
 	}
-	if out[0] != 2 || out[1] != 3 {
+	// Order by score: 2 (30), 3 (20), 1 (10)
+	if out[0] != 2 || out[1] != 3 || out[2] != 1 {
 		t.Fatalf("unexpected order: %v", out)
 	}
 }

@@ -375,10 +375,13 @@ func main() {
 	r.GET("/api/v1/ocr/download/:filename", h.OCRDownload)
 	r.GET("/api/v1/ocr/health", h.OCRHealth)
 
-	// Wait for suggest engine lexicon load so first suggest request has full cache (file load can take 1–5 min for 100k–500k rows).
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// Wait for suggest engine lexicon load so first suggest request has full cache.
+	// Full lexicon (~500k rows) can take 1–3 min on Cloud Run; 5 min timeout ensures we don't mark ready with empty suggest.
+	const suggestReadyTimeout = 5 * time.Minute
+	ctx, cancel := context.WithTimeout(context.Background(), suggestReadyTimeout)
 	h.WaitSuggestReady(ctx)
 	cancel()
+	log.Printf("[STARTUP] Suggest ready wait completed (timeout was %v)", suggestReadyTimeout)
 	// Switch traffic to full app (Cloud Run startup probe already passed).
 	readyHandler.Store(r)
 	log.Println("Backend ready; full router active")

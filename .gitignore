@@ -22,7 +22,7 @@ out/
 *.test
 *.out
 go.work
-server
+backend/server
 backend/main
 
 # IDE
