@@ -54,17 +54,14 @@ func main() {
 
 	start := time.Now()
 	var rows []suggest.LexiconRow
-	var lastFreq int
-	var lastUC int
 	var lastID uint
-	firstBatch := true
 	for {
 		var batch []suggest.LexiconRow
 		q := db.Table("tamil_words").
 			Select("id, tamil_text, transliteration, alternate_spellings, frequency, user_confirmed").
-			Order("frequency DESC, user_confirmed DESC, id")
-		if !firstBatch {
-			q = q.Where("(frequency, user_confirmed, id) < (?, ?, ?)", lastFreq, lastUC, lastID)
+			Order("id ASC")
+		if lastID > 0 {
+			q = q.Where("id > ?", lastID)
 		}
 		if err := q.Limit(*batchSize).Find(&batch).Error; err != nil {
 			log.Fatalf("DB query failed: %v", err)
@@ -74,9 +71,7 @@ func main() {
 		if len(batch) < *batchSize {
 			break
 		}
-		last := batch[len(batch)-1]
-		lastFreq, lastUC, lastID = last.Frequency, last.UserConfirmed, last.ID
-		firstBatch = false
+		lastID = batch[len(batch)-1].ID
 		if *limit > 0 && len(rows) >= *limit {
 			rows = rows[:*limit]
 			log.Printf("Stopped at limit %d", *limit)

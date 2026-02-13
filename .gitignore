@@ -54,5 +54,4 @@ temp/
 .env*.local
 backend/seed_corpus_wiki.sql
 
-# Generated in CI (baked into Docker image for fast cold start)
-data/lexicon.json
+# data/lexicon.json: not ignored so you can commit a pre-built full lexicon (see docs/BUILD_LEXICON_LOCALLY.md)

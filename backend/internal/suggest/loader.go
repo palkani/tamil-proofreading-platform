@@ -117,27 +117,43 @@ func BuildSuggestDataFromRows(rows []LexiconRow, opts LoaderOptions, version str
 		}
 		id := int32(r.ID)
 		tamil := strings.TrimSpace(r.TamilText)
-		latin := strings.TrimSpace(r.Transliteration)
-		if tamil == "" || latin == "" {
+		if tamil == "" {
 			continue
 		}
 		if int(id) >= len(tables.TamilByID) {
 			continue
 		}
+		// Build all lookup keys: primary transliteration + alternate_spellings (each maps to same tamil_text)
+		primary := strings.TrimSpace(r.Transliteration)
+		keys := make([]string, 0, 1+4)
+		if primary != "" {
+			keys = append(keys, primary)
+		}
+		for _, alt := range parseAlternateSpellings(r.AlternateSpellings) {
+			alt = strings.TrimSpace(alt)
+			if alt != "" && (primary == "" || alt != primary) {
+				keys = append(keys, alt)
+			}
+		}
+		if len(keys) == 0 {
+			continue
+		}
 		tables.TamilByID[id] = tamil
-		tables.LatinByID[id] = latin
+		if primary != "" {
+			tables.LatinByID[id] = primary
+		} else {
+			tables.LatinByID[id] = keys[0]
+		}
 		tables.GlobalFreqByID[id] = int32(r.Frequency)
 		tables.BoostByID[id] = float32(r.UserConfirmed)
 
-		keys := []string{latin}
-		for _, alt := range parseAlternateSpellings(r.AlternateSpellings) {
-			keys = append(keys, alt)
-		}
+		seenNorm := make(map[string]bool)
 		for _, k := range keys {
 			norm := NormalizeRoman(k, normOpts)
-			if norm == "" {
+			if norm == "" || seenNorm[norm] {
 				continue
 			}
+			seenNorm[norm] = true
 			trie.Insert(norm, id)
 		}
 	}

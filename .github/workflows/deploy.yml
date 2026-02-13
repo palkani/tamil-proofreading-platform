@@ -53,26 +53,31 @@ jobs:
           go mod verify
           CGO_ENABLED=0 GOOS=linux go build ./cmd/server
 
-      - name: Build lexicon for baked image (one-time full export from tamil_words)
-        working-directory: backend
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Use committed lexicon or build from DB
         run: |
-          mkdir -p ../data
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::warning::DATABASE_URL not set - lexicon will be empty; backend will load from DB at startup (slower). Set DATABASE_URL in GitHub repo secrets so the image is baked with a full lexicon."
-            touch ../data/lexicon.json
-            echo "[]" > ../data/lexicon.json
+          mkdir -p data
+          # If data/lexicon.json exists in repo and is non-empty, use it (built locally with full table)
+          if [ -f data/lexicon.json ] && [ -s data/lexicon.json ] && [ "$(cat data/lexicon.json)" != "[]" ]; then
+            ROWS=$(jq 'length' data/lexicon.json 2>/dev/null || echo "?")
+            echo "Using committed data/lexicon.json: $ROWS rows (no CI build)"
           else
-            # One-time full export: no limit so all rows from tamil_words go into the file
-            go run ./cmd/build_lexicon -output ../data/lexicon.json -limit=0 -batch=10000
-            ls -lh ../data/lexicon.json
-            ROWS=$(jq 'length' ../data/lexicon.json 2>/dev/null || echo "0")
-            echo "Lexicon built: $ROWS rows (full table export, -limit=0)"
-            if [ ! -s ../data/lexicon.json ] || [ "$(cat ../data/lexicon.json)" = "[]" ]; then
-              echo "::warning::Lexicon is empty after build (tamil_words may be empty or DB unreachable). Backend will load from DB at startup."
+            # No committed lexicon: build in CI from DATABASE_URL or write empty
+            cd backend
+            if [ -z "${{ secrets.DATABASE_URL }}" ]; then
+              echo "::warning::No data/lexicon.json in repo and DATABASE_URL not set - lexicon will be empty. Build locally: cd backend && DATABASE_URL=... go run ./cmd/build_lexicon -output ../data/lexicon.json -limit=0 && commit data/lexicon.json"
+              mkdir -p ../data
+              echo "[]" > ../data/lexicon.json
+            else
+              mkdir -p ../data
+              echo "Building lexicon from DB (no committed data/lexicon.json)..."
+              go run ./cmd/build_lexicon -output ../data/lexicon.json -limit=0 -batch=10000
+              ls -lh ../data/lexicon.json
+              ROWS=$(jq 'length' ../data/lexicon.json 2>/dev/null || echo "0")
+              echo "Lexicon built in CI: $ROWS rows"
             fi
           fi
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Build Backend Image
         run: |
