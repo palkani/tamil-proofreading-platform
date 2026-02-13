@@ -124,8 +124,8 @@ jobs:
             --region=us-central1 \
             --platform=managed \
             --allow-unauthenticated \
-            --memory=1Gi \
-            --cpu=1 \
+            --memory=2Gi \
+            --cpu=2 \
             --timeout=300 \
             --min-instances=0 \
             --max-instances=100 \
