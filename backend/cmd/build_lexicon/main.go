@@ -1,11 +1,11 @@
-// build_lexicon reads tamil_words from Postgres and writes a JSON lexicon file
-// for the suggest engine. Run in CI before Docker build; the file is baked into
-// the image so Cloud Run loads it at startup (2–3s) instead of querying DB (15+ min).
+// build_lexicon reads tamil_words from Postgres and writes a lexicon file (JSON or binary)
+// for the suggest engine. Binary format loads faster and is smaller. Run in CI before
+// Docker build; the file is baked into the image so Cloud Run loads at startup.
 //
 // Usage:
 //
 //	DATABASE_URL="postgres://..." go run . -output=data/lexicon.json
-//	go run . -output=data/lexicon.json -limit=500000
+//	go run . -output=data/lexicon.bin -format=binary
 package main
 
 import (
@@ -26,7 +26,8 @@ import (
 )
 
 func main() {
-	output := flag.String("output", "data/lexicon.json", "Output path for lexicon JSON")
+	output := flag.String("output", "data/lexicon.json", "Output path for lexicon (e.g. lexicon.json or lexicon.bin)")
+	format := flag.String("format", "", "Output format: json (default) or binary. Default inferred from output extension.")
 	limit := flag.Int("limit", 0, "Max rows to export (0 = no limit, load entire tamil_words into file)")
 	batchSize := flag.Int("batch", 10000, "Batch size for DB fetch")
 	flag.Parse()
@@ -82,6 +83,35 @@ func main() {
 	if err := os.MkdirAll(filepath.Dir(*output), 0755); err != nil {
 		log.Fatalf("Failed to create output dir: %v", err)
 	}
+
+	useBinary := *format == "binary" || strings.HasSuffix(strings.ToLower(*output), suggest.LexiconBinaryExt)
+	if *format != "" && *format != "json" && *format != "binary" {
+		log.Fatalf("Invalid format %q; use json or binary", *format)
+	}
+
+	if useBinary {
+		opts := suggest.LoaderOptions{
+			MaxTopPerNode:       25,
+			EnableVowelCollapse: false,
+		}
+		data := suggest.BuildSuggestDataFromRows(rows, opts, "build:"+time.Now().UTC().Format(time.RFC3339))
+		f, err := os.Create(*output)
+		if err != nil {
+			log.Fatalf("Failed to create %s: %v", *output, err)
+		}
+		if err := suggest.WriteSuggestDataBinary(f, data); err != nil {
+			f.Close()
+			log.Fatalf("Failed to write binary: %v", err)
+		}
+		if err := f.Close(); err != nil {
+			log.Fatalf("Failed to close %s: %v", *output, err)
+		}
+		info, _ := os.Stat(*output)
+		elapsed := time.Since(start)
+		log.Printf("Wrote %s (binary): %d words, %.2f MB, %v", *output, data.LexiconCount, float64(info.Size())/(1024*1024), elapsed)
+		return
+	}
+
 	f, err := os.Create(*output)
 	if err != nil {
 		log.Fatalf("Failed to create %s: %v", *output, err)

@@ -11,7 +11,8 @@ export default function AuthCallbackPage() {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    if (!supabase) {
+    const client = supabase;
+    if (!client) {
       setStatus('error');
       setMessage('Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
       return;
@@ -19,10 +20,10 @@ export default function AuthCallbackPage() {
 
     const run = async () => {
       // After OAuth redirect, tokens may be in URL hash; allow a moment for Supabase to parse them
-      let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      let { data: { session }, error: sessionError } = await client.auth.getSession();
       if (!session?.access_token && !sessionError) {
         await new Promise((r) => setTimeout(r, 200));
-        const next = await supabase.auth.getSession();
+        const next = await client.auth.getSession();
         session = next.data.session;
         sessionError = next.error;
       }

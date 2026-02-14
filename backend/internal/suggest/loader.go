@@ -11,6 +11,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// LexiconBinaryExt is the extension used for binary lexicon cache files.
+const LexiconBinaryExt = ".bin"
+
 type LexiconRow struct {
 	ID                 uint
 	TamilText          string
@@ -167,10 +170,8 @@ func BuildSuggestDataFromRows(rows []LexiconRow, opts LoaderOptions, version str
 	}
 }
 
-// LoadSuggestDataFromFile loads the entire lexicon from a pre-built JSON file (baked in image).
-// Uses streaming JSON decode (Decoder) to reduce peak memory and often load faster on Cloud Run
-// than one big Unmarshal (Cloud Run is slower than local: less CPU, shared disk, smaller memory).
-// Then builds trie + ID tables in memory.
+// LoadSuggestDataFromFile loads the entire lexicon from a pre-built file (binary .bin or JSON).
+// Binary format loads faster and uses less memory than JSON.
 // Returns nil, nil if file is missing or empty (caller should fall back to DB).
 func LoadSuggestDataFromFile(path string, opts LoaderOptions) (*SuggestData, error) {
 	if path == "" {
@@ -186,7 +187,12 @@ func LoadSuggestDataFromFile(path string, opts LoaderOptions) (*SuggestData, err
 		log.Printf("[SUGGEST] LoadSuggestDataFromFile: stat failed path=%s err=%v", path, err)
 		return nil, err
 	}
-	log.Printf("[SUGGEST] LoadSuggestDataFromFile: streaming JSON path=%s size_mb=%.2f", path, float64(info.Size())/(1024*1024))
+	sizeMB := float64(info.Size()) / (1024 * 1024)
+	// Prefer binary format when extension is .bin
+	if strings.HasSuffix(strings.ToLower(path), LexiconBinaryExt) {
+		return LoadSuggestDataFromBinary(path, sizeMB)
+	}
+	log.Printf("[SUGGEST] LoadSuggestDataFromFile: streaming JSON path=%s size_mb=%.2f", path, sizeMB)
 	f, err := os.Open(path)
 	if err != nil {
 		log.Printf("[SUGGEST] LoadSuggestDataFromFile: open failed path=%s err=%v", path, err)
@@ -222,6 +228,34 @@ func LoadSuggestDataFromFile(path string, opts LoaderOptions) (*SuggestData, err
 	version := "file:" + path
 	out := BuildSuggestDataFromRows(rows, opts, version)
 	log.Printf("[SUGGEST] LoadSuggestDataFromFile: done — %d rows in cache, trie_version=%s", out.LexiconCount, out.TrieVersion)
+	return out, nil
+}
+
+// LoadSuggestDataFromBinary loads SuggestData from a pre-built binary file (fast load, no JSON parse).
+func LoadSuggestDataFromBinary(path string, sizeMB float64) (*SuggestData, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		log.Printf("[SUGGEST] LoadSuggestDataFromBinary: open failed path=%s err=%v", path, err)
+		return nil, err
+	}
+	defer f.Close()
+	if sizeMB <= 0 {
+		info, _ := f.Stat()
+		if info != nil {
+			sizeMB = float64(info.Size()) / (1024 * 1024)
+		}
+	}
+	log.Printf("[SUGGEST] LoadSuggestDataFromBinary: path=%s size_mb=%.2f", path, sizeMB)
+	version := "binary:" + path
+	out, err := ReadSuggestDataBinary(f, version)
+	if err != nil {
+		log.Printf("[SUGGEST] LoadSuggestDataFromBinary: read failed path=%s err=%v", path, err)
+		return nil, err
+	}
+	if out == nil {
+		return nil, nil
+	}
+	log.Printf("[SUGGEST] LoadSuggestDataFromBinary: done — %d words in cache, trie_version=%s", out.LexiconCount, out.TrieVersion)
 	return out, nil
 }
 

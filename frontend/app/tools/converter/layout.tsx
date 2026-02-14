@@ -6,8 +6,8 @@ const seo = getSeoMetadata('converterTool');
 export const metadata: Metadata = {
   title: seo.title,
   description: seo.description,
-  alternates: { canonical: seo.canonical },
-  openGraph: { title: seo.ogTitle, description: seo.ogDescription, url: seo.canonical },
+  alternates: seo.alternates,
+  openGraph: seo.openGraph,
 };
 
 export default function ConverterLayout({ children }: { children: React.ReactNode }) {

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,19 +27,22 @@ func (h *Handlers) Suggest(c *gin.Context) {
 	c.Header("Vary", "Accept-Encoding")
 	
 	engine := h.getSuggestEngine()
+	qTrim := strings.TrimSpace(c.Query("q"))
 	if engine == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success":     true,
-			"q":           strings.TrimSpace(c.Query("q")),
+			"q":           qTrim,
+			"input":       qTrim,
 			"normalized":  "",
 			"suggestions": []suggest.Suggestion{},
 			"source":      "disabled",
+			"latency_ms":  0,
 			"timing":      gin.H{"total_ms": 0},
 			"meta":        gin.H{"lexicon_count": 0, "trie_version": ""},
 		})
 		return
 	}
-	q := strings.TrimSpace(c.Query("q"))
+	q := qTrim
 	uid := strings.TrimSpace(c.Query("uid"))
 	limit := parseLimit(c.Query("limit"))
 
@@ -51,13 +55,45 @@ func (h *Handlers) Suggest(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"success":     true,
 			"q":           q,
+			"input":       q,
 			"normalized":  "",
 			"suggestions": []suggest.Suggestion{},
 			"source":      "error",
+			"latency_ms":  0,
 			"timing":      gin.H{"total_ms": 0},
 			"meta":        gin.H{"error": err.Error()},
 		})
 		return
+	}
+	// Transliteration fallback: when trie returns no suggestions, use IME (corpus + Aksharamukha)
+	if len(out.Suggestions) == 0 && q != "" && h.imeSvc != nil && h.imeEnabled {
+		ctx := c.Request.Context()
+		if c.GetString("request_id") != "" {
+			ctx = context.WithValue(ctx, "request_id", c.GetString("request_id"))
+		}
+		lim := limit
+		if lim <= 0 {
+			lim = 5
+		}
+		cands, _ := h.imeSvc.Suggest(ctx, q, "spoken", lim)
+		if len(cands) > 0 {
+			suggestions := make([]suggest.Suggestion, 0, len(cands))
+			for i, c := range cands {
+				score := 0.9 - float64(i)*0.05
+				if score < 0.5 {
+					score = 0.5
+				}
+				suggestions = append(suggestions, suggest.Suggestion{
+					Text:  c.Word,
+					Word:  c.Word,
+					Latin: "",
+					Score: score,
+					Type:  "transliteration",
+				})
+			}
+			out.Suggestions = suggestions
+			out.Source = "transliteration"
+		}
 	}
 	c.JSON(http.StatusOK, out)
 }

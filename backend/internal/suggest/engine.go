@@ -43,9 +43,11 @@ type SuggestRequest struct {
 type SuggestResponse struct {
 	Success     bool                   `json:"success"`
 	Q           string                 `json:"q"`
+	Input       string                 `json:"input"`        // same as q; for API spec compatibility
 	Normalized  string                 `json:"normalized"`
 	Suggestions []Suggestion           `json:"suggestions"`
 	Source      string                 `json:"source"`
+	LatencyMS   float64                `json:"latency_ms"`    // total response time in ms
 	Timing      map[string]float64     `json:"timing"`
 	Meta        map[string]interface{} `json:"meta"`
 }
@@ -53,8 +55,10 @@ type SuggestResponse struct {
 type Suggestion struct {
 	ID    int32   `json:"id"`
 	Text  string  `json:"text"`
+	Word  string  `json:"word"`  // same as text; for API spec compatibility
 	Latin string  `json:"latin"`
-	Score float64 `json:"score"`
+	Score float64 `json:"score"`  // 0–1 normalized
+	Type  string  `json:"type"`  // "dictionary" | "transliteration" | "fuzzy"
 }
 
 type scoredEntry struct {
@@ -292,14 +296,29 @@ func (e *Engine) Suggest(ctx context.Context, req SuggestRequest) (*SuggestRespo
 	start := time.Now()
 	qRaw := strings.TrimSpace(req.Query)
 	norm := NormalizeRoman(qRaw, NormalizeOptions{EnableVowelCollapse: e.vowelCollapse})
-	if norm == "" || len(norm) < e.minLen {
+	if norm == "" {
 		return &SuggestResponse{
 			Success:     true,
 			Q:           qRaw,
+			Input:       qRaw,
 			Normalized:  norm,
 			Suggestions: []Suggestion{},
 			Source:      "trie",
+			LatencyMS:   0,
 			Timing:      map[string]float64{"total_ms": 0},
+			Meta:        e.meta(),
+		}, nil
+	}
+	if len(norm) < e.minLen {
+		return &SuggestResponse{
+			Success:     true,
+			Q:           qRaw,
+			Input:       qRaw,
+			Normalized:  norm,
+			Suggestions: []Suggestion{},
+			Source:      "trie",
+			LatencyMS:   msSince(start),
+			Timing:      map[string]float64{"total_ms": msSince(start)},
 			Meta:        e.meta(),
 		}, nil
 	}
@@ -313,22 +332,28 @@ func (e *Engine) Suggest(ctx context.Context, req SuggestRequest) (*SuggestRespo
 
 	cacheKey := norm + "|" + req.UID + "|" + strconvI(limit)
 	if cached, ok := e.cache.Get(cacheKey); ok {
-		cached.Timing = map[string]float64{"total_ms": msSince(start), "cache": 1}
+		ms := msSince(start)
+		cached.Input = cached.Q
+		cached.LatencyMS = ms
+		cached.Timing = map[string]float64{"total_ms": ms, "cache": 1}
 		cached.Source = "lru"
-		e.metrics.Add(msSince(start))
+		e.metrics.Add(ms)
 		return cached, nil
 	}
 
 	data := e.Data()
 	// When lexicon not loaded yet, return empty immediately (no DB fallback — we use file-only; DB path was slow and caused ~5s first request)
 	if data == nil || data.Trie == nil || data.LexiconCount == 0 {
+		totalMs := msSince(start)
 		return &SuggestResponse{
 			Success:     true,
 			Q:           qRaw,
+			Input:       qRaw,
 			Normalized:  norm,
 			Suggestions: []Suggestion{},
 			Source:      "starting",
-			Timing:      map[string]float64{"total_ms": msSince(start)},
+			LatencyMS:   totalMs,
+			Timing:      map[string]float64{"total_ms": totalMs},
 			Meta:        e.meta(),
 		}, nil
 	}
@@ -337,26 +362,29 @@ func (e *Engine) Suggest(ctx context.Context, req SuggestRequest) (*SuggestRespo
 	ids := data.Trie.Lookup(norm, 25)
 	trieMs := msSince(trieStart)
 
-	suggestions, redisMs := e.buildSuggestions(ctx, norm, ids, req.UID)
+	suggestions, redisMs := e.buildSuggestions(ctx, qRaw, norm, ids, req.UID)
 	source := "trie"
 	if redisMs > 0 {
 		source = "redis"
 	}
+	totalMs := msSince(start)
 	out := &SuggestResponse{
 		Success:     true,
 		Q:           qRaw,
+		Input:       qRaw,
 		Normalized:  norm,
 		Suggestions: suggestions,
 		Source:      source,
+		LatencyMS:   totalMs,
 		Timing: map[string]float64{
-			"total_ms": msSince(start),
+			"total_ms": totalMs,
 			"trie_ms":  trieMs,
 			"redis_ms": redisMs,
 		},
 		Meta: e.meta(),
 	}
 	e.cache.Set(cacheKey, out)
-	e.metrics.Add(msSince(start))
+	e.metrics.Add(totalMs)
 	return out, nil
 }
 
@@ -422,7 +450,7 @@ func (e *Engine) suggestFromDB(ctx context.Context, start time.Time, qRaw, norm 
 	return out, nil
 }
 
-func (e *Engine) buildSuggestions(ctx context.Context, prefix string, ids []int32, uid string) ([]Suggestion, float64) {
+func (e *Engine) buildSuggestions(ctx context.Context, qRaw, prefix string, ids []int32, uid string) ([]Suggestion, float64) {
 	data := e.Data()
 	if data == nil || data.Tables == nil {
 		return []Suggestion{}, 0
@@ -497,17 +525,37 @@ func (e *Engine) buildSuggestions(ctx context.Context, prefix string, ids []int3
 
 	sortScored(scoredList)
 	out := make([]Suggestion, 0, limit)
+	maxScore := 0.0
+	for _, s := range scoredList {
+		if s.score > maxScore {
+			maxScore = s.score
+		}
+	}
 	for _, s := range scoredList {
 		tamil := tables.TamilByID[s.id]
 		latin := tables.LatinByID[s.id]
 		if tamil == "" {
 			continue
 		}
+		score := s.score
+		if maxScore > 0 {
+			score = score / maxScore
+			if score > 1 {
+				score = 1
+			}
+		}
+		score = math.Round(score*100) / 100
+		sugType := "dictionary"
+		if strings.TrimSpace(qRaw) != "" && !strings.EqualFold(strings.TrimSpace(latin), strings.TrimSpace(qRaw)) {
+			sugType = "fuzzy" // matched via normalized/prefix, not exact Latin match
+		}
 		out = append(out, Suggestion{
 			ID:    s.id,
 			Text:  tamil,
+			Word:  tamil,
 			Latin: latin,
-			Score: math.Round(s.score*100) / 100,
+			Score: score,
+			Type:  sugType,
 		})
 		if len(out) >= limit {
 			break

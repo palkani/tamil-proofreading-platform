@@ -153,7 +153,7 @@ func Load() *Config {
 		OCRServiceURL:          strings.TrimRight(getEnv("OCR_SERVICE_URL", ""), "/"),
 		AdvancedSuggestURL:     strings.TrimRight(getEnv("ADVANCED_SUGGEST_URL", ""), "/"),
 		UseAdvancedSuggest:     strings.ToLower(getEnv("USE_ADVANCED_SUGGEST", "false")) == "true",
-		SuggestMinLen:          getEnvAsInt("SUGGEST_MIN_LEN", 2),
+		SuggestMinLen:          getEnvAsInt("SUGGEST_MIN_LEN", 1), // 1 = letter-by-letter (t, th, thu...)
 		SuggestTopK:            getEnvAsInt("SUGGEST_TOP_K", 5),
 		SuggestCacheEntries:    getEnvAsInt("SUGGEST_CACHE_ENTRIES", 3000),  // LRU response cache for lower latency
 		SuggestCacheTTLMS:      getEnvAsInt("SUGGEST_CACHE_TTL_MS", 300000), // 5 minutes TTL

@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   title: seo.title,
   description: seo.description,
   keywords: seo.keywords,
-  alternates: { canonical: seo.canonical },
-  openGraph: { title: seo.ogTitle, description: seo.ogDescription, url: seo.canonical },
+  alternates: seo.alternates,
+  openGraph: seo.openGraph,
   robots: seo.robots,
 };
 
