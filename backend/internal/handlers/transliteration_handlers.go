@@ -131,13 +131,9 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 	}
 
 	// Allow per-letter IME suggestions (n -> na -> nam -> ...).
-	// Keep empty query fast-path.
+	// Keep empty query fast-path. Return exact suggest API format: { success, suggestions: [{ word, score }] }.
 	if len(q) < 1 {
-		c.JSON(http.StatusOK, TransliterateSuggestResponse{
-			Success:     true,
-			Query:       q,
-			Suggestions: []map[string]interface{}{},
-		})
+		c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: []SuggestAPIItem{}})
 		return
 	}
 
@@ -149,26 +145,23 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 			Limit: limit,
 		})
 		if err == nil && out != nil {
-			mapped := make([]map[string]interface{}, 0, len(out.Suggestions))
-			for idx, s := range out.Suggestions {
-				mapped = append(mapped, map[string]interface{}{
-					"word":   s.Text,
-					"ta":     s.Text,
-					"score":  s.Score,
-					"rank":   idx + 1,
-					"label":  "Recommended",
-					"usage":  usageLabel,
-					"reason": "Hybrid trie suggestion",
-				})
+			items := make([]SuggestAPIItem, 0, len(out.Suggestions))
+			for _, s := range out.Suggestions {
+				word := strings.TrimSpace(s.Word)
+				if word == "" {
+					word = strings.TrimSpace(s.Text)
+				}
+				if word == "" {
+					continue
+				}
+				score := s.Score
+				if score <= 0 || score > 1 {
+					score = 1.0
+				}
+				items = append(items, SuggestAPIItem{Word: word, Score: score})
 			}
-			mapped = validateSuggestionsMap(mapped)
-			// OPTIMIZATION: Set cache headers for browser caching (1 minute)
 			c.Header("Cache-Control", "public, max-age=60")
-			c.JSON(http.StatusOK, TransliterateSuggestResponse{
-				Success:     true,
-				Query:       q,
-				Suggestions: mapped,
-			})
+			c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: items})
 			return
 		}
 	}
@@ -194,30 +187,21 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 		}
 	}
 
-	// Map to rich metadata
-	mapped := make([]map[string]interface{}, 0, len(suggestions))
-	for idx, s := range suggestions {
-		mapped = append(mapped, map[string]interface{}{
-			"word":   s.Word,
-			"ta":     s.Word,
-			"score":  s.Score,
-			"rank":   idx + 1,
-			"label":  "Recommended",
-			"usage":  usageLabel,
-			"reason": "Standard transliteration match",
-		})
+	items := make([]SuggestAPIItem, 0, len(suggestions))
+	for _, s := range suggestions {
+		word := strings.TrimSpace(s.Word)
+		if word == "" {
+			continue
+		}
+		score := s.Score
+		if score <= 0 || score > 1 {
+			score = 1.0
+		}
+		items = append(items, SuggestAPIItem{Word: word, Score: score})
 	}
 
-	mapped = validateSuggestionsMap(mapped)
-	
-	// OPTIMIZATION: Set cache headers for browser caching (1 minute)
 	c.Header("Cache-Control", "public, max-age=60")
-
-	c.JSON(http.StatusOK, TransliterateSuggestResponse{
-		Success:     true,
-		Query:       q,
-		Suggestions: mapped,
-	})
+	c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: items})
 }
 
 type nodeSuggestResp struct {

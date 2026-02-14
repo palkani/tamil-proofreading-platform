@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"tamil-proofreading-platform/backend/internal/ime"
 	"tamil-proofreading-platform/backend/internal/suggest"
@@ -50,7 +49,6 @@ func (h *Handlers) IMESuggest(c *gin.Context) {
 		}
 	}
 
-	start := time.Now()
 	ctx := c.Request.Context()
 	if reqID != "" {
 		ctx = context.WithValue(ctx, "request_id", reqID)
@@ -71,22 +69,25 @@ func (h *Handlers) IMESuggest(c *gin.Context) {
 
 	// Fallback: when IME disabled or returned no candidates, use in-process suggest engine (lexicon/trie).
 	if len(cands) == 0 {
-		if suggestions, fallbackMeta := h.imeSuggestFromEngine(c, q, limit); len(suggestions) > 0 {
-			if fallbackMeta != nil {
-				fallbackMeta["engine"] = "suggest_engine"
-				fallbackMeta["request_id"] = reqID
-				fallbackMeta["duration_ms"] = time.Since(start).Milliseconds()
-				fallbackMeta["latency_ms"] = fallbackMeta["duration_ms"]
-			}
+		if suggestions, _ := h.imeSuggestFromEngine(c, q, limit); len(suggestions) > 0 {
 			log.Printf(`[IME] event=fallback request_id=%s q=%q count=%d`, reqID, q, len(suggestions))
-			c.JSON(http.StatusOK, gin.H{
-				"success":     true,
-				"query":       q,
-				"mode":        mode,
-				"suggestions": suggestions,
-				"candidates":  suggestions,
-				"meta":        fallbackMeta,
-			})
+			items := make([]SuggestAPIItem, 0, len(suggestions))
+			for _, s := range suggestions {
+				word, _ := s["word"].(string)
+				if word == "" {
+					word, _ = s["ta"].(string)
+				}
+				word = strings.TrimSpace(word)
+				if word == "" {
+					continue
+				}
+				score := 0.9
+				if v, ok := s["score"].(float64); ok && v > 0 && v <= 1 {
+					score = v
+				}
+				items = append(items, SuggestAPIItem{Word: word, Score: score})
+			}
+			c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: items})
 			return
 		}
 	}
@@ -94,34 +95,24 @@ func (h *Handlers) IMESuggest(c *gin.Context) {
 	if meta == nil {
 		meta = map[string]interface{}{"cache": "miss", "latency_ms": 0, "engine": "none"}
 	}
-	meta["request_id"] = reqID
-	meta["duration_ms"] = time.Since(start).Milliseconds()
-	if _, ok := meta["latency_ms"]; !ok {
-		meta["latency_ms"] = meta["duration_ms"]
-	}
 	cacheState, _ := meta["cache"]
-	log.Printf(`[IME] event=response request_id=%s q=%q mode=%s limit=%d cache=%v count=%d latency_ms=%v`,
-		reqID, q, mode, limit, cacheState, len(cands), meta["latency_ms"])
+	log.Printf(`[IME] event=response request_id=%s q=%q mode=%s limit=%d cache=%v count=%d`,
+		reqID, q, mode, limit, cacheState, len(cands))
 
-	suggestions := make([]map[string]interface{}, 0, len(cands))
+	items := make([]SuggestAPIItem, 0, len(cands))
 	for _, cnd := range cands {
-		suggestions = append(suggestions, map[string]interface{}{
-			"word":        cnd.Word,
-			"ta":          cnd.Word,
-			"score":       cnd.Score,
-			"source":      cnd.Source,
-			"rank_reason": cnd.RankReason,
-		})
+		word := strings.TrimSpace(cnd.Word)
+		if word == "" {
+			continue
+		}
+		score := cnd.Score
+		if score <= 0 || score > 1 {
+			score = 1.0
+		}
+		items = append(items, SuggestAPIItem{Word: word, Score: score})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":     true,
-		"query":       q,
-		"mode":        mode,
-		"suggestions": suggestions,
-		"candidates":  suggestions,
-		"meta":        meta,
-	})
+	c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: items})
 }
 
 // imeSuggestFromEngine returns IME-style suggestions (word, ta, score, ...) from the in-process suggest engine.

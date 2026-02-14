@@ -1,0 +1,16 @@
+# Tamil Handwriting OCR - ProofTamil integration
+# Run without torch: preprocessing + line/word segmentation only (empty word text).
+# With torch + model: full handwritten Tamil recognition.
+
+# Web
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Image processing (required)
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+pydantic>=2.0.0
+
+# Optional: full recognition (uncomment and place model at MODEL_PATH)
+# torch>=2.0.0

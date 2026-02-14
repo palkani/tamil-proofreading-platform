@@ -1676,28 +1676,24 @@ class HomeEditor {
       
       this.abortController = new AbortController();
 
-      // Home page always calls /api/submit.
-      // If user is logged out, the server-side /api/submit route will fallback to Gemini.
-      const submitOpts = {
+      // Home page uses corrections API for grammar check: exact format { success, corrections: [{ blockId, originalText, correction, reason, type }] }
+      const correctionsOpts = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, save_draft: false }),
+        body: JSON.stringify({ text }),
         signal: this.abortController.signal,
       };
-      // Don't send cookies when token is expired so backend/proxy treats request as anonymous (avoids 401).
       const token = typeof localStorage !== 'undefined' ? localStorage.getItem('access_token') : null;
       if (token && typeof isTokenExpired === 'function' && isTokenExpired(token)) {
-        submitOpts.credentials = 'omit';
+        correctionsOpts.credentials = 'omit';
       }
       const response = await apiFetch(
-        '/api/submit',
-        submitOpts,
-        false // requireAuth=false to avoid homepage redirect loops; token still sent if present and valid
+        '/api/corrections',
+        correctionsOpts,
+        false
       );
-      
+
       if (!response.ok) {
-        // Home page AI Assistant works without login. If we get 401 (e.g. expired token was sent),
-        // show a neutral message and do not block anonymous usage.
         if (response.status === 401) {
           this.showError('AI analysis failed. Please try again.');
           return;
@@ -1706,76 +1702,35 @@ class HomeEditor {
         let msg = `AI analysis failed (HTTP ${response.status})`;
         try {
           const j = rawErr ? JSON.parse(rawErr) : null;
-          if (j && (j.error || j.message || j.details)) {
-            msg = String(j.error || j.message || j.details);
-          }
-        } catch (e) {
-          // ignore
-        }
+          if (j && (j.error || j.message || j.details)) msg = String(j.error || j.message || j.details);
+        } catch (e) { /* ignore */ }
         if (rawErr && rawErr.trim() && msg === `AI analysis failed (HTTP ${response.status})`) {
           msg = `${msg}: ${rawErr.trim().slice(0, 300)}`;
         }
         this.showError(msg);
         return;
       }
-      
+
       const rawOk = await response.text();
       let data = {};
       try {
         data = rawOk ? JSON.parse(rawOk) : {};
       } catch (e) {
-        console.error('[HomeEditor] /api/submit returned non-JSON:', rawOk?.slice?.(0, 300));
+        console.error('[HomeEditor] /api/corrections returned non-JSON:', rawOk?.slice?.(0, 300));
         this.showError('AI analysis failed: server returned an invalid response.');
         return;
       }
-      console.log('AI analysis response (full):', JSON.stringify(data, null, 2));
-      console.log('Response structure check:', {
-        hasResult: !!data.result,
-        resultType: typeof data.result,
-        resultKeys: data.result ? Object.keys(data.result) : 'no result',
-        hasCorrections: !!data.corrections,
-        hasResultCorrections: !!data.result?.corrections,
-      });
-      
-      // If backend accepted async (202/pending), wait for completion via SSE
-      const submissionId = data?.submission?.id;
-      const status = data?.submission?.status;
-      const looksAsync = response.status === 202 || status === 'pending' || status === 'processing';
-
-      if (looksAsync && submissionId) {
-        try {
-          const resultPayload = await this.awaitSubmissionResult(submissionId);
-          const suggestions = this.extractSuggestionsFromPayload(resultPayload);
-          console.log('[HomeEditor] SSE suggestions:', suggestions.length, suggestions);
-          const backendMsg = String(resultPayload?.message || resultPayload?.submission?.error || '').trim();
-          if (!suggestions.length && backendMsg && /temporarily unavailable|not configured|missing|timeout|provider|gemini|ai/i.test(backendMsg)) {
-            this.emptyState = 'idle';
-            this.showError(backendMsg);
-            this.lastAnalyzedText = text;
-            return;
-          }
-          this.emptyState = suggestions.length ? 'idle' : 'no-issues';
-          this.displaySuggestions(suggestions);
-          this.lastAnalyzedText = text;
-          return;
-        } catch (e) {
-          console.warn('[HomeEditor] SSE wait failed:', e?.message);
-          // Fall through: show what we have (often none) rather than hanging.
-        }
-      }
-
-      // Non-async (or SSE failed): best-effort extraction from current payload
-      const suggestions = this.extractSuggestionsFromPayload(data);
-      console.log('[HomeEditor] Immediate suggestions:', suggestions.length, suggestions);
-      const backendMsg = String(data?.message || data?.submission?.error || '').trim();
-      if (!suggestions.length && backendMsg && /temporarily unavailable|not configured|missing|timeout|provider|gemini|ai/i.test(backendMsg)) {
+      // Response format: { success: true, corrections: [{ blockId, originalText, correction, reason, type }] }
+      const suggestions = this.extractSuggestionsFromPayload({ corrections: data.corrections || [] });
+      console.log('[HomeEditor] Corrections API suggestions:', suggestions.length, suggestions);
+      const errMsg = (data.error || '').trim();
+      if (!suggestions.length && errMsg && /temporarily unavailable|not configured|missing|timeout|provider|gemini|ai/i.test(errMsg)) {
         this.emptyState = 'idle';
-        this.showError(backendMsg);
+        this.showError(errMsg);
       } else {
         this.emptyState = suggestions.length ? 'idle' : 'no-issues';
         this.displaySuggestions(suggestions);
       }
-      // Only now mark the text as analyzed successfully (prevents missing triggers on quick edits)
       this.lastAnalyzedText = text;
       
     } catch (error) {

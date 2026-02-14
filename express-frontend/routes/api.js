@@ -279,6 +279,112 @@ router.post('/gemini/analyze', async (req, res) => {
   }
 });
 
+// Grammar/Corrections API for AI assistant - exact format: { success, corrections: [{ blockId, originalText, correction, reason, type }] }
+router.post('/corrections', async (req, res) => {
+  try {
+    const { text } = req.body;
+
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ success: false, corrections: [], error: 'Text is required' });
+    }
+
+    const keyInfo = keyRotator.getNextKey();
+    const apiKey = keyInfo ? keyInfo.key : null;
+    const keyIndex = keyInfo ? keyInfo.index : -1;
+    const baseUrl = keyRotator.baseUrl;
+
+    if (!apiKey) {
+      return res.status(500).json({ success: false, corrections: [], error: 'Gemini AI not configured' });
+    }
+
+    const chunks = splitIntoSentences(text);
+    const chunkPromises = chunks.map(async (chunk) => {
+      try {
+        const response = await axiosWithPool.post(
+          `${baseUrl}/models/gemini-2.5-flash:generateContent`,
+          {
+            systemInstruction: {
+              parts: [{
+                text: `நீங்கள் ஒரு தமிழ் மொழி நிபுணர். தமிழ் உரையில் உள்ள இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், தவறான சொற்களை கண்டறியுங்கள்.
+பதில் வடிவம் (JSON Array): id, type ("spelling" அல்லது "grammar" அல்லது "punctuation"), title (தமிழில்), description (விரிவான விளக்கம் தமிழில்), original (தவறான சொல்), suggestion (சரியான சொல்), position: { start, end }`
+              }]
+            },
+            contents: [{
+              role: 'user',
+              parts: [{
+                text: `கீழே உள்ள தமிழ் உரையை பகுப்பாய்வு செய்யுங்கள். இலக்கணப் பிழைகள், எழுத்துப் பிழைகள் மட்டுமே குறிக்கவும். உரை:\n\n${chunk.text}`
+              }]
+            }],
+            generationConfig: {
+              temperature: 0,
+              topP: 0.1,
+              maxOutputTokens: 1024,
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    type: { type: 'string' },
+                    title: { type: 'string' },
+                    description: { type: 'string' },
+                    original: { type: 'string' },
+                    suggestion: { type: 'string' },
+                    position: { type: 'object', properties: { start: { type: 'integer' }, end: { type: 'integer' } } }
+                  },
+                  required: ['id', 'type', 'title', 'description', 'original', 'suggestion']
+                }
+              }
+            }
+          },
+          { headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, timeout: 10000 }
+        );
+
+        if (response.status === 429) {
+          keyRotator.markRateLimited(keyIndex);
+          return [];
+        }
+        if (response.status !== 200) return [];
+
+        let cleanedJson = (response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]').trim();
+        if (!cleanedJson.endsWith(']')) {
+          const lastComplete = cleanedJson.lastIndexOf('}');
+          if (lastComplete > 0) cleanedJson = cleanedJson.substring(0, lastComplete + 1) + ']';
+          else cleanedJson = '[]';
+        }
+        const arr = JSON.parse(cleanedJson);
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) {
+        return [];
+      }
+    });
+
+    const allSuggestions = (await Promise.all(chunkPromises)).flat();
+    const filtered = allSuggestions.filter((s) => {
+      const orig = (s.original || '').trim();
+      const sugg = (s.suggestion || s.corrected || '').trim();
+      if (!orig || !sugg) return false;
+      if (orig === sugg) return false;
+      if (orig.normalize('NFC') === sugg.normalize('NFC')) return false;
+      return true;
+    });
+
+    const corrections = filtered.map((s) => ({
+      blockId: '0',
+      originalText: (s.original || '').trim(),
+      correction: (s.suggestion || s.corrected || '').trim(),
+      reason: (s.description || s.title || '').trim() || 'இலக்கண/எழுத்துப் பிழை திருத்தம்.',
+      type: (s.type && ['spelling', 'grammar', 'punctuation'].includes(s.type)) ? s.type : 'spelling'
+    }));
+
+    return res.json({ success: true, corrections });
+  } catch (error) {
+    console.error('[CORRECTIONS] Error:', error.message);
+    return res.status(500).json({ success: false, corrections: [], error: error.message });
+  }
+});
+
 // English to Tamil Translation with Gemini AI
 // Pure translation only: returns translated Tamil text (no proofreading pass after)
 router.post('/gemini/translate', async (req, res) => {
@@ -497,6 +603,8 @@ router.get('/v1/auth/google/callback', async (req, res) => {
 
 // OCR Tool - Direct implementation using Tesseract.js
 const OCR_SERVICE_URL = process.env.OCR_SERVICE_URL;
+// Handwriting OCR - Tamil handwritten notes to text (Python service)
+const HANDWRITING_OCR_URL = process.env.HANDWRITING_OCR_URL || 'http://localhost:8000';
 let ocrService = null;
 
 // Try to load OCR service (direct implementation)
@@ -865,6 +973,62 @@ router.get('/ocr/download/:filename', async (req, res) => {
     res.status(error.response?.status || 500).json({
       error: error.response?.data?.error || 'File download failed',
       details: error.message
+    });
+  }
+});
+
+// Handwriting OCR (Tamil handwritten notes to text) - proxy to Python service
+const uploadHandwriting = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/bmp', 'image/tiff'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPG, PNG, BMP, TIFF images are allowed.'));
+    }
+  }
+});
+
+router.get('/handwriting-ocr/health', async (req, res) => {
+  try {
+    const response = await axiosWithPool.get(`${HANDWRITING_OCR_URL}/health`, { timeout: 5000 });
+    return res.json(response.data);
+  } catch (err) {
+    return res.status(503).json({
+      status: 'unhealthy',
+      error: 'Handwriting OCR service is not available',
+      details: err.message
+    });
+  }
+});
+
+router.post('/handwriting-ocr/extract-words', uploadHandwriting.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const form = new FormData();
+    form.append('file', req.file.buffer, { filename: req.file.originalname || 'image.png', contentType: req.file.mimetype });
+    const response = await axiosWithPool.post(
+      `${HANDWRITING_OCR_URL}/api/ocr/extract-words`,
+      form,
+      {
+        headers: form.getHeaders(),
+        timeout: 60000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      }
+    );
+    return res.json(response.data);
+  } catch (error) {
+    const status = error.response?.status || 500;
+    const data = error.response?.data;
+    const message = data?.detail || (Array.isArray(data?.detail) ? data.detail.map(d => d.msg).join(' ') : null) || data?.message || error.message;
+    return res.status(status).json({
+      success: false,
+      error: message || 'Failed to process handwritten image'
     });
   }
 });
@@ -1488,16 +1652,29 @@ router.put('/blog/posts/:id', async (req, res) => {
 // ============= OPTIMIZED SUGGEST ENDPOINTS =============
 // These routes are critical for IME performance (target <100ms latency)
 
-// Primary suggest endpoint used by workspace.js for IME (proxies to backend in-process: trie + translit fallback).
+// Normalize backend suggest response to exact format: { success: true, suggestions: [ { word, score } ] }
+function normalizeSuggestResponse(data) {
+  const raw = (data && data.suggestions) ? data.suggestions : [];
+  const suggestions = raw
+    .map((s) => {
+      const word = (s.word != null ? s.word : s.text != null ? s.text : s.ta) || '';
+      const score = typeof s.score === 'number' ? Math.min(1, Math.max(0, s.score)) : 1;
+      return word.trim() ? { word: word.trim(), score } : null;
+    })
+    .filter(Boolean);
+  return { success: true, suggestions };
+}
+
+// Primary suggest endpoint used by workspace.js for IME (proxies to backend). Returns exact format: { success, suggestions: [{ word, score }] }.
 router.get('/v1/suggest', async (req, res) => {
   const startTime = Date.now();
   try {
     const { q, mode = 'spoken', limit = 8 } = req.query;
-    
+
     if (!q || typeof q !== 'string' || q.trim().length === 0) {
       return res.status(400).json({ error: 'Query parameter "q" required' });
     }
-    
+
     const url = `${BACKEND_URL}/transliterate/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
     const maxRetries = 4;
     const retryDelayMs = 1000;
@@ -1517,69 +1694,63 @@ router.get('/v1/suggest', async (req, res) => {
     }
 
     res.set('Cache-Control', 'public, max-age=60');
-    if (response.status === 503) {
-      return res.status(200).json({ success: true, suggestions: [], source: 'backend_starting' });
+    if (response.status === 503 || response.status !== 200) {
+      return res.status(200).json({ success: true, suggestions: [] });
     }
-    res.status(response.status).json(response.data);
+    return res.status(200).json(normalizeSuggestResponse(response.data));
   } catch (error) {
     const elapsed = Date.now() - startTime;
-    // Return empty suggestions on timeout/abort to allow faster typing
     if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
       console.log(`[SUGGEST] Timeout after ${elapsed}ms for q=${req.query.q}`);
       res.set('Cache-Control', 'no-cache');
-      return res.status(200).json({ success: true, suggestions: [], source: 'timeout', elapsed_ms: elapsed });
+      return res.status(200).json({ success: true, suggestions: [] });
     }
     console.error(`[SUGGEST] Error after ${elapsed}ms:`, error.message);
-    res.status(200).json({ success: true, suggestions: [], source: 'error', error: error.message });
+    return res.status(200).json({ success: true, suggestions: [] });
   }
 });
 
 // CRITICAL: IME suggestions endpoint MUST be before router.all('/*') catch-all
-// IME suggestions endpoint - proxy to backend (OPTIMIZED for low latency)
+// IME suggestions endpoint - proxy to backend. Returns exact format: { success, suggestions: [{ word, score }] }.
 router.get('/ime/suggest', async (req, res) => {
   const startTime = Date.now();
   try {
     const { q, mode = 'smart', limit = 8 } = req.query;
-    
-    // Quick validation
+
     if (!q || typeof q !== 'string' || q.trim().length === 0) {
       return res.status(400).json({ error: 'Query parameter "q" required' });
     }
-    
-    // Use AbortController for reliable timeout
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second hard timeout
-    
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+
     const url = `${BACKEND_URL}/ime/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
-    
-    // Forward authorization header if present
     const headers = {};
-    if (req.headers.authorization) {
-      headers.Authorization = req.headers.authorization;
-    }
-    
+    if (req.headers.authorization) headers.Authorization = req.headers.authorization;
+
     const response = await axiosWithPool.get(url, {
       headers,
       validateStatus: () => true,
-      timeout: 1500, // 1.5 second axios timeout
+      timeout: 1500,
       signal: controller.signal,
     });
-    
+
     clearTimeout(timeoutId);
-    
-    // OPTIMIZATION: Set cache headers for browser caching (1 minute)
+
     res.set('Cache-Control', 'public, max-age=60');
-    res.status(response.status).json(response.data);
+    if (response.status !== 200) {
+      return res.status(200).json({ success: true, suggestions: [] });
+    }
+    return res.status(200).json(normalizeSuggestResponse(response.data));
   } catch (error) {
     const elapsed = Date.now() - startTime;
-    // Return empty suggestions on timeout to allow faster typing
     if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
       console.log(`[IME] Timeout after ${elapsed}ms for q=${req.query.q}`);
       res.set('Cache-Control', 'no-cache');
-      return res.status(200).json({ success: true, suggestions: [], source: 'timeout', elapsed_ms: elapsed });
+      return res.status(200).json({ success: true, suggestions: [] });
     }
     console.error(`[IME] Error after ${elapsed}ms:`, error.message);
-    res.status(200).json({ success: true, suggestions: [], source: 'error', error: error.message });
+    return res.status(200).json({ success: true, suggestions: [] });
   }
 });
 

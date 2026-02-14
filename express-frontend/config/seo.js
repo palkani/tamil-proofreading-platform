@@ -52,6 +52,16 @@ const seoConfig = {
     pageType: 'tool'
   },
 
+  handwritingOcrTool: {
+    title: 'Tamil Handwriting to Text - Handwritten Notes OCR | ProofTamil (prooftamil.com)',
+    description: 'Extract Tamil text from handwritten notes, whiteboard, or letters. Upload an image of handwritten Tamil and get editable text instantly. Free Tamil handwriting OCR online.',
+    keywords: 'tamil handwriting ocr, handwritten tamil to text, tamil notes to text, tamil handwriting recognition, handwritten tamil ocr online',
+    canonical: BASE_URL + '/tools/handwriting-ocr',
+    ogTitle: 'Tamil Handwriting to Text - ProofTamil',
+    ogDescription: 'Convert handwritten Tamil notes to editable text. Upload an image and get text instantly.',
+    pageType: 'tool'
+  },
+
   converterTool: {
     title: 'Document Converter Online - Convert PDF DOCX TXT HTML RTF ODT | ProofTamil',
     description: 'Convert documents between PDF, DOCX, TXT, HTML, RTF, and ODT. Preserve Tamil text and formatting. Fast online document converter for Tamil files.',

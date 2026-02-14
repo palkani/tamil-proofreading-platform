@@ -91,15 +91,10 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		path := req.URL.Path
-		// Suggest endpoints: return 200 with empty suggestions during startup so clients don't see 503.
-		if path == "/api/v1/suggest" || path == "/api/v1/transliterate/suggest" {
+		// Suggest endpoints: return 200 with empty suggestions during startup (exact format: success + suggestions only).
+		if path == "/api/v1/suggest" || path == "/api/v1/transliterate/suggest" || path == "/api/v1/ime/suggest" {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"success":true,"suggestions":[],"source":"starting","q":"","query":""}`))
-			return
-		}
-		if path == "/api/v1/ime/suggest" {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"success":true,"query":"","suggestions":[],"candidates":[],"meta":{"engine":"starting"}}`))
+			w.Write([]byte(`{"success":true,"suggestions":[]}`))
 			return
 		}
 		w.WriteHeader(http.StatusServiceUnavailable)

@@ -97,6 +97,17 @@ router.get('/tools/ocr', (req, res) => {
   });
 });
 
+// Tamil Handwriting to Text tool page - accessible to everyone
+router.get('/tools/handwriting-ocr', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('handwritingOcrTool');
+  res.render('pages/handwriting-ocr-tool', {
+    title: 'Tamil Handwriting to Text - Handwritten Notes OCR | ProofTamil',
+    seo: seo,
+    user: user
+  });
+});
+
 // Document Converter Tool page - accessible to everyone
 router.get('/tools/converter', (req, res) => {
   const user = getCurrentUser(req);
@@ -659,6 +670,7 @@ router.get('/sitemap.xml', (req, res) => {
     { url: '/login', priority: '0.6', changefreq: 'monthly' },
     { url: '/register', priority: '0.6', changefreq: 'monthly' },
     { url: '/tools/ocr', priority: '0.8', changefreq: 'weekly' },
+    { url: '/tools/handwriting-ocr', priority: '0.8', changefreq: 'weekly' },
     { url: '/tools/converter', priority: '0.8', changefreq: 'weekly' },
     { url: '/tools/ai-content-writer', priority: '0.8', changefreq: 'weekly' },
     { url: '/tools/event-name-suggester', priority: '0.7', changefreq: 'monthly' },

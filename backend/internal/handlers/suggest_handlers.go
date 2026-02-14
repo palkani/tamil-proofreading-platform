@@ -18,28 +18,27 @@ type SuggestSelectRequest struct {
 	SuggestionID int32  `json:"suggestionId"`
 }
 
+// SuggestAPIResponse is the exact response format for auto-suggest API: only success and suggestions with word and score.
+type SuggestAPIResponse struct {
+	Success     bool              `json:"success"`
+	Suggestions []SuggestAPIItem  `json:"suggestions"`
+}
+
+type SuggestAPIItem struct {
+	Word  string  `json:"word"`
+	Score float64 `json:"score"`
+}
+
 // Suggest handles GET /api/suggest (in-process hybrid trie engine).
-// OPTIMIZED for <100ms latency with aggressive caching.
+// Returns exactly { "success": true, "suggestions": [ { "word": "...", "score": 0-1 } ] } for auto-suggest clients.
 func (h *Handlers) Suggest(c *gin.Context) {
-	// OPTIMIZATION: Set cache headers for edge caching (Vercel, CloudFlare, etc.)
-	// This allows the edge to cache identical requests, reducing backend load
 	c.Header("Cache-Control", "public, max-age=60, s-maxage=120, stale-while-revalidate=300")
 	c.Header("Vary", "Accept-Encoding")
-	
+
 	engine := h.getSuggestEngine()
 	qTrim := strings.TrimSpace(c.Query("q"))
 	if engine == nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success":     true,
-			"q":           qTrim,
-			"input":       qTrim,
-			"normalized":  "",
-			"suggestions": []suggest.Suggestion{},
-			"source":      "disabled",
-			"latency_ms":  0,
-			"timing":      gin.H{"total_ms": 0},
-			"meta":        gin.H{"lexicon_count": 0, "trie_version": ""},
-		})
+		c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: []SuggestAPIItem{}})
 		return
 	}
 	q := qTrim
@@ -52,17 +51,7 @@ func (h *Handlers) Suggest(c *gin.Context) {
 		Limit: limit,
 	})
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success":     true,
-			"q":           q,
-			"input":       q,
-			"normalized":  "",
-			"suggestions": []suggest.Suggestion{},
-			"source":      "error",
-			"latency_ms":  0,
-			"timing":      gin.H{"total_ms": 0},
-			"meta":        gin.H{"error": err.Error()},
-		})
+		c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: []SuggestAPIItem{}})
 		return
 	}
 	// Transliteration fallback: when trie returns no suggestions, use IME (corpus + Aksharamukha)
@@ -95,7 +84,22 @@ func (h *Handlers) Suggest(c *gin.Context) {
 			out.Source = "transliteration"
 		}
 	}
-	c.JSON(http.StatusOK, out)
+	items := make([]SuggestAPIItem, 0, len(out.Suggestions))
+	for _, s := range out.Suggestions {
+		word := strings.TrimSpace(s.Word)
+		if word == "" {
+			word = strings.TrimSpace(s.Text)
+		}
+		if word == "" {
+			continue
+		}
+		score := s.Score
+		if score <= 0 || score > 1 {
+			score = 1.0
+		}
+		items = append(items, SuggestAPIItem{Word: word, Score: score})
+	}
+	c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: items})
 }
 
 // SuggestSelect handles POST /api/select (selection logging + personalization).

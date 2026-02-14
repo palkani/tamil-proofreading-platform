@@ -356,6 +356,7 @@
           const out = await runClientSideOcr(selectedFile, lang);
           extractedText = out.text || '';
           loading.classList.add('hidden');
+          processBtn.disabled = false;
           resultText.textContent = extractedText;
           stats.textContent = `${extractedText.length} characters extracted`;
           downloadFilename = null; // no server docx in client OCR
@@ -383,6 +384,7 @@
         stats.textContent = `${data.char_count || extractedText.length} characters extracted`;
         downloadFilename = data.download_filename;
         resultArea.classList.remove('hidden');
+        processBtn.disabled = false;
       }
     } catch (err) {
       loading.classList.add('hidden');
