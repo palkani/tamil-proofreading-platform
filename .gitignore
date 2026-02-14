@@ -1,6 +1,12 @@
 # Dependencies
 node_modules/
 vendor/
+.venv/
+venv/
+**/.venv/
+**/__pycache__/
+*.pyc
+*.pyo
 
 # Environment variables
 .env
@@ -13,7 +19,7 @@ build/
 .next/
 out/
 
-# Go
+# Go (binaries - do not commit; they bloat the repo)
 *.exe
 *.exe~
 *.dll
@@ -24,6 +30,11 @@ out/
 go.work
 backend/server
 backend/main
+backend/load-tamil-words-dir
+backend/extract-tamil-from-wikipedia
+backend/cmd/extract-tamil-from-wikipedia/extract-tamil
+backend/cmd/import-tamil-words/import-tamil-words
+backend/build_lexicon
 
 # IDE
 .vscode/
@@ -54,4 +65,8 @@ temp/
 .env*.local
 backend/seed_corpus_wiki.sql
 
-# data/lexicon.json: not ignored so you can commit a pre-built full lexicon (see docs/BUILD_LEXICON_LOCALLY.md)
+# Tesseract traineddata (large; download at build/deploy time)
+*.traineddata
+
+# data/lexicon.json: large; build locally (see docs/BUILD_LEXICON_LOCALLY.md) or use LEXICON_FILE at deploy
+data/lexicon.json
