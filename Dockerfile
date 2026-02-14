@@ -1,48 +1,26 @@
-# Build stage: Next.js (unified frontend)
-FROM node:18-alpine AS builder
+# Frontend: Express (same app as Vercel / express-frontend)
+# docker-compose "frontend" service uses this; Vercel deploys express-frontend directly.
+FROM node:18-slim
 
 WORKDIR /app
 
-# Optional: set at build time for client-side API URL (e.g. --build-arg NEXT_PUBLIC_API_URL=http://backend:8080/api/v1)
-ARG NEXT_PUBLIC_API_URL
-ARG NEXT_PUBLIC_SITE_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+# Copy package files (context is repo root)
+COPY express-frontend/package*.json ./
 
-# Copy frontend package files
-COPY frontend/package*.json ./
+# Install dependencies
+RUN npm install --production && npm install tailwindcss postcss autoprefixer concurrently
 
-# Install all deps (including dev for build)
-RUN npm ci
+# Copy application code
+COPY express-frontend/ .
 
-# Copy frontend source
-COPY frontend/ .
-
-# Build Next.js (output: .next)
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
-
-# Runtime stage
-FROM node:18-alpine
-
-WORKDIR /app
-
-# Install dumb-init for signal handling
-RUN apk add --no-cache dumb-init wget
+# Build CSS
+RUN npm run build:css
 
 ENV NODE_ENV=production
 ENV PORT=5000
-ENV NEXT_TELEMETRY_DISABLED=1
-
-# Copy built app and node_modules from builder
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-
 EXPOSE 5000
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:5000/ || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "const port = process.env.PORT || 5000; require('http').get(`http://localhost:${port}/`, (r) => process.exit(r.statusCode === 200 ? 0 : 1));" || exit 1
 
-ENTRYPOINT ["/sbin/dumb-init", "--"]
-CMD ["node", "server.js"]
+CMD ["npm", "start"]

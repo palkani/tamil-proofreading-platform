@@ -5,14 +5,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        - NEXT_PUBLIC_API_URL=http://backend:8080/api/v1
-        - NEXT_PUBLIC_SITE_URL=http://localhost:5000
     ports:
       - "5000:5000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=http://backend:8080/api/v1
+      - BACKEND_URL=http://backend:8080
+      - FRONTEND_URL=http://localhost:5000
       - DATABASE_URL=${DATABASE_URL:-postgresql://prooftamil:localdev123@db:5432/prooftamil_local}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}

@@ -27,11 +27,9 @@ A web-based platform that enables Tamil writers to upload text for AI-assisted p
 - **OpenAI API** for LLM integration
 
 ### Frontend
-- **Next.js 14** with React 19
-- **TypeScript**
-- **Tailwind CSS**
-- **Recharts** for data visualization
-- **Axios** for API calls
+- **Express** (Node.js) with **EJS** templates — deployed to Vercel
+- **Tailwind CSS** for styling
+- **Axios** for API calls; workspace and home editor in `express-frontend/public/js/`
 
 ## Project Structure
 
@@ -45,22 +43,13 @@ tamil-proofreading-platform/
 │   │   ├── middleware/     # Auth, CORS, rate limiting, sanitization
 │   │   ├── models/         # Database models
 │   │   └── services/       # Business logic
-│   │       ├── auth/       # Authentication service
-│   │       ├── llm/        # LLM service
-│   │       ├── nlp/        # Tamil NLP service
-│   │       └── payment/    # Payment service
 │   └── migrations/         # Database migrations
-├── frontend/               # Next.js app
-│   ├── app/               # App router pages
-│   │   ├── (auth)/        # Auth pages
-│   │   ├── dashboard/     # User dashboard
-│   │   ├── submit/        # Text submission
-│   │   ├── admin/         # Admin panel
-│   │   └── payment/       # Payment page
-│   ├── components/        # React components
-│   ├── lib/              # Utilities, API clients
-│   └── types/            # TypeScript types
-└── docs/                 # Documentation
+├── express-frontend/        # Express app (Vercel + Docker)
+│   ├── views/              # EJS pages (home, workspace, drafts, tools)
+│   ├── routes/             # API proxy, auth, index
+│   ├── public/js/          # workspace.js, home-editor.js, auth-utils.js
+│   └── server.js           # Entry point
+└── docs/                   # Documentation
 ```
 
 ## Local IME (Aksharamukha) Development
