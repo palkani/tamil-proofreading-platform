@@ -137,14 +137,14 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 		return
 	}
 
-	// Step 0: Use in-process hybrid trie engine (no external calls).
+	// Step 0: Use in-process hybrid trie engine when it has suggestions.
 	if engine := h.getSuggestEngine(); engine != nil {
 		out, err := engine.Suggest(c.Request.Context(), suggest.SuggestRequest{
 			Query: q,
 			UID:   strings.TrimSpace(c.Query("uid")),
 			Limit: limit,
 		})
-		if err == nil && out != nil {
+		if err == nil && out != nil && len(out.Suggestions) > 0 {
 			items := make([]SuggestAPIItem, 0, len(out.Suggestions))
 			for _, s := range out.Suggestions {
 				word := strings.TrimSpace(s.Word)
@@ -160,12 +160,15 @@ func (h *Handlers) TransliterateSuggest(c *gin.Context) {
 				}
 				items = append(items, SuggestAPIItem{Word: word, Score: score})
 			}
-			c.Header("Cache-Control", "public, max-age=60")
-			c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: items})
-			return
+			if len(items) > 0 {
+				c.Header("Cache-Control", "public, max-age=60")
+				c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: items})
+				return
+			}
 		}
 	}
 
+	// Fallback: in-memory translit lexicon (works when trie not loaded or no trie match for this query)
 	suggestions := translit.GetSuggestions(q)
 	if len(suggestions) > limit {
 		suggestions = suggestions[:limit]

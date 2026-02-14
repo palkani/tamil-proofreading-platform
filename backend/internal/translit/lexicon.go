@@ -8,6 +8,13 @@ import (
 	"unicode"
 )
 
+// suggestLexiconRow matches the suggest engine's JSON lexicon format (TamilText, Transliteration, Frequency).
+type suggestLexiconRow struct {
+	TamilText       string `json:"TamilText"`
+	Transliteration string `json:"Transliteration"`
+	Frequency       int    `json:"Frequency"`
+}
+
 type Entry struct {
 	Tamil     string `json:"tam"`
 	Phonetic  string `json:"eng"`
@@ -92,6 +99,57 @@ func LoadLexicon(filePath string) error {
 		maxFreq = 1
 	}
 
+	return nil
+}
+
+// LoadLexiconFromSuggestFile loads the same JSON lexicon used by the suggest engine (array of {TamilText, Transliteration, Frequency})
+// so the translit fallback has data when the trie is not loaded or has no match.
+func LoadLexiconFromSuggestFile(filePath string) error {
+	if filePath == "" {
+		return nil
+	}
+	f, err := os.Open(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	defer f.Close()
+	dec := json.NewDecoder(f)
+	if _, err := dec.Token(); err != nil { // skip '['
+		return err
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	exactMap = make(map[string][]Entry)
+	prefixMap = make(map[string][]Entry)
+	maxFreq = 0
+	for dec.More() {
+		var r suggestLexiconRow
+		if err := dec.Decode(&r); err != nil {
+			return err
+		}
+		phon := normalize(r.Transliteration)
+		if phon == "" {
+			continue
+		}
+		if r.Frequency > maxFreq {
+			maxFreq = r.Frequency
+		}
+		entry := Entry{Tamil: strings.TrimSpace(r.TamilText), Phonetic: r.Transliteration, Frequency: r.Frequency}
+		exactMap[phon] = append(exactMap[phon], entry)
+		for i := 1; i <= len(phon); i++ {
+			prefix := phon[:i]
+			prefixMap[prefix] = append(prefixMap[prefix], entry)
+		}
+	}
+	if _, err := dec.Token(); err != nil { // skip ']'
+		return err
+	}
+	if maxFreq == 0 {
+		maxFreq = 1
+	}
 	return nil
 }
 

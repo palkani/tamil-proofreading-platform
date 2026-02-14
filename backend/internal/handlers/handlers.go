@@ -17,6 +17,7 @@ import (
 	"tamil-proofreading-platform/backend/internal/services/nlp"
 	"tamil-proofreading-platform/backend/internal/services/payment"
 	"tamil-proofreading-platform/backend/internal/suggest"
+	"tamil-proofreading-platform/backend/internal/translit"
 
 	"github.com/MicahParks/keyfunc/v2"
 	"github.com/gin-gonic/gin"
@@ -111,6 +112,17 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	h.suggestEngine = eng
 	h.suggestEngineMu.Unlock()
 	log.Printf("[SUGGEST] In-process suggest engine registered (lexicon loads in background, min_len=%d, top_k=%d)", cfg.SuggestMinLen, cfg.SuggestTopK)
+
+	// Load translit fallback lexicon from same file so /transliterate/suggest returns suggestions when trie is empty or still loading
+	if path := cfg.LexiconFile; path != "" {
+		go func() {
+			if err := translit.LoadLexiconFromSuggestFile(path); err != nil {
+				log.Printf("[TRANSLIT] LoadLexiconFromSuggestFile %q failed: %v", path, err)
+			} else {
+				log.Printf("[TRANSLIT] Fallback lexicon loaded from %q", path)
+			}
+		}()
+	}
 
 	// Tamil word autocomplete uses the file-based suggest engine (lexicon), not DB cache.
 
