@@ -259,7 +259,17 @@ router.post('/gemini/analyze', async (req, res) => {
     const allChunkResults = await Promise.all(chunkPromises);
     const allSuggestions = allChunkResults.flat();
 
-    res.json({ suggestions: allSuggestions });
+    // Filter out invalid suggestions where original === suggestion (Gemini sometimes returns no-op corrections)
+    const filtered = allSuggestions.filter((s) => {
+      const orig = (s.original || '').trim();
+      const sugg = (s.suggestion || s.corrected || '').trim();
+      if (!orig || !sugg) return false;
+      if (orig === sugg) return false;
+      if (orig.normalize('NFC') === sugg.normalize('NFC')) return false;
+      return true;
+    });
+
+    res.json({ suggestions: filtered });
   } catch (error) {
     console.error('Gemini API error:', error.response?.data || error.message);
     res.status(500).json({ 
