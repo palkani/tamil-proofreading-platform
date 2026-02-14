@@ -94,6 +94,38 @@ func getAllEntries() []Entry {
         return result
 }
 
+// builtinPrefixSuggestions returns a minimal set of suggestions for very common 1–3 letter Latin prefixes
+// so that suggestions appear even when no lexicon file is loaded (e.g. first request or no LEXICON_FILE).
+var builtinPrefixSuggestions = map[string][]Suggestion{
+        "t":   {{Word: "த்", Score: 1}, {Word: "ட", Score: 0.9}, {Word: "த", Score: 0.85}},
+        "ta":  {{Word: "தா", Score: 1}, {Word: "டா", Score: 0.9}, {Word: "த", Score: 0.85}, {Word: "ட", Score: 0.8}},
+        "taa": {{Word: "தா", Score: 1}, {Word: "டா", Score: 0.9}},
+        "n":   {{Word: "ன்", Score: 1}, {Word: "ண", Score: 0.9}, {Word: "ந", Score: 0.85}},
+        "na":  {{Word: "நா", Score: 1}, {Word: "ணா", Score: 0.9}, {Word: "னா", Score: 0.85}},
+        "k":   {{Word: "க்", Score: 1}, {Word: "க", Score: 0.95}},
+        "ka":  {{Word: "கா", Score: 1}, {Word: "க", Score: 0.9}},
+        "e":   {{Word: "எ", Score: 1}, {Word: "ஏ", Score: 0.9}},
+        "en":  {{Word: "என்", Score: 1}, {Word: "என", Score: 0.95}, {Word: "ஏன்", Score: 0.9}},
+        "enna": {{Word: "என்ன", Score: 1}},
+        "a":   {{Word: "அ", Score: 1}, {Word: "ஆ", Score: 0.95}},
+        "am":  {{Word: "அம்", Score: 1}, {Word: "ஆம்", Score: 0.95}},
+        "amma": {{Word: "அம்மா", Score: 1}},
+        "v":   {{Word: "வ்", Score: 1}, {Word: "வ", Score: 0.95}},
+        "va":  {{Word: "வா", Score: 1}, {Word: "வ", Score: 0.9}},
+        "s":   {{Word: "ச்", Score: 1}, {Word: "ச", Score: 0.95}, {Word: "ஸ", Score: 0.85}},
+        "sa":  {{Word: "சா", Score: 1}, {Word: "ச", Score: 0.9}},
+        "p":   {{Word: "ப்", Score: 1}, {Word: "ப", Score: 0.95}},
+        "pa":  {{Word: "பா", Score: 1}, {Word: "ப", Score: 0.9}},
+        "m":   {{Word: "ம்", Score: 1}, {Word: "ம", Score: 0.95}},
+        "ma":  {{Word: "மா", Score: 1}, {Word: "ம", Score: 0.9}},
+        "r":   {{Word: "ர்", Score: 1}, {Word: "ர", Score: 0.95}},
+        "ra":  {{Word: "ரா", Score: 1}, {Word: "ர", Score: 0.9}},
+        "l":   {{Word: "ல்", Score: 1}, {Word: "ல", Score: 0.95}, {Word: "ள்", Score: 0.9}, {Word: "ழ", Score: 0.85}},
+        "la":  {{Word: "லா", Score: 1}, {Word: "ல", Score: 0.9}},
+        "i":   {{Word: "இ", Score: 1}, {Word: "ஈ", Score: 0.9}},
+        "u":   {{Word: "உ", Score: 1}, {Word: "ஊ", Score: 0.9}},
+}
+
 func GetSuggestions(input string) []Suggestion {
         mu.RLock()
         defer mu.RUnlock()
@@ -101,6 +133,20 @@ func GetSuggestions(input string) []Suggestion {
         key := normalize(input)
         if key == "" {
                 return []Suggestion{}
+        }
+
+        // When no lexicon is loaded, return built-in suggestions for common short prefixes so UI always gets something.
+        if len(prefixMap) == 0 {
+                if sug, ok := builtinPrefixSuggestions[key]; ok {
+                        return sug
+                }
+                // Try prefix match on built-in keys (e.g. "tam" -> use "ta" suggestions as fallback)
+                for i := len(key); i >= 1; i-- {
+                        prefix := key[:i]
+                        if sug, ok := builtinPrefixSuggestions[prefix]; ok {
+                                return sug
+                        }
+                }
         }
 
         // Common-word overrides for high-confidence everyday terms where

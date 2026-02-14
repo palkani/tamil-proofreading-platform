@@ -99,7 +99,7 @@ jobs:
             --region=${{ env.REGION }} \
             --platform=managed \
             --allow-unauthenticated \
-            --memory=1Gi \
+            --memory=2Gi \
             --cpu=1 \
             --timeout=300 \
             --min-instances=0 \
