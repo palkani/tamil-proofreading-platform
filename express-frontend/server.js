@@ -1,5 +1,8 @@
-const express = require('express');
+// Load .env from project root for local testing (optional; does nothing if file missing)
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const compression = require('compression');

@@ -1575,16 +1575,19 @@ class WorkspaceController {
     });
     
     // MINIMAL GUARDS: Only check if token exists and is Latin
-    // Suggestions start from 2 characters
-    if (!token || token.length < 2) {
+    // Suggestions work from 1 character (backend and Express fallback support it)
+    if (!token || token.length < 1) {
       console.log('[IME] ⚠️ Token is empty - no Latin characters found at cursor');
-      // Clear suggestions if token is invalid
       if (this.lastFetchToken) {
         this.lastFetchToken = null;
         this.currentTokenInfo = null;
         this.clearSuggestions();
       }
-      // Don't call API if token is empty - this prevents 400 errors
+      // When editor has Tamil but cursor is not in a Latin word, show hint so user knows to type in English
+      const hasTamil = /[\u0B80-\u0BFF]/.test(text);
+      if (hasTamil && text.trim().length > 0) {
+        this.showSuggestionsHint('Type in English (e.g. tamil) to get Tamil suggestions.');
+      }
       return;
     }
     
@@ -1619,6 +1622,10 @@ class WorkspaceController {
         this.lastFetchToken = null;
         this.currentTokenInfo = null;
         this.clearSuggestions();
+      }
+      // When cursor is in Tamil text, show hint so user knows to type in English
+      if (hasTamil) {
+        this.showSuggestionsHint('Type in English (e.g. tamil) to get Tamil suggestions.');
       }
       return;
     }
@@ -1704,6 +1711,51 @@ class WorkspaceController {
     if (this.renderTranslitSuggestions) {
       this.renderTranslitSuggestions('', []);
     }
+  }
+
+  /**
+   * Show a hint in the suggestions dropdown when there is no Latin token at caret (e.g. cursor in Tamil text).
+   * Explains that suggestions appear when typing in English (Roman).
+   */
+  showSuggestionsHint(message) {
+    if (!message || typeof message !== 'string') return;
+    // Remove any existing suggestion dropdowns first
+    document.querySelectorAll('#tamil-suggestions-dropdown').forEach(dd => {
+      dd.style.display = 'none';
+      if (dd.parentNode) dd.parentNode.removeChild(dd);
+    });
+    const dropdown = document.createElement('div');
+    dropdown.id = 'tamil-suggestions-dropdown';
+    dropdown.className = 'tamil-suggestions-dropdown';
+    dropdown.style.pointerEvents = 'auto';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'tamil-suggestions-close';
+    closeBtn.innerHTML = '×';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.onclick = () => {
+      if (dropdown.parentNode) dropdown.parentNode.removeChild(dropdown);
+    };
+    const hint = document.createElement('div');
+    hint.className = 'tamil-suggestions-hint';
+    hint.style.padding = '10px 14px';
+    hint.style.color = '#6b7280';
+    hint.style.fontSize = '13px';
+    hint.style.lineHeight = '1.4';
+    hint.textContent = message;
+    dropdown.appendChild(closeBtn);
+    dropdown.appendChild(hint);
+    document.body.appendChild(dropdown);
+    // Position near editor/cursor if we have a reference
+    const editorEl = this.editorElement || document.querySelector('[contenteditable="true"]');
+    if (editorEl) {
+      const rect = editorEl.getBoundingClientRect();
+      dropdown.style.position = 'fixed';
+      dropdown.style.left = rect.left + 'px';
+      dropdown.style.top = (rect.top + rect.height + 4) + 'px';
+      dropdown.style.minWidth = '280px';
+      dropdown.style.maxWidth = '360px';
+    }
+    dropdown.style.display = 'block';
   }
 
   // DEPRECATED: Use getTokenAtCaret instead
@@ -3757,67 +3809,62 @@ class WorkspaceController {
     this.abortController = new AbortController();
     this.updateAnalysisStatus('analyzing');
     
-    console.log('[AI] 🚀 Making API call to /api/submit with text length:', text.length);
-    console.log('[AI] 🚀 Request body:', JSON.stringify({ text: text.substring(0, 100) + '...', save_draft: false }));
-    
+    let data = null;
     try {
-      console.log('[AI] 🚀 Calling /api/submit endpoint...');
-      const response = await this.apiFetch('/api/submit', {
+      // Prefer /api/corrections (Express → Gemini) so paste always gets grammar check in production
+      console.log('[AI] 🚀 Calling /api/corrections (Gemini) with text length:', text.length);
+      const correctionsResponse = await this.apiFetch('/api/corrections', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        // Workspace uses draft-saving submit so we can poll for completed suggestions.
-        // This avoids a second "inline" submit call and matches backend async design.
-        body: JSON.stringify({ text, html: this.getEditorHTML(), save_draft: true }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
         signal: this.abortController.signal
       });
-      
-      console.log('[AI] ✅ API response status:', response.status);
-      console.log('[AI] ✅ API response headers:', Object.fromEntries(response.headers.entries()));
-      
-      // Robust JSON parsing (avoid crashes when backend returns HTML/text on errors)
-      const raw = await response.text();
-      let data = null;
-      try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch (e) {
-        console.warn('[AI] ⚠️ Response was not valid JSON:', raw?.slice?.(0, 200));
-        data = { error: 'invalid_json', raw: raw?.slice?.(0, 300) };
+      const correctionsJson = await correctionsResponse.json().catch(() => ({}));
+      if (correctionsResponse.ok && correctionsJson.success && Array.isArray(correctionsJson.corrections)) {
+        console.log('[AI] ✅ Got corrections from Gemini:', correctionsJson.corrections.length);
+        data = { corrections: correctionsJson.corrections };
+        this.lastAnalyzedText = text;
       }
-
-      // Daily limit handling
-      if (response.status === 429) {
-        const remaining = (data && typeof data.remaining === 'number') ? data.remaining : null;
-        const code = String(data?.error || '').trim();
-        const msgBase = String(data?.message || 'Request blocked.').trim();
-        const showRemaining = remaining !== null && (code === 'daily_limit_exceeded' || code === 'quota_insufficient_for_request');
-        const msg = showRemaining ? `${msgBase} (Remaining tokens today: ${remaining})` : msgBase;
-        this.updateAnalysisStatus('');
-        if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
-          this.suggestionsPanel.setEmptyState('idle');
+      // Fallback to backend /api/submit if corrections API failed or returned nothing
+      if (!data) {
+        console.log('[AI] 🚀 Fallback: calling /api/submit with text length:', text.length);
+        const response = await this.apiFetch('/api/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, html: this.getEditorHTML(), save_draft: true }),
+          signal: this.abortController.signal
+        });
+        const raw = await response.text();
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch (e) {
+          data = { error: 'invalid_json', raw: raw?.slice?.(0, 300) };
         }
-        this.showNotification(msg, 'warning');
-        return;
-      }
-
-      console.log('[AI] ✅ API response data keys:', Object.keys(data));
-      if (response.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
-        const submissionId = data.submission?.id;
-        console.log('[AI] submit accepted, awaiting completion', submissionId);
-        data = await this.awaitSubmissionResult(submissionId, analysisSeq);
-        // If polling didn't return a completed payload, keep UI in "analyzing" instead of claiming "no issues".
-        const polledStatus = String(data?.submission?.status || '').toLowerCase();
-        if (!data?.submission || (polledStatus && polledStatus !== 'completed' && polledStatus !== 'failed')) {
-          console.warn('[AI] Poll did not reach completed state yet; keeping analyzing UI');
-          this.updateAnalysisStatus('analyzing');
+        if (response.status === 429) {
+          const remaining = (data && typeof data.remaining === 'number') ? data.remaining : null;
+          const code = String(data?.error || '').trim();
+          const msgBase = String(data?.message || 'Request blocked.').trim();
+          const showRemaining = remaining !== null && (code === 'daily_limit_exceeded' || code === 'quota_insufficient_for_request');
+          this.updateAnalysisStatus('');
+          if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
+            this.suggestionsPanel.setEmptyState('idle');
+          }
+          this.showNotification(showRemaining ? `${msgBase} (Remaining: ${remaining})` : msgBase, 'warning');
           return;
         }
-      } else if (!response.ok) {
-        throw new Error(data?.error || data?.message || 'Failed to analyze text');
+        if (response.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
+          const submissionId = data.submission?.id;
+          data = await this.awaitSubmissionResult(submissionId, analysisSeq);
+          const polledStatus = String(data?.submission?.status || '').toLowerCase();
+          if (!data?.submission || (polledStatus && polledStatus !== 'completed' && polledStatus !== 'failed')) {
+            this.updateAnalysisStatus('analyzing');
+            return;
+          }
+        } else if (!response.ok) {
+          throw new Error(data?.error || data?.message || 'Failed to analyze text');
+        }
+        this.lastAnalyzedText = text;
       }
-      
-      this.lastAnalyzedText = text;
       
       // Debug: Log the API response
       console.log('[AI Debug] API Response:', JSON.stringify(data, null, 2));
