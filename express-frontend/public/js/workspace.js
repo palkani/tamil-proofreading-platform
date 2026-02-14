@@ -31,8 +31,8 @@ try {
   // non-fatal
 }
 
-// Minimum words before we call /api/submit automatically (typing/paste auto analysis)
-const MIN_SUBMIT_WORDS = 20;
+// Minimum words before we call /api/submit automatically (typing/paste auto analysis). Set to 5 for easier testing.
+const MIN_SUBMIT_WORDS = 5;
 
 // ============================================
 // APPLY REPLACEMENT UTILITY
@@ -332,6 +332,135 @@ async function ensureRunnerLoaded() {
   });
 
   return window.__loadingTranslitRunner;
+}
+
+// ============================================
+// TamilEditor - Wrapper for contenteditable editor (suggestions + proofreading)
+// ============================================
+class TamilEditor {
+  constructor(element) {
+    if (!element) {
+      console.error('[TamilEditor] Constructor called without element');
+      return;
+    }
+    this.element = element;
+    this.editor = element; // Compatibility: controller may use this.editor.editor
+    this._onChangeCallback = null;
+    try {
+      element.addEventListener('input', () => {
+        if (this._onChangeCallback) this._onChangeCallback();
+      }, { passive: true });
+      element.addEventListener('paste', () => {
+        if (this._onChangeCallback) this._onChangeCallback();
+      }, { passive: true });
+    } catch (e) {
+      console.warn('[TamilEditor] Failed to add input listeners:', e);
+    }
+    console.log('[TamilEditor] Initialized for element:', element.id || element.tagName);
+  }
+
+  get onChange() {
+    return this._onChangeCallback;
+  }
+  set onChange(fn) {
+    this._onChangeCallback = typeof fn === 'function' ? fn : null;
+  }
+
+  getText() {
+    return this.element ? (this.element.textContent || '') : '';
+  }
+
+  getHTML() {
+    return this.element ? (this.element.innerHTML || '') : '';
+  }
+
+  setContent(html) {
+    if (!this.element) return;
+    this.element.innerHTML = html || '';
+    if (this._onChangeCallback) this._onChangeCallback();
+  }
+
+  getCursorPosition() {
+    if (!this.element) return 0;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return 0;
+    const range = sel.getRangeAt(0);
+    if (!this.element.contains(range.commonAncestorContainer)) return 0;
+    const preCaretRange = document.createRange();
+    preCaretRange.selectNodeContents(this.element);
+    preCaretRange.setEnd(range.endContainer, range.endOffset);
+    return preCaretRange.toString().length;
+  }
+
+  setCursorPosition(position) {
+    if (!this.element) return;
+    const text = this.getText();
+    const pos = Math.max(0, Math.min(position, text.length));
+    const sel = window.getSelection();
+    if (!sel) return;
+    let node = this.element;
+    let offset = 0;
+    const walk = (n) => {
+      if (n.nodeType === Node.TEXT_NODE) {
+        const len = (n.textContent || '').length;
+        if (offset + len >= pos) {
+          node = n;
+          offset = pos - offset;
+          return true;
+        }
+        offset += len;
+        return false;
+      }
+      for (let i = 0; i < n.childNodes.length; i++) {
+        if (walk(n.childNodes[i])) return true;
+      }
+      return false;
+    };
+    walk(this.element);
+    try {
+      const range = document.createRange();
+      const maxOffset = node.nodeType === Node.TEXT_NODE ? (node.textContent || '').length : node.childNodes.length;
+      range.setStart(node, Math.min(offset, maxOffset));
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (_e) {
+      // non-fatal
+    }
+  }
+
+  replaceText(start, end, replacement) {
+    const text = this.getText();
+    if (start < 0 || end > text.length || start > end) return;
+    const newText = text.slice(0, start) + (replacement || '') + text.slice(end);
+    this.element.textContent = newText;
+    this.setCursorPosition(start + (replacement || '').length);
+    if (this._onChangeCallback) this._onChangeCallback();
+  }
+
+  focus() {
+    if (this.element) this.element.focus();
+  }
+}
+
+/** Fallback editor wrapper when TamilEditor is not available (same interface). */
+function createFallbackEditorWrapper(elm) {
+  let _onChange = null;
+  return {
+    editor: elm,
+    getText() { return elm ? (elm.textContent || '') : ''; },
+    getHTML() { return elm ? (elm.innerHTML || '') : ''; },
+    setContent(html) { if (elm) { elm.innerHTML = html || ''; if (_onChange) _onChange(); } },
+    getCursorPosition() { return 0; },
+    setCursorPosition() { },
+    get onChange() { return _onChange; },
+    set onChange(fn) { _onChange = typeof fn === 'function' ? fn : null; },
+    replaceText(start, end, replacement) {
+      const text = elm ? (elm.textContent || '') : '';
+      if (elm) { elm.textContent = text.slice(0, start) + (replacement || '') + text.slice(end); if (_onChange) _onChange(); }
+    },
+    focus() { if (elm) elm.focus(); }
+  };
 }
 
 class WorkspaceController {
@@ -1114,16 +1243,29 @@ class WorkspaceController {
     const editorElement = document.getElementById('editor');
     console.log('[WorkspaceJS] Editor element found:', !!editorElement);
     if (editorElement) {
-      this.editor = new TamilEditor(editorElement);
-      this.editor.onChange = () => {
-        console.log("[IME] TamilEditor onChange callback triggered");
-        this.handleEditorChange();
-      };
-      console.log("[IME] Editor initialized, onChange callback set", { 
-        editor: !!this.editor, 
-        editorElement: !!editorElement,
-        hasOnChange: typeof this.editor.onChange === 'function'
-      });
+      try {
+        if (typeof TamilEditor !== 'undefined') {
+          this.editor = new TamilEditor(editorElement);
+          console.log('[WorkspaceJS] TamilEditor class used for editor');
+        } else {
+          console.warn('[WorkspaceJS] TamilEditor class not defined - using fallback editor wrapper');
+          this.editor = createFallbackEditorWrapper(editorElement);
+        }
+        this.editor.onChange = () => {
+          console.log("[IME] TamilEditor onChange callback triggered");
+          this.handleEditorChange();
+        };
+        console.log("[IME] Editor initialized, onChange callback set", {
+          editor: !!this.editor,
+          editorElement: !!editorElement,
+          hasOnChange: typeof this.editor.onChange === 'function'
+        });
+      } catch (e) {
+        console.error('[WorkspaceJS] Editor initialization failed:', e);
+        this.editor = createFallbackEditorWrapper(editorElement);
+        this.editor.onChange = () => this.handleEditorChange();
+        console.log('[WorkspaceJS] Fallback editor wrapper attached after error');
+      }
       
       // Also add direct input listener as fallback (but debounced to prevent duplicates)
       // This ensures handleEditorChange is called even if editor.onChange doesn't fire
@@ -1229,8 +1371,24 @@ class WorkspaceController {
           pasteHandler(e);
         }
       }, true);
-      
-      console.log('[WorkspaceJS] ✅ Paste event listeners attached (bubble, capture, and document levels)');
+
+      // Backup paste handler: runs even if primary handlers fail (e.g. editor init failed). Detects Tamil and triggers analysis after 500ms.
+      document.addEventListener('paste', function(e) {
+        try {
+          const pastedText = (e.clipboardData || window.clipboardData) ? (e.clipboardData || window.clipboardData).getData('text/plain') || '' : '';
+          if (!pastedText || !/[\u0B80-\u0BFF]/.test(pastedText)) return;
+          console.log('[WorkspaceJS] 📋 Backup paste: Tamil detected, scheduling autoAnalyze in 500ms');
+          setTimeout(function() {
+            if (controller && typeof controller.autoAnalyze === 'function') {
+              controller.autoAnalyze();
+            }
+          }, 500);
+        } catch (err) {
+          console.warn('[WorkspaceJS] Backup paste handler error:', err);
+        }
+      }, true);
+
+      console.log('[WorkspaceJS] ✅ Paste event listeners attached (bubble, capture, document, and backup)');
     }
 
     // Apply read-only mode after editor is mounted (disables contenteditable/title/toolbar)
@@ -5335,3 +5493,25 @@ if (document.readyState === 'loading') {
   // Phase 4: Switch to TipTap if flag is enabled
   setTimeout(() => switchWorkspaceEditor(), 500); // Wait a bit for TipTap to load
 }
+
+// Debug verification (runs after init)
+setTimeout(function workspaceDebugVerification() {
+  try {
+    const wc = window.workspaceController;
+    const editorEl = document.getElementById('editor');
+    const hasTamilEditor = typeof TamilEditor !== 'undefined';
+    const hasHandleEditorChange = wc && typeof wc.handleEditorChange === 'function';
+    const hasAutoAnalyze = wc && typeof wc.autoAnalyze === 'function';
+    const hasFetchRunnerSuggestions = wc && typeof wc.fetchRunnerSuggestions === 'function';
+    console.log('[WorkspaceJS] 🔍 Debug verification:', {
+      workspaceControllerInitialized: !!wc,
+      editorElementExists: !!editorEl,
+      tamilEditorClassAvailable: hasTamilEditor,
+      handleEditorChange: hasHandleEditorChange,
+      autoAnalyze: hasAutoAnalyze,
+      fetchRunnerSuggestions: hasFetchRunnerSuggestions
+    });
+  } catch (e) {
+    console.warn('[WorkspaceJS] Debug verification error:', e);
+  }
+}, 600);
