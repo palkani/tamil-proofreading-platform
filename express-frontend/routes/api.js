@@ -1665,6 +1665,47 @@ function normalizeSuggestResponse(data) {
   return { success: true, suggestions };
 }
 
+// Fallback when backend returns empty (e.g. backend not ready or no lexicon). Ensures short queries always get suggestions.
+const BUILTIN_SUGGESTIONS = {
+  t: [{ word: 'த்', score: 1 }, { word: 'ட', score: 0.9 }, { word: 'த', score: 0.85 }],
+  ta: [{ word: 'தா', score: 1 }, { word: 'டா', score: 0.9 }, { word: 'த', score: 0.85 }, { word: 'ட', score: 0.8 }],
+  n: [{ word: 'ன்', score: 1 }, { word: 'ண', score: 0.9 }, { word: 'ந', score: 0.85 }],
+  na: [{ word: 'நா', score: 1 }, { word: 'ணா', score: 0.9 }, { word: 'னா', score: 0.85 }],
+  k: [{ word: 'க்', score: 1 }, { word: 'க', score: 0.95 }],
+  ka: [{ word: 'கா', score: 1 }, { word: 'க', score: 0.9 }],
+  e: [{ word: 'எ', score: 1 }, { word: 'ஏ', score: 0.9 }],
+  en: [{ word: 'என்', score: 1 }, { word: 'என', score: 0.95 }, { word: 'ஏன்', score: 0.9 }],
+  enna: [{ word: 'என்ன', score: 1 }],
+  a: [{ word: 'அ', score: 1 }, { word: 'ஆ', score: 0.95 }],
+  am: [{ word: 'அம்', score: 1 }, { word: 'ஆம்', score: 0.95 }],
+  amma: [{ word: 'அம்மா', score: 1 }],
+  v: [{ word: 'வ்', score: 1 }, { word: 'வ', score: 0.95 }],
+  va: [{ word: 'வா', score: 1 }, { word: 'வ', score: 0.9 }],
+  s: [{ word: 'ச்', score: 1 }, { word: 'ச', score: 0.95 }],
+  sa: [{ word: 'சா', score: 1 }, { word: 'ச', score: 0.9 }],
+  p: [{ word: 'ப்', score: 1 }, { word: 'ப', score: 0.95 }],
+  pa: [{ word: 'பா', score: 1 }, { word: 'ப', score: 0.9 }],
+  m: [{ word: 'ம்', score: 1 }, { word: 'ம', score: 0.95 }],
+  ma: [{ word: 'மா', score: 1 }, { word: 'ம', score: 0.9 }],
+  r: [{ word: 'ர்', score: 1 }, { word: 'ர', score: 0.95 }],
+  ra: [{ word: 'ரா', score: 1 }, { word: 'ர', score: 0.9 }],
+  l: [{ word: 'ல்', score: 1 }, { word: 'ல', score: 0.95 }, { word: 'ள்', score: 0.9 }],
+  la: [{ word: 'லா', score: 1 }, { word: 'ல', score: 0.9 }],
+  i: [{ word: 'இ', score: 1 }, { word: 'ஈ', score: 0.9 }],
+  u: [{ word: 'உ', score: 1 }, { word: 'ஊ', score: 0.9 }],
+};
+
+function getBuiltinSuggestions(q) {
+  const key = String(q || '').toLowerCase().replace(/\s/g, '');
+  if (!key) return [];
+  if (BUILTIN_SUGGESTIONS[key]) return BUILTIN_SUGGESTIONS[key];
+  for (let len = key.length - 1; len >= 1; len--) {
+    const prefix = key.slice(0, len);
+    if (BUILTIN_SUGGESTIONS[prefix]) return BUILTIN_SUGGESTIONS[prefix];
+  }
+  return [];
+}
+
 // Primary suggest endpoint used by workspace.js for IME (proxies to backend). Returns exact format: { success, suggestions: [{ word, score }] }.
 router.get('/v1/suggest', async (req, res) => {
   const startTime = Date.now();
@@ -1695,18 +1736,25 @@ router.get('/v1/suggest', async (req, res) => {
 
     res.set('Cache-Control', 'public, max-age=60');
     if (response.status === 503 || response.status !== 200) {
-      return res.status(200).json({ success: true, suggestions: [] });
+      const fallback = getBuiltinSuggestions(q);
+      return res.status(200).json({ success: true, suggestions: fallback });
     }
-    return res.status(200).json(normalizeSuggestResponse(response.data));
+    const out = normalizeSuggestResponse(response.data);
+    if (out.suggestions.length === 0) {
+      out.suggestions = getBuiltinSuggestions(q);
+    }
+    return res.status(200).json(out);
   } catch (error) {
     const elapsed = Date.now() - startTime;
     if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
       console.log(`[SUGGEST] Timeout after ${elapsed}ms for q=${req.query.q}`);
       res.set('Cache-Control', 'no-cache');
-      return res.status(200).json({ success: true, suggestions: [] });
+      const fallback = getBuiltinSuggestions(req.query.q);
+      return res.status(200).json({ success: true, suggestions: fallback });
     }
     console.error(`[SUGGEST] Error after ${elapsed}ms:`, error.message);
-    return res.status(200).json({ success: true, suggestions: [] });
+    const fallback = getBuiltinSuggestions(req.query.q);
+    return res.status(200).json({ success: true, suggestions: fallback });
   }
 });
 
@@ -1739,18 +1787,25 @@ router.get('/ime/suggest', async (req, res) => {
 
     res.set('Cache-Control', 'public, max-age=60');
     if (response.status !== 200) {
-      return res.status(200).json({ success: true, suggestions: [] });
+      const fallback = getBuiltinSuggestions(q);
+      return res.status(200).json({ success: true, suggestions: fallback });
     }
-    return res.status(200).json(normalizeSuggestResponse(response.data));
+    const out = normalizeSuggestResponse(response.data);
+    if (out.suggestions.length === 0) {
+      out.suggestions = getBuiltinSuggestions(q);
+    }
+    return res.status(200).json(out);
   } catch (error) {
     const elapsed = Date.now() - startTime;
     if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
       console.log(`[IME] Timeout after ${elapsed}ms for q=${req.query.q}`);
       res.set('Cache-Control', 'no-cache');
-      return res.status(200).json({ success: true, suggestions: [] });
+      const fallback = getBuiltinSuggestions(req.query.q);
+      return res.status(200).json({ success: true, suggestions: fallback });
     }
     console.error(`[IME] Error after ${elapsed}ms:`, error.message);
-    return res.status(200).json({ success: true, suggestions: [] });
+    const fallback = getBuiltinSuggestions(req.query.q);
+    return res.status(200).json({ success: true, suggestions: fallback });
   }
 });
 
