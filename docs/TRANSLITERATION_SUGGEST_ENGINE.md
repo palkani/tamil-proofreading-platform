@@ -96,6 +96,16 @@ Real-time, letter-by-letter Tamil word suggestions as users type English/romaniz
 | `LEXICON_FILE`     | Pre-built lexicon path (`.json` or `.bin`) | -  |
 | `SUGGEST_LOAD_LIMIT` | Max rows to load from DB (0 = all) | 0      |
 
+## Which editor uses which API
+
+| Editor | App | API used | With our changes |
+|--------|-----|----------|------------------|
+| **Home page editor** (prooftamil.com) | express-frontend | `GET /api/v1/suggest` (via transliterator-runner.js) | Yes: letter-by-letter, trie + transliteration fallback |
+| **Workspace editor** (prooftamil.com) | express-frontend | `GET /api/v1/suggest` (workspace.js) | Yes: same as above |
+| **Home page editor** (Next.js app) | frontend (Next.js) | `GET /api/v1/ime/suggest` (TamilIME.ts) | Yes: IME or suggest-engine fallback, 200 during startup |
+
+So the **text editor on the home page and inside the workspace** (on the live site) both call **/api/v1/suggest**. Our changes ensure that endpoint returns letter-by-letter suggestions from the trie and, when the trie has no match, from the IME (transliteration) fallback. The Next.js editor (if deployed) uses **/api/v1/ime/suggest**, which we also fixed to fall back to the suggest engine when IME is disabled or returns empty.
+
 ## Frontend integration
 
 - **Reusable component** – `frontend/components/TransliterationSuggestDropdown.tsx`:
