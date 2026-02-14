@@ -97,6 +97,11 @@ func main() {
 			w.Write([]byte(`{"success":true,"suggestions":[],"source":"starting","q":"","query":""}`))
 			return
 		}
+		if path == "/api/v1/ime/suggest" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"success":true,"query":"","suggestions":[],"candidates":[],"meta":{"engine":"starting"}}`))
+			return
+		}
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte(`{"status":"starting"}`))
 	})
