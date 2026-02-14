@@ -70,3 +70,10 @@ backend/seed_corpus_wiki.sql
 
 # data/lexicon.json: large; build locally (see docs/BUILD_LEXICON_LOCALLY.md) or use LEXICON_FILE at deploy
 data/lexicon.json
+data/tamil_lexicon.json
+
+# Dev artifacts and backups (do not commit)
+attached_assets/
+backup.sql
+backup_clean.sql
+.replit
