@@ -83,11 +83,24 @@ Optional:
 | `STRIPE_WEBHOOK_SECRET` | For Stripe webhooks. |
 | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | For Razorpay. |
 
+### DB architecture migration (suggest: phonetic_variants, RPCs)
+
+**Run from local only** (not from Cloud Run or CI). Ensures `phonetic_variants`, RPCs, and data exist so `SUGGEST_USE_DB` works.
+
+From **backend** directory (with `DATABASE_URL` in `backend/.env` or in your shell):
+
+```bash
+cd backend && go run ./cmd/migrate
+```
+
+Or from project root: `set -a && source .env && set +a && cd backend && go run ./cmd/migrate`
+
 ### Other (optional)
 
 | Variable | Example | Description |
 |----------|---------|-------------|
 | `RUN_MIGRATIONS` | `true` | Set to `true` on first run or after schema changes (backend). |
+| `RUN_DB_ARCHITECTURE_MIGRATIONS` | `false` | Leave false; run DB architecture from local via `go run ./cmd/migrate` only. |
 | `SUPABASE_URL` / `SUPABASE_JWT_SECRET` | — | Only if using Supabase Auth for Google sign-in. |
 
 ---

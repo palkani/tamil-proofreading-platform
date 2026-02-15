@@ -15,7 +15,7 @@ This document confirms that the codebase matches the **Implement ProofTamil DB A
 | 1.5 tamil_phrases: id if missing, UNIQUE(phrase) | Same file, STEP 5 | Done |
 | 1.6 Indexes (idx_pv_*, idx_tw_*, idx_bigrams_*, idx_phrases_*) + ANALYZE | Same file, STEP 6 | Done |
 | 1.7 mv_top_suggestions (1/2/3-letter prefixes, top 10), indexes | Same file, STEP 7 | Done |
-| Migration artifact | `backend/internal/migrations/db_architecture.go` runs 01/02/03 when phonetic_variants missing; finds SQL under migrations/sql/ | Done |
+| Migration artifact | `backend/internal/migrations/db_architecture.go` runs 01/02/03 when phonetic_variants missing; SQL is embedded (`sql/*.sql`) so migrations run in Cloud Run without filesystem | Done |
 | alternate_spellings: JSON + comma/pipe | Handled in data migration (03) Step 2a (JSON) and 2b (CSV) | Done |
 
 ---
@@ -101,15 +101,15 @@ This document confirms that the codebase matches the **Implement ProofTamil DB A
 
 | Aspect | Plan | Implementation | Valid |
 |--------|------|----------------|-------|
-| **Default run** | Migrations run at startup (optionally or by default) | `RUN_MIGRATIONS` defaults to `true`; server runs AutoMigrate + custom migrations when true | Yes |
+| **Default run** | DB architecture not run at startup | Server runs AutoMigrate + Newsletter/Affiliate/Billing when `RUN_MIGRATIONS=true`; DB architecture runs only when `RUN_DB_ARCHITECTURE_MIGRATIONS=true` (default false). Run from local: `go run ./cmd/migrate` | Yes |
 | **Execution order** | Schema → RPCs → data | `db_architecture.go` runs `01_db_architecture_schema.sql` → `02_db_architecture_rpcs.sql` → `03_db_architecture_data.sql` in sequence | Yes |
 | **Gate** | Run DB architecture only when needed | `MigrateDBArchitecture` runs only if `phonetic_variants` table does not exist; then runs all three SQL files | Yes |
 | **Re-run safety** | Idempotent; IF NOT EXISTS / DO blocks | 01/02 use `CREATE IF NOT EXISTS`, `DO $$ ... IF NOT EXISTS ... END $$`; 03 uses `ON CONFLICT DO NOTHING` and `REFRESH MATERIALIZED VIEW CONCURRENTLY` | Yes |
-| **SQL location** | migrations/sql/ (or external) | `findMigrationsSQLDir()` tries cwd, `../migrations/sql`, `../../migrations/sql`; if not found, logs and skips (manual run in Supabase) | Yes |
+| **SQL location** | migrations/sql/ or embedded | Embedded `sql/*.sql` in migrations package used first (Cloud Run); fallback to `findMigrationsSQLDir()` on disk | Yes |
 | **Integration** | After GORM connect; with other migrations | main.go: after DB connect, when `cfg.RunMigrations`: AutoMigrate → Newsletter/Affiliate/Billing (parallel) → MigrateDBArchitecture | Yes |
 | **Error handling** | Non-fatal where appropriate | DB architecture failure is logged as Warning; server still starts; `isAlreadyExistsOrBind` skips "already exists" errors | Yes |
 
-**Note:** In Docker/Cloud Run the binary may not have `migrations/sql/` in the image; then DB architecture is skipped and 01/02/03 must be run once in Supabase SQL Editor. GORM AutoMigrate and other Go migrations still run when `RUN_MIGRATIONS=true`.
+**Note:** DB architecture migrations are **not** run from Cloud Run or the workflow. They run **from local only** via: `go run ./cmd/migrate` (with `DATABASE_URL` in `.env` or env). The server only runs them when `RUN_DB_ARCHITECTURE_MIGRATIONS=true` (default false). SQL is embedded so the migrate command needs no extra files.
 
 ---
 

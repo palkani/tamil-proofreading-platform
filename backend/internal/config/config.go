@@ -68,7 +68,9 @@ type Config struct {
 	SupabaseURL      string
 	SupabaseJWTSecret string
 	// RunMigrations: run AutoMigrate and custom migrations at startup. Default true. Set RUN_MIGRATIONS=false to skip (e.g. to reduce cold-start time after first deploy).
-	RunMigrations   bool
+	RunMigrations bool
+	// RunDBArchitectureMigrations: run ProofTamil DB architecture (phonetic_variants, RPCs, data) at startup. Default false. Run from local only via: go run ./cmd/migrate (never set in Cloud Run/workflow).
+	RunDBArchitectureMigrations bool
 }
 
 func Load() *Config {
@@ -173,7 +175,8 @@ func Load() *Config {
 		SeedCorpusMinCount:  getEnvAsInt("SEED_CORPUS_MIN_COUNT", 1),
 		SupabaseURL:         strings.TrimRight(getEnv("SUPABASE_URL", ""), "/"),
 		SupabaseJWTSecret:      strings.TrimSpace(getEnv("SUPABASE_JWT_SECRET", "")),
-		RunMigrations:          parseRunMigrations(getEnv("RUN_MIGRATIONS", "true")),
+		RunMigrations:              parseRunMigrations(getEnv("RUN_MIGRATIONS", "true")),
+		RunDBArchitectureMigrations: parseRunMigrations(getEnv("RUN_DB_ARCHITECTURE_MIGRATIONS", "false")),
 	}
 }
 

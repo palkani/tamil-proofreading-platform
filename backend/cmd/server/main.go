@@ -181,9 +181,12 @@ func main() {
 		if billingErr != nil {
 			log.Printf("Warning: Billing migration failed: %v", billingErr)
 		}
-		if dbArchErr := migrations.MigrateDBArchitecture(db); dbArchErr != nil {
-			log.Printf("Warning: DB architecture migration failed: %v", dbArchErr)
+		if cfg.RunDBArchitectureMigrations {
+			if dbArchErr := migrations.MigrateDBArchitecture(db); dbArchErr != nil {
+				log.Printf("Warning: DB architecture migration failed: %v", dbArchErr)
+			}
 		}
+		// DB architecture (phonetic_variants, RPCs, data) is not run here when RunDBArchitectureMigrations=false. Run from local: go run ./cmd/migrate
 	} else {
 		log.Println("Skipping migrations (RUN_MIGRATIONS=false)")
 	}
