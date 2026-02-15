@@ -179,6 +179,22 @@ func isLikelyTruncatedJSON(s string) bool {
 	return false
 }
 
+// isLikelyRefusalOrSafety returns true when content looks like a safety/refusal message instead of proofread JSON.
+// Used to trigger OpenAI/Anthropic fallback so political/sensitive Tamil news text still gets grammar corrections.
+func isLikelyRefusalOrSafety(content string) bool {
+	t := strings.ToLower(strings.TrimSpace(content))
+	if t == "" || len(t) > 2000 {
+		return false
+	}
+	refusalPhrases := []string{"can't", "cannot", "can not", "i'm unable", "i am unable", "sorry", "i cannot", "won't assist", "won't help", "refuse", "inappropriate", "safety", "policy", "violates", "blocked", "not able to", "unable to complete", "cannot process", "cannot provide", "don't feel comfortable"}
+	for _, p := range refusalPhrases {
+		if strings.Contains(t, p) {
+			return true
+		}
+	}
+	return false
+}
+
 type proofreadCacheEntry struct {
 	value     *ProofreadResult
 	expiresAt time.Time
@@ -465,6 +481,21 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
                 }
         }
         if !ok {
+                // Gemini may have returned a refusal/safety message (e.g. for political/sensitive content).
+                // Try OpenAI/Anthropic so the user still gets grammar corrections.
+                if isLikelyRefusalOrSafety(content) {
+                        log.Printf("[GEMINI-REFUSAL] Parse failed, content looks like refusal; trying OpenAI/Anthropic (request_id=%s)", requestID)
+                        if s.openAIClient != nil {
+                                if out, ferr := s.proofreadWithOpenAI(ctx, cleaned, requestID); ferr == nil {
+                                        return out, nil
+                                }
+                        }
+                        if strings.TrimSpace(s.anthropicKey) != "" {
+                                if out, ferr := s.proofreadWithAnthropic(ctx, cleaned, requestID); ferr == nil {
+                                        return out, nil
+                                }
+                        }
+                }
                 // Final safety net: never break submit. Return best-effort corrected_text or original.
                 clipped := content
                 if len(clipped) > 600 {
