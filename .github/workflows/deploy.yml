@@ -1,7 +1,7 @@
 # UI (Node.js) → Vercel | OAuth & DB → Supabase | Backend (Go) → Cloud Run
 #
 # Required GitHub repo secrets (Settings → Secrets and variables → Actions):
-#   DATABASE_URL - Postgres connection string (Supabase pooler) for lexicon build and Cloud Run
+#   DATABASE_URL - Postgres connection string (Supabase pooler) for Cloud Run
 #   GOOGLE_CREDENTIALS_JSON, VERCEL_*, GOOGLE_GENAI_API_KEY, OPENAI_API_KEY, etc.
 
 name: Deploy to Cloud Run + Vercel
@@ -53,32 +53,6 @@ jobs:
           go mod verify
           CGO_ENABLED=0 GOOS=linux go build ./cmd/server
 
-      - name: Use committed lexicon or build from DB
-        run: |
-          mkdir -p data
-          # If data/lexicon.json exists in repo and is non-empty, use it (built locally with full table)
-          if [ -f data/lexicon.json ] && [ -s data/lexicon.json ] && [ "$(cat data/lexicon.json)" != "[]" ]; then
-            ROWS=$(jq 'length' data/lexicon.json 2>/dev/null || echo "?")
-            echo "Using committed data/lexicon.json: $ROWS rows (no CI build)"
-          else
-            # No committed lexicon: build in CI from DATABASE_URL or write empty
-            cd backend
-            if [ -z "${{ secrets.DATABASE_URL }}" ]; then
-              echo "::warning::No data/lexicon.json in repo and DATABASE_URL not set - lexicon will be empty. Build locally: cd backend && DATABASE_URL=... go run ./cmd/build_lexicon -output ../data/lexicon.json -limit=0 && commit data/lexicon.json"
-              mkdir -p ../data
-              echo "[]" > ../data/lexicon.json
-            else
-              mkdir -p ../data
-              echo "Building lexicon from DB (no committed data/lexicon.json)..."
-              go run ./cmd/build_lexicon -output ../data/lexicon.json -limit=0 -batch=10000
-              ls -lh ../data/lexicon.json
-              ROWS=$(jq 'length' ../data/lexicon.json 2>/dev/null || echo "0")
-              echo "Lexicon built in CI: $ROWS rows"
-            fi
-          fi
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-
       - name: Build Backend Image
         run: |
           docker build \
@@ -105,7 +79,7 @@ jobs:
             --min-instances=0 \
             --max-instances=100 \
             --port=8080 \
-            --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUPABASE_URL=https://cnyrqookmazccatnwvkf.supabase.co,SUGGEST_MIN_LEN=1,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,LEXICON_FILE=/root/data/lexicon.json,SUGGEST_LOAD_LIMIT=0,REDIS_URL=${{ secrets.REDIS_URL }} \
+            --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUPABASE_URL=https://cnyrqookmazccatnwvkf.supabase.co,SUGGEST_MIN_LEN=1,SUGGEST_TOP_K=5,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_USE_DB=true,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,REDIS_URL=${{ secrets.REDIS_URL }} \
             --update-secrets DATABASE_URL=DATABASE_URL:latest \
             --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
             --update-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest \
@@ -130,7 +104,7 @@ jobs:
             --min-instances=0 \
             --max-instances=100 \
             --port=8080 \
-            --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUPABASE_URL=https://cnyrqookmazccatnwvkf.supabase.co,SUGGEST_MIN_LEN=1,SUGGEST_TOP_K=5,SUGGEST_TRIE_TOP_K=25,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,LEXICON_REFRESH_SEC=600,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_REDIS_TIMEOUT_MS=15,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,LEXICON_FILE=/root/data/lexicon.json,SUGGEST_LOAD_LIMIT=0,REDIS_URL=${{ secrets.REDIS_URL }} \
+            --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUPABASE_URL=https://cnyrqookmazccatnwvkf.supabase.co,SUGGEST_MIN_LEN=1,SUGGEST_TOP_K=5,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_USE_DB=true,SEED_CORPUS_ON_STARTUP=true,SEED_CORPUS_FILE=/root/seed_corpus_minimal.sql,SEED_CORPUS_MIN_COUNT=1,REDIS_URL=${{ secrets.REDIS_URL }} \
             --update-secrets DATABASE_URL=DATABASE_URL:latest \
             --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
             --update-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest \

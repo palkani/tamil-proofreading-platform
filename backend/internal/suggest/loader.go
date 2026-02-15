@@ -224,7 +224,6 @@ func LoadSuggestDataFromFile(path string, opts LoaderOptions) (*SuggestData, err
 		log.Printf("[SUGGEST] LoadSuggestDataFromFile: file has 0 rows path=%s", path)
 		return nil, nil
 	}
-	log.Printf("[SUGGEST] LoadSuggestDataFromFile: decoded %d rows, building trie...", len(rows))
 	version := "file:" + path
 	out := BuildSuggestDataFromRows(rows, opts, version)
 	log.Printf("[SUGGEST] LoadSuggestDataFromFile: done — %d rows in cache, trie_version=%s", out.LexiconCount, out.TrieVersion)

@@ -67,7 +67,7 @@ type Config struct {
 	// Supabase Auth (Google sign-in via Supabase; existing users matched by email)
 	SupabaseURL      string
 	SupabaseJWTSecret string
-	// RunMigrations: if false, skip AutoMigrate and custom migrations at startup. Default false so backend becomes ready quickly (avoids "Backend is starting" / 503 on auth). Set RUN_MIGRATIONS=true only for first deploy or when schema changes are needed.
+	// RunMigrations: run AutoMigrate and custom migrations at startup. Default true. Set RUN_MIGRATIONS=false to skip (e.g. to reduce cold-start time after first deploy).
 	RunMigrations   bool
 }
 
@@ -173,7 +173,7 @@ func Load() *Config {
 		SeedCorpusMinCount:  getEnvAsInt("SEED_CORPUS_MIN_COUNT", 1),
 		SupabaseURL:         strings.TrimRight(getEnv("SUPABASE_URL", ""), "/"),
 		SupabaseJWTSecret:      strings.TrimSpace(getEnv("SUPABASE_JWT_SECRET", "")),
-		RunMigrations:          parseRunMigrations(getEnv("RUN_MIGRATIONS", "false")),
+		RunMigrations:          parseRunMigrations(getEnv("RUN_MIGRATIONS", "true")),
 	}
 }
 

@@ -173,6 +173,9 @@ func (h *Handlers) Suggest(c *gin.Context) {
 			items = items[:limit]
 		}
 	}
+	if len(items) > limit {
+		items = items[:limit]
+	}
 
 	c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: items})
 }

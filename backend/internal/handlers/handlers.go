@@ -19,7 +19,6 @@ import (
 	"tamil-proofreading-platform/backend/internal/services/nlp"
 	"tamil-proofreading-platform/backend/internal/services/payment"
 	"tamil-proofreading-platform/backend/internal/suggest"
-	"tamil-proofreading-platform/backend/internal/translit"
 
 	"github.com/MicahParks/keyfunc/v2"
 	"github.com/gin-gonic/gin"
@@ -95,39 +94,26 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 		imeEnabled:    cfg.IMEEnabled,
 	}
 
-	// Suggest engine is created immediately with empty lexicon, then loaded in background.
-	// API never returns source "disabled"; returns lexicon_count 0 until load completes.
-	// Redis disabled for suggest: use in-memory LocalSelectionStore only (avoids ~5s DialTimeout when Redis unreachable).
+	// Suggest engine: empty trie only. Suggest uses DB path (SuggestRepo + HotCache when SUGGEST_USE_DB=true) or IME/translit fallbacks.
 	eng := suggest.NewEngineWithEmptyData(db, suggest.EngineOptions{
 		MinLen:           cfg.SuggestMinLen,
 		LimitDefault:     cfg.SuggestTopK,
 		MaxTopPerNode:    cfg.SuggestTrieTopK,
 		CacheEntries:     cfg.SuggestCacheEntries,
 		CacheTTL:         time.Duration(cfg.SuggestCacheTTLMS) * time.Millisecond,
-		RefreshSec:       cfg.LexiconRefreshSec,
+		RefreshSec:       0, // no lexicon refresh
 		VowelCollapse:    cfg.SuggestVowelCollapse,
-		RedisURL:         "", // not used; suggest uses in-memory personalization only
+		RedisURL:         "",
 		RedisTimeoutMs:   cfg.SuggestRedisTimeoutMS,
 		LoadBatchSize:    cfg.SuggestLoadBatchSize,
 		LoadLimit:        cfg.SuggestLoadLimit,
 		BatchTimeoutSec:  cfg.SuggestBatchTimeoutSec,
-		LexiconFile:      cfg.LexiconFile,
+		LexiconFile:      "", // no file load; suggest via DB path or IME/translit
 	})
 	h.suggestEngineMu.Lock()
 	h.suggestEngine = eng
 	h.suggestEngineMu.Unlock()
-	log.Printf("[SUGGEST] In-process suggest engine registered (lexicon loads in background, min_len=%d, top_k=%d)", cfg.SuggestMinLen, cfg.SuggestTopK)
-
-	// Load translit fallback lexicon from same file so /transliterate/suggest returns suggestions when trie is empty or still loading
-	if path := cfg.LexiconFile; path != "" {
-		go func() {
-			if err := translit.LoadLexiconFromSuggestFile(path); err != nil {
-				log.Printf("[TRANSLIT] LoadLexiconFromSuggestFile %q failed: %v", path, err)
-			} else {
-				log.Printf("[TRANSLIT] Fallback lexicon loaded from %q", path)
-			}
-		}()
-	}
+	log.Printf("[SUGGEST] Suggest engine registered (no lexicon load; use SUGGEST_USE_DB for Postgres path)")
 
 	// DB path for suggest: Postgres RPC + hot cache (when SUGGEST_USE_DB=true and phonetic_variants exists)
 	if cfg.SuggestUseDB && sqlDB != nil {

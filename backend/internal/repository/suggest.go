@@ -82,6 +82,35 @@ func (r *SuggestRepo) Suggest(ctx context.Context, query string, limit int, prev
 	return results, rows.Err()
 }
 
+// PredictNext calls predict_next_word RPC for next-word prediction (bigrams).
+func (r *SuggestRepo) PredictNext(ctx context.Context, word string, limit int) ([]ScoredWord, error) {
+	if r == nil || r.db == nil || word == "" {
+		return nil, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Millisecond)
+	defer cancel()
+	if limit <= 0 {
+		limit = 5
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT next_word, frequency FROM predict_next_word($1, $2)`,
+		strings.TrimSpace(word), limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var results []ScoredWord
+	for rows.Next() {
+		var w ScoredWord
+		if err := rows.Scan(&w.TamilText, &w.Score); err != nil {
+			continue
+		}
+		results = append(results, w)
+	}
+	return results, rows.Err()
+}
+
 // ValidateWords calls validate_tamil_words RPC. Batch validation for grammar/spell check.
 func (r *SuggestRepo) ValidateWords(ctx context.Context, words []string) ([]ValidationResult, error) {
 	if r == nil || r.db == nil || len(words) == 0 {

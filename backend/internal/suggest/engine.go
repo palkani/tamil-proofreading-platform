@@ -184,25 +184,7 @@ func NewEngineWithEmptyData(db *gorm.DB, opts EngineOptions) *Engine {
 	}
 	e.data.Store(empty)
 	e.readyCh = make(chan struct{})
-	go func() {
-		defer close(e.readyCh)
-		log.Printf("[SUGGEST] Lexicon load started (lexicon_file=%q)", e.lexiconFile)
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer cancel()
-		if err := e.reload(ctx); err != nil {
-			log.Printf("[SUGGEST] Lexicon load failed: %v; cache has 0 words", err)
-			return
-		}
-		data := e.Data()
-		n := 0
-		if data != nil {
-			n = data.LexiconCount
-		}
-		log.Printf("[SUGGEST] Lexicon load complete: %d words in cache (readyCh closing)", n)
-		if e.refreshSec > 0 {
-			go e.refreshLoop()
-		}
-	}()
+	close(e.readyCh) // No lexicon loading: suggest uses DB path (SuggestRepo + HotCache) or IME/translit fallbacks
 	return e
 }
 

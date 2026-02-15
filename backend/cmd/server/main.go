@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
 	"os"
@@ -145,7 +144,7 @@ func main() {
 		log.Println("Database connected and ping OK (Supabase/Postgres)")
 	}
 
-	// Run migrations only when RUN_MIGRATIONS=true (set false in prod after first deploy to avoid running on every cold start).
+	// Run migrations by default (RUN_MIGRATIONS=true). Set RUN_MIGRATIONS=false to skip and reduce cold-start time.
 	if cfg.RunMigrations {
 		log.Println("Running database migrations...")
 		if err := db.AutoMigrate(
@@ -378,18 +377,8 @@ func main() {
 	r.GET("/api/v1/ocr/download/:filename", h.OCRDownload)
 	r.GET("/api/v1/ocr/health", h.OCRHealth)
 
-	// Switch traffic to full app immediately so /health and /api/v1/suggest are handled by real handlers.
-	// Suggest returns empty (source "starting") until lexicon load completes in background; then suggestions appear.
 	readyHandler.Store(r)
-	log.Printf("[STARTUP] Backend ready; full router active (suggest lexicon loading in background)")
-	go func() {
-		const suggestReadyTimeout = 10 * time.Minute
-		ctx, cancel := context.WithTimeout(context.Background(), suggestReadyTimeout)
-		h.WaitSuggestReady(ctx)
-		cancel()
-		lexiconCount := h.SuggestLexiconCount()
-		log.Printf("[STARTUP] Suggest lexicon load completed: %d words in cache", lexiconCount)
-	}()
+	log.Printf("[STARTUP] Backend ready; full router active")
 
 	// Run Tamil words index migration in background only when migrations are enabled (skips quickly if indexes exist).
 	if cfg.RunMigrations {
