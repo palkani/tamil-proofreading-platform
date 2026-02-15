@@ -182,6 +182,9 @@ func main() {
 		if billingErr != nil {
 			log.Printf("Warning: Billing migration failed: %v", billingErr)
 		}
+		if dbArchErr := migrations.MigrateDBArchitecture(db); dbArchErr != nil {
+			log.Printf("Warning: DB architecture migration failed: %v", dbArchErr)
+		}
 	} else {
 		log.Println("Skipping migrations (RUN_MIGRATIONS=false)")
 	}

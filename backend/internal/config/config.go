@@ -60,6 +60,7 @@ type Config struct {
 	SuggestLoadLimit          int
 	SuggestBatchTimeoutSec    int
 	LexiconFile          string // optional: path to pre-built lexicon JSON (baked in image for fast cold start)
+	SuggestUseDB         bool   // use Postgres RPC + hot cache for suggest (when phonetic_variants exists)
 	SeedCorpusOnStartup   bool
 	SeedCorpusFile            string
 	SeedCorpusMinCount int
@@ -166,6 +167,7 @@ func Load() *Config {
 		SuggestLoadLimit:       getEnvAsInt("SUGGEST_LOAD_LIMIT", 0), // 0 = no limit (load full tamil_words)
 		SuggestBatchTimeoutSec:  getEnvAsInt("SUGGEST_BATCH_TIMEOUT_SEC", 120),
 		LexiconFile:        strings.TrimSpace(getEnv("LEXICON_FILE", "")),
+		SuggestUseDB:       strings.ToLower(getEnv("SUGGEST_USE_DB", "false")) == "true",
 		SeedCorpusOnStartup: strings.ToLower(getEnv("SEED_CORPUS_ON_STARTUP", "false")) == "true",
 		SeedCorpusFile:      strings.TrimSpace(getEnv("SEED_CORPUS_FILE", "/root/seed_corpus_minimal.sql")),
 		SeedCorpusMinCount:  getEnvAsInt("SEED_CORPUS_MIN_COUNT", 1),

@@ -8,9 +8,11 @@ import (
 	"sync"
 	"time"
 
+	"tamil-proofreading-platform/backend/internal/cache"
 	"tamil-proofreading-platform/backend/internal/config"
 	"tamil-proofreading-platform/backend/internal/ime"
 	"tamil-proofreading-platform/backend/internal/models"
+	"tamil-proofreading-platform/backend/internal/repository"
 	"tamil-proofreading-platform/backend/internal/services/auth"
 	"tamil-proofreading-platform/backend/internal/services/email"
 	"tamil-proofreading-platform/backend/internal/services/llm"
@@ -37,6 +39,9 @@ type Handlers struct {
 	imeEnabled          bool
 	suggestEngine   *suggest.Engine
 	suggestEngineMu sync.RWMutex
+	// DB path for suggest (Postgres RPC + hot cache when SUGGEST_USE_DB=true)
+	suggestRepo *repository.SuggestRepo
+	hotCache    *cache.HotCache
 	// supabaseJWKS is lazily initialized for RS256/ES256 token verification (Supabase JWT Signing Keys)
 	supabaseJWKS   *keyfunc.JWKS
 	supabaseJWKSMu sync.Mutex
@@ -124,7 +129,17 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 		}()
 	}
 
-	// Tamil word autocomplete uses the file-based suggest engine (lexicon), not DB cache.
+	// DB path for suggest: Postgres RPC + hot cache (when SUGGEST_USE_DB=true and phonetic_variants exists)
+	if cfg.SuggestUseDB && sqlDB != nil {
+		h.suggestRepo = repository.NewSuggestRepo(sqlDB)
+		hc, err := cache.NewHotCache(sqlDB)
+		if err != nil {
+			log.Printf("[SUGGEST] HotCache init failed: %v (DB suggest will use RPC only)", err)
+		} else {
+			h.hotCache = hc
+			log.Printf("[SUGGEST] DB path enabled: SuggestRepo + HotCache")
+		}
+	}
 
 	h.startArchiveCleanup()
 	h.startIMEAggregateJob()

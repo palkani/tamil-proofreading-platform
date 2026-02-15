@@ -6,8 +6,10 @@ import (
 	"strconv"
 	"strings"
 
+	"tamil-proofreading-platform/backend/internal/cache"
 	"tamil-proofreading-platform/backend/internal/models"
 	"tamil-proofreading-platform/backend/internal/suggest"
+	"tamil-proofreading-platform/backend/internal/translit"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,21 +31,73 @@ type SuggestAPIItem struct {
 	Score float64 `json:"score"`
 }
 
-// Suggest handles GET /api/suggest (in-process hybrid trie engine).
-// Returns exactly { "success": true, "suggestions": [ { "word": "...", "score": 0-1 } ] } for auto-suggest clients.
+// Suggest handles GET /api/suggest. When SUGGEST_USE_DB=true, uses HotCache then Postgres RPC (suggest_tamil);
+// otherwise uses in-process trie + IME + translit fallbacks. Response: { "success": true, "suggestions": [ { "word", "score": 0-1 } ] }.
 func (h *Handlers) Suggest(c *gin.Context) {
 	c.Header("Cache-Control", "public, max-age=60, s-maxage=120, stale-while-revalidate=300")
 	c.Header("Vary", "Accept-Encoding")
 
-	engine := h.getSuggestEngine()
 	qTrim := strings.TrimSpace(c.Query("q"))
+	q := qTrim
+	uid := strings.TrimSpace(c.Query("uid"))
+	limit := parseLimit(c.Query("limit"))
+	if limit <= 0 {
+		limit = 8
+	}
+	if limit > 20 {
+		limit = 20
+	}
+
+	// DB path: HotCache then SuggestRepo (when SUGGEST_USE_DB=true)
+	if h.suggestRepo != nil && q != "" {
+		if h.hotCache != nil {
+			cached := h.hotCache.Lookup(q)
+			if len(cached) >= limit {
+				items := normalizeScoredWordsToAPI(cached, limit)
+				c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: items})
+				return
+			}
+		}
+		prevWord := strings.TrimSpace(c.Query("prev"))
+		results, err := h.suggestRepo.Suggest(c.Request.Context(), q, limit, prevWord)
+		if err == nil && len(results) > 0 {
+			items := make([]SuggestAPIItem, 0, len(results))
+			for i, s := range results {
+				if i >= limit {
+					break
+				}
+				word := strings.TrimSpace(s.TamilText)
+				if word == "" {
+					continue
+				}
+				score := 1.0
+				if len(results) > 1 && i > 0 {
+					maxScore := results[0].Score
+					if maxScore > 0 {
+						score = float64(s.Score) / float64(maxScore)
+						if score > 1 {
+							score = 1
+						}
+						if score < 0.5 {
+							score = 0.5
+						}
+					}
+				}
+				items = append(items, SuggestAPIItem{Word: word, Score: score})
+			}
+			if len(items) > 0 {
+				c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: items})
+				return
+			}
+		}
+	}
+
+	// Legacy path: in-process engine + IME + translit
+	engine := h.getSuggestEngine()
 	if engine == nil {
 		c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: []SuggestAPIItem{}})
 		return
 	}
-	q := qTrim
-	uid := strings.TrimSpace(c.Query("uid"))
-	limit := parseLimit(c.Query("limit"))
 
 	out, err := engine.Suggest(c.Request.Context(), suggest.SuggestRequest{
 		Query: q,
@@ -99,7 +153,61 @@ func (h *Handlers) Suggest(c *gin.Context) {
 		}
 		items = append(items, SuggestAPIItem{Word: word, Score: score})
 	}
+
+	// Translit fallback: when trie and IME return no suggestions, use in-memory translit lexicon
+	// (same as GET /api/v1/transliterate/suggest) so queries like "tamil" get Tamil suggestions.
+	if len(items) == 0 && q != "" {
+		translitCands := translit.GetSuggestions(q)
+		for _, s := range translitCands {
+			word := strings.TrimSpace(s.Word)
+			if word == "" {
+				continue
+			}
+			score := s.Score
+			if score <= 0 || score > 1 {
+				score = 1.0
+			}
+			items = append(items, SuggestAPIItem{Word: word, Score: score})
+		}
+		if len(items) > limit {
+			items = items[:limit]
+		}
+	}
+
 	c.JSON(http.StatusOK, SuggestAPIResponse{Success: true, Suggestions: items})
+}
+
+// normalizeScoredWordsToAPI converts cache.ScoredWord (Tamil, Frequency) to API items with score 0-1.
+func normalizeScoredWordsToAPI(cached []cache.ScoredWord, limit int) []SuggestAPIItem {
+	if len(cached) == 0 {
+		return nil
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+	maxFreq := int64(0)
+	for _, w := range cached {
+		if w.Frequency > maxFreq {
+			maxFreq = w.Frequency
+		}
+	}
+	items := make([]SuggestAPIItem, 0, limit)
+	for i := 0; i < len(cached) && i < limit; i++ {
+		w := cached[i]
+		word := strings.TrimSpace(w.Tamil)
+		if word == "" {
+			continue
+		}
+		score := 1.0
+		if maxFreq > 0 && i > 0 {
+			score = float64(w.Frequency) / float64(maxFreq)
+			if score < 0.5 {
+				score = 0.5
+			}
+		}
+		items = append(items, SuggestAPIItem{Word: word, Score: score})
+	}
+	return items
 }
 
 // SuggestSelect handles POST /api/select (selection logging + personalization).
