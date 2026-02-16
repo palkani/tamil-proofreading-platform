@@ -472,14 +472,14 @@
   <!-- Header -->
   <header class="bg-white border-b border-gray-200 px-6 py-3">
     <div class="flex items-center justify-between">
-      <!-- Left: Back to Drafts -->
+      <!-- Left: Back to Drafts (link so it works without JS) -->
       <div>
-        <button id="show-drafts-btn" class="text-gray-600 hover:text-gray-900 flex items-center gap-2">
+        <a href="/drafts" id="show-drafts-btn" class="text-gray-600 hover:text-gray-900 flex items-center gap-2 no-underline">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
           </svg>
           <span class="font-medium">My Drafts</span>
-        </button>
+        </a>
       </div>
 
       <!-- Center: Editable Title -->

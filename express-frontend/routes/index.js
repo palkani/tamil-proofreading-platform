@@ -532,7 +532,7 @@ router.get('/register', (req, res) => {
   });
 });
 
-// Note: Login and registration form submissions are handled client-side via /api/auth/login and /api/auth/register
+// Note: Login and registration form submissions are handled client-side via /auth/login and /auth/register
 // These routes are handled by routes/auth.js which proxies to the backend
 
 // Provide Google Client ID to frontend

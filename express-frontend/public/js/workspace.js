@@ -1569,11 +1569,11 @@ class WorkspaceController {
       createFirstDraftBtn.addEventListener('click', () => this.createNewDraft());
     }
 
-    // Show Drafts button - Navigate to drafts page
+    // My Drafts link - use JS navigation so we can prevent default and ensure /drafts (element is now <a href="/drafts">)
     const showDraftsBtn = document.getElementById('show-drafts-btn');
     if (showDraftsBtn) {
-      showDraftsBtn.addEventListener('click', () => {
-        // Navigate to the drafts page instead of showing in workspace
+      showDraftsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         window.location.href = '/drafts';
       });
 

@@ -189,3 +189,13 @@ router.post('/submit', async (req, res) => {
 | Transliteration (backend) | `backend/internal/handlers/transliteration_handlers.go` |
 | Proofreading API | `express-frontend/routes/api.js` (`POST /corrections`, `POST /submit`) |
 | Dependencies | `express-frontend/package.json` |
+
+---
+
+## Link audit (page routes and API paths)
+
+**Page routes (Express):** `/`, `/home`, `/how-to-use`, `/tools/*`, `/blog`, `/drafts`, `/workspace`, `/login`, `/register`, `/contact`, `/privacy`, `/terms`, `/account`, `/analytics`, `/admin/affiliates`, `/archive`.
+
+**Auth:** Form/JS use `/auth/login`, `/auth/register` (Express `routes/auth.js` forwards to backend).
+
+**API (relative URLs):** `/api/v1/suggest`, `/api/v1/submissions` (GET/DELETE), `/api/v1/submissions/:id/stream` (home-editor stream), `/api/v1/admin/analytics-dashboard`. Use relative paths so production works regardless of host.

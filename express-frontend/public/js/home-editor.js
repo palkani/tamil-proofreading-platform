@@ -1458,7 +1458,7 @@ class HomeEditor {
     const canSse = typeof window !== 'undefined' && typeof window.EventSource === 'function';
     if (!canSse) return {};
 
-    const url = `/api/v1/stream/submissions/${submissionId}`;
+    const url = `/api/v1/submissions/${submissionId}/stream`;
     console.log('[HomeEditor] Waiting for SSE result:', url);
 
     return await new Promise((resolve, reject) => {
