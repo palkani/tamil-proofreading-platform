@@ -335,12 +335,13 @@ async function ensureRunnerLoaded() {
 }
 
 // ============================================
-// TamilEditor - Wrapper for contenteditable editor (suggestions + proofreading)
+// WorkspaceTamilEditor - Wrapper for contenteditable (used only when editor.js not loaded)
+// On workspace page, editor.js loads first and provides TamilEditor; avoid duplicate declaration.
 // ============================================
-class TamilEditor {
+class WorkspaceTamilEditor {
   constructor(element) {
     if (!element) {
-      console.error('[TamilEditor] Constructor called without element');
+      console.error('[WorkspaceTamilEditor] Constructor called without element');
       return;
     }
     this.element = element;
@@ -354,9 +355,9 @@ class TamilEditor {
         if (this._onChangeCallback) this._onChangeCallback();
       }, { passive: true });
     } catch (e) {
-      console.warn('[TamilEditor] Failed to add input listeners:', e);
+      console.warn('[WorkspaceTamilEditor] Failed to add input listeners:', e);
     }
-    console.log('[TamilEditor] Initialized for element:', element.id || element.tagName);
+    console.log('[WorkspaceTamilEditor] Initialized for element:', element.id || element.tagName);
   }
 
   get onChange() {
@@ -441,6 +442,9 @@ class TamilEditor {
   focus() {
     if (this.element) this.element.focus();
   }
+}
+if (typeof window.TamilEditor === 'undefined') {
+  window.TamilEditor = WorkspaceTamilEditor;
 }
 
 /** Fallback editor wrapper when TamilEditor is not available (same interface). */
