@@ -1461,26 +1461,33 @@ class WorkspaceController {
       if (draftId && !isNaN(draftId)) {
         console.log('[WorkspaceJS] Opening draft from URL query parameter:', draftId);
         
-        // Wait for editor to be fully initialized before loading draft
+        // Ensure editor panel is visible before loading (so content lands in visible editor)
+        this.showEditor();
+        
+        // Wait for editor DOM to be available before loading draft (retry up to ~3s)
+        let attempts = 0;
+        const maxAttempts = 15;
         const checkEditorReady = () => {
-          const editorReady = this.editorElement || 
-                            (this.editor && this.editor.editor) || 
+          const editorEl = this.editorElement || document.getElementById('editor');
+          const editorReady = editorEl ||
+                            (this.editor && this.editor.editor) ||
                             (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor);
           
           if (editorReady) {
+            if (!this.editorElement && editorEl) this.editorElement = editorEl;
             console.log('[WorkspaceJS] Editor is ready, loading draft');
             this.openDraft(draftId);
-            // IMPORTANT: Do NOT strip ?draftId= immediately.
-            // If the draft load triggers a 401 → /login, we need the redirect URL to retain draftId
-            // so the user returns to the same draft after login.
-          } else {
-            console.log('[WorkspaceJS] Editor not ready yet, waiting...');
+          } else if (attempts < maxAttempts) {
+            attempts++;
+            console.log('[WorkspaceJS] Editor not ready yet, retry', attempts, '/', maxAttempts);
             setTimeout(checkEditorReady, 200);
+          } else {
+            console.warn('[WorkspaceJS] Editor not ready after retries, loading draft anyway');
+            this.openDraft(draftId);
           }
         };
         
-        // Start checking after a short delay
-        setTimeout(checkEditorReady, 500);
+        setTimeout(checkEditorReady, 300);
         return;
       }
     }
@@ -5123,29 +5130,34 @@ class WorkspaceController {
       // Handle both response formats: { submission: {...} } or direct submission object
       const draft = data.submission || data;
       
-      // Load draft into editor
+      // Load draft into editor (prefer original_text; fallback to proofread_text for completed drafts)
       this.currentDraft = draft;
-      const draftText = draft.original_text || draft.text || '';
+      const draftText = (draft.original_text || draft.text || draft.proofread_text || '').trim();
       console.log('[WorkspaceJS] Loading draft text into editor, length:', draftText.length);
       
+      // Ensure editor panel is visible so content is shown
+      this.showEditor();
+      
+      // Resolve editor element: use instance ref or fallback to DOM by id (fixes View Draft when ref not set yet)
+      const editorEl = this.editorElement || document.getElementById('editor');
+      
       // Set editor content - handle both TipTap and legacy editor
-      if (window.USE_TIPTAP_EDITOR && tiptapWorkspaceEditor) {
+      if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
         console.log('[WorkspaceJS] Setting content in TipTap editor');
-        tiptapWorkspaceEditor.commands.setContent(draftText);
-      } else if (this.editorElement) {
+        tiptapWorkspaceEditor.commands.setContent(draftText || '');
+      } else if (editorEl) {
+        if (!this.editorElement) this.editorElement = editorEl;
         console.log('[WorkspaceJS] Setting content in legacy editor element');
-        this.editorElement.textContent = draftText;
-        // Trigger input event to ensure editor state is updated
+        editorEl.textContent = draftText;
         const inputEvent = new Event('input', { bubbles: true });
-        this.editorElement.dispatchEvent(inputEvent);
+        editorEl.dispatchEvent(inputEvent);
       } else if (this.editor && this.editor.editor) {
         console.log('[WorkspaceJS] Setting content in TamilEditor');
         this.editor.editor.textContent = draftText;
-        // Trigger input event
         const inputEvent = new Event('input', { bubbles: true });
         this.editor.editor.dispatchEvent(inputEvent);
       } else {
-        console.error('[WorkspaceJS] No editor found to set content');
+        console.error('[WorkspaceJS] No editor found to set content (editorEl:', !!editorEl, ')');
       }
       
       // Update word count after setting content
@@ -5212,7 +5224,7 @@ class WorkspaceController {
     }
 
     try {
-      const response = await this.apiFetch(`/api/submissions/${draftId}`, {
+      const response = await this.apiFetch(`/api/v1/submissions/${draftId}`, {
         method: 'DELETE'
       });
 
