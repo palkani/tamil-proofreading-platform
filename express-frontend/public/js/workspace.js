@@ -578,8 +578,9 @@ class WorkspaceController {
         const dropdown = document.getElementById('tamil-suggestions-dropdown');
         if (dropdown && !dropdown.contains(e.target) && !e.target.closest('.tamil-suggestion-item')) {
           // Only hide if clicking outside the editor area (to avoid hiding while typing)
-          const editor = this.editor || document.querySelector('.ProseMirror') || document.querySelector('#tiptap-workspace-editor');
-          if (editor && !editor.contains(e.target)) {
+          // Resolve DOM element: this.editor may be TamilEditor wrapper (has .editor), not the node
+          const editorEl = this.editorElement || (this.editor && this.editor.editor) || document.querySelector('.ProseMirror') || document.querySelector('#tiptap-workspace-editor') || document.getElementById('editor');
+          if (editorEl && typeof editorEl.contains === 'function' && !editorEl.contains(e.target)) {
             this.cleanupAllDropdowns();
           }
         }
