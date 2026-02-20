@@ -50,6 +50,20 @@ function getBackendApiUrl() {
 }
 
 const BACKEND_URL = getBackendApiUrl();
+
+// Base URL for corrections proxy (Cloud Run). Prefer BACKEND_URL; fall back to TRANSLITERATOR_BASE_URL + /api/v1 if you only have that set.
+function getCorrectionsBackendBase() {
+  const backend = (BACKEND_URL || '').replace(/\/$/, '');
+  if (backend && !/^https?:\/\/localhost(\d*)(\/|$)/i.test(backend)) {
+    return backend;
+  }
+  const runner = (process.env.TRANSLITERATOR_BASE_URL || process.env.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL || '').replace(/\/$/, '');
+  if (runner) {
+    return runner.endsWith('/api/v1') ? runner : runner + '/api/v1';
+  }
+  return '';
+}
+
 const ENABLE_PROXY_LOGS = process.env.PROXY_LOG !== 'false';
 
 // Helper function to split text into manageable chunks for better accuracy
@@ -280,7 +294,7 @@ router.post('/gemini/analyze', async (req, res) => {
 });
 
 // Grammar/Corrections API for AI assistant - exact format: { success, corrections: [{ blockId, originalText, correction, reason, type }] }
-// NOTE: This route runs on Express (Vercel), not on the Go backend. Check Vercel function logs for /api/corrections, not Cloud Run.
+// Tries Cloud Run first (BACKEND_URL/submit with save_draft=false) so you see requests in Cloud Run logs; falls back to Express→Gemini.
 router.post('/corrections', async (req, res) => {
   try {
     const { text } = req.body;
@@ -289,12 +303,35 @@ router.post('/corrections', async (req, res) => {
       return res.status(400).json({ success: false, corrections: [], error: 'Text is required' });
     }
 
+    // 1) Try backend (Cloud Run) first so /api/corrections shows up in Cloud Run logs.
+    // Uses BACKEND_URL if set; else TRANSLITERATOR_BASE_URL (or NEXT_PUBLIC_TRANSLITERATOR_BASE_URL) + /api/v1.
+    const correctionsBackend = getCorrectionsBackendBase();
+    if (correctionsBackend) {
+      try {
+        const submitUrl = `${correctionsBackend}/submit`;
+        const proxyRes = await axiosWithPool.post(
+          submitUrl,
+          { text: text.trim(), save_draft: false },
+          { headers: { 'Content-Type': 'application/json' }, timeout: 25000, validateStatus: () => true }
+        );
+        if (proxyRes.status === 200 && proxyRes.data && proxyRes.data.success === true && Array.isArray(proxyRes.data.corrections)) {
+          console.log('[CORRECTIONS] Proxied to Cloud Run', { url: submitUrl, count: proxyRes.data.corrections.length });
+          return res.json({ success: true, corrections: proxyRes.data.corrections });
+        }
+      } catch (proxyErr) {
+        console.warn('[CORRECTIONS] Backend proxy failed, using Express→Gemini', proxyErr.message);
+      }
+    } else {
+      console.log('[CORRECTIONS] No backend URL (set BACKEND_URL or TRANSLITERATOR_BASE_URL for Cloud Run proxy)');
+    }
+
+    // 2) Fallback: Express → Gemini (no Cloud Run; check Vercel logs)
     const keyInfo = keyRotator.getNextKey();
     const apiKey = keyInfo ? keyInfo.key : null;
     const keyIndex = keyInfo ? keyInfo.index : -1;
     const baseUrl = keyRotator.baseUrl;
 
-    console.log('[CORRECTIONS] POST /api/corrections received', { textLen: text.length, hasKey: !!apiKey });
+    console.log('[CORRECTIONS] POST /api/corrections (Express→Gemini)', { textLen: text.length, hasKey: !!apiKey });
 
     if (!apiKey) {
       console.warn('[CORRECTIONS] No Gemini API key - set GEMINI_API_KEY_1 or GOOGLE_GENAI_API_KEY in env (Vercel/Express)');

@@ -54,7 +54,7 @@ Then set the variables below. **Required** = needed for the app to start or for 
 | `GOOGLE_GENAI_API_KEY` | `AIza...` | Gemini API key (Express uses this for `/api/corrections`). |
 | `OPENAI_API_KEY` | `sk-...` | Optional fallback if Gemini is rate-limited. |
 
-Backend also uses `GOOGLE_GENAI_API_KEY` / `OPENAI_GENAI_API_KEY` for AI; Express uses Gemini for the corrections endpoint. **`POST /api/corrections` is handled by Express (Vercel), not by the Go backend on Cloud Run.** To debug corrections not returning issues, check **Vercel function logs** (or your Express server logs), not Cloud Run. Ensure `GEMINI_API_KEY_1` or `GOOGLE_GENAI_API_KEY` is set in Vercel env for production.
+Backend also uses `GOOGLE_GENAI_API_KEY` / `OPENAI_GENAI_API_KEY` for AI. **`POST /api/corrections`**: Express first proxies to the backend (Cloud Run) as `POST /api/v1/submit` with `save_draft: false` when `BACKEND_URL` is set, so you see the request in **Cloud Run logs**. If the proxy fails or `BACKEND_URL` is unset, Express falls back to calling Gemini directly (check **Vercel function logs** for that path). Ensure `BACKEND_URL` points to your Cloud Run URL (e.g. `https://prooftamil-backend-xxx.run.app/api/v1`) in Vercel so corrections hit Cloud Run.
 
 ### Suggestions (IME / transliteration)
 
