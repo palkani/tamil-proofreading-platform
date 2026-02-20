@@ -654,47 +654,114 @@ router.get('/privacy', (req, res) => {
   });
 });
 
-// Sitemap.xml - SEO optimization
+// Sitemap.xml - SEO optimisation
+// Serves static pages immediately; best-effort includes published blog posts
+// fetched from the backend (10-minute in-memory cache keeps it fast on serverless).
 router.get('/sitemap.xml', (req, res) => {
   const BASE_URL = 'https://prooftamil.com';
-  const now = new Date().toISOString().split('T')[0];
-  
-  // Public pages that should be indexed
-  const publicPages = [
-    { url: '', priority: '1.0', changefreq: 'daily' },
-    { url: '/free-tamil-editor', priority: '0.9', changefreq: 'weekly' },
-    { url: '/how-to-use', priority: '0.8', changefreq: 'monthly' },
+  const currentDate = new Date().toISOString().split('T')[0];
+
+  const pages = [
+    { url: '/', priority: '1.0', changefreq: 'daily' },
+    { url: '/free-tamil-editor', priority: '0.95', changefreq: 'weekly' },
+    { url: '/how-to-use', priority: '0.9', changefreq: 'weekly' },
+    { url: '/blog', priority: '0.85', changefreq: 'weekly' },
+    { url: '/tools/ocr', priority: '0.85', changefreq: 'weekly' },
+    { url: '/tools/handwriting-ocr', priority: '0.85', changefreq: 'weekly' },
+    { url: '/tools/converter', priority: '0.85', changefreq: 'weekly' },
+    { url: '/tools/font-converter', priority: '0.85', changefreq: 'weekly' },
+    { url: '/tools/ai-content-writer', priority: '0.8', changefreq: 'weekly' },
+    { url: '/tools/event-name-suggester', priority: '0.75', changefreq: 'weekly' },
+    { url: '/tools/email-spam-detector', priority: '0.75', changefreq: 'weekly' },
     { url: '/contact', priority: '0.7', changefreq: 'monthly' },
-    { url: '/privacy', priority: '0.5', changefreq: 'yearly' },
-    { url: '/terms', priority: '0.5', changefreq: 'yearly' },
     { url: '/login', priority: '0.6', changefreq: 'monthly' },
     { url: '/register', priority: '0.6', changefreq: 'monthly' },
-    { url: '/tools/ocr', priority: '0.8', changefreq: 'weekly' },
-    { url: '/tools/handwriting-ocr', priority: '0.8', changefreq: 'weekly' },
-    { url: '/tools/converter', priority: '0.8', changefreq: 'weekly' },
-    { url: '/tools/ai-content-writer', priority: '0.8', changefreq: 'weekly' },
-    { url: '/tools/event-name-suggester', priority: '0.7', changefreq: 'monthly' },
-    { url: '/tools/font-converter', priority: '0.8', changefreq: 'weekly' },
-    { url: '/tools/email-spam-detector', priority: '0.7', changefreq: 'monthly' },
-    { url: '/blog', priority: '0.8', changefreq: 'weekly' }
+    { url: '/privacy', priority: '0.4', changefreq: 'yearly' },
+    { url: '/terms', priority: '0.4', changefreq: 'yearly' },
   ];
-  
+
+  const escapeXml = (s) =>
+    String(s || '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&apos;');
+
   let sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n';
-  sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">\n';
-  
-  publicPages.forEach(page => {
+  sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n';
+  sitemap += '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n';
+  sitemap += '        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9\n';
+  sitemap += '        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">\n';
+
+  pages.forEach((page) => {
     sitemap += '  <url>\n';
-    sitemap += `    <loc>${BASE_URL}${page.url}</loc>\n`;
-    sitemap += `    <lastmod>${now}</lastmod>\n`;
+    sitemap += `    <loc>${escapeXml(BASE_URL + page.url)}</loc>\n`;
+    sitemap += `    <lastmod>${currentDate}</lastmod>\n`;
     sitemap += `    <changefreq>${page.changefreq}</changefreq>\n`;
     sitemap += `    <priority>${page.priority}</priority>\n`;
     sitemap += '  </url>\n';
   });
-  
-  sitemap += '</urlset>';
-  
-  res.set('Content-Type', 'application/xml');
-  res.send(sitemap);
+
+  global.__sitemapBlogCache = global.__sitemapBlogCache || { ts: 0, urls: [] };
+
+  const addBlogUrls = (list) => {
+    (list || []).forEach((u) => {
+      if (!u || !u.loc) return;
+      sitemap += '  <url>\n';
+      sitemap += `    <loc>${escapeXml(u.loc)}</loc>\n`;
+      sitemap += `    <lastmod>${escapeXml(u.lastmod || currentDate)}</lastmod>\n`;
+      sitemap += `    <changefreq>${escapeXml(u.changefreq || 'monthly')}</changefreq>\n`;
+      sitemap += `    <priority>${escapeXml(u.priority || '0.65')}</priority>\n`;
+      sitemap += '  </url>\n';
+    });
+  };
+
+  const now = Date.now();
+  const isCacheFresh = now - (global.__sitemapBlogCache.ts || 0) < 10 * 60 * 1000;
+  const cached = Array.isArray(global.__sitemapBlogCache.urls) ? global.__sitemapBlogCache.urls : [];
+
+  const sendSitemap = () => {
+    sitemap += '</urlset>';
+    res.header('Content-Type', 'application/xml');
+    res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    return res.send(sitemap);
+  };
+
+  if (isCacheFresh && cached.length) {
+    addBlogUrls(cached);
+    return sendSitemap();
+  }
+
+  // Fetch up to 200 blog posts; keep timeout low so sitemap stays responsive.
+  axiosWithPool
+    .get(`${BACKEND_URL}/blog/posts`, {
+      params: { page: 1, limit: 200 },
+      timeout: 2500,
+      validateStatus: () => true,
+    })
+    .then((r) => {
+      const posts = r.data?.posts || [];
+      const blogUrls = posts
+        .filter((p) => p && (p.slug || p.Slug))
+        .map((p) => {
+          const slug = String(p.slug || p.Slug || '').trim();
+          const updated = String(
+            p.updated_at || p.updatedAt || p.UpdatedAt ||
+            p.published_at || p.publishedAt || p.PublishedAt || ''
+          ).slice(0, 10);
+          return {
+            loc: `${BASE_URL}/blog/${encodeURIComponent(slug)}`,
+            lastmod: updated || currentDate,
+            changefreq: 'monthly',
+            priority: '0.65',
+          };
+        });
+      global.__sitemapBlogCache = { ts: Date.now(), urls: blogUrls };
+      addBlogUrls(blogUrls);
+      return sendSitemap();
+    })
+    .catch(() => sendSitemap()); // best-effort: serve static pages on error
 });
 
 // Terms of Service page - accessible to everyone

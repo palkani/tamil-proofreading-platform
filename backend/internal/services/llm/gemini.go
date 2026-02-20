@@ -27,6 +27,7 @@ var proofreadingPrompt = `நீங்கள் ஒரு தமிழ் மொ
 - நடை விருப்பங்களையோ சரியான மாற்றுகளையோ பிழையாக குறிப்பிட வேண்டாம்
 - ChatGPT போல முழுமையாக பகுப்பாய்வு செய்து ஒவ்வொரு பிழையையும் கண்டறியவும்
 - உரையின் தலைப்பு/பொருளைக் காரணமாக மறுக்க வேண்டாம்; மொழி/இலக்கண பிழைகள் மட்டும் சரிபார்த்து JSON திருப்பவும் (Do not refuse based on topic; analyze only grammar and spelling.)
+- 🔴 CRITICAL: Only include a correction when "original" and "corrected" are DIFFERENT. If original === corrected, do NOT add that item to the corrections array.
 
 ════════════════════════════════════════════════════════
 அ. பொருள் & நோக்கம் (கட்டாயம் காக்க வேண்டியவை)
@@ -209,6 +210,11 @@ var proofreadingPrompt = `நீங்கள் ஒரு தமிழ் மொ
 ஒ. வெளியீட்டு வடிவம் (கட்டாயம் JSON மட்டும்)
 ════════════════════════════════════════════════════════
 
+🔴 CRITICAL - DO NOT VIOLATE:
+NEVER add an item to "corrections" where "original" and "corrected" are the same text.
+Only include a correction when the text actually changes (original ≠ corrected).
+If there is no real change, do NOT add that item. Empty corrections array is valid.
+
 சரியான JSON மட்டும் திருப்பவும். markdown, code fences, அல்லது கூடுதல் உரை வேண்டாம்.
 
 {
@@ -243,6 +249,7 @@ var proofreadingPrompt = `நீங்கள் ஒரு தமிழ் மொ
 ✅ பிழை இல்லை என்றால்: {"corrections":[],"corrected_text":""}
 ✅ 20 பிழைகள் இருந்தால், 20 corrections எல்லாம் திருப்பவும்
 ❌ "original" மற்றும் "corrected" ஒரே இருந்தால் அல்லது மாற்றம் தேவையில்லை என்றால் corrections-ல் சேர்க்க வேண்டாம் - உண்மையான மாற்றங்கள் மட்டுமே
+❌ NEVER output original === corrected (same string). Only real changes. Same text = do not add to array.
 
 ════════════════════════════════════════════════════════
 ஓ. உதாரணங்கள்: எதை பிடிக்கவும் vs எதை தவிர்க்கவும்

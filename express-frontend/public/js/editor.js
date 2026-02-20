@@ -110,20 +110,19 @@ class TamilEditor {
     this.editor.addEventListener('paste', (e) => {
       e.preventDefault();
       const text = e.clipboardData.getData('text/plain');
-      
+
       // Check if text contains mostly English characters
       const englishRatio = (text.match(/[a-zA-Z]/g) || []).length / text.length;
-      
+
       if (englishRatio > 0.5) {
         // Text is mostly English, convert to Tamil
         const tamilText = this.convertEnglishParagraphToTamil(text);
-        document.execCommand('insertText', false, tamilText);
-        console.log('Converted English to Tamil:', { original: text, converted: tamilText });
+        this.insertTextAtCursor(tamilText);
       } else {
         // Keep as is (already Tamil or mixed)
-        document.execCommand('insertText', false, text);
+        this.insertTextAtCursor(text);
       }
-      
+
       // Explicitly trigger content change for paste events
       this.onContentChange();
     });
@@ -149,13 +148,7 @@ class TamilEditor {
     const fontSizeSelect = document.getElementById('font-size-select');
     if (fontSizeSelect) {
       fontSizeSelect.addEventListener('change', (e) => {
-        const size = e.target.value;
-        document.execCommand('fontSize', false, '7');
-        const fontElements = this.editor.querySelectorAll('font[size="7"]');
-        fontElements.forEach(el => {
-          el.removeAttribute('size');
-          el.style.fontSize = size;
-        });
+        this.applyFontSize(e.target.value);
         this.editor.focus();
       });
     }
@@ -197,7 +190,7 @@ class TamilEditor {
         e.preventDefault();
         const url = prompt('Enter URL:');
         if (url) {
-          document.execCommand('createLink', false, url);
+          this.createLinkOnSelection(url);
           this.editor.focus();
         }
       });
@@ -224,7 +217,7 @@ class TamilEditor {
         item.addEventListener('click', (e) => {
           e.preventDefault();
           const tag = item.getAttribute('data-format') || 'p';
-          document.execCommand('formatBlock', false, tag);
+          this.formatSelectedBlock(tag);
           formatDropdown.classList.add('hidden');
           this.editor.focus();
         });
@@ -264,8 +257,142 @@ class TamilEditor {
     }
   }
 
+  // --- Modern DOM API helpers (replacing document.execCommand) ---
+
+  insertTextAtCursor(text) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+    range.setStartAfter(textNode);
+    range.setEndAfter(textNode);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  applyFontSize(size) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount || selection.isCollapsed) return;
+    const range = selection.getRangeAt(0);
+    const span = document.createElement('span');
+    span.style.fontSize = size;
+    try {
+      range.surroundContents(span);
+    } catch {
+      const fragment = range.extractContents();
+      span.appendChild(fragment);
+      range.insertNode(span);
+    }
+  }
+
+  createLinkOnSelection(url) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    if (range.collapsed) {
+      a.textContent = url;
+      range.insertNode(a);
+    } else {
+      try {
+        range.surroundContents(a);
+      } catch {
+        const fragment = range.extractContents();
+        a.appendChild(fragment);
+        range.insertNode(a);
+      }
+    }
+  }
+
+  formatSelectedBlock(tag) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    const blockTags = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'DIV', 'BLOCKQUOTE', 'PRE']);
+    let block = range.commonAncestorContainer;
+    if (block.nodeType === Node.TEXT_NODE) block = block.parentNode;
+    while (block && block !== this.editor && !blockTags.has(block.tagName)) {
+      block = block.parentNode;
+    }
+    if (!block || block === this.editor) {
+      const newBlock = document.createElement(tag);
+      try {
+        range.surroundContents(newBlock);
+      } catch {
+        const fragment = range.extractContents();
+        newBlock.appendChild(fragment);
+        range.insertNode(newBlock);
+      }
+      return;
+    }
+    const newBlock = document.createElement(tag);
+    Array.from(block.attributes).forEach(attr => newBlock.setAttribute(attr.name, attr.value));
+    while (block.firstChild) newBlock.appendChild(block.firstChild);
+    block.parentNode.replaceChild(newBlock, block);
+    const newRange = document.createRange();
+    newRange.selectNodeContents(newBlock);
+    newRange.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+  }
+
+  applyInlineFormat(tag) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount || selection.isCollapsed) return;
+    const range = selection.getRangeAt(0);
+    const ancestor = range.commonAncestorContainer;
+    const parent = ancestor.nodeType === Node.TEXT_NODE ? ancestor.parentNode : ancestor;
+    if (parent.tagName === tag.toUpperCase() && this.editor.contains(parent)) {
+      const fragment = document.createDocumentFragment();
+      while (parent.firstChild) fragment.appendChild(parent.firstChild);
+      parent.parentNode.replaceChild(fragment, parent);
+      return;
+    }
+    const el = document.createElement(tag);
+    try {
+      range.surroundContents(el);
+    } catch {
+      const fragment = range.extractContents();
+      el.appendChild(fragment);
+      range.insertNode(el);
+    }
+  }
+
+  applyBlockAlignment(command) {
+    const alignMap = { justifyLeft: 'left', justifyCenter: 'center', justifyRight: 'right', justifyFull: 'justify' };
+    const align = alignMap[command];
+    if (!align) return;
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    const blockTags = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'DIV', 'BLOCKQUOTE', 'PRE', 'LI']);
+    let block = range.commonAncestorContainer;
+    if (block.nodeType === Node.TEXT_NODE) block = block.parentNode;
+    while (block && block !== this.editor && !blockTags.has(block.tagName)) {
+      block = block.parentNode;
+    }
+    if (block && block !== this.editor) {
+      block.style.textAlign = align;
+    } else {
+      this.editor.style.textAlign = align;
+    }
+  }
+
+  // --- End of modern DOM API helpers ---
+
   executeCommand(command) {
-    document.execCommand(command, false, null);
+    const inlineFormats = { bold: 'strong', italic: 'em', underline: 'u', strikeThrough: 's' };
+    const alignCommands = new Set(['justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull']);
+    if (inlineFormats[command]) {
+      this.applyInlineFormat(inlineFormats[command]);
+    } else if (alignCommands.has(command)) {
+      this.applyBlockAlignment(command);
+    }
     this.editor.focus();
   }
 
@@ -375,7 +502,7 @@ class TamilEditor {
             removeAutocomplete();
           } else {
             // No Tamil conversion, just add space normally
-            document.execCommand('insertText', false, ' ');
+            this.insertTextAtCursor(' ');
             removeAutocomplete();
           }
         }
