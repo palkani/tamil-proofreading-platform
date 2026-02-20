@@ -280,6 +280,7 @@ router.post('/gemini/analyze', async (req, res) => {
 });
 
 // Grammar/Corrections API for AI assistant - exact format: { success, corrections: [{ blockId, originalText, correction, reason, type }] }
+// NOTE: This route runs on Express (Vercel), not on the Go backend. Check Vercel function logs for /api/corrections, not Cloud Run.
 router.post('/corrections', async (req, res) => {
   try {
     const { text } = req.body;
@@ -293,7 +294,10 @@ router.post('/corrections', async (req, res) => {
     const keyIndex = keyInfo ? keyInfo.index : -1;
     const baseUrl = keyRotator.baseUrl;
 
+    console.log('[CORRECTIONS] POST /api/corrections received', { textLen: text.length, hasKey: !!apiKey });
+
     if (!apiKey) {
+      console.warn('[CORRECTIONS] No Gemini API key - set GEMINI_API_KEY_1 or GOOGLE_GENAI_API_KEY in env (Vercel/Express)');
       return res.status(500).json({ success: false, corrections: [], error: 'Gemini AI not configured' });
     }
 
@@ -306,7 +310,53 @@ router.post('/corrections', async (req, res) => {
             systemInstruction: {
               parts: [{
                 text: `நீங்கள் ஒரு தமிழ் மொழி நிபுணர். தமிழ் உரையில் உள்ள இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், தவறான சொற்களை கண்டறியுங்கள்.
-பதில் வடிவம் (JSON Array): id, type ("spelling" அல்லது "grammar" அல்லது "punctuation"), title (தமிழில்), description (விரிவான விளக்கம் தமிழில்), original (தவறான சொல்), suggestion (சரியான சொல்), position: { start, end }`
+
+🔴 கண்டிப்பான விதிகள் - இவற்றை மட்டுமே பிழையாகக் குறிக்கவும்:
+
+1. புள்ளி (ஒற்று) விடுபட்டது:
+   ❌ "கொடுங்கள" → ✅ "கொடுங்கள்"
+   ❌ "வருகிறார்கள" → ✅ "வருகிறார்கள்"
+   ❌ "சொல்ல" → ✅ "சொல்ல" (சரி) அல்லது ❌ "சொல்" → ✅ "சொல்ல்" (தவறு)
+
+2. எழுத்துப் பிழைகள் (Spelling errors):
+   ❌ "வணகம்" → ✅ "வணக்கம்"
+   ❌ "தமிள்" → ✅ "தமிழ்"
+   ❌ "நன்ரி" → ✅ "நன்றி"
+
+3. சொற்கள் தவறாக இணைந்தது (Words wrongly joined):
+   ❌ "பதிவபுதுப்பித்தல்" → ✅ "பதிவு புதுப்பித்தல்"
+   ❌ "இaboratoryருக்கிறது" → தவறான இணைப்பு
+
+4. தவறான எழுத்து மாற்றம் (Wrong character substitution):
+   ❌ "ண" க்கு பதில் "ன" (அல்லது நேர்மாறாக) - சூழலைப் பொறுத்து
+   ❌ "ற" க்கு பதில் "ர" (அல்லது நேர்மாறாக) - சூழலைப் பொறுத்து
+
+🟢 பிழையாகக் குறிக்க வேண்டாம் - இவை சரியானவை:
+- புணர்ச்சி மாற்றங்கள் இரண்டும் சரி:
+  ✅ "வரலாற்றுச் சிறப்பு" = ✅ "வரலாற்று சிறப்பு"
+  ✅ "அரசியல்சாசனச் சட்டம்" = ✅ "அரசியல்சாசன சட்டம்"
+- பேச்சு வழக்கு vs இலக்கிய வழக்கு இரண்டும் சரி:
+  ✅ "போனேன்" = ✅ "சென்றேன்" (இரண்டும் சரி)
+  ✅ "செய்தீர்" = ✅ "செய்தீர்கள்" (இரண்டும் சரி)
+  ✅ "வந்தான்" = ✅ "வந்தான்" (பேச்சு வழக்கு சரி)
+- வட்டார வழக்குகள் சரியானவை
+
+🔵 முக்கிய அறிவுறுத்தல்கள்:
+1. ஒரே பிழையை இரண்டு முறை குறிக்காதீர்கள் (NO DUPLICATES)
+2. title மற்றும் description எப்போதும் தமிழில் மட்டுமே எழுதவும்
+3. ஒவ்வொரு பிழைக்கும் தெளிவான விளக்கம் கொடுக்கவும்
+4. original சொல் உரையில் அப்படியே இருக்க வேண்டும்
+5. suggestion சரியான வடிவமாக இருக்க வேண்டும்
+6. சந்தேகமாக இருந்தால், பிழையாகக் குறிக்காதீர்கள்
+
+📝 பதில் வடிவம் (JSON Array):
+- id: தனித்துவமான அடையாளம்
+- type: "spelling" அல்லது "grammar" அல்லது "punctuation"
+- title: பிழையின் வகை (தமிழில்)
+- description: விரிவான விளக்கம் (தமிழில்)
+- original: மூல உரையில் உள்ள தவறான சொல்
+- suggestion: சரியான சொல்
+- position: { start: எண், end: எண் }`
               }]
             },
             contents: [{
@@ -356,6 +406,9 @@ router.post('/corrections', async (req, res) => {
         const arr = JSON.parse(cleanedJson);
         return Array.isArray(arr) ? arr : [];
       } catch (e) {
+        const msg = e.response?.data?.error?.message || e.message || String(e);
+        const status = e.response?.status;
+        console.warn('[CORRECTIONS] Gemini chunk error', { status, message: msg?.slice(0, 200) });
         return [];
       }
     });
@@ -378,6 +431,7 @@ router.post('/corrections', async (req, res) => {
       type: (s.type && ['spelling', 'grammar', 'punctuation'].includes(s.type)) ? s.type : 'spelling'
     }));
 
+    console.log('[CORRECTIONS] Returning', { count: corrections.length, rawSuggestions: allSuggestions.length });
     return res.json({ success: true, corrections });
   } catch (error) {
     console.error('[CORRECTIONS] Error:', error.message);
@@ -419,10 +473,10 @@ router.post('/gemini/translate', async (req, res) => {
 
 TRANSLATION RULES:
 1. Preserve the meaning and tone of the original text
-2. Preserve the meaning and tone of the original text
-3. Use natural Tamil grammar and sentence structure
-4. For technical terms, provide the Tamil equivalent if available
-5. Maintain paragraph structure
+2. Use natural Tamil grammar and sentence structure
+3. For technical terms, provide the Tamil equivalent if available
+4. Maintain paragraph structure
+5. Use modern, commonly understood Tamil words
 
 OUTPUT FORMAT (MANDATORY JSON):
 {
