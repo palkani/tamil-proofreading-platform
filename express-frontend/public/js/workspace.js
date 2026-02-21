@@ -3910,7 +3910,77 @@ class WorkspaceController {
       console.error('[SUBMIT] error', err);
     }
   }
-  
+
+  // ---------------------------------------------------------------------------
+  // Large-document chunked corrections helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Split text into chunks of at most maxWords words, preserving paragraph
+   * boundaries. Tamil text is dense (~7 chars/word × 3 bytes UTF-8) so keeping
+   * chunks well under 30 KB avoids body-size limits on any individual request.
+   */
+  splitTextIntoChunks(text, maxWords) {
+    const lines = text.split(/\n+/);
+    const chunks = [];
+    let buf = [];
+    let count = 0;
+    for (const line of lines) {
+      const lw = line.trim() ? line.trim().split(/\s+/).length : 0;
+      if (count + lw > maxWords && buf.length > 0) {
+        chunks.push(buf.join('\n'));
+        buf = [];
+        count = 0;
+      }
+      if (line.trim()) {
+        buf.push(line);
+        count += lw;
+      }
+    }
+    if (buf.length > 0) chunks.push(buf.join('\n'));
+    return chunks.length > 0 ? chunks : [text];
+  }
+
+  /** Fetch corrections for one chunk; returns [] on non-fatal failure. */
+  async fetchOneChunkCorrections(chunkText, signal) {
+    try {
+      const resp = await this.apiFetch('/api/corrections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: chunkText }),
+        signal,
+      });
+      const json = await resp.json().catch(() => ({}));
+      if (resp.ok && json.success && Array.isArray(json.corrections)) return json.corrections;
+    } catch (e) {
+      if (e.name === 'AbortError') throw e;
+      console.warn('[AI] Chunk corrections failed:', e.message);
+    }
+    return [];
+  }
+
+  /**
+   * Fetch corrections for all chunks of a large document.
+   * Runs CONCURRENCY chunks in parallel and logs progress so the user can
+   * see the analysis is still working on long documents.
+   */
+  async fetchCorrectionsInChunks(text, signal) {
+    const WORDS_PER_CHUNK = 1500;
+    const CONCURRENCY = 4;
+    const chunks = this.splitTextIntoChunks(text, WORDS_PER_CHUNK);
+    console.log(`[AI] Large document: ${chunks.length} chunks × ${WORDS_PER_CHUNK} words`);
+    const all = [];
+    for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+      if (signal.aborted) break;
+      const batch = chunks.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(batch.map(c => this.fetchOneChunkCorrections(c, signal)));
+      for (const r of results) all.push(...r);
+      const pct = Math.min(99, Math.round(((i + batch.length) / chunks.length) * 100));
+      console.log(`[AI] Chunks ${i + 1}–${Math.min(i + CONCURRENCY, chunks.length)}/${chunks.length} (${pct}%): ${all.length} corrections so far`);
+    }
+    return all;
+  }
+
   async autoAnalyze() {
     // Optional opts: autoAnalyze({ silent: true })
     const opts = (arguments && arguments[0] && typeof arguments[0] === 'object') ? arguments[0] : {};
@@ -3989,61 +4059,74 @@ class WorkspaceController {
     this.abortController = new AbortController();
     this.updateAnalysisStatus('analyzing');
     
+    // Documents above this threshold are chunked so each request stays well
+    // under HTTP body limits (Tamil text is ~21 bytes/word in UTF-8).
+    const LARGE_DOC_WORD_THRESHOLD = 1500;
+
     let data = null;
     try {
-      // Prefer /api/corrections (Express → Gemini) so paste always gets grammar check in production
-      console.log('[AI] 🚀 Calling /api/corrections (Gemini) with text length:', text.length);
-      const correctionsResponse = await this.apiFetch('/api/corrections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-        signal: this.abortController.signal
-      });
-      const correctionsJson = await correctionsResponse.json().catch(() => ({}));
-      if (correctionsResponse.ok && correctionsJson.success && Array.isArray(correctionsJson.corrections)) {
-        console.log('[AI] ✅ Got corrections from Gemini:', correctionsJson.corrections.length);
-        data = { corrections: correctionsJson.corrections };
+      if (wordCount > LARGE_DOC_WORD_THRESHOLD) {
+        // ── Large document: split into chunks and send in parallel batches ──
+        console.log(`[AI] 📦 Large document (${wordCount} words) — chunked analysis`);
+        const chunkedCorrections = await this.fetchCorrectionsInChunks(text, this.abortController.signal);
+        // Always populate data so the processing pipeline runs (empty = no issues found)
+        data = { corrections: chunkedCorrections };
         this.lastAnalyzedText = text;
-      }
-      // Fallback to backend /api/submit if corrections API failed or returned nothing
-      if (!data) {
-        console.log('[AI] 🚀 Fallback: calling /api/submit with text length:', text.length);
-        const response = await this.apiFetch('/api/submit', {
+      } else {
+        // ── Small document: single /api/corrections request ──
+        console.log('[AI] 🚀 Calling /api/corrections (Gemini) with text length:', text.length);
+        const correctionsResponse = await this.apiFetch('/api/corrections', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, html: this.getEditorHTML(), save_draft: true }),
+          body: JSON.stringify({ text }),
           signal: this.abortController.signal
         });
-        const raw = await response.text();
-        try {
-          data = raw ? JSON.parse(raw) : {};
-        } catch (e) {
-          data = { error: 'invalid_json', raw: raw?.slice?.(0, 300) };
+        const correctionsJson = await correctionsResponse.json().catch(() => ({}));
+        if (correctionsResponse.ok && correctionsJson.success && Array.isArray(correctionsJson.corrections)) {
+          console.log('[AI] ✅ Got corrections from Gemini:', correctionsJson.corrections.length);
+          data = { corrections: correctionsJson.corrections };
+          this.lastAnalyzedText = text;
         }
-        if (response.status === 429) {
-          const remaining = (data && typeof data.remaining === 'number') ? data.remaining : null;
-          const code = String(data?.error || '').trim();
-          const msgBase = String(data?.message || 'Request blocked.').trim();
-          const showRemaining = remaining !== null && (code === 'daily_limit_exceeded' || code === 'quota_insufficient_for_request');
-          this.updateAnalysisStatus('');
-          if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
-            this.suggestionsPanel.setEmptyState('idle');
+        // Fallback to backend /api/submit if corrections API failed or returned nothing
+        if (!data) {
+          console.log('[AI] 🚀 Fallback: calling /api/submit with text length:', text.length);
+          const response = await this.apiFetch('/api/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, html: this.getEditorHTML(), save_draft: true }),
+            signal: this.abortController.signal
+          });
+          const raw = await response.text();
+          try {
+            data = raw ? JSON.parse(raw) : {};
+          } catch (e) {
+            data = { error: 'invalid_json', raw: raw?.slice?.(0, 300) };
           }
-          this.showNotification(showRemaining ? `${msgBase} (Remaining: ${remaining})` : msgBase, 'warning');
-          return;
-        }
-        if (response.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
-          const submissionId = data.submission?.id;
-          data = await this.awaitSubmissionResult(submissionId, analysisSeq);
-          const polledStatus = String(data?.submission?.status || '').toLowerCase();
-          if (!data?.submission || (polledStatus && polledStatus !== 'completed' && polledStatus !== 'failed')) {
-            this.updateAnalysisStatus('analyzing');
+          if (response.status === 429) {
+            const remaining = (data && typeof data.remaining === 'number') ? data.remaining : null;
+            const code = String(data?.error || '').trim();
+            const msgBase = String(data?.message || 'Request blocked.').trim();
+            const showRemaining = remaining !== null && (code === 'daily_limit_exceeded' || code === 'quota_insufficient_for_request');
+            this.updateAnalysisStatus('');
+            if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
+              this.suggestionsPanel.setEmptyState('idle');
+            }
+            this.showNotification(showRemaining ? `${msgBase} (Remaining: ${remaining})` : msgBase, 'warning');
             return;
           }
-        } else if (!response.ok) {
-          throw new Error(data?.error || data?.message || 'Failed to analyze text');
+          if (response.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
+            const submissionId = data.submission?.id;
+            data = await this.awaitSubmissionResult(submissionId, analysisSeq);
+            const polledStatus = String(data?.submission?.status || '').toLowerCase();
+            if (!data?.submission || (polledStatus && polledStatus !== 'completed' && polledStatus !== 'failed')) {
+              this.updateAnalysisStatus('analyzing');
+              return;
+            }
+          } else if (!response.ok) {
+            throw new Error(data?.error || data?.message || 'Failed to analyze text');
+          }
+          this.lastAnalyzedText = text;
         }
-        this.lastAnalyzedText = text;
       }
       
       // Debug: Log the API response
@@ -4562,10 +4645,12 @@ class WorkspaceController {
     }
 
     try {
-      const html = this.getEditorHTML();
-      
       // If we have a current draft, we're updating it
       // Otherwise, create a new one
+      // Note: html is intentionally omitted — for large Tamil documents the HTML
+      // can be 2-3× the text size and would exceed HTTP body limits. The backend
+      // stores plain text for corrections; HTML is re-generated on load from the
+      // stored text. Omitting html halves the autosave payload.
       const response = await this.apiFetch('/api/submit', {
         method: 'POST',
         headers: {
@@ -4573,7 +4658,6 @@ class WorkspaceController {
         },
         body: JSON.stringify({
           text: text,
-          html: html,
           model: 'gemini-flash', // Default model
           save_draft: true // Explicitly mark this as a draft save
         })
