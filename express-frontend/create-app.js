@@ -109,8 +109,8 @@ function createApp() {
     })
   );
 
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(cookieParser());
   // attachUser must run for /workspace so requireAuth works and draft links don't loop.
   app.use((req, res, next) => attachUser(req, res, next));
@@ -194,6 +194,16 @@ function createApp() {
   // Error handler
   app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
     console.error(err.stack);
+    // API routes must always return JSON — never HTML.
+    // HTML error pages cause JSON.parse failures in the browser client.
+    const isApiRequest = req.path.startsWith('/api/');
+    if (isApiRequest) {
+      const status = err.status || err.statusCode || 500;
+      return res.status(status).json({
+        error: err.message || 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+      });
+    }
     const seo = getSeoData('error');
     res.status(500).render('pages/error', {
       title: seo.title,
