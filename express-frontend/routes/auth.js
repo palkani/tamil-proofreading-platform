@@ -2,26 +2,24 @@ const express = require('express');
 const axios = require('axios');
 const querystring = require('querystring');
 const router = express.Router();
+const { getRegionalBackendUrl, getPrimaryBackendUrl } = require('../utils/regional-backend');
 
-// Construct backend API URL - handle both cases:
-// 1. BACKEND_URL = http://localhost:8080/api/v1 (dev)
-// 2. BACKEND_URL = https://prooftamil-backend-xxx.run.app (prod - needs /api/v1)
-function getBackendApiUrl() {
-  const baseUrl = process.env.BACKEND_URL || 'http://localhost:8080';
-  if (baseUrl.endsWith('/api/v1')) {
-    return baseUrl;
-  }
-  return baseUrl.replace(/\/$/, '') + '/api/v1';
-}
+// Stamp the regional backend URL once per request.
+// All route handlers read req._backendUrl instead of the static constant.
+router.use((req, res, next) => {
+  req._backendUrl = getRegionalBackendUrl(req);
+  next();
+});
 
-const BACKEND_URL = getBackendApiUrl();
+// Module-level fallback (used by getGoogleCallbackUrl which has no req context).
+const BACKEND_URL = getPrimaryBackendUrl();
 const AUTH_RETRY_PATHS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/supabase-token'];
 const AUTH_RETRY_MAX = 8;
 const AUTH_RETRY_DELAY_MS = 2500;
 
 const forward = async (req, res, path, method = 'post') => {
   try {
-    const url = `${BACKEND_URL}${path}`;
+    const url = `${req._backendUrl}${path}`;
     const doRetry = AUTH_RETRY_PATHS.includes(path);
     const headers = {
       ...req.headers,
@@ -114,7 +112,7 @@ router.post('/logout', async (req, res) => {
     // Fire backend logout best-effort (revokes refresh token server-side)
     await axios({
       method: 'post',
-      url: `${BACKEND_URL}/auth/logout`,
+      url: `${req._backendUrl}/auth/logout`,
       data: req.body,
       params: req.query,
       headers: {

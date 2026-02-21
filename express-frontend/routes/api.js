@@ -10,6 +10,9 @@ const crypto = require('crypto');
 // Shared Gemini key rotator for multi-key support
 const { keyRotator } = require('../utils/gemini-key-rotator');
 
+// Latency-based regional backend resolver (Asia vs US Cloud Run instances)
+const { getRegionalBackendUrl } = require('../utils/regional-backend');
+
 // SEO automation service
 const seoAutomation = require('../services/seo-automation');
 
@@ -39,22 +42,29 @@ const axiosWithPool = axios.create({
   maxRedirects: 5,
 });
 
-// Construct backend API URL - handle both cases:
-// 1. BACKEND_URL = http://localhost:8080/api/v1 (dev)
-// 2. BACKEND_URL = https://prooftamil-backend-xxx.run.app (prod - needs /api/v1)
+// ---------------------------------------------------------------------------
+// Per-request backend URL (latency-based regional routing)
+// ---------------------------------------------------------------------------
+// Stamp req._backendUrl once at the router boundary so every handler below
+// automatically uses the geographically closest Cloud Run instance without
+// any per-handler changes needed.
+router.use((req, res, next) => {
+  req._backendUrl = getRegionalBackendUrl(req);
+  next();
+});
+
+// Kept for module-level code that runs before a request is available.
 function getBackendApiUrl() {
   const baseUrl = process.env.BACKEND_URL || 'http://localhost:8080';
-  if (baseUrl.endsWith('/api/v1')) {
-    return baseUrl;
-  }
+  if (baseUrl.endsWith('/api/v1')) return baseUrl;
   return baseUrl.replace(/\/$/, '') + '/api/v1';
 }
+const BACKEND_URL = getBackendApiUrl(); // fallback — handlers use req._backendUrl
 
-const BACKEND_URL = getBackendApiUrl();
-
-// Base URL for corrections proxy (Cloud Run). Prefer BACKEND_URL; fall back to TRANSLITERATOR_BASE_URL + /api/v1 if you only have that set.
-function getCorrectionsBackendBase() {
-  const backend = (BACKEND_URL || '').replace(/\/$/, '');
+// Returns the corrections proxy base URL for a specific request.
+// Uses req._backendUrl (regional) and falls back to the transliterator URL.
+function getCorrectionsBackendBase(req) {
+  const backend = (req._backendUrl || BACKEND_URL || '').replace(/\/$/, '');
   if (backend && !/^https?:\/\/localhost(\d*)(\/|$)/i.test(backend)) {
     return backend;
   }
@@ -333,7 +343,7 @@ router.post('/corrections', async (req, res) => {
     // 1) Try backend (Cloud Run) first so /api/corrections shows up in Cloud Run logs.
     // Timeout reduced to 7s: Cloud Run responds in < 3s when warm; if it can't respond in
     // 7s it's cold/unavailable and we fall through to Gemini immediately.
-    const correctionsBackend = getCorrectionsBackendBase();
+    const correctionsBackend = getCorrectionsBackendBase(req);
     if (correctionsBackend) {
       try {
         const submitUrl = `${correctionsBackend}/submit`;
@@ -621,7 +631,7 @@ router.post('/transliterate', async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
     
-    const url = `${BACKEND_URL}/transliterate`;
+    const url = `${req._backendUrl}/transliterate`;
     console.log(`[TRANSLITERATE] POST ${url} with text: ${text}`);
     
     const response = await axiosWithPool.post(url, { text });
@@ -637,7 +647,7 @@ router.post('/transliterate', async (req, res) => {
 // Google OAuth callback proxy: frontend callback terminates here, then proxied to backend
 router.get('/v1/auth/google/callback', async (req, res) => {
   try {
-    const target = `${BACKEND_URL}/auth/google/callback`;
+    const target = `${req._backendUrl}/auth/google/callback`;
     const forwardHeaders = { ...req.headers };
     delete forwardHeaders.host;
     delete forwardHeaders.connection;
@@ -839,7 +849,7 @@ router.get('/ocr/health', (req, res) => {
       status: 'unknown',
       service: 'OCR Service',
       implementation: 'Backend proxy (if configured)',
-      url: `${BACKEND_URL}/ocr/upload`,
+      url: `${req._backendUrl}/ocr/upload`,
       version: '1.0.0'
     });
     
@@ -882,7 +892,7 @@ router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
     // If OCR_SERVICE_URL is not configured on Vercel, fall back to BACKEND_URL OCR proxy endpoints (if backend is configured).
     if (isProd && !hasExternalOcr) {
       try {
-        const url = `${BACKEND_URL}/ocr/upload`;
+        const url = `${req._backendUrl}/ocr/upload`;
         if (ENABLE_PROXY_LOGS) console.log('[OCR] Using backend OCR proxy:', url);
 
         const formData = new FormData();
@@ -1072,7 +1082,7 @@ router.get('/ocr/download/:filename', async (req, res) => {
 
     // Fallback to backend OCR proxy (Cloud Run backend) if available
     try {
-      const response = await axiosWithPool.get(`${BACKEND_URL}/ocr/download/${encodeURIComponent(filename)}`, {
+      const response = await axiosWithPool.get(`${req._backendUrl}/ocr/download/${encodeURIComponent(filename)}`, {
         responseType: 'stream',
         headers: {
           cookie: req.headers.cookie,
@@ -1266,7 +1276,7 @@ router.get('/converter/download/:filename', async (req, res) => {
 router.post('/submit', async (req, res) => {
   try {
     // Backend expects POST /api/v1/submit (NOT /submissions)
-    const url = `${BACKEND_URL}/submit`;
+    const url = `${req._backendUrl}/submit`;
     
     // Minimal logging for performance (only in debug mode)
     if (ENABLE_PROXY_LOGS && process.env.DEBUG_SUBMIT === 'true') {
@@ -1333,7 +1343,7 @@ router.post('/submit', async (req, res) => {
 // This endpoint streams real-time updates from the Go backend using Server-Sent Events
 router.get('/submissions/:id/stream', async (req, res) => {
   const submissionId = req.params.id;
-  const url = `${BACKEND_URL}/submissions/${submissionId}/stream`;
+  const url = `${req._backendUrl}/submissions/${submissionId}/stream`;
   
   console.log(`[SSE] Proxying stream for submission ${submissionId}`);
   
@@ -1639,7 +1649,7 @@ router.post('/blog/publish', async (req, res) => {
     }
 
     // Note: BACKEND_URL already includes /api/v1, so just append /blog/posts
-    const url = `${BACKEND_URL}/blog/posts`;
+    const url = `${req._backendUrl}/blog/posts`;
     const headers = {
       'Content-Type': 'application/json',
     };
@@ -1708,7 +1718,7 @@ router.delete('/blog/posts/:id', async (req, res) => {
     }
 
     // Note: BACKEND_URL already includes /api/v1, so just append /blog/posts/:id
-    const url = `${BACKEND_URL}/blog/posts/${encodeURIComponent(id)}`;
+    const url = `${req._backendUrl}/blog/posts/${encodeURIComponent(id)}`;
     const headers = {
       'Content-Type': 'application/json',
     };
@@ -1746,7 +1756,7 @@ router.put('/blog/posts/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid id' });
     }
 
-    const url = `${BACKEND_URL}/blog/posts/${encodeURIComponent(id)}`;
+    const url = `${req._backendUrl}/blog/posts/${encodeURIComponent(id)}`;
     const headers = {
       'Content-Type': 'application/json',
     };
@@ -1844,7 +1854,7 @@ router.get('/v1/suggest', async (req, res) => {
       return res.status(400).json({ error: 'Query parameter "q" required' });
     }
 
-    const url = `${BACKEND_URL}/transliterate/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
+    const url = `${req._backendUrl}/transliterate/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
     const maxRetries = 4;
     const retryDelayMs = 1000;
     let response;
@@ -1900,7 +1910,7 @@ router.get('/ime/suggest', async (req, res) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-    const url = `${BACKEND_URL}/ime/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
+    const url = `${req._backendUrl}/ime/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
     const headers = {};
     if (req.headers.authorization) headers.Authorization = req.headers.authorization;
 
@@ -2265,7 +2275,7 @@ router.post('/spam-check', (req, res) => {
 // Subscribe to newsletter
 router.post('/newsletter/subscribe', async (req, res) => {
   try {
-    const url = `${BACKEND_URL}/newsletter/subscribe`;
+    const url = `${req._backendUrl}/newsletter/subscribe`;
     const response = await axiosWithPool.post(url, req.body, {
       headers: { 'Content-Type': 'application/json' },
       validateStatus: () => true,
@@ -2280,7 +2290,7 @@ router.post('/newsletter/subscribe', async (req, res) => {
 // Confirm subscription (via email link)
 router.get('/newsletter/confirm/:token', async (req, res) => {
   try {
-    const url = `${BACKEND_URL}/newsletter/confirm/${req.params.token}`;
+    const url = `${req._backendUrl}/newsletter/confirm/${req.params.token}`;
     const response = await axiosWithPool.get(url, {
       validateStatus: () => true,
     });
@@ -2301,7 +2311,7 @@ router.get('/newsletter/unsubscribe', async (req, res) => {
   try {
     const token = req.query.token;
     const email = req.query.email;
-    const url = `${BACKEND_URL}/newsletter/unsubscribe?token=${token || ''}&email=${email || ''}`;
+    const url = `${req._backendUrl}/newsletter/unsubscribe?token=${token || ''}&email=${email || ''}`;
     const response = await axiosWithPool.get(url, {
       validateStatus: () => true,
     });
@@ -2319,7 +2329,7 @@ router.get('/newsletter/unsubscribe', async (req, res) => {
 
 router.post('/newsletter/unsubscribe', async (req, res) => {
   try {
-    const url = `${BACKEND_URL}/newsletter/unsubscribe`;
+    const url = `${req._backendUrl}/newsletter/unsubscribe`;
     const response = await axiosWithPool.post(url, req.body, {
       headers: { 'Content-Type': 'application/json' },
       validateStatus: () => true,
@@ -2334,7 +2344,7 @@ router.post('/newsletter/unsubscribe', async (req, res) => {
 // Get subscriber count (public)
 router.get('/newsletter/count', async (req, res) => {
   try {
-    const url = `${BACKEND_URL}/newsletter/count`;
+    const url = `${req._backendUrl}/newsletter/count`;
     const response = await axiosWithPool.get(url, {
       validateStatus: () => true,
     });
@@ -2368,11 +2378,11 @@ router.all('/*', async (req, res) => {
     // Normalize path to avoid double /v1 when BACKEND_URL already has /api/v1
     // Example: BACKEND_URL=/api/v1 and req.path=/v1/auth/register -> strip leading /v1
     let normalizedPath = req.path;
-    if (BACKEND_URL.endsWith('/api/v1') && normalizedPath.startsWith('/v1/')) {
+    if (req._backendUrl.endsWith('/api/v1') && normalizedPath.startsWith('/v1/')) {
       normalizedPath = normalizedPath.replace(/^\/v1/, '');
     }
 
-    const url = `${BACKEND_URL}${normalizedPath}`;
+    const url = `${req._backendUrl}${normalizedPath}`;
     
     // Debug logging for auth passthrough
     console.log('[PROXY] incoming authorization:', req.headers.authorization);
@@ -2410,7 +2420,7 @@ router.all('/*', async (req, res) => {
 router.all('/v1/*', async (req, res) => {
   try {
     const path = req.path.replace('/v1', ''); // Remove /v1 prefix
-    const url = `${BACKEND_URL}${path}${req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''}`;
+    const url = `${req._backendUrl}${path}${req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''}`;
     
     if (ENABLE_PROXY_LOGS) {
       console.log(`[PROXY] ${req.method} ${req.path} -> ${url}`);

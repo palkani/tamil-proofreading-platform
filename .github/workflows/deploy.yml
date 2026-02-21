@@ -159,6 +159,66 @@ jobs:
             exit 1
           fi
 
+      # Automatically sync the freshly-deployed Cloud Run URLs into Vercel's
+      # production environment so the frontend always routes to the right backend.
+      # Uses the Vercel REST API for reliable upsert (create-or-update) without
+      # any interactive prompts.
+      - name: Sync Cloud Run URLs to Vercel environment
+        run: |
+          ASIA_URL=$(gcloud run services describe prooftamil-backend \
+            --region=asia-south1 --format='value(status.url)')
+          US_URL=$(gcloud run services describe prooftamil-backend-us \
+            --region=us-central1 --format='value(status.url)' 2>/dev/null || echo "")
+
+          echo "Asia backend: $ASIA_URL"
+          echo "US backend:   ${US_URL:-not deployed}"
+
+          if [ -z "$ASIA_URL" ]; then
+            echo "ERROR: Asia backend URL not found after deployment"
+            exit 1
+          fi
+
+          # Upsert a Vercel production env var: update if it exists, create otherwise.
+          upsert_env() {
+            local KEY="$1"
+            local VALUE="$2"
+
+            EXISTING_ID=$(curl -sf \
+              "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}" \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" | \
+              jq -r --arg k "$KEY" '.envs[] | select(.key == $k and (.target | index("production") != null)) | .id' | head -1)
+
+            if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "null" ]; then
+              echo "  Updating $KEY"
+              curl -sf -X PATCH \
+                "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env/${EXISTING_ID}?teamId=${VERCEL_ORG_ID}" \
+                -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "{\"value\":\"${VALUE}\",\"type\":\"plain\",\"target\":[\"production\"]}" > /dev/null
+            else
+              echo "  Creating $KEY"
+              curl -sf -X POST \
+                "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}" \
+                -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "{\"key\":\"${KEY}\",\"value\":\"${VALUE}\",\"type\":\"plain\",\"target\":[\"production\"]}" > /dev/null
+            fi
+          }
+
+          upsert_env BACKEND_URL_ASIA  "$ASIA_URL"
+
+          if [ -n "$US_URL" ]; then
+            upsert_env BACKEND_URL_US      "$US_URL"
+            # BACKEND_URL_PRIMARY is the fixed OAuth callback URL — always US.
+            upsert_env BACKEND_URL_PRIMARY "$US_URL"
+          fi
+
+          echo "Vercel env vars synced."
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
       - name: Deploy Frontend to Vercel
         run: |
           npm install --global vercel@latest

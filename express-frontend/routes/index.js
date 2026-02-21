@@ -28,16 +28,22 @@ const axiosWithPool = axios.create({
   timeout: 30000,
 });
 const { getSeoData } = require('../config/seo');
-// Build backend API URL (matches api/auth proxy)
+const { getRegionalBackendUrl } = require('../utils/regional-backend');
+
+// Stamp the regional backend URL once per request.
+router.use((req, res, next) => {
+  req._backendUrl = getRegionalBackendUrl(req);
+  next();
+});
+
+// Module-level fallback for the sitemap route (called from an async callback
+// that may not have req in scope at the point of the BACKEND_URL reference).
 function getBackendApiUrl() {
   const baseUrl = process.env.BACKEND_URL || 'http://localhost:8080';
-  if (baseUrl.endsWith('/api/v1')) {
-    return baseUrl;
-  }
+  if (baseUrl.endsWith('/api/v1')) return baseUrl;
   return baseUrl.replace(/\/$/, '') + '/api/v1';
 }
-
-const BACKEND_URL = getBackendApiUrl();
+const BACKEND_URL = getBackendApiUrl(); // fallback — handlers use req._backendUrl
 
 // Demo banner should only show in development / explicit demo deployments.
 // NOTE: keep false by default in production.
@@ -174,7 +180,7 @@ router.get('/blog', async (req, res) => {
     pageType: 'blogIndex',
   };
   try {
-    const blogUrl = `${BACKEND_URL}/blog/posts`;
+    const blogUrl = `${req._backendUrl}/blog/posts`;
     console.log(`[BLOG] Fetching posts from: ${blogUrl}`);
     
     const backendRes = await axiosWithPool.get(blogUrl, {
@@ -226,7 +232,7 @@ router.get('/blog/:slug', async (req, res) => {
   const seoBase = getSeoData('blogPost') || getSeoData('home');
   const slug = String(req.params.slug || '').trim();
   try {
-    const backendRes = await axiosWithPool.get(`${BACKEND_URL}/blog/posts/${encodeURIComponent(slug)}`, {
+    const backendRes = await axiosWithPool.get(`${req._backendUrl}/blog/posts/${encodeURIComponent(slug)}`, {
       timeout: 10000,
       validateStatus: () => true,
     });
@@ -327,7 +333,7 @@ router.get('/blog/:slug', async (req, res) => {
 router.get('/blog/rss.xml', async (req, res) => {
   const baseUrl = 'https://prooftamil.com';
   try {
-    const backendRes = await axiosWithPool.get(`${BACKEND_URL}/blog/posts`, {
+    const backendRes = await axiosWithPool.get(`${req._backendUrl}/blog/posts`, {
       params: { page: 1, limit: 50 },
       timeout: 10000,
       validateStatus: () => true,
@@ -400,7 +406,7 @@ router.get('/my-blogs', requireAuth, async (req, res) => {
     if (req.headers.cookie) headers.cookie = req.headers.cookie;
     if (req.headers.authorization) headers.authorization = req.headers.authorization;
 
-    const backendRes = await axiosWithPool.get(`${BACKEND_URL}/blog/me/posts`, {
+    const backendRes = await axiosWithPool.get(`${req._backendUrl}/blog/me/posts`, {
       params: { limit: 200 },
       headers,
       withCredentials: true,
@@ -735,7 +741,7 @@ router.get('/sitemap.xml', (req, res) => {
 
   // Fetch up to 200 blog posts; keep timeout low so sitemap stays responsive.
   axiosWithPool
-    .get(`${BACKEND_URL}/blog/posts`, {
+    .get(`${req._backendUrl}/blog/posts`, {
       params: { page: 1, limit: 200 },
       timeout: 2500,
       validateStatus: () => true,
@@ -790,7 +796,7 @@ router.post('/logout', async (req, res) => {
     
     const backendRes = await axios({
       method: 'post',
-      url: `${BACKEND_URL}/auth/logout`,
+      url: `${req._backendUrl}/auth/logout`,
       headers: {
         cookie: req.headers.cookie,
         authorization: req.headers.authorization,
