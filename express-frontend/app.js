@@ -3,6 +3,7 @@
  * Responsibility: export an async handler for Vercel — nothing else.
  * All Express configuration lives in create-app.js.
  */
+require('express'); // So Vercel build detects Express entrypoint
 const { createApp, ensureAppReady } = require('./create-app');
 
 const app = createApp();
