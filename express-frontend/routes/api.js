@@ -1318,6 +1318,7 @@ router.post('/submit', async (req, res) => {
     const response = await axiosWithPool.post(url, requestBody, {
       headers,
       validateStatus: () => true, // Don't throw on any status
+      timeout: 25000, // 25s — well within Vercel's function limit; prevents HTML timeout pages reaching the client
     });
 
     // Logged-in path should behave exactly like Workspace.
