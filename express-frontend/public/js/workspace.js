@@ -1442,10 +1442,14 @@ class WorkspaceController {
     if (container && summary && acceptAllBtn) {
       this.suggestionsPanel = new SuggestionsPanel(container, summary, acceptAllBtn);
       this.suggestionsPanel.onAcceptSuggestion = () => this.handleSuggestionAccepted();
+      this.suggestionsPanel.onClearHighlights = () => this._clearCorrectionHighlights();
     }
 
     // Set up event listeners
     this.setupEventListeners();
+
+    // Set up inline correction highlight handlers (click, hover tooltip)
+    this._setupCorrectionHighlighting();
 
     // Update status displays
     this.updateWordCount();
@@ -3981,6 +3985,166 @@ class WorkspaceController {
     return all;
   }
 
+  // ============================================
+  // CORRECTION HIGHLIGHTING IN EDITOR
+  // ============================================
+
+  /** Set up delegated event handlers on the editor element (called once from init). */
+  _setupCorrectionHighlighting() {
+    // Create the hover tooltip element and append to body (so it's never clipped).
+    if (!document.getElementById('correction-tooltip')) {
+      const tooltip = document.createElement('div');
+      tooltip.id = 'correction-tooltip';
+      document.body.appendChild(tooltip);
+    }
+
+    const editor = document.getElementById('editor');
+    if (!editor) return;
+
+    // Click on an underlined span → focus the matching card in the AI panel.
+    editor.addEventListener('click', (e) => {
+      const span = e.target.closest('.correction-highlight');
+      if (!span) return;
+      const id = span.dataset.suggestionId;
+      if (!id) return;
+      editor.querySelectorAll('.correction-highlight.correction-active').forEach(s => s.classList.remove('correction-active'));
+      span.classList.add('correction-active');
+      if (this.suggestionsPanel && typeof this.suggestionsPanel.focusSuggestion === 'function') {
+        this.suggestionsPanel.focusSuggestion(id);
+      }
+    });
+
+    // Mouse move → show / reposition tooltip on correction spans.
+    editor.addEventListener('mousemove', (e) => {
+      const span = e.target.closest('.correction-highlight');
+      if (!span) { this._hideTooltip(); return; }
+      const title = span.dataset.title || '';
+      const desc = span.dataset.description || '';
+      const text = [title, desc].filter(Boolean).join(': ');
+      if (text) this._showTooltip(e.clientX, e.clientY, text);
+      else this._hideTooltip();
+    });
+
+    // Mouse leaves editor → always hide tooltip.
+    editor.addEventListener('mouseleave', () => this._hideTooltip());
+
+    // Hide tooltip on scroll inside the editor container.
+    const editorScroll = editor.closest('.overflow-auto');
+    if (editorScroll) editorScroll.addEventListener('scroll', () => this._hideTooltip(), { passive: true });
+  }
+
+  /** Remove all `.correction-highlight` spans from the editor, unwrapping their children. */
+  _clearCorrectionHighlights() {
+    const editor = document.getElementById('editor');
+    if (!editor) return;
+    const spans = Array.from(editor.querySelectorAll('.correction-highlight'));
+    spans.forEach(span => {
+      const parent = span.parentNode;
+      if (!parent) return;
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+    });
+    try { editor.normalize(); } catch (_e) {}
+    this._hideTooltip();
+  }
+
+  /**
+   * Wrap the first occurrence of each suggestion's sourceText in a styled span.
+   * Clears any previous highlights first.
+   */
+  _highlightCorrectionsInEditor(suggestions) {
+    const editor = document.getElementById('editor');
+    if (!editor) return;
+    this._clearCorrectionHighlights();
+    if (!suggestions || suggestions.length === 0) return;
+
+    let count = 0;
+    for (const s of suggestions) {
+      const searchText = (s.sourceText || s.originalText || '').trim();
+      if (searchText.length < 2) continue;
+      const typeClass = this._getCorrectionTypeClass(s.type);
+      const wrapped = this._wrapFirstMatch(editor, searchText, s.id, typeClass, s.title || '', s.description || '');
+      if (wrapped) count++;
+    }
+    console.log('[Highlight] Highlighted', count, '/', suggestions.length, 'corrections in editor');
+  }
+
+  /** Map suggestion type string to a CSS class. */
+  _getCorrectionTypeClass(type) {
+    const t = (type || 'grammar').toLowerCase().replace(/\s+/g, '-');
+    const map = {
+      grammar: 'correction-grammar',
+      punctuation: 'correction-punctuation',
+      spelling: 'correction-spelling',
+      style: 'correction-style',
+      clarity: 'correction-clarity',
+      'word-choice': 'correction-style',
+      'incomplete-word': 'correction-spelling',
+      sandhi: 'correction-grammar',
+      'missing-space': 'correction-grammar',
+      phonetic: 'correction-grammar',
+      case: 'correction-grammar',
+      space: 'correction-grammar',
+    };
+    return map[t] || 'correction-grammar';
+  }
+
+  /**
+   * Find the first text-node occurrence of `searchText` under `container` and
+   * wrap it in a `<span class="correction-highlight …">`. Returns true on success.
+   */
+  _wrapFirstMatch(container, searchText, suggestionId, typeClass, title, description) {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+    let node;
+    while ((node = walker.nextNode())) {
+      // Skip text already inside a correction span.
+      if (node.parentNode && node.parentNode.classList && node.parentNode.classList.contains('correction-highlight')) continue;
+      const idx = node.textContent.indexOf(searchText);
+      if (idx === -1) continue;
+      try {
+        const range = document.createRange();
+        range.setStart(node, idx);
+        range.setEnd(node, idx + searchText.length);
+        const span = document.createElement('span');
+        span.className = `correction-highlight ${typeClass}`;
+        span.dataset.suggestionId = suggestionId;
+        span.dataset.title = title;
+        span.dataset.description = description;
+        range.surroundContents(span);
+        return true;
+      } catch (e) {
+        console.warn('[Highlight] surroundContents failed for:', searchText, e.message);
+      }
+      break;
+    }
+    return false;
+  }
+
+  _showTooltip(x, y, text) {
+    const tooltip = document.getElementById('correction-tooltip');
+    if (!tooltip) return;
+    tooltip.textContent = text;
+    tooltip.classList.add('visible');
+    this._positionTooltip(tooltip, x, y);
+  }
+
+  _positionTooltip(tooltip, x, y) {
+    const OFFSET = 14;
+    const tw = tooltip.offsetWidth || 200;
+    const th = tooltip.offsetHeight || 40;
+    let left = x + OFFSET;
+    let top = y + OFFSET;
+    if (left + tw > window.innerWidth - 8) left = x - tw - OFFSET;
+    if (top + th > window.innerHeight - 8) top = y - th - OFFSET;
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  }
+
+  _hideTooltip() {
+    const tooltip = document.getElementById('correction-tooltip');
+    if (tooltip) tooltip.classList.remove('visible');
+  }
+
   async autoAnalyze() {
     // Optional opts: autoAnalyze({ silent: true })
     const opts = (arguments && arguments[0] && typeof arguments[0] === 'object') ? arguments[0] : {};
@@ -4408,10 +4572,12 @@ class WorkspaceController {
         this.suggestionsPanel.addSuggestions(dedupedGeminiSuggestions);
         console.log('[AI Debug] Added', dedupedGeminiSuggestions.length, 'suggestions to panel');
         console.log('[AI Debug] Panel suggestions count after add:', this.suggestionsPanel.suggestions.length);
+        // Underline corrections inline in the editor
+        this._highlightCorrectionsInEditor(this.suggestionsPanel.suggestions);
       } else {
         console.warn('[AI Debug] ⚠️ No suggestions to add (all filtered out or empty response)');
       }
-      
+
       // Highlight spelling mistakes in editor
       if (this.editor && typeof this.editor.highlightSpellingMistakes === 'function') {
         this.editor.highlightSpellingMistakes(dedupedGeminiSuggestions);

@@ -376,6 +376,230 @@
     background: linear-gradient(180deg, #a5b4fc 0%, #818cf8 100%);
     background-clip: padding-box;
   }
+
+  /* ==========================================================================
+     Correction Highlighting (inline wavy underlines + tooltip + navigator)
+     ========================================================================== */
+  .correction-highlight {
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background-color 0.15s;
+  }
+  .correction-highlight:hover {
+    background-color: rgba(239, 68, 68, 0.08);
+  }
+  .correction-highlight.correction-active {
+    background-color: rgba(239, 68, 68, 0.14);
+    outline: 1px solid rgba(239, 68, 68, 0.35);
+    outline-offset: 1px;
+  }
+  /* Red wavy – grammar / punctuation / default */
+  .correction-grammar,
+  .correction-punctuation {
+    text-decoration: underline wavy #ef4444;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 2px;
+  }
+  /* Orange wavy – spelling */
+  .correction-spelling {
+    text-decoration: underline wavy #f97316;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 2px;
+  }
+  /* Purple wavy – style / clarity */
+  .correction-style,
+  .correction-clarity {
+    text-decoration: underline wavy #8b5cf6;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 2px;
+  }
+  /* Hover tooltip */
+  #correction-tooltip {
+    position: fixed;
+    z-index: 99999;
+    max-width: 260px;
+    background: #1e293b;
+    color: #f1f5f9;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 8px 12px;
+    border-radius: 8px;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    display: none;
+    white-space: normal;
+    word-break: break-word;
+  }
+  #correction-tooltip.visible { display: block; }
+  /* Correction Navigator bar (above suggestions list) */
+  #correction-navigator {
+    display: none;
+    background: #eff6ff;
+    border-bottom: 1px solid #bfdbfe;
+    padding: 10px 16px;
+    align-items: center;
+    gap: 8px;
+    justify-content: space-between;
+  }
+  #correction-navigator.visible { display: flex; }
+  .correction-nav-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #1e40af;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .correction-nav-btns {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .correction-nav-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid #bfdbfe;
+    background: white;
+    color: #1e40af;
+    cursor: pointer;
+    transition: background 0.12s;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .correction-nav-btn:hover { background: #dbeafe; }
+  .correction-nav-count {
+    font-size: 12px;
+    color: #3b82f6;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  /* ==========================================================================
+     Suggestion Cards — Screenshot-accurate design
+     ========================================================================== */
+
+  /* Ensure the suggestions list scrolls when there are many corrections */
+  #suggestions-container {
+    min-height: 0;
+    padding-bottom: 24px;
+  }
+
+  /* Base card */
+  .suggestion-card {
+    background: #ffffff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    transition: box-shadow 0.15s, border-color 0.15s;
+  }
+  .suggestion-card:last-child { margin-bottom: 0; }
+  .suggestion-card:hover {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+    border-color: #d1d5db;
+  }
+  .suggestion-card.focused {
+    border: 2px solid #2563eb !important;
+    background-color: #eff6ff;
+    scroll-margin-top: 8px;
+  }
+
+  /* Type badge */
+  .sugg-type-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 99px;
+    margin-bottom: 12px;
+    letter-spacing: 0.01em;
+  }
+  .sugg-type-grammar, .sugg-type-punctuation    { background: #fee2e2; color: #b91c1c; }
+  .sugg-type-spelling, .sugg-type-incomplete-word { background: #ffedd5; color: #c2410c; }
+  .sugg-type-style, .sugg-type-clarity, .sugg-type-word-choice { background: #ede9fe; color: #6d28d9; }
+  .sugg-type-sandhi, .sugg-type-missing-space,
+  .sugg-type-phonetic, .sugg-type-case, .sugg-type-space { background: #fef9c3; color: #854d0e; }
+  .sugg-type-default { background: #f1f5f9; color: #475569; }
+
+  /* Field labels (ORIGINAL / SUGGESTION / REASON) */
+  .sugg-field-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: block;
+    margin-bottom: 5px;
+  }
+
+  /* Original text — pink/red tinted box */
+  .sugg-original-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: #991b1b;
+    line-height: 1.65;
+    margin-bottom: 10px;
+    word-break: break-word;
+  }
+
+  /* Suggestion — green tinted box */
+  .sugg-suggestion-box {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: #166534;
+    font-weight: 500;
+    line-height: 1.65;
+    margin-bottom: 10px;
+    word-break: break-word;
+  }
+
+  /* Reason text */
+  .sugg-reason-text {
+    font-size: 13px;
+    color: #4b5563;
+    line-height: 1.65;
+    margin: 0 0 14px 0;
+  }
+
+  /* Action buttons row */
+  .sugg-actions { display: flex; gap: 8px; }
+  .sugg-accept-btn {
+    flex: 1;
+    padding: 7px 14px;
+    background: #4f46e5;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.13s;
+  }
+  .sugg-accept-btn:hover { background: #4338ca; }
+  .sugg-ignore-btn {
+    flex: 1;
+    padding: 7px 14px;
+    background: #ffffff;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 8px;
+    border: 1.5px solid #e5e7eb;
+    cursor: pointer;
+    transition: background 0.13s, border-color 0.13s;
+  }
+  .sugg-ignore-btn:hover { background: #f9fafb; border-color: #d1d5db; }
 </style>
 
 <div id="workspace-auth-banner" class="hidden bg-yellow-50 border-b border-yellow-200 text-yellow-800 px-4 py-3 flex items-center justify-between">
@@ -772,8 +996,11 @@
         </p>
       </div>
 
+      <!-- Correction Navigator (shown when a correction span is clicked) -->
+      <div id="correction-navigator"></div>
+
       <!-- Suggestions List -->
-      <div id="suggestions-container" class="flex-1 overflow-auto px-6 py-4 space-y-6">
+      <div id="suggestions-container" class="flex-1 overflow-auto px-6 py-4">
         <div class="text-center text-gray-400 py-12">
           <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>

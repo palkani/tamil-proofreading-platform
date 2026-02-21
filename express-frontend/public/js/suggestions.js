@@ -12,6 +12,8 @@ class SuggestionsPanel {
     // - 'no-issues': analysis completed and no corrections found
     // - 'resolved': user applied/ignored all suggestions for this run
     this.emptyState = 'idle';
+    // Index of the currently focused suggestion (-1 = none)
+    this.focusedIndex = -1;
   }
 
   normalizeComparable(s) {
@@ -108,20 +110,102 @@ class SuggestionsPanel {
     this.suggestions = [];
     this.handledIds.clear();
     this.emptyState = 'idle';
+    this.focusedIndex = -1;
+    const nav = document.getElementById('correction-navigator');
+    if (nav) { nav.classList.remove('visible'); nav.innerHTML = ''; }
+    if (this.onClearHighlights) this.onClearHighlights();
     this.render();
   }
 
   removeSuggestion(id) {
+    const removedIdx = this.suggestions.findIndex(s => s.id === id);
     this.suggestions = this.suggestions.filter(s => s.id !== id);
     this.handledIds.add(id);
+    // Adjust focusedIndex so navigator stays consistent
+    if (this.focusedIndex >= 0 && removedIdx !== -1 && removedIdx <= this.focusedIndex) {
+      this.focusedIndex = Math.max(0, this.focusedIndex - 1);
+    }
+    if (this.focusedIndex >= this.suggestions.length) {
+      this.focusedIndex = this.suggestions.length - 1;
+    }
     if (this.suggestions.length === 0 && this.handledIds.size > 0) {
       this.emptyState = 'resolved';
+      this.focusedIndex = -1;
+      const nav = document.getElementById('correction-navigator');
+      if (nav) { nav.classList.remove('visible'); nav.innerHTML = ''; }
+    } else {
+      this._renderNavigator();
     }
     this.render();
   }
 
   getAcceptedCount() {
     return this.handledIds.size;
+  }
+
+  /**
+   * Highlight the suggestion card with the given id and show the navigator.
+   * Called when the user clicks an underlined correction span in the editor.
+   */
+  focusSuggestion(id) {
+    const idx = this.suggestions.findIndex(s => s.id === id);
+    if (idx === -1) return;
+    this.focusedIndex = idx;
+    this._renderNavigator();
+    // Scroll the card into view and apply focus styling
+    document.querySelectorAll('.suggestion-card.focused').forEach(c => c.classList.remove('focused'));
+    const card = document.querySelector(`.suggestion-card[data-suggestion-id="${id}"]`);
+    if (card) {
+      card.classList.add('focused');
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  /**
+   * Move focus to the next (+1) or previous (-1) correction, looping around.
+   * Also activates the corresponding editor highlight span.
+   */
+  navigateCorrection(delta) {
+    const total = this.suggestions.length;
+    if (total === 0) return;
+    if (this.focusedIndex < 0) this.focusedIndex = 0;
+    else this.focusedIndex = (this.focusedIndex + delta + total) % total;
+    const suggestion = this.suggestions[this.focusedIndex];
+    if (!suggestion) return;
+    this.focusSuggestion(suggestion.id);
+    // Activate the matching editor span
+    document.querySelectorAll('.correction-highlight.correction-active').forEach(s => s.classList.remove('correction-active'));
+    const span = document.querySelector(`.correction-highlight[data-suggestion-id="${suggestion.id}"]`);
+    if (span) {
+      span.classList.add('correction-active');
+      span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  /** Render the "X of Y" navigator bar above the suggestions list. */
+  _renderNavigator() {
+    const nav = document.getElementById('correction-navigator');
+    if (!nav) return;
+    const total = this.suggestions.length;
+    if (total === 0 || this.focusedIndex < 0) {
+      nav.classList.remove('visible');
+      nav.innerHTML = '';
+      return;
+    }
+    const s = this.suggestions[this.focusedIndex];
+    const label = s ? (s.title || 'Correction') : 'Correction';
+    nav.classList.add('visible');
+    nav.innerHTML = `
+      <span class="correction-nav-label">${escapeHtml(label)}</span>
+      <div class="correction-nav-btns">
+        <button class="correction-nav-btn" data-nav="-1" title="Previous">&#8249;</button>
+        <span class="correction-nav-count">${this.focusedIndex + 1} / ${total}</span>
+        <button class="correction-nav-btn" data-nav="1" title="Next">&#8250;</button>
+      </div>
+    `;
+    nav.querySelectorAll('.correction-nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.navigateCorrection(parseInt(btn.dataset.nav, 10)));
+    });
   }
 
   render() {
@@ -183,46 +267,47 @@ class SuggestionsPanel {
       return;
     }
 
-    // Group suggestions by type
+    // Render as a flat list in type-priority order (each card carries its own badge).
+    // Grammar errors first, then spelling, punctuation, style/clarity, others.
+    const TYPE_ORDER = [
+      'grammar', 'spelling', 'punctuation', 'incomplete word', 'sandhi',
+      'missing space', 'phonetic', 'case', 'space',
+      'word choice', 'style', 'clarity', 'suggestion', 'alternative',
+    ];
     const grouped = this.groupByType(this.suggestions);
+    const list = document.createElement('div');
 
-    // Render each group
-    Object.keys(grouped).forEach(type => {
-      if (grouped[type].length === 0) return;
-
-      const section = document.createElement('div');
-      section.className = 'mb-6';
-
-      const header = document.createElement('h4');
-      header.className = 'text-sm font-semibold text-gray-700 mb-3 capitalize';
-      header.textContent = this.getTypeLabel(type);
-      section.appendChild(header);
-
-      const cards = document.createElement('div');
-      cards.className = 'space-y-3';
-
-      grouped[type].forEach(suggestion => {
-        cards.appendChild(this.createSuggestionCard(suggestion));
-      });
-
-      section.appendChild(cards);
-      this.container.appendChild(section);
+    // Render known types in priority order
+    TYPE_ORDER.forEach(type => {
+      if (!grouped[type] || grouped[type].length === 0) return;
+      grouped[type].forEach(s => list.appendChild(this.createSuggestionCard(s)));
     });
+
+    // Append any types not in TYPE_ORDER (future-proof)
+    Object.keys(grouped).forEach(type => {
+      if (TYPE_ORDER.includes(type) || !grouped[type] || grouped[type].length === 0) return;
+      grouped[type].forEach(s => list.appendChild(this.createSuggestionCard(s)));
+    });
+
+    this.container.appendChild(list);
   }
 
   groupByType(suggestions) {
     const groups = {
       grammar: [],
-      style: [],
-      clarity: [],
       spelling: [],
       punctuation: [],
-      'word choice': [],
       'incomplete word': [],
-      'sandhi': [],
+      sandhi: [],
       'missing space': [],
+      phonetic: [],
+      case: [],
+      space: [],
+      'word choice': [],
+      style: [],
+      clarity: [],
       suggestion: [],
-      alternative: []
+      alternative: [],
     };
 
     suggestions.forEach(s => {
@@ -257,82 +342,85 @@ class SuggestionsPanel {
     return labels[type?.toLowerCase()] || (type ? type.charAt(0).toUpperCase() + type.slice(1).toLowerCase() : 'Suggestions');
   }
 
+  /** Returns a CSS class name for the type badge based on suggestion type. */
+  _getTypeBadgeClass(type) {
+    const t = (type || '').toLowerCase().trim();
+    const map = {
+      grammar:           'sugg-type-grammar',
+      punctuation:       'sugg-type-punctuation',
+      spelling:          'sugg-type-spelling',
+      'incomplete word': 'sugg-type-incomplete-word',
+      style:             'sugg-type-style',
+      clarity:           'sugg-type-clarity',
+      'word choice':     'sugg-type-word-choice',
+      sandhi:            'sugg-type-sandhi',
+      'missing space':   'sugg-type-missing-space',
+      phonetic:          'sugg-type-phonetic',
+      case:              'sugg-type-case',
+      space:             'sugg-type-space',
+    };
+    return map[t] || 'sugg-type-default';
+  }
+
   createSuggestionCard(suggestion) {
     const card = document.createElement('div');
     card.className = 'suggestion-card';
     card.setAttribute('data-suggestion-id', suggestion.id);
 
-    // Parse original and suggested text
-    let originalText = '';
+    // Resolve original and suggested text
+    let originalText = (suggestion.sourceText || '').trim();
     let suggestedText = '';
-
-    if (suggestion.sourceText) {
-      originalText = suggestion.sourceText;
-    }
 
     if (suggestion.preview && suggestion.preview.includes('→')) {
       const parts = suggestion.preview.split('→');
-      originalText = originalText || parts[0].trim();
-      suggestedText = parts[1]?.trim() || '';
+      if (!originalText) originalText = parts[0].trim();
+      suggestedText = (parts[1] || '').trim();
     } else if (suggestion.preview) {
-      suggestedText = suggestion.preview;
+      suggestedText = suggestion.preview.trim();
     }
 
+    const badgeClass  = this._getTypeBadgeClass(suggestion.type);
+    const typeLabel   = this.getTypeLabel(suggestion.type);
+    const reason      = (suggestion.description || '').trim();
+    const hasApply    = !!suggestion.onApply;
+
     card.innerHTML = `
-      <div class="flex items-start justify-between mb-2">
-        <h5 class="font-medium text-gray-900 text-sm">${escapeHtml(suggestion.title)}</h5>
-        <span class="text-xs px-2 py-1 rounded-full bg-blue-50 text-primary-700">${this.getTypeLabel(suggestion.type)}</span>
-      </div>
-      
-      ${originalText || suggestedText ? `
-        <div class="bg-gray-50 rounded-lg p-3 mb-3 text-sm tamil-text">
-          ${originalText ? `
-            <div class="mb-2">
-              <span class="text-xs text-gray-500 block mb-1">Original:</span>
-              <span class="text-gray-700">${escapeHtml(originalText)}</span>
-            </div>
-          ` : ''}
-          ${suggestedText ? `
-            <div>
-              <span class="text-xs text-gray-500 block mb-1">Suggested:</span>
-              <span class="text-green-700 font-medium">${escapeHtml(suggestedText)}</span>
-            </div>
-          ` : ''}
-        </div>
+      <span class="sugg-type-badge ${badgeClass}">${escapeHtml(typeLabel)}</span>
+
+      ${originalText ? `
+        <span class="sugg-field-label">Original:</span>
+        <div class="sugg-original-box tamil-text">${escapeHtml(originalText)}</div>
       ` : ''}
-      
-      <p class="text-sm text-gray-600 mb-3">${escapeHtml(suggestion.description || '')}</p>
-      
-      <div class="flex gap-2">
-        ${suggestion.onApply ? `
-          <button class="apply-btn flex-1 px-3 py-1.5 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-500 transition-colors">
-            Apply
-          </button>
-        ` : ''}
-        <button class="ignore-btn flex-1 px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition-colors">
-          Ignore
-        </button>
+
+      ${suggestedText ? `
+        <span class="sugg-field-label">Suggestion:</span>
+        <div class="sugg-suggestion-box tamil-text">${escapeHtml(suggestedText)}</div>
+      ` : ''}
+
+      ${reason ? `
+        <span class="sugg-field-label">Reason:</span>
+        <p class="sugg-reason-text">${escapeHtml(reason)}</p>
+      ` : ''}
+
+      <div class="sugg-actions">
+        ${hasApply ? `<button class="sugg-accept-btn">Accept</button>` : ''}
+        <button class="sugg-ignore-btn">Ignore</button>
       </div>
     `;
 
-    // Attach event listeners
-    const applyBtn = card.querySelector('.apply-btn');
-    const ignoreBtn = card.querySelector('.ignore-btn');
-
-    if (applyBtn && suggestion.onApply) {
-      applyBtn.addEventListener('click', () => {
+    // Accept button
+    const acceptBtn = card.querySelector('.sugg-accept-btn');
+    if (acceptBtn && suggestion.onApply) {
+      acceptBtn.addEventListener('click', () => {
         suggestion.onApply();
         this.removeSuggestion(suggestion.id);
-        if (this.onAcceptSuggestion) {
-          this.onAcceptSuggestion();
-        }
+        if (this.onAcceptSuggestion) this.onAcceptSuggestion();
       });
     }
 
-    ignoreBtn.addEventListener('click', () => {
-      if (suggestion.onIgnore) {
-        suggestion.onIgnore();
-      }
+    // Ignore button
+    card.querySelector('.sugg-ignore-btn').addEventListener('click', () => {
+      if (suggestion.onIgnore) suggestion.onIgnore();
       this.removeSuggestion(suggestion.id);
     });
 
