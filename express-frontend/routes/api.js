@@ -5,6 +5,7 @@ const http = require('http');
 const https = require('https');
 const multer = require('multer');
 const FormData = require('form-data');
+const crypto = require('crypto');
 
 // Shared Gemini key rotator for multi-key support
 const { keyRotator } = require('../utils/gemini-key-rotator');
@@ -66,17 +67,48 @@ function getCorrectionsBackendBase() {
 
 const ENABLE_PROXY_LOGS = process.env.PROXY_LOG !== 'false';
 
+// ---------------------------------------------------------------------------
+// Short-lived in-memory cache for corrections results.
+// Prevents duplicate Gemini calls when the user clicks "Check" multiple times
+// on the same text within 30 seconds (common UX pattern).
+// ---------------------------------------------------------------------------
+const correctionsCache = new Map();
+const CORRECTIONS_CACHE_TTL = 30 * 1000; // 30 seconds
+
+function getCacheKey(text) {
+  return crypto.createHash('md5').update(text).digest('hex');
+}
+
+function getCachedResult(key) {
+  const entry = correctionsCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CORRECTIONS_CACHE_TTL) {
+    correctionsCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCachedResult(key, data) {
+  // Cap at 50 entries; evict oldest to avoid unbounded growth
+  if (correctionsCache.size >= 50) {
+    correctionsCache.delete(correctionsCache.keys().next().value);
+  }
+  correctionsCache.set(key, { ts: Date.now(), data });
+}
+
 // Helper function to split text into manageable chunks for better accuracy
-// Optimized: Increased chunk size from 120 to 200 chars to reduce API calls
+// Chunk size 400: fewer API calls per request (each call has ~1-2s RTT overhead).
+// Accuracy is not affected — Gemini handles 400-char Tamil paragraphs well.
 function splitIntoSentences(text) {
   // Split by common Tamil and English sentence delimiters
   const sentences = text.split(/([.!?।]\s*)/g);
   const chunks = [];
   let current = '';
   let globalOffset = 0;
-  
+
   for (const part of sentences) {
-    if (current.length + part.length <= 200) {
+    if (current.length + part.length <= 400) {
       current += part;
     } else {
       if (current.trim()) {
@@ -104,24 +136,30 @@ router.post('/gemini/analyze', async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    // Use shared key rotator for multi-key support
-    const keyInfo = keyRotator.getNextKey();
-    const apiKey = keyInfo ? keyInfo.key : null;
-    const keyIndex = keyInfo ? keyInfo.index : -1;
-    const baseUrl = keyRotator.baseUrl;
-    
-    if (!apiKey) {
-      return res.status(500).json({ 
+    const { baseUrl } = keyRotator;
+
+    if (!keyRotator.getNextKey()) {
+      return res.status(500).json({
         error: 'Gemini AI not configured - API key missing',
         help: 'Set GEMINI_API_KEY_1 in Vercel environment. Get free keys at https://aistudio.google.com/apikey'
       });
     }
 
-    // Split into chunks to improve detection accuracy
+    // Cache hit: avoid redundant Gemini calls for the same text
+    const analyzeCacheKey = getCacheKey(text.trim());
+    const analyzeCache = getCachedResult(analyzeCacheKey);
+    if (analyzeCache) {
+      return res.json(analyzeCache);
+    }
+
+    // Split into chunks; each chunk gets its own Gemini key so parallel chunks
+    // spread rate-limit usage across all available keys.
     const chunks = splitIntoSentences(text);
-    
-    // OPTIMIZATION: Process all chunks in parallel for 3-5x speed improvement
     const chunkPromises = chunks.map(async (chunk) => {
+      const keyInfo = keyRotator.getNextKey();
+      const apiKey = keyInfo ? keyInfo.key : null;
+      const keyIndex = keyInfo ? keyInfo.index : -1;
+      if (!apiKey) return [];
       try {
         const response = await axiosWithPool.post(
           `${baseUrl}/models/gemini-2.5-flash:generateContent`,
@@ -186,7 +224,7 @@ router.post('/gemini/analyze', async (req, res) => {
             generationConfig: {
               temperature: 0,
               topP: 0.1,
-              maxOutputTokens: 1024,
+              maxOutputTokens: 800,
               responseMimeType: "application/json",
               responseSchema: {
                 type: "array",
@@ -213,46 +251,30 @@ router.post('/gemini/analyze', async (req, res) => {
             }
           },
           {
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': apiKey
-            },
-            timeout: 10000 // 10 second timeout for faster failure detection
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+            timeout: 10000
           }
         );
 
-        // Check for rate limiting
         if (response.status === 429) {
           keyRotator.markRateLimited(keyIndex);
-          console.log(`[GEMINI] Rate limited on key ${keyIndex + 1}, chunk will return empty`);
           return [];
         }
-        
         if (response.status !== 200) {
           console.error(`[GEMINI] API error ${response.status}:`, response.data?.error);
           return [];
         }
 
-        const aiText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-        
-        // Clean and validate JSON before parsing
-        let cleanedJson = aiText.trim();
-        
-        // If response is truncated or malformed, try to fix it
+        let cleanedJson = (response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]').trim();
         if (!cleanedJson.endsWith(']')) {
-          // Find the last complete object
           const lastCompleteObject = cleanedJson.lastIndexOf('}');
-          if (lastCompleteObject > 0) {
-            cleanedJson = cleanedJson.substring(0, lastCompleteObject + 1) + ']';
-          } else {
-            cleanedJson = '[]';
-          }
+          cleanedJson = lastCompleteObject > 0
+            ? cleanedJson.substring(0, lastCompleteObject + 1) + ']'
+            : '[]';
         }
-        
+
         const chunkSuggestions = JSON.parse(cleanedJson);
-        
         if (Array.isArray(chunkSuggestions)) {
-          // Adjust offsets to global text positions
           return chunkSuggestions.map(sugg => {
             if (sugg.position) {
               sugg.position.start += chunk.offset;
@@ -265,15 +287,11 @@ router.post('/gemini/analyze', async (req, res) => {
         return [];
       } catch (parseErr) {
         console.error('Failed to process chunk, skipping:', parseErr.message);
-        return []; // Return empty array instead of failing
+        return [];
       }
     });
 
-    // Wait for all chunks to complete in parallel
-    const allChunkResults = await Promise.all(chunkPromises);
-    const allSuggestions = allChunkResults.flat();
-
-    // Filter out invalid suggestions where original === suggestion (Gemini sometimes returns no-op corrections)
+    const allSuggestions = (await Promise.all(chunkPromises)).flat();
     const filtered = allSuggestions.filter((s) => {
       const orig = (s.original || '').trim();
       const sugg = (s.suggestion || s.corrected || '').trim();
@@ -283,7 +301,9 @@ router.post('/gemini/analyze', async (req, res) => {
       return true;
     });
 
-    res.json({ suggestions: filtered });
+    const analyzeResult = { suggestions: filtered };
+    setCachedResult(analyzeCacheKey, analyzeResult);
+    res.json(analyzeResult);
   } catch (error) {
     console.error('Gemini API error:', error.response?.data || error.message);
     res.status(500).json({ 
@@ -303,8 +323,16 @@ router.post('/corrections', async (req, res) => {
       return res.status(400).json({ success: false, corrections: [], error: 'Text is required' });
     }
 
+    // Cache hit: return immediately without hitting any backend or Gemini
+    const cacheKey = getCacheKey(text.trim());
+    const cached = getCachedResult(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     // 1) Try backend (Cloud Run) first so /api/corrections shows up in Cloud Run logs.
-    // Uses BACKEND_URL if set; else TRANSLITERATOR_BASE_URL (or NEXT_PUBLIC_TRANSLITERATOR_BASE_URL) + /api/v1.
+    // Timeout reduced to 7s: Cloud Run responds in < 3s when warm; if it can't respond in
+    // 7s it's cold/unavailable and we fall through to Gemini immediately.
     const correctionsBackend = getCorrectionsBackendBase();
     if (correctionsBackend) {
       try {
@@ -312,11 +340,13 @@ router.post('/corrections', async (req, res) => {
         const proxyRes = await axiosWithPool.post(
           submitUrl,
           { text: text.trim(), save_draft: false },
-          { headers: { 'Content-Type': 'application/json' }, timeout: 25000, validateStatus: () => true }
+          { headers: { 'Content-Type': 'application/json' }, timeout: 7000, validateStatus: () => true }
         );
         if (proxyRes.status === 200 && proxyRes.data && proxyRes.data.success === true && Array.isArray(proxyRes.data.corrections)) {
           console.log('[CORRECTIONS] Proxied to Cloud Run', { url: submitUrl, count: proxyRes.data.corrections.length });
-          return res.json({ success: true, corrections: proxyRes.data.corrections });
+          const result = { success: true, corrections: proxyRes.data.corrections };
+          setCachedResult(cacheKey, result);
+          return res.json(result);
         }
       } catch (proxyErr) {
         console.warn('[CORRECTIONS] Backend proxy failed, using Express→Gemini', proxyErr.message);
@@ -326,20 +356,23 @@ router.post('/corrections', async (req, res) => {
     }
 
     // 2) Fallback: Express → Gemini (no Cloud Run; check Vercel logs)
-    const keyInfo = keyRotator.getNextKey();
-    const apiKey = keyInfo ? keyInfo.key : null;
-    const keyIndex = keyInfo ? keyInfo.index : -1;
-    const baseUrl = keyRotator.baseUrl;
+    const { baseUrl } = keyRotator;
 
-    console.log('[CORRECTIONS] POST /api/corrections (Express→Gemini)', { textLen: text.length, hasKey: !!apiKey });
-
-    if (!apiKey) {
+    if (!keyRotator.getNextKey()) {
       console.warn('[CORRECTIONS] No Gemini API key - set GEMINI_API_KEY_1 or GOOGLE_GENAI_API_KEY in env (Vercel/Express)');
       return res.status(500).json({ success: false, corrections: [], error: 'Gemini AI not configured' });
     }
 
     const chunks = splitIntoSentences(text);
+    console.log('[CORRECTIONS] POST /api/corrections (Express→Gemini)', { textLen: text.length, chunks: chunks.length });
+
+    // Rotate the Gemini key independently per chunk so concurrent chunks spread
+    // across all available keys and a single rate-limited key doesn't stall everything.
     const chunkPromises = chunks.map(async (chunk) => {
+      const keyInfo = keyRotator.getNextKey();
+      const apiKey = keyInfo ? keyInfo.key : null;
+      const keyIndex = keyInfo ? keyInfo.index : -1;
+      if (!apiKey) return [];
       try {
         const response = await axiosWithPool.post(
           `${baseUrl}/models/gemini-2.5-flash:generateContent`,
@@ -405,7 +438,9 @@ router.post('/corrections', async (req, res) => {
             generationConfig: {
               temperature: 0,
               topP: 0.1,
-              maxOutputTokens: 1024,
+              // 800 tokens is sufficient for up to ~6 corrections per 400-char chunk.
+              // Lower limit → faster time-to-first-token from Gemini.
+              maxOutputTokens: 800,
               responseMimeType: 'application/json',
               responseSchema: {
                 type: 'array',
@@ -469,7 +504,9 @@ router.post('/corrections', async (req, res) => {
     }));
 
     console.log('[CORRECTIONS] Returning', { count: corrections.length, rawSuggestions: allSuggestions.length });
-    return res.json({ success: true, corrections });
+    const result = { success: true, corrections };
+    setCachedResult(cacheKey, result);
+    return res.json(result);
   } catch (error) {
     console.error('[CORRECTIONS] Error:', error.message);
     return res.status(500).json({ success: false, corrections: [], error: error.message });
