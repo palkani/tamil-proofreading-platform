@@ -482,6 +482,7 @@ class WorkspaceController {
     this._imeLastAppliedSeq = 0;
     this._imeAbortController = null;
     this.saveTimeout = null;
+    this.periodicSaveInterval = null; // 30-second background save
     this.autosaveAuthBlocked = false;
     this.loading = false;
     this.currentMode = 'editor'; // 'list' or 'editor'
@@ -1452,9 +1453,18 @@ class WorkspaceController {
     
     // Check for URL hash to open specific draft
     this.checkUrlHash();
-    
+
     // Start in editor mode
     this.showEditor();
+
+    // Periodic save: fire autosave() every 30 seconds so edits are never lost
+    // even when the user types continuously without a pause long enough to trigger
+    // the 2-second debounce in scheduleSave().
+    if (!this.readOnly) {
+      this.periodicSaveInterval = setInterval(() => {
+        this.autosave();
+      }, 30_000);
+    }
   }
   
   checkUrlHash() {

@@ -26,7 +26,13 @@ async function getWorker(logger) {
       await worker.initialize('eng+tam');
       workerCurrentLang = 'eng+tam';
       return worker;
-    })();
+    })().catch((err) => {
+      // Reset so the next request creates a fresh worker instead of
+      // permanently failing on a rejected promise.
+      workerPromise = null;
+      workerCurrentLang = null;
+      throw err;
+    });
   }
   return workerPromise;
 }

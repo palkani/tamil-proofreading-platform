@@ -422,7 +422,7 @@
 
     if (fmt === 'docx') {
       if (downloadFilename) {
-        window.location.href = `/api/ocr/download/${downloadFilename}`;
+        window.location.href = `/api/ocr/download/${encodeURIComponent(downloadFilename)}`;
       } else {
         // If backend didn't provide a docx, fallback to TXT so user can still download.
         const blob = new Blob([extractedText || ''], { type: 'text/plain;charset=utf-8' });
