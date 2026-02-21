@@ -7,7 +7,10 @@ import (
         "errors"
         "fmt"
         "log"
+        "math"
         "os"
+        "regexp"
+        "strconv"
         "strings"
 	"sync"
         "time"
@@ -103,6 +106,21 @@ func getEnvTrim(key, def string) string {
                 return def
         }
         return v
+}
+
+var retryAfterRe = regexp.MustCompile(`(?i)retry in (\d+(?:\.\d+)?)\s*s`)
+
+// parseRetryAfterSeconds extracts "Please retry in 14.458843057s" from Gemini 429 message; returns 0 if not found.
+func parseRetryAfterSeconds(message string) float64 {
+        m := retryAfterRe.FindStringSubmatch(message)
+        if len(m) < 2 {
+                return 0
+        }
+        secs, err := strconv.ParseFloat(m[1], 64)
+        if err != nil || secs <= 0 {
+                return 0
+        }
+        return math.Min(secs, 25)
 }
 
 func shouldFallbackOn(err error) bool {
@@ -413,6 +431,22 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
                                 content, geminiResp, err = c2, r2, nil
                         } else if e2 != nil {
                                 err = e2
+                        }
+                }
+                // On 429 (quota exceeded), wait for suggested retry time then retry once before falling back.
+                if err != nil && errors.As(err, &pe) && pe.Provider == "gemini" && pe.StatusCode == 429 {
+                        waitSec := parseRetryAfterSeconds(pe.Message)
+                        if waitSec > 0 && waitSec <= 25 {
+                                log.Printf("[GEMINI-429] Quota exceeded; retrying once after %.1fs (request_id=%s)", waitSec, requestID)
+                                select {
+                                case <-ctx.Done():
+                                case <-time.After(time.Duration(waitSec * float64(time.Second))):
+                                }
+                                if c2, r2, e2 := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey, maxTokens); e2 == nil && strings.TrimSpace(c2) != "" {
+                                        content, geminiResp, err = c2, r2, nil
+                                } else if e2 != nil {
+                                        err = e2
+                                }
                         }
                 }
         }

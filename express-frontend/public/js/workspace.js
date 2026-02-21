@@ -4050,8 +4050,7 @@ class WorkspaceController {
       }
 
       // Map backend response format to suggestions
-      // API can return suggestions at different levels: submission.suggestions (preferred), result.suggestions, corrections, or suggestions
-      // Backend stores submission.suggestions as a JSON STRING.
+      // Backend/SSE/poll send top-level data.corrections (array). Prefer that when present so AI panel always shows.
       const parsedSubmissionSuggestions = (() => {
         const rawSug = data.submission?.suggestions;
         if (!rawSug) return [];
@@ -4067,14 +4066,11 @@ class WorkspaceController {
         return [];
       })();
 
-      // Prefer stored submission suggestions ONLY when present; otherwise fall back to GoTamil-style corrections[]
-      // (Note: [] is truthy in JS, so we must check length explicitly.)
+      // Prefer data.corrections when backend sent it (SSE/poll/GET submission), then submission.suggestions, then rest
       const corrections =
-        (Array.isArray(parsedSubmissionSuggestions) && parsedSubmissionSuggestions.length > 0
-          ? parsedSubmissionSuggestions
-          : null) ||
+        (Array.isArray(data.corrections) && data.corrections.length > 0 ? data.corrections : null) ||
+        (Array.isArray(parsedSubmissionSuggestions) && parsedSubmissionSuggestions.length > 0 ? parsedSubmissionSuggestions : null) ||
         data.result?.suggestions ||
-        data.corrections ||
         data.suggestions ||
         [];
       console.log('[AI Debug] Extracted corrections:', corrections.length, 'items');
