@@ -161,8 +161,8 @@ jobs:
 
       # Automatically sync the freshly-deployed Cloud Run URLs into Vercel's
       # production environment so the frontend always routes to the right backend.
-      # Uses the Vercel REST API for reliable upsert (create-or-update) without
-      # any interactive prompts.
+      # Uses the Vercel CLI (not the REST API) so VERCEL_ORG_ID / VERCEL_PROJECT_ID
+      # are resolved correctly regardless of whether they are stored as slugs or IDs.
       - name: Sync Cloud Run URLs to Vercel environment
         run: |
           ASIA_URL=$(gcloud run services describe prooftamil-backend \
@@ -178,90 +178,28 @@ jobs:
             exit 1
           fi
 
-          API="https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env"
-          TEAM="teamId=${VERCEL_ORG_ID}"
-          AUTH="Authorization: Bearer ${VERCEL_TOKEN}"
+          npm install --global vercel@latest --quiet
 
-          # Find existing env var ID for a key + production target.
-          # Uses jq with a safe guard — handles target as array or string.
-          find_env_id() {
-            local KEY="$1"
-            curl -s "${API}?${TEAM}" -H "$AUTH" | \
-              jq -r --arg k "$KEY" '
-                .envs[]?
-                | select(.key == $k)
-                | select(
-                    if (.target | type) == "array"
-                    then (.target | index("production")) != null
-                    else .target == "production"
-                    end
-                  )
-                | .id' | head -1
-          }
-
-          # Upsert a Vercel production env var: update if exists, create if not.
-          # Shows the API response body on any non-2xx so failures are diagnosable.
-          upsert_env() {
+          # Set/overwrite a Vercel production env var using the CLI.
+          # vercel env rm removes only the production target (ignores error if absent).
+          # vercel env add reads value from stdin; --yes skips any confirmation prompt.
+          set_env() {
             local KEY="$1" VALUE="$2"
-
-            local EXISTING_ID
-            EXISTING_ID=$(find_env_id "$KEY")
-
-            local BODY CODE
-
-            if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "null" ]; then
-              echo "  Updating $KEY (id: $EXISTING_ID)"
-              BODY=$(curl -s -w "\n%{http_code}" -X PATCH \
-                "${API}/${EXISTING_ID}?${TEAM}" \
-                -H "$AUTH" -H "Content-Type: application/json" \
-                -d "{\"value\":\"${VALUE}\",\"type\":\"plain\",\"target\":[\"production\"]}")
-              CODE=$(printf '%s' "$BODY" | tail -1)
-              if ! [[ "$CODE" =~ ^2 ]]; then
-                echo "  ERROR: PATCH returned HTTP $CODE for $KEY"
-                printf '%s\n' "$BODY" | head -1
-                exit 1
-              fi
-              echo "  Done: $KEY updated"
-            else
-              echo "  Creating $KEY"
-              BODY=$(curl -s -w "\n%{http_code}" -X POST \
-                "${API}?${TEAM}" \
-                -H "$AUTH" -H "Content-Type: application/json" \
-                -d "{\"key\":\"${KEY}\",\"value\":\"${VALUE}\",\"type\":\"plain\",\"target\":[\"production\"]}")
-              CODE=$(printf '%s' "$BODY" | tail -1)
-
-              # 409 = env var already exists in a different target combination.
-              # Recover by finding the ID and patching it.
-              if [ "$CODE" = "409" ]; then
-                echo "  409 conflict — looking up existing ID for $KEY"
-                EXISTING_ID=$(curl -s "${API}?${TEAM}" -H "$AUTH" | \
-                  jq -r --arg k "$KEY" '.envs[]? | select(.key == $k) | .id' | head -1)
-                if [ -n "$EXISTING_ID" ]; then
-                  curl -s -X PATCH \
-                    "${API}/${EXISTING_ID}?${TEAM}" \
-                    -H "$AUTH" -H "Content-Type: application/json" \
-                    -d "{\"value\":\"${VALUE}\",\"type\":\"plain\",\"target\":[\"production\"]}" > /dev/null
-                  echo "  Done: $KEY updated (409 recovery)"
-                else
-                  echo "  ERROR: 409 but could not find existing ID for $KEY"
-                  exit 1
-                fi
-              elif ! [[ "$CODE" =~ ^2 ]]; then
-                echo "  ERROR: POST returned HTTP $CODE for $KEY"
-                printf '%s\n' "$BODY" | head -1
-                exit 1
-              else
-                echo "  Done: $KEY created"
-              fi
-            fi
+            echo "  Setting $KEY"
+            vercel env rm "$KEY" production \
+              --token="$VERCEL_TOKEN" --yes 2>/dev/null || true
+            printf '%s' "$VALUE" | \
+              vercel env add "$KEY" production \
+              --token="$VERCEL_TOKEN" --yes
+            echo "  Done: $KEY"
           }
 
-          upsert_env BACKEND_URL_ASIA "$ASIA_URL"
+          set_env BACKEND_URL_ASIA "$ASIA_URL"
 
           if [ -n "$US_URL" ]; then
-            upsert_env BACKEND_URL_US      "$US_URL"
+            set_env BACKEND_URL_US      "$US_URL"
             # BACKEND_URL_PRIMARY is the fixed OAuth callback URL — always US.
-            upsert_env BACKEND_URL_PRIMARY "$US_URL"
+            set_env BACKEND_URL_PRIMARY "$US_URL"
           fi
 
           echo "Vercel env vars synced."
