@@ -1,0 +1,208 @@
+/**
+ * Shared Express app factory.
+ * Both app.js (Vercel serverless) and server.js (local / Docker) import this.
+ * Each entry point only handles its own deployment concern:
+ *   - app.js   → export a Vercel handler
+ *   - server.js → load .env then call app.listen()
+ */
+
+const express = require('express');
+const path = require('path');
+const cookieParser = require('cookie-parser');
+const cors = require('cors');
+const querystring = require('querystring');
+const compression = require('compression');
+const { trackPageView } = require('./middleware/analytics');
+const { getSeoData } = require('./config/seo');
+const { attachUser } = require('./middleware/auth');
+const authRoutes = require('./routes/auth');
+const indexRouter = require('./routes/index');
+const apiRouter = require('./routes/api');
+const processRouter = require('./routes/process');
+const workspaceRouter = require('./routes/workspace');
+
+// JS files that must never be served from cache
+const NO_CACHE_JS = [
+  '/js/workspace.js',
+  '/js/home-editor.js',
+  '/js/transliterator-runner.js',
+];
+
+// ---------------------------------------------------------------------------
+// Secrets initialisation (singleton — shared between app.js and server.js via
+// Node's module cache, so the promise is created only once per process).
+// ---------------------------------------------------------------------------
+let initPromise = null;
+
+async function initializeAppSecrets() {
+  try {
+    const { loadAllSecrets } = require('./utils/secrets');
+    await loadAllSecrets();
+    console.log(`[Init] GOOGLE_CLIENT_ID available: ${!!process.env.GOOGLE_CLIENT_ID}`);
+  } catch (error) {
+    console.warn('[Init] Secrets module error (non-fatal):', error.message);
+  }
+}
+
+function ensureAppReady() {
+  if (!initPromise) {
+    initPromise = (async () => {
+      console.log('[Init] Starting Express app bootstrap');
+      await initializeAppSecrets();
+      console.log('[Init] Express app bootstrap complete');
+    })().catch((error) => {
+      console.warn('[Init] Bootstrap encountered an error (non-fatal):', error.message);
+      initPromise = null;
+    });
+  }
+  return initPromise;
+}
+
+// ---------------------------------------------------------------------------
+// App factory
+// ---------------------------------------------------------------------------
+function createApp() {
+  const app = express();
+
+  app.set('trust proxy', true);
+  app.set('view engine', 'ejs');
+  app.set('views', path.join(__dirname, 'views'));
+
+  const allowedOrigins = (process.env.FRONTEND_URL || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  // Wait for secrets before serving most routes; skip OAuth callbacks and
+  // workspace so they are never blocked by an initialisation delay.
+  const ensureReadyMiddleware = (req, res, next) => {
+    const p = req.path || '';
+    if (
+      p.startsWith('/api/v1/auth/google/callback') ||
+      p.startsWith('/v1/auth/google/callback') ||
+      p.startsWith('/auth/google/callback') ||
+      p === '/auth/callback' ||
+      p.startsWith('/workspace')
+    ) {
+      return next();
+    }
+    ensureAppReady()
+      .then(() => next())
+      .catch((error) => {
+        console.error('[Init] Express app failed to initialize', error);
+        next(error);
+      });
+  };
+
+  app.use(ensureReadyMiddleware);
+
+  app.use(compression({ level: 6, threshold: 1024 }));
+
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.length === 0) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        return callback(new Error('Not allowed by CORS'));
+      },
+      credentials: true,
+    })
+  );
+
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+  app.use(cookieParser());
+  // attachUser must run for /workspace so requireAuth works and draft links don't loop.
+  app.use((req, res, next) => attachUser(req, res, next));
+  app.use(trackPageView);
+
+  // Serve frequently-updated JS files with no-cache headers before the
+  // general static middleware so the headers are applied correctly.
+  NO_CACHE_JS.forEach((file) => {
+    app.get(file, (req, res, next) => {
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, private',
+        Pragma: 'no-cache',
+        Expires: '0',
+        'Last-Modified': new Date().toUTCString(),
+        ETag: false,
+        'X-Content-Type-Options': 'nosniff',
+      });
+      res.removeHeader('ETag');
+      next();
+    });
+  });
+
+  if (process.env.NODE_ENV !== 'production') {
+    app.get('/js/*.js', (req, res, next) => {
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        Pragma: 'no-cache',
+        Expires: '0',
+      });
+      next();
+    });
+  }
+
+  app.use(
+    express.static(path.join(__dirname, 'public'), {
+      maxAge: process.env.NODE_ENV === 'production' ? '7d' : '0',
+      etag: true,
+      setHeaders: (res, filePath) => {
+        if (process.env.NODE_ENV !== 'production') return;
+        const isJs = filePath.endsWith('.js');
+        const isCss = filePath.endsWith('.css');
+        const isImage = /\.(png|jpg|jpeg|webp|gif|svg|ico)$/.test(filePath);
+        const isFont = /\.(woff2|woff|ttf|otf)$/.test(filePath);
+        if (isJs) {
+          const isNoCacheFile = NO_CACHE_JS.some((f) => filePath.endsWith(f.replace('/js/', path.sep + 'js' + path.sep)));
+          res.setHeader(
+            'Cache-Control',
+            isNoCacheFile
+              ? 'public, max-age=0, must-revalidate'
+              : 'public, max-age=604800, stale-while-revalidate=86400'
+          );
+        } else if (isCss) {
+          res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+        } else if (isImage || isFont) {
+          res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        }
+      },
+    })
+  );
+
+  // Normalise legacy OAuth callback paths to the canonical backend path.
+  app.get(['/v1/auth/google/callback', '/auth/google/callback'], (req, res) => {
+    const qs = querystring.stringify(req.query);
+    const target = `/api/v1/auth/google/callback${qs ? `?${qs}` : ''}`;
+    return res.redirect(target);
+  });
+
+  // Routes
+  app.use('/auth', authRoutes);
+  app.use('/workspace', workspaceRouter);
+  app.use('/', indexRouter);
+  app.use('/api', apiRouter);
+  app.use('/api/process', processRouter);
+
+  // 404 handler
+  app.use((req, res) => {
+    const seo = getSeoData('notFound');
+    res.status(404).render('pages/404', { title: seo.title, seo });
+  });
+
+  // Error handler
+  app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
+    console.error(err.stack);
+    const seo = getSeoData('error');
+    res.status(500).render('pages/error', {
+      title: seo.title,
+      seo,
+      error: process.env.NODE_ENV === 'development' ? err : {},
+    });
+  });
+
+  return app;
+}
+
+module.exports = { createApp, ensureAppReady };
