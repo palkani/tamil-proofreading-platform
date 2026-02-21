@@ -165,16 +165,29 @@ jobs:
       # are resolved correctly regardless of whether they are stored as slugs or IDs.
       - name: Sync Cloud Run URLs to Vercel environment
         run: |
-          ASIA_URL=$(gcloud run services describe prooftamil-backend \
-            --region=asia-south1 --format='value(status.url)')
-          US_URL=$(gcloud run services describe prooftamil-backend-us \
-            --region=us-central1 --format='value(status.url)' 2>/dev/null || echo "")
+          # Prefer explicit GitHub secrets (CLOUD_RUN_URL_ASIA / CLOUD_RUN_URL_US) so the
+          # stable project-number URLs are used instead of the auto-generated hash URLs that
+          # `gcloud run services describe` may return (e.g. *-aspwcdiala-el.a.run.app vs
+          # *-991187041222.asia-south1.run.app).  Fall back to gcloud if secrets are absent.
+          if [ -n "$CLOUD_RUN_URL_ASIA" ]; then
+            ASIA_URL="$CLOUD_RUN_URL_ASIA"
+          else
+            ASIA_URL=$(gcloud run services describe prooftamil-backend \
+              --region=asia-south1 --format='value(status.url)')
+          fi
+
+          if [ -n "$CLOUD_RUN_URL_US" ]; then
+            US_URL="$CLOUD_RUN_URL_US"
+          else
+            US_URL=$(gcloud run services describe prooftamil-backend-us \
+              --region=us-central1 --format='value(status.url)' 2>/dev/null || echo "")
+          fi
 
           echo "Asia backend: $ASIA_URL"
           echo "US backend:   ${US_URL:-not deployed}"
 
           if [ -z "$ASIA_URL" ]; then
-            echo "ERROR: Asia backend URL not found after deployment"
+            echo "ERROR: Asia backend URL not found"
             exit 1
           fi
 
@@ -207,6 +220,10 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          # Optional overrides — set these in GitHub secrets to pin the stable
+          # project-number Cloud Run URLs instead of relying on gcloud output.
+          CLOUD_RUN_URL_ASIA: ${{ secrets.CLOUD_RUN_URL_ASIA }}
+          CLOUD_RUN_URL_US: ${{ secrets.CLOUD_RUN_URL_US }}
 
       - name: Deploy Frontend to Vercel
         run: |
