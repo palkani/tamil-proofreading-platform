@@ -424,9 +424,11 @@ router.post('/corrections', async (req, res) => {
     if (correctionsBackend && text.length <= BACKEND_MAX_CHARS) {
       try {
         const submitUrl = `${correctionsBackend}/submit`;
+        // 20s timeout: Cloud Run takes 12-20s for medium chunks. Vercel Pro allows 60s lambdas.
         // Use both axios timeout AND AbortController so keep-alive streams don't prevent abort.
+        const CLOUD_RUN_TIMEOUT_MS = 20000;
         const cloudRunAbort = new AbortController();
-        const cloudRunTimer = setTimeout(() => cloudRunAbort.abort(), 6000);
+        const cloudRunTimer = setTimeout(() => cloudRunAbort.abort(), CLOUD_RUN_TIMEOUT_MS);
         let proxyRes;
         try {
           proxyRes = await axiosWithPool.post(
@@ -435,7 +437,7 @@ router.post('/corrections', async (req, res) => {
             {
               headers: { 'Content-Type': 'application/json' },
               signal: cloudRunAbort.signal,
-              timeout: 6000,
+              timeout: CLOUD_RUN_TIMEOUT_MS,
               validateStatus: () => true,
             }
           );

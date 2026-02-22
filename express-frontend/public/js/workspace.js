@@ -1058,12 +1058,14 @@ class WorkspaceController {
         }
       }
 
-      // Deduplicate by text so the same word never appears twice (prevents double-insert when user selects)
+      // Deduplicate by normalized text so the same word never appears twice (prevents duplicates like "ணா", "ணா")
       const seen = new Set();
       finalSuggestions = finalSuggestions.filter(s => {
         const t = (s.text || s.word || '').toString().trim();
-        if (!t || seen.has(t)) return false;
-        seen.add(t);
+        if (!t) return false;
+        const key = t.normalize ? t.normalize('NFC') : t;
+        if (seen.has(key)) return false;
+        seen.add(key);
         return true;
       });
       // Limit to 4 suggestions for better performance and smaller dropdown
@@ -1075,8 +1077,10 @@ class WorkspaceController {
         const rawSeen = new Set();
         finalSuggestions = rawSuggestions.filter(s => {
           const t = (s.text || s.word || '').toString().trim();
-          if (!t || rawSeen.has(t)) return false;
-          rawSeen.add(t);
+          if (!t) return false;
+          const key = t.normalize ? t.normalize('NFC') : t;
+          if (rawSeen.has(key)) return false;
+          rawSeen.add(key);
           return true;
         }).slice(0, 4);
       }
@@ -2078,6 +2082,20 @@ class WorkspaceController {
       return;
     }
 
+    // CRITICAL: Remove any suggestion that would render as empty (same cleaning as loop) so indices never skip
+    const cleanedList = this.currentSuggestions.filter(s => {
+      const raw = (s.text || s.word || '').toString();
+      const t = raw.replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰²³]/g, '').trim();
+      return t.length > 0;
+    });
+    if (cleanedList.length === 0) {
+      this.hideSuggestions();
+      this._isRenderingDropdown = false;
+      return;
+    }
+    this.currentSuggestions = cleanedList;
+    this.activeSuggestionIndex = 0;
+
     // CRITICAL: Double-check - if a dropdown still exists after cleanup, remove it
     const stillExisting = document.getElementById('tamil-suggestions-dropdown');
     if (stillExisting) {
@@ -2401,7 +2419,7 @@ class WorkspaceController {
     // Add instruction text
     const instruction = document.createElement('div');
     instruction.className = 'tamil-suggestions-instruction';
-    instruction.innerHTML = 'Press <strong>Space</strong> to select first option';
+    instruction.innerHTML = 'Press <strong>Space</strong> to accept highlighted option';
     // Ensure instruction is visible
     instruction.style.setProperty('color', '#64748b', 'important');
     instruction.style.setProperty('display', 'block', 'important');
@@ -2499,7 +2517,7 @@ class WorkspaceController {
     // Force a reflow to ensure styles are applied
     void dropdown.offsetHeight;
     
-    // Double-check visibility after reflow - force it multiple times if needed
+    // Double-check visibility after reflow - fix without wiping position (left/top)
     const forceVisibility = () => {
       const computed = window.getComputedStyle(dropdown);
       const rect = dropdown.getBoundingClientRect();
@@ -2508,70 +2526,41 @@ class WorkspaceController {
                        computed.opacity !== '0' &&
                        rect.width > 0 &&
                        rect.height > 0;
-      console.log('[IME] 🔍 Visibility check:', {
-        isVisible,
-        computedDisplay: computed.display,
-        computedVisibility: computed.visibility,
-        computedOpacity: computed.opacity,
-        inlineDisplay: dropdown.style.display,
-        boundingRect: {
-          width: rect.width,
-          height: rect.height,
-          top: rect.top,
-          left: rect.left,
-          bottom: rect.bottom,
-          right: rect.right
-        },
-        viewport: {
-          width: window.innerWidth,
-          height: window.innerHeight
-        },
-        inViewport: rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth
-      });
       
-      if (!isVisible || computed.display === 'none' || rect.width === 0 || rect.height === 0) {
-        console.error('[IME] ❌ Dropdown is NOT visible! Forcing visibility...');
-        // Remove all styles and reapply with premium theme styling
-        dropdown.removeAttribute('style');
-        dropdown.style.cssText = `
-          display: block !important;
-          visibility: visible !important;
-          opacity: 1 !important;
-          pointer-events: auto !important;
-          position: fixed !important;
-          z-index: 999999 !important;
-          background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%) !important;
-          border: 1px solid rgba(79, 70, 229, 0.15) !important;
-          border-radius: 16px !important;
-          box-shadow: 0 20px 40px rgba(79, 70, 229, 0.12), 0 8px 16px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(79, 70, 229, 0.05) !important;
-          min-width: 280px !important;
-          max-width: 380px !important;
-          padding: 0 !important;
-          margin: 0 !important;
-          font-family: system-ui, -apple-system, 'Segoe UI', 'Inter', sans-serif !important;
-        `;
-        void dropdown.offsetHeight; // Force reflow again
-        
-        // Also check parent container
-        const container = document.getElementById('tamil-ime-container');
-        if (container) {
-          const containerComputed = window.getComputedStyle(container);
-          console.log('[IME] Container styles:', {
-            display: containerComputed.display,
-            visibility: containerComputed.visibility,
-            zIndex: containerComputed.zIndex,
-            pointerEvents: containerComputed.pointerEvents
-          });
-        }
+      if (isVisible) return;
+      
+      // CRITICAL: Preserve position - never wipe left/top or dropdown disappears or jumps
+      const savedLeft = dropdown.style.left || dropdown.style.getPropertyValue('left');
+      const savedTop = dropdown.style.top || dropdown.style.getPropertyValue('top');
+      
+      // Only override visibility/size properties; do NOT removeAttribute('style') (that wipes left/top)
+      dropdown.style.setProperty('display', 'block', 'important');
+      dropdown.style.setProperty('visibility', 'visible', 'important');
+      dropdown.style.setProperty('opacity', '1', 'important');
+      dropdown.style.setProperty('pointer-events', 'auto', 'important');
+      dropdown.style.setProperty('position', 'fixed', 'important');
+      dropdown.style.setProperty('z-index', '999999', 'important');
+      if (savedLeft) dropdown.style.setProperty('left', savedLeft, 'important');
+      if (savedTop) dropdown.style.setProperty('top', savedTop, 'important');
+      if (rect.width === 0 || rect.height === 0) {
+        dropdown.style.setProperty('min-width', '280px', 'important');
+        dropdown.style.setProperty('min-height', '120px', 'important');
       }
+      dropdown.style.setProperty('background', 'linear-gradient(180deg, #ffffff 0%, #fafbfc 100%)', 'important');
+      dropdown.style.setProperty('border', '1px solid rgba(79, 70, 229, 0.15)', 'important');
+      dropdown.style.setProperty('border-radius', '16px', 'important');
+      dropdown.style.setProperty('box-shadow', '0 20px 40px rgba(79, 70, 229, 0.12), 0 8px 16px rgba(0, 0, 0, 0.08)', 'important');
+      dropdown.style.setProperty('padding', '0', 'important');
+      dropdown.style.setProperty('margin', '0', 'important');
+      void dropdown.offsetHeight;
     };
     
-    // Check immediately and after delays
-    forceVisibility();
-    setTimeout(forceVisibility, 10);
-    setTimeout(forceVisibility, 50);
-    setTimeout(forceVisibility, 100);
-    setTimeout(forceVisibility, 200);
+    // Check once after a short delay so layout has run (avoid false "not visible" from immediate check)
+    setTimeout(() => {
+      forceVisibility();
+      // One retry for slow layout
+      setTimeout(forceVisibility, 50);
+    }, 10);
     
     // Release lock after a short delay to allow DOM to settle
     setTimeout(() => {
@@ -4252,8 +4241,48 @@ class WorkspaceController {
             }
           }
         );
-        // Always populate data so the processing pipeline runs (empty = no issues found)
-        data = { corrections: chunkedCorrections };
+        if (chunkedCorrections.length > 0) {
+          // Chunked corrections arrived — use them directly
+          data = { corrections: chunkedCorrections };
+        } else {
+          // Chunked /api/corrections returned nothing (Cloud Run timeout + Gemini unavailable).
+          // Fall back to a single /api/submit call which uses Cloud Run inline correction.
+          console.log('[AI] ⚠️ Chunked corrections empty — falling back to /api/submit');
+          const MAX_SUBMIT_CHARS = 30_000;
+          const submitText = text.length > MAX_SUBMIT_CHARS ? text.slice(0, MAX_SUBMIT_CHARS) : text;
+          const fbResponse = await this.apiFetch('/api/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: submitText, save_draft: true }),
+            signal: this.abortController.signal
+          });
+          const fbRaw = await fbResponse.text();
+          try { data = fbRaw ? JSON.parse(fbRaw) : {}; } catch (_e) { data = {}; }
+          if (fbResponse.status === 429) {
+            const remaining = (data && typeof data.remaining === 'number') ? data.remaining : null;
+            const code = String(data?.error || '').trim();
+            const msgBase = String(data?.message || 'Request blocked.').trim();
+            const showRemaining = remaining !== null && (code === 'daily_limit_exceeded' || code === 'quota_insufficient_for_request');
+            this.updateAnalysisStatus('');
+            if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
+              this.suggestionsPanel.setEmptyState('idle');
+            }
+            this.showNotification(showRemaining ? `${msgBase} (Remaining: ${remaining})` : msgBase, 'warning');
+            return;
+          }
+          if (fbResponse.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
+            const submissionId = data.submission?.id;
+            data = await this.awaitSubmissionResult(submissionId, analysisSeq);
+            const polledStatus = String(data?.submission?.status || '').toLowerCase();
+            if (!data?.submission || (polledStatus && polledStatus !== 'completed' && polledStatus !== 'failed')) {
+              this.updateAnalysisStatus('analyzing');
+              return;
+            }
+          } else if (!fbResponse.ok) {
+            console.warn('[AI] /api/submit fallback also failed:', data?.error || 'Unknown error');
+            data = { corrections: [] };
+          }
+        }
         this.lastAnalyzedText = text;
       } else {
         // ── Small document: single /api/corrections request ──
