@@ -1362,8 +1362,19 @@ class HomeEditor {
   }
   
   countWords(text) {
-    if (!text.trim()) return 0;
-    return text.trim().split(/\s+/).length;
+    if (!text || !text.trim()) return 0;
+    const tokens = text.trim().split(/\s+/).filter(w => w.length > 0);
+    let count = tokens.length;
+    // Detect Tamil word boundaries inside joined tokens (missing space errors)
+    // e.g. "வேண்டும்ஆன்மிக" → ம்+ஆ boundary → counted as 2 words
+    const tamilRange = /[\u0B80-\u0BFF]/;
+    const joinBoundary = /[\u0BBE-\u0BCD][\u0B85-\u0B94]/g;
+    for (const token of tokens) {
+      if (tamilRange.test(token)) {
+        count += (token.match(joinBoundary) || []).length;
+      }
+    }
+    return count;
   }
 
   enforceWordLimit() {
