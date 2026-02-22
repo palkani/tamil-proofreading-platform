@@ -292,8 +292,10 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		return
 	}
 
-	if len(req.Text) > 100000 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Text is too long (max 100KB)"})
+	// 500KB limit to support long documents; backend proofreads with timeouts and chunking
+	const maxSubmitTextLen = 500000
+	if len(req.Text) > maxSubmitTextLen {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Text is too long (max 500KB)"})
 		return
 	}
 

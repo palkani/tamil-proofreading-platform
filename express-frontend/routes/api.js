@@ -193,6 +193,13 @@ router.post('/gemini/analyze', async (req, res) => {
         help: 'Set GEMINI_API_KEY_1 in Vercel environment. Get free keys at https://aistudio.google.com/apikey'
       });
     }
+    if (keyRotator.getAvailableKeyCount() === 0) {
+      const waitSecs = keyRotator.getSecondsUntilAvailable();
+      return res.status(503).json({
+        error: `All Gemini keys are temporarily rate limited. Please try again in ${waitSecs || 1}–2 minutes.`,
+        retry_after_seconds: waitSecs || 90
+      });
+    }
 
     // Cache hit: avoid redundant Gemini calls for the same text
     const analyzeCacheKey = getCacheKey(text.trim());
@@ -352,8 +359,8 @@ router.post('/gemini/analyze', async (req, res) => {
   }
 });
 
-// Backend /submit accepts up to 100k chars; above that we use Express→Gemini with segment batching.
-const BACKEND_MAX_CHARS = 100000;
+// Backend /submit accepts up to 500k chars; above that we use Express→Gemini with segment batching.
+const BACKEND_MAX_CHARS = 500000;
 // For very long text we process in segments to avoid thousands of concurrent chunk requests.
 const EXPRESS_SEGMENT_CHARS = 80000;
 // Hard cap so one request cannot tie up the server indefinitely (~200k+ words).
@@ -419,6 +426,16 @@ router.post('/corrections', async (req, res) => {
     if (!keyRotator.getNextKey()) {
       console.warn('[CORRECTIONS] No Gemini API key - set GEMINI_API_KEY_1 or GOOGLE_GENAI_API_KEY in env (Vercel/Express)');
       return res.status(500).json({ success: false, corrections: [], error: 'Gemini AI not configured' });
+    }
+    if (keyRotator.getAvailableKeyCount() === 0) {
+      const waitSecs = keyRotator.getSecondsUntilAvailable();
+      console.warn('[CORRECTIONS] All Gemini keys rate limited, returning 503');
+      return res.status(503).json({
+        success: false,
+        corrections: [],
+        error: `All Gemini keys are temporarily rate limited. Please try again in ${waitSecs || 1}–2 minutes.`,
+        retry_after_seconds: waitSecs || 90
+      });
     }
 
     // For very long text, process in segments sequentially to avoid rate limits and timeouts.
