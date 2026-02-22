@@ -77,6 +77,30 @@ function getCorrectionsBackendBase(req) {
 
 const ENABLE_PROXY_LOGS = process.env.PROXY_LOG !== 'false';
 
+// Run async tasks with a max concurrency to avoid Gemini 429 (free tier ~5–15 RPM per key).
+async function runWithConcurrency(tasks, concurrency) {
+  const results = [];
+  let index = 0;
+  async function runNext() {
+    if (index >= tasks.length) return;
+    const i = index++;
+    results[i] = await tasks[i]();
+    return runNext();
+  }
+  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => runNext());
+  await Promise.all(workers);
+  return results;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Limit concurrent Gemini calls to avoid 429 (free tier ~5–15 RPM per key).
+const GEMINI_CORRECTIONS_CONCURRENCY = 3;
+// Wait before retrying a chunk after 429 so the next key has a fresh quota.
+const GEMINI_429_RETRY_MS = 8000;
+
 // ---------------------------------------------------------------------------
 // Short-lived in-memory cache for corrections results.
 // Prevents duplicate Gemini calls when the user clicks "Check" multiple times
@@ -105,6 +129,21 @@ function setCachedResult(key, data) {
     correctionsCache.delete(correctionsCache.keys().next().value);
   }
   correctionsCache.set(key, { ts: Date.now(), data });
+}
+
+// TipTap/ProseMirror docJson: extract plain text from { type, content: [ { type, content: [ { text } ] } ] }.
+// Competitor-style payloads send docJson; we accept either { text } or { docJson }.
+function docJsonToPlainText(docJson) {
+  if (!docJson || typeof docJson !== 'object') return '';
+  const parts = [];
+  function walk(node) {
+    if (!node || typeof node !== 'object') return;
+    if (typeof node.text === 'string' && node.text.length > 0) parts.push(node.text);
+    const content = node.content;
+    if (Array.isArray(content)) content.forEach(walk);
+  }
+  walk(docJson);
+  return parts.join('\n');
 }
 
 // Helper function to split text into manageable chunks for better accuracy
@@ -162,21 +201,13 @@ router.post('/gemini/analyze', async (req, res) => {
       return res.json(analyzeCache);
     }
 
-    // Split into chunks; each chunk gets its own Gemini key so parallel chunks
-    // spread rate-limit usage across all available keys.
+    // Run chunks with limited concurrency and retry on 429 to avoid rate limits.
     const chunks = splitIntoSentences(text);
-    const chunkPromises = chunks.map(async (chunk) => {
-      const keyInfo = keyRotator.getNextKey();
-      const apiKey = keyInfo ? keyInfo.key : null;
-      const keyIndex = keyInfo ? keyInfo.index : -1;
-      if (!apiKey) return [];
-      try {
-        const response = await axiosWithPool.post(
-          `${baseUrl}/models/gemini-2.5-flash:generateContent`,
-          {
-            systemInstruction: {
-              parts: [{
-                text: `நீங்கள் ஒரு தமிழ் மொழி நிபுணர். தமிழ் உரையில் உள்ள இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், தவறான சொற்களை கண்டறியுங்கள்.
+    const chunkTasks = chunks.map((chunk) => async () => {
+      const payload = {
+        systemInstruction: {
+          parts: [{
+            text: `நீங்கள் ஒரு தமிழ் மொழி நிபுணர். தமிழ் உரையில் உள்ள இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், தவறான சொற்களை கண்டறியுங்கள்.
 
 🔴 கண்டிப்பான விதிகள் - இவற்றை மட்டுமே பிழையாகக் குறிக்கவும்:
 
@@ -216,92 +247,90 @@ router.post('/gemini/analyze', async (req, res) => {
 - original: மூல உரையில் உள்ள தவறான சொல்
 - suggestion: சரியான சொல்
 - position: { start: எண், end: எண் }`
-              }]
-            },
-            contents: [{
-              role: "user",
-              parts: [{
-                text: `கீழே உள்ள தமிழ் உரையை பகுப்பாய்வு செய்யுங்கள். இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், புள்ளி விடுபட்டவை மட்டுமே குறிக்கவும். 
-                
-முக்கியம்: 
-- ஒரே பிழையை மீண்டும் குறிக்காதீர்கள்
-- title, description தமிழில் மட்டுமே
-- original சொல் உரையில் அப்படியே இருக்க வேண்டும்
-
-உரை:\n\n${chunk.text}`
-              }]
-            }],
-            generationConfig: {
-              temperature: 0,
-              topP: 0.1,
-              maxOutputTokens: 800,
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    id: { type: "string" },
-                    type: { type: "string" },
-                    title: { type: "string" },
-                    description: { type: "string" },
-                    original: { type: "string" },
-                    suggestion: { type: "string" },
-                    position: {
-                      type: "object",
-                      properties: {
-                        start: { type: "integer" },
-                        end: { type: "integer" }
-                      }
-                    }
-                  },
-                  required: ["id", "type", "title", "description", "original", "suggestion"]
-                }
-              }
+          }]
+        },
+        contents: [{
+          role: 'user',
+          parts: [{ text: `கீழே உள்ள தமிழ் உரையை பகுப்பாய்வு செய்யுங்கள். இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், புள்ளி விடுபட்டவை மட்டுமே குறிக்கவும்.\n\nமுக்கியம்:\n- ஒரே பிழையை மீண்டும் குறிக்காதீர்கள்\n- title, description தமிழில் மட்டுமே\n- original சொல் உரையில் அப்படியே இருக்க வேண்டும்\n\nஉரை:\n\n${chunk.text}` }]
+        }],
+        generationConfig: {
+          temperature: 0,
+          topP: 0.1,
+          maxOutputTokens: 800,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                type: { type: 'string' },
+                title: { type: 'string' },
+                description: { type: 'string' },
+                original: { type: 'string' },
+                suggestion: { type: 'string' },
+                position: { type: 'object', properties: { start: { type: 'integer' }, end: { type: 'integer' } } }
+              },
+              required: ['id', 'type', 'title', 'description', 'original', 'suggestion']
             }
-          },
-          {
-            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-            timeout: 10000
           }
-        );
-
-        if (response.status === 429) {
-          keyRotator.markRateLimited(keyIndex);
-          return [];
         }
-        if (response.status !== 200) {
-          console.error(`[GEMINI] API error ${response.status}:`, response.data?.error);
-          return [];
-        }
+      };
 
-        let cleanedJson = (response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]').trim();
-        if (!cleanedJson.endsWith(']')) {
-          const lastCompleteObject = cleanedJson.lastIndexOf('}');
-          cleanedJson = lastCompleteObject > 0
-            ? cleanedJson.substring(0, lastCompleteObject + 1) + ']'
-            : '[]';
-        }
-
-        const chunkSuggestions = JSON.parse(cleanedJson);
-        if (Array.isArray(chunkSuggestions)) {
-          return chunkSuggestions.map(sugg => {
-            if (sugg.position) {
-              sugg.position.start += chunk.offset;
-              sugg.position.end += chunk.offset;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const keyInfo = keyRotator.getNextKey();
+        const apiKey = keyInfo ? keyInfo.key : null;
+        const keyIndex = keyInfo ? keyInfo.index : -1;
+        if (!apiKey) return [];
+        try {
+          const response = await axiosWithPool.post(
+            `${baseUrl}/models/gemini-2.5-flash:generateContent`,
+            payload,
+            { headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, timeout: 10000 }
+          );
+          if (response.status === 429) {
+            keyRotator.markRateLimited(keyIndex);
+            if (attempt === 0) {
+              await sleep(GEMINI_429_RETRY_MS);
+              continue;
             }
-            sugg.id = `${sugg.id}-chunk${chunk.offset}`;
-            return sugg;
-          });
+            return [];
+          }
+          if (response.status !== 200) {
+            console.error('[GEMINI] API error', response.status, response.data?.error);
+            return [];
+          }
+          let cleanedJson = (response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]').trim();
+          if (!cleanedJson.endsWith(']')) {
+            const lastCompleteObject = cleanedJson.lastIndexOf('}');
+            cleanedJson = lastCompleteObject > 0 ? cleanedJson.substring(0, lastCompleteObject + 1) + ']' : '[]';
+          }
+          const chunkSuggestions = JSON.parse(cleanedJson);
+          if (Array.isArray(chunkSuggestions)) {
+            return chunkSuggestions.map(sugg => {
+              if (sugg.position) {
+                sugg.position.start += chunk.offset;
+                sugg.position.end += chunk.offset;
+              }
+              sugg.id = `${sugg.id}-chunk${chunk.offset}`;
+              return sugg;
+            });
+          }
+          return [];
+        } catch (e) {
+          if (e.response?.status === 429 && attempt === 0) {
+            keyRotator.markRateLimited(keyIndex);
+            await sleep(GEMINI_429_RETRY_MS);
+            continue;
+          }
+          console.error('Failed to process chunk, skipping:', e.message);
+          return [];
         }
-        return [];
-      } catch (parseErr) {
-        console.error('Failed to process chunk, skipping:', parseErr.message);
-        return [];
       }
+      return [];
     });
 
-    const allSuggestions = (await Promise.all(chunkPromises)).flat();
+    const allSuggestions = (await runWithConcurrency(chunkTasks, GEMINI_CORRECTIONS_CONCURRENCY)).flat();
     const filtered = allSuggestions.filter((s) => {
       const orig = (s.original || '').trim();
       const sugg = (s.suggestion || s.corrected || '').trim();
@@ -323,33 +352,50 @@ router.post('/gemini/analyze', async (req, res) => {
   }
 });
 
+// Backend /submit accepts up to 100k chars; above that we use Express→Gemini with segment batching.
+const BACKEND_MAX_CHARS = 100000;
+// For very long text we process in segments to avoid thousands of concurrent chunk requests.
+const EXPRESS_SEGMENT_CHARS = 80000;
+// Hard cap so one request cannot tie up the server indefinitely (~200k+ words).
+const MAX_CORRECTIONS_TEXT_CHARS = 2000000;
+
 // Grammar/Corrections API for AI assistant - exact format: { success, corrections: [{ blockId, originalText, correction, reason, type }] }
-// Tries Cloud Run first (BACKEND_URL/submit with save_draft=false) so you see requests in Cloud Run logs; falls back to Express→Gemini.
+// Accepts { text } or { docJson } (TipTap/ProseMirror). Tries Cloud Run first; falls back to Express→Gemini.
+// Large payloads (e.g. 200k+ words) supported via chunking; body limit raised via app-level 50mb.
 router.post('/corrections', async (req, res) => {
   try {
-    const { text } = req.body;
-
+    let text = req.body.text;
+    if (req.body.docJson != null) {
+      const extracted = docJsonToPlainText(req.body.docJson);
+      if (extracted.length > 0) text = extracted;
+    }
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
-      return res.status(400).json({ success: false, corrections: [], error: 'Text is required' });
+      return res.status(400).json({ success: false, corrections: [], error: 'Text or docJson is required' });
+    }
+    text = text.trim();
+    if (text.length > MAX_CORRECTIONS_TEXT_CHARS) {
+      return res.status(413).json({
+        success: false,
+        corrections: [],
+        error: `Text exceeds maximum length (${MAX_CORRECTIONS_TEXT_CHARS} characters). Consider splitting the document.`
+      });
     }
 
     // Cache hit: return immediately without hitting any backend or Gemini
-    const cacheKey = getCacheKey(text.trim());
+    const cacheKey = getCacheKey(text);
     const cached = getCachedResult(cacheKey);
     if (cached) {
       return res.json(cached);
     }
 
-    // 1) Try backend (Cloud Run) first so /api/corrections shows up in Cloud Run logs.
-    // Timeout reduced to 7s: Cloud Run responds in < 3s when warm; if it can't respond in
-    // 7s it's cold/unavailable and we fall through to Gemini immediately.
+    // 1) Try backend (Cloud Run) first when within backend limit.
     const correctionsBackend = getCorrectionsBackendBase(req);
-    if (correctionsBackend) {
+    if (correctionsBackend && text.length <= BACKEND_MAX_CHARS) {
       try {
         const submitUrl = `${correctionsBackend}/submit`;
         const proxyRes = await axiosWithPool.post(
           submitUrl,
-          { text: text.trim(), save_draft: false },
+          { text, save_draft: false },
           { headers: { 'Content-Type': 'application/json' }, timeout: 7000, validateStatus: () => true }
         );
         if (proxyRes.status === 200 && proxyRes.data && proxyRes.data.success === true && Array.isArray(proxyRes.data.corrections)) {
@@ -361,11 +407,13 @@ router.post('/corrections', async (req, res) => {
       } catch (proxyErr) {
         console.warn('[CORRECTIONS] Backend proxy failed, using Express→Gemini', proxyErr.message);
       }
-    } else {
+    } else if (correctionsBackend && text.length > BACKEND_MAX_CHARS) {
+      console.log('[CORRECTIONS] Text exceeds backend limit, using Express→Gemini with segments', { textLen: text.length, limit: BACKEND_MAX_CHARS });
+    } else if (!correctionsBackend) {
       console.log('[CORRECTIONS] No backend URL (set BACKEND_URL or TRANSLITERATOR_BASE_URL for Cloud Run proxy)');
     }
 
-    // 2) Fallback: Express → Gemini (no Cloud Run; check Vercel logs)
+    // 2) Express → Gemini (fallback or when text exceeds backend limit)
     const { baseUrl } = keyRotator;
 
     if (!keyRotator.getNextKey()) {
@@ -373,23 +421,29 @@ router.post('/corrections', async (req, res) => {
       return res.status(500).json({ success: false, corrections: [], error: 'Gemini AI not configured' });
     }
 
-    const chunks = splitIntoSentences(text);
-    console.log('[CORRECTIONS] POST /api/corrections (Express→Gemini)', { textLen: text.length, chunks: chunks.length });
+    // For very long text, process in segments sequentially to avoid rate limits and timeouts.
+    const segments = text.length <= EXPRESS_SEGMENT_CHARS
+      ? [text]
+      : (() => {
+          const out = [];
+          for (let i = 0; i < text.length; i += EXPRESS_SEGMENT_CHARS) {
+            out.push(text.slice(i, i + EXPRESS_SEGMENT_CHARS));
+          }
+          return out;
+        })();
 
-    // Rotate the Gemini key independently per chunk so concurrent chunks spread
-    // across all available keys and a single rate-limited key doesn't stall everything.
-    const chunkPromises = chunks.map(async (chunk) => {
-      const keyInfo = keyRotator.getNextKey();
-      const apiKey = keyInfo ? keyInfo.key : null;
-      const keyIndex = keyInfo ? keyInfo.index : -1;
-      if (!apiKey) return [];
-      try {
-        const response = await axiosWithPool.post(
-          `${baseUrl}/models/gemini-2.5-flash:generateContent`,
-          {
-            systemInstruction: {
-              parts: [{
-                text: `நீங்கள் ஒரு தமிழ் மொழி நிபுணர். தமிழ் உரையில் உள்ள இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், தவறான சொற்களை கண்டறியுங்கள்.
+    let allSuggestions = [];
+    for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+      const segment = segments[segIdx];
+      const chunks = splitIntoSentences(segment);
+      console.log('[CORRECTIONS] POST /api/corrections (Express→Gemini)', { segment: segIdx + 1, segments: segments.length, textLen: segment.length, chunks: chunks.length });
+
+      // Run chunks with limited concurrency and retry on 429 to avoid rate limits.
+      const chunkTasks = chunks.map((chunk) => async () => {
+        const payload = {
+          systemInstruction: {
+            parts: [{
+              text: `நீங்கள் ஒரு தமிழ் மொழி நிபுணர். தமிழ் உரையில் உள்ள இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், தவறான சொற்களை கண்டறியுங்கள்.
 
 🔴 கண்டிப்பான விதிகள் - இவற்றை மட்டுமே பிழையாகக் குறிக்கவும்:
 
@@ -437,65 +491,82 @@ router.post('/corrections', async (req, res) => {
 - original: மூல உரையில் உள்ள தவறான சொல்
 - suggestion: சரியான சொல்
 - position: { start: எண், end: எண் }`
-              }]
-            },
-            contents: [{
-              role: 'user',
-              parts: [{
-                text: `கீழே உள்ள தமிழ் உரையை பகுப்பாய்வு செய்யுங்கள். இலக்கணப் பிழைகள், எழுத்துப் பிழைகள் மட்டுமே குறிக்கவும். உரை:\n\n${chunk.text}`
-              }]
-            }],
-            generationConfig: {
-              temperature: 0,
-              topP: 0.1,
-              // 800 tokens is sufficient for up to ~6 corrections per 400-char chunk.
-              // Lower limit → faster time-to-first-token from Gemini.
-              maxOutputTokens: 800,
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    type: { type: 'string' },
-                    title: { type: 'string' },
-                    description: { type: 'string' },
-                    original: { type: 'string' },
-                    suggestion: { type: 'string' },
-                    position: { type: 'object', properties: { start: { type: 'integer' }, end: { type: 'integer' } } }
-                  },
-                  required: ['id', 'type', 'title', 'description', 'original', 'suggestion']
-                }
+            }]
+          },
+          contents: [{
+            role: 'user',
+            parts: [{ text: `கீழே உள்ள தமிழ் உரையை பகுப்பாய்வு செய்யுங்கள். இலக்கணப் பிழைகள், எழுத்துப் பிழைகள் மட்டுமே குறிக்கவும். உரை:\n\n${chunk.text}` }]
+          }],
+          generationConfig: {
+            temperature: 0,
+            topP: 0.1,
+            maxOutputTokens: 800,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  type: { type: 'string' },
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  original: { type: 'string' },
+                  suggestion: { type: 'string' },
+                  position: { type: 'object', properties: { start: { type: 'integer' }, end: { type: 'integer' } } }
+                },
+                required: ['id', 'type', 'title', 'description', 'original', 'suggestion']
               }
             }
-          },
-          { headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, timeout: 10000 }
-        );
+          }
+        };
 
-        if (response.status === 429) {
-          keyRotator.markRateLimited(keyIndex);
-          return [];
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const keyInfo = keyRotator.getNextKey();
+          const apiKey = keyInfo ? keyInfo.key : null;
+          const keyIndex = keyInfo ? keyInfo.index : -1;
+          if (!apiKey) return [];
+          try {
+            const response = await axiosWithPool.post(
+              `${baseUrl}/models/gemini-2.5-flash:generateContent`,
+              payload,
+              { headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, timeout: 10000 }
+            );
+            if (response.status === 429) {
+              keyRotator.markRateLimited(keyIndex);
+              if (attempt === 0) {
+                await sleep(GEMINI_429_RETRY_MS);
+                continue;
+              }
+              return [];
+            }
+            if (response.status !== 200) return [];
+            let cleanedJson = (response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]').trim();
+            if (!cleanedJson.endsWith(']')) {
+              const lastComplete = cleanedJson.lastIndexOf('}');
+              if (lastComplete > 0) cleanedJson = cleanedJson.substring(0, lastComplete + 1) + ']';
+              else cleanedJson = '[]';
+            }
+            const arr = JSON.parse(cleanedJson);
+            return Array.isArray(arr) ? arr : [];
+          } catch (e) {
+            const status = e.response?.status;
+            if (status === 429 && attempt === 0) {
+              keyRotator.markRateLimited(keyIndex);
+              await sleep(GEMINI_429_RETRY_MS);
+              continue;
+            }
+            console.warn('[CORRECTIONS] Gemini chunk error', { status, message: (e.response?.data?.error?.message || e.message || '').slice(0, 200) });
+            return [];
+          }
         }
-        if (response.status !== 200) return [];
-
-        let cleanedJson = (response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]').trim();
-        if (!cleanedJson.endsWith(']')) {
-          const lastComplete = cleanedJson.lastIndexOf('}');
-          if (lastComplete > 0) cleanedJson = cleanedJson.substring(0, lastComplete + 1) + ']';
-          else cleanedJson = '[]';
-        }
-        const arr = JSON.parse(cleanedJson);
-        return Array.isArray(arr) ? arr : [];
-      } catch (e) {
-        const msg = e.response?.data?.error?.message || e.message || String(e);
-        const status = e.response?.status;
-        console.warn('[CORRECTIONS] Gemini chunk error', { status, message: msg?.slice(0, 200) });
         return [];
-      }
-    });
+      });
 
-    const allSuggestions = (await Promise.all(chunkPromises)).flat();
+      const segmentSuggestions = (await runWithConcurrency(chunkTasks, GEMINI_CORRECTIONS_CONCURRENCY)).flat();
+      allSuggestions = allSuggestions.concat(segmentSuggestions);
+    }
+
     const filtered = allSuggestions.filter((s) => {
       const orig = (s.original || '').trim();
       const sugg = (s.suggestion || s.corrected || '').trim();

@@ -65,7 +65,7 @@ class GeminiKeyRotator {
     const status = this.keyStatus[keyIndex];
     if (!status) return true;
     
-    // Check if cooldown period has passed (60 seconds for rate limits)
+    // Check if cooldown period has passed (90 seconds for rate limits)
     if (Date.now() > status.availableAt) {
       delete this.keyStatus[keyIndex];
       return true;
@@ -74,12 +74,12 @@ class GeminiKeyRotator {
   }
 
   _markKeyRateLimited(keyIndex) {
-    // Put key in cooldown for 60 seconds
+    // Put key in cooldown for 90 seconds (free tier RPM resets; avoid immediate reuse)
     this.keyStatus[keyIndex] = {
       rateLimited: true,
-      availableAt: Date.now() + 60000, // 60 second cooldown
+      availableAt: Date.now() + 90000, // 90 second cooldown
     };
-    console.log(`[GEMINI] Key ${keyIndex + 1} rate limited, cooldown for 60s`);
+    console.log(`[GEMINI] Key ${keyIndex + 1} rate limited, cooldown for 90s`);
   }
 
   /**
