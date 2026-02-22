@@ -3919,7 +3919,17 @@ class WorkspaceController {
     let buf = [];
     let count = 0;
     for (const line of lines) {
-      const lw = line.trim() ? line.trim().split(/\s+/).length : 0;
+      const words = line.trim() ? line.trim().split(/\s+/) : [];
+      const lw = words.length;
+      // A single line (e.g. one large paragraph with no newlines) can itself exceed
+      // maxWords. Split it by word count rather than dropping into a single oversized chunk.
+      if (lw > maxWords) {
+        if (buf.length > 0) { chunks.push(buf.join('\n')); buf = []; count = 0; }
+        for (let wi = 0; wi < words.length; wi += maxWords) {
+          chunks.push(words.slice(wi, wi + maxWords).join(' '));
+        }
+        continue;
+      }
       if (count + lw > maxWords && buf.length > 0) {
         chunks.push(buf.join('\n'));
         buf = [];
@@ -5434,17 +5444,35 @@ class WorkspaceController {
       // Use the correct API endpoint - proxy will forward to backend
       const apiUrl = `/api/v1/submissions/${draftId}`;
       console.log('[WorkspaceJS] Fetching draft from:', apiUrl);
-      
-      const response = await this.apiFetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json'
+
+      // Cloud Run scales to zero when idle; on cold start it returns 503 {"status":"starting"}.
+      // Retry with backoff for up to ~15s so the user's draft still loads after a cold boot.
+      const MAX_COLD_START_RETRIES = 6;
+      const COLD_START_RETRY_MS = 2500;
+      let response = null;
+      let coldStartShown = false;
+      for (let attempt = 0; attempt <= MAX_COLD_START_RETRIES; attempt++) {
+        response = await this.apiFetch(apiUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
+        if (response.status !== 503) break;
+        // Peek at the body to check for Cloud Run "starting" sentinel
+        const bodyClone = response.clone();
+        let bodyText = '';
+        try { bodyText = await bodyClone.text(); } catch (_e) {}
+        const isStarting = bodyText.includes('"starting"') || bodyText.includes('starting');
+        if (!isStarting) break; // Real 503, not a cold start
+        if (attempt === MAX_COLD_START_RETRIES) break; // Exhausted retries
+        if (!coldStartShown) {
+          coldStartShown = true;
+          this.showNotification('Backend is starting up, please wait a moment…', 'info');
+          console.log('[WorkspaceJS] Cloud Run cold start detected — retrying draft load…');
         }
-      });
+        await new Promise(resolve => setTimeout(resolve, COLD_START_RETRY_MS));
+      }
+
       console.log('Response status:', response.status);
-      
+
       if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = await response.text().catch(() => String(response.status));
         console.error('API error response:', errorText);
         throw new Error(`Failed to load draft: ${response.status} ${errorText}`);
       }

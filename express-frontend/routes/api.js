@@ -96,6 +96,29 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Cloud Run scales to zero when idle. On cold start it returns 503 {"status":"starting"}.
+// This helper retries the axios call transparently so clients never see the interim 503.
+// Max 3 retries × 2.5s = 7.5s wait — well within Vercel Pro's 60s function limit.
+function isColdStartResponse(response) {
+  if (response.status !== 503) return false;
+  const body = response.data;
+  if (!body) return false;
+  if (typeof body === 'object' && (body.status === 'starting' || body.status === 'Starting')) return true;
+  if (typeof body === 'string' && body.includes('starting')) return true;
+  return false;
+}
+
+async function axiosWithColdStartRetry(config, maxRetries = 3, retryDelayMs = 2500) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await axiosWithPool(config);
+    if (!isColdStartResponse(response) || attempt === maxRetries) {
+      return response;
+    }
+    console.log(`[PROXY] Cloud Run cold-start 503 — retry ${attempt + 1}/${maxRetries} in ${retryDelayMs}ms`);
+    await sleep(retryDelayMs);
+  }
+}
+
 // Limit concurrent Gemini calls to avoid 429 (free tier ~5–15 RPM per key).
 const GEMINI_CORRECTIONS_CONCURRENCY = 5;
 // Wait before retrying a chunk after 429 so the next key has a fresh quota.
@@ -366,6 +389,10 @@ router.post('/gemini/analyze', async (req, res) => {
 
 // Backend /submit accepts up to 500k chars; above that we use Express→Gemini with segment batching.
 const BACKEND_MAX_CHARS = 500000;
+// For corrections, only proxy short texts (≤ 2000 chars ≈ 300 words) to Cloud Run.
+// Longer texts go straight to Express→Gemini which chunks via splitIntoSentences, avoiding
+// the 31s Cloud Run timeout on large documents and the confusing /api/v1/submit log entries.
+const CORRECTIONS_CLOUD_RUN_MAX_CHARS = 2000;
 // For very long text we process in segments to avoid thousands of concurrent chunk requests.
 const EXPRESS_SEGMENT_CHARS = 80000;
 // Hard cap so one request cannot tie up the server indefinitely (~200k+ words).
@@ -419,9 +446,10 @@ router.post('/corrections', async (req, res) => {
     });
     inFlightCorrections.set(cacheKey, inFlightPromise);
 
-    // 1) Try backend (Cloud Run) first when within backend limit.
+    // 1) Try backend (Cloud Run) first for short texts only (≤ CORRECTIONS_CLOUD_RUN_MAX_CHARS).
+    //    Large texts skip Cloud Run entirely and go straight to Express→Gemini chunking.
     const correctionsBackend = getCorrectionsBackendBase(req);
-    if (correctionsBackend && text.length <= BACKEND_MAX_CHARS) {
+    if (correctionsBackend && text.length <= CORRECTIONS_CLOUD_RUN_MAX_CHARS) {
       try {
         const submitUrl = `${correctionsBackend}/submit`;
         // 20s timeout: Cloud Run takes 12-20s for medium chunks. Vercel Pro allows 60s lambdas.
@@ -455,8 +483,8 @@ router.post('/corrections', async (req, res) => {
         const isAbort = proxyErr.name === 'AbortError' || proxyErr.code === 'ERR_CANCELED';
         console.warn('[CORRECTIONS] Backend proxy failed, using Express→Gemini', isAbort ? 'AbortError (6s timeout)' : proxyErr.message);
       }
-    } else if (correctionsBackend && text.length > BACKEND_MAX_CHARS) {
-      console.log('[CORRECTIONS] Text exceeds backend limit, using Express→Gemini with segments', { textLen: text.length, limit: BACKEND_MAX_CHARS });
+    } else if (correctionsBackend && text.length > CORRECTIONS_CLOUD_RUN_MAX_CHARS) {
+      console.log('[CORRECTIONS] Text too large for Cloud Run, using Express→Gemini', { textLen: text.length, limit: CORRECTIONS_CLOUD_RUN_MAX_CHARS });
     } else if (!correctionsBackend) {
       console.log('[CORRECTIONS] No backend URL (set BACKEND_URL or TRANSLITERATOR_BASE_URL for Cloud Run proxy)');
     }
@@ -2604,7 +2632,7 @@ router.all('/*', async (req, res) => {
       validateStatus: () => true,
     };
 
-    const response = await axios(config);
+    const response = await axiosWithColdStartRetry(config);
     res.status(response.status).send(response.data);
   } catch (error) {
     console.error(`[PROXY-ERROR] ${error.message}`);
@@ -2643,8 +2671,8 @@ router.all('/v1/*', async (req, res) => {
       config.headers.authorization = req.headers.authorization;
     }
     
-    const response = await axios(config);
-    
+    const response = await axiosWithColdStartRetry(config);
+
     // Forward status and headers
     res.status(response.status);
     Object.keys(response.headers).forEach(key => {
@@ -2652,7 +2680,7 @@ router.all('/v1/*', async (req, res) => {
         res.setHeader(key, response.headers[key]);
       }
     });
-    
+
     // Send response data
     res.send(response.data);
   } catch (error) {
