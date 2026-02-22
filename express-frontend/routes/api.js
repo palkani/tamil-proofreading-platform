@@ -400,11 +400,24 @@ router.post('/corrections', async (req, res) => {
     if (correctionsBackend && text.length <= BACKEND_MAX_CHARS) {
       try {
         const submitUrl = `${correctionsBackend}/submit`;
-        const proxyRes = await axiosWithPool.post(
-          submitUrl,
-          { text, save_draft: false },
-          { headers: { 'Content-Type': 'application/json' }, timeout: 7000, validateStatus: () => true }
-        );
+        // Use both axios timeout AND AbortController so keep-alive streams don't prevent abort.
+        const cloudRunAbort = new AbortController();
+        const cloudRunTimer = setTimeout(() => cloudRunAbort.abort(), 6000);
+        let proxyRes;
+        try {
+          proxyRes = await axiosWithPool.post(
+            submitUrl,
+            { text, save_draft: false },
+            {
+              headers: { 'Content-Type': 'application/json' },
+              signal: cloudRunAbort.signal,
+              timeout: 6000,
+              validateStatus: () => true,
+            }
+          );
+        } finally {
+          clearTimeout(cloudRunTimer);
+        }
         if (proxyRes.status === 200 && proxyRes.data && proxyRes.data.success === true && Array.isArray(proxyRes.data.corrections)) {
           console.log('[CORRECTIONS] Proxied to Cloud Run', { url: submitUrl, count: proxyRes.data.corrections.length });
           const result = { success: true, corrections: proxyRes.data.corrections };
@@ -412,7 +425,8 @@ router.post('/corrections', async (req, res) => {
           return res.json(result);
         }
       } catch (proxyErr) {
-        console.warn('[CORRECTIONS] Backend proxy failed, using Express→Gemini', proxyErr.message);
+        const isAbort = proxyErr.name === 'AbortError' || proxyErr.code === 'ERR_CANCELED';
+        console.warn('[CORRECTIONS] Backend proxy failed, using Express→Gemini', isAbort ? 'AbortError (6s timeout)' : proxyErr.message);
       }
     } else if (correctionsBackend && text.length > BACKEND_MAX_CHARS) {
       console.log('[CORRECTIONS] Text exceeds backend limit, using Express→Gemini with segments', { textLen: text.length, limit: BACKEND_MAX_CHARS });
@@ -449,8 +463,20 @@ router.post('/corrections', async (req, res) => {
           return out;
         })();
 
+    // Hard deadline — must respond well before Vercel's 300s Lambda cutoff.
+    const routeStart = Date.now();
+    const ROUTE_DEADLINE_MS = 240_000; // 240s (leaves 60s buffer)
+
     let allSuggestions = [];
     for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+      if (Date.now() - routeStart > ROUTE_DEADLINE_MS) {
+        console.warn('[CORRECTIONS] 240s deadline reached, returning partial results', {
+          segment: segIdx,
+          totalSegments: segments.length,
+          corrections: allSuggestions.length,
+        });
+        break;
+      }
       const segment = segments[segIdx];
       const chunks = splitIntoSentences(segment);
       console.log('[CORRECTIONS] POST /api/corrections (Express→Gemini)', { segment: segIdx + 1, segments: segments.length, textLen: segment.length, chunks: chunks.length });

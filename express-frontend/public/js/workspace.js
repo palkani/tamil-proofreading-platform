@@ -4253,11 +4253,14 @@ class WorkspaceController {
         }
         // Fallback to backend /api/submit if corrections API failed or returned nothing
         if (!data) {
-          console.log('[AI] 🚀 Fallback: calling /api/submit with text length:', text.length);
+          // Truncate text to backend limit before fallback submit.
+          const MAX_SUBMIT_CHARS = 30_000;
+          const submitText = text.length > MAX_SUBMIT_CHARS ? text.slice(0, MAX_SUBMIT_CHARS) : text;
+          console.log('[AI] 🚀 Fallback: calling /api/submit with text length:', submitText.length);
           const response = await this.apiFetch('/api/submit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, html: this.getEditorHTML(), save_draft: true }),
+            body: JSON.stringify({ text: submitText, save_draft: true }),
             signal: this.abortController.signal
           });
           const raw = await response.text();
@@ -4811,21 +4814,22 @@ class WorkspaceController {
     }
 
     try {
-      // If we have a current draft, we're updating it
-      // Otherwise, create a new one
-      // Note: html is intentionally omitted — for large Tamil documents the HTML
-      // can be 2-3× the text size and would exceed HTTP body limits. The backend
-      // stores plain text for corrections; HTML is re-generated on load from the
-      // stored text. Omitting html halves the autosave payload.
+      // Backend hard limit: ~100 KB raw bytes ≈ 33,333 Tamil chars (3 bytes/char UTF-8).
+      // Truncate text so the draft is ALWAYS saved, even for very large documents.
+      // The full text stays live in the editor; only the server copy is capped here.
+      const MAX_SAVE_CHARS = 30_000;
+      const saveText = text.length > MAX_SAVE_CHARS ? text.slice(0, MAX_SAVE_CHARS) : text;
+      const wasTruncated = saveText.length < text.length;
+
       const response = await this.apiFetch('/api/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          text: text,
-          model: 'gemini-flash', // Default model
-          save_draft: true // Explicitly mark this as a draft save
+          text: saveText,
+          model: 'gemini-flash',
+          save_draft: true,
         })
       });
 
@@ -4873,11 +4877,20 @@ class WorkspaceController {
       }
       
       if (saveStatusEl) {
-        saveStatusEl.innerHTML = '<span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>Saved';
+        saveStatusEl.innerHTML = wasTruncated
+          ? '<span class="inline-block w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>Saved (partial)'
+          : '<span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>Saved';
       }
       if (autosaveTimeEl) {
         const now = new Date();
         autosaveTimeEl.textContent = `Last saved: ${now.toLocaleTimeString()}`;
+      }
+      if (wasTruncated) {
+        const kChars = Math.round(text.length / 1000);
+        this.showNotification(
+          `Large document (${kChars}K chars): only first 30K characters saved to server. Full text is safe in your editor.`,
+          'warning'
+        );
       }
     } catch (error) {
       if (error.message === 'unauthorized') {
