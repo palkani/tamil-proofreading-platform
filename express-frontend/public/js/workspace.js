@@ -3965,10 +3965,10 @@ class WorkspaceController {
 
   /**
    * Fetch corrections for all chunks of a large document.
-   * Runs CONCURRENCY chunks in parallel and logs progress so the user can
-   * see the analysis is still working on long documents.
+   * Runs CONCURRENCY chunks in parallel; calls onBatchDone(newCorrections, done, total)
+   * after each batch so callers can stream partial results to the UI.
    */
-  async fetchCorrectionsInChunks(text, signal) {
+  async fetchCorrectionsInChunks(text, signal, onBatchDone) {
     const WORDS_PER_CHUNK = 1500;
     const CONCURRENCY = 4;
     const chunks = this.splitTextIntoChunks(text, WORDS_PER_CHUNK);
@@ -3978,9 +3978,11 @@ class WorkspaceController {
       if (signal.aborted) break;
       const batch = chunks.slice(i, i + CONCURRENCY);
       const results = await Promise.all(batch.map(c => this.fetchOneChunkCorrections(c, signal)));
-      for (const r of results) all.push(...r);
-      const pct = Math.min(99, Math.round(((i + batch.length) / chunks.length) * 100));
-      console.log(`[AI] Chunks ${i + 1}–${Math.min(i + CONCURRENCY, chunks.length)}/${chunks.length} (${pct}%): ${all.length} corrections so far`);
+      const batchCorrections = results.flat();
+      for (const r of batchCorrections) all.push(r);
+      const done = Math.min(i + batch.length, chunks.length);
+      console.log(`[AI] Chunks ${i + 1}–${done}/${chunks.length}: ${all.length} corrections so far`);
+      if (onBatchDone && batchCorrections.length > 0) onBatchDone(batchCorrections, done, chunks.length);
     }
     return all;
   }
@@ -4232,7 +4234,24 @@ class WorkspaceController {
       if (wordCount > LARGE_DOC_WORD_THRESHOLD) {
         // ── Large document: split into chunks and send in parallel batches ──
         console.log(`[AI] 📦 Large document (${wordCount} words) — chunked analysis`);
-        const chunkedCorrections = await this.fetchCorrectionsInChunks(text, this.abortController.signal);
+        const summaryEl = document.getElementById('suggestions-summary');
+        const chunkedCorrections = await this.fetchCorrectionsInChunks(
+          text,
+          this.abortController.signal,
+          (batchCorrections, done, total) => {
+            // Show progress in status bar so user knows analysis is progressing
+            if (summaryEl) {
+              summaryEl.innerHTML = `
+                <div class="flex items-center gap-2 text-primary-600">
+                  <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span class="text-sm font-medium">Analyzing section ${done}/${total}…</span>
+                </div>`;
+            }
+          }
+        );
         // Always populate data so the processing pipeline runs (empty = no issues found)
         data = { corrections: chunkedCorrections };
         this.lastAnalyzedText = text;

@@ -97,9 +97,9 @@ function sleep(ms) {
 }
 
 // Limit concurrent Gemini calls to avoid 429 (free tier ~5–15 RPM per key).
-const GEMINI_CORRECTIONS_CONCURRENCY = 3;
+const GEMINI_CORRECTIONS_CONCURRENCY = 5;
 // Wait before retrying a chunk after 429 so the next key has a fresh quota.
-const GEMINI_429_RETRY_MS = 8000;
+const GEMINI_429_RETRY_MS = 1500;
 
 // ---------------------------------------------------------------------------
 // Short-lived in-memory cache for corrections results.
@@ -107,7 +107,11 @@ const GEMINI_429_RETRY_MS = 8000;
 // on the same text within 30 seconds (common UX pattern).
 // ---------------------------------------------------------------------------
 const correctionsCache = new Map();
-const CORRECTIONS_CACHE_TTL = 30 * 1000; // 30 seconds
+const CORRECTIONS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// In-flight deduplication: if the same text is already being processed, await the existing promise
+// instead of spawning a duplicate set of Gemini calls.
+const inFlightCorrections = new Map(); // cacheKey → Promise<result>
 
 function getCacheKey(text) {
   return crypto.createHash('md5').update(text).digest('hex');
@@ -124,8 +128,8 @@ function getCachedResult(key) {
 }
 
 function setCachedResult(key, data) {
-  // Cap at 50 entries; evict oldest to avoid unbounded growth
-  if (correctionsCache.size >= 50) {
+  // Cap at 500 entries; evict oldest to avoid unbounded growth
+  if (correctionsCache.size >= 500) {
     correctionsCache.delete(correctionsCache.keys().next().value);
   }
   correctionsCache.set(key, { ts: Date.now(), data });
@@ -146,9 +150,9 @@ function docJsonToPlainText(docJson) {
   return parts.join('\n');
 }
 
-// Helper function to split text into manageable chunks for better accuracy
-// Chunk size 400: fewer API calls per request (each call has ~1-2s RTT overhead).
-// Accuracy is not affected — Gemini handles 400-char Tamil paragraphs well.
+// Helper function to split text into manageable chunks for better accuracy.
+// Chunk size 800: halves the number of Gemini API calls vs 400-char chunks.
+// Gemini 2.5 Flash handles 800-char Tamil paragraphs accurately.
 function splitIntoSentences(text) {
   // Split by common Tamil and English sentence delimiters
   const sentences = text.split(/([.!?।]\s*)/g);
@@ -157,7 +161,7 @@ function splitIntoSentences(text) {
   let globalOffset = 0;
 
   for (const part of sentences) {
-    if (current.length + part.length <= 400) {
+    if (current.length + part.length <= 800) {
       current += part;
     } else {
       if (current.trim()) {
@@ -263,7 +267,7 @@ router.post('/gemini/analyze', async (req, res) => {
         generationConfig: {
           temperature: 0,
           topP: 0.1,
-          maxOutputTokens: 800,
+          maxOutputTokens: 400,
           responseMimeType: 'application/json',
           responseSchema: {
             type: 'array',
@@ -370,6 +374,10 @@ const MAX_CORRECTIONS_TEXT_CHARS = 2000000;
 // Accepts { text } or { docJson } (TipTap/ProseMirror). Tries Cloud Run first; falls back to Express→Gemini.
 // Large payloads (e.g. 200k+ words) supported via chunking; body limit raised via app-level 50mb.
 router.post('/corrections', async (req, res) => {
+  // In-flight deduplication state — declared outside try so catch can clean up.
+  let _inFlightKey = null;
+  let _resolveInFlight = null;
+  let _rejectInFlight = null;
   try {
     let text = req.body.text;
     if (req.body.docJson != null) {
@@ -394,6 +402,21 @@ router.post('/corrections', async (req, res) => {
     if (cached) {
       return res.json(cached);
     }
+
+    // In-flight deduplication: if identical text is already being processed by another request,
+    // piggyback on that promise instead of spawning a duplicate set of Gemini API calls.
+    if (inFlightCorrections.has(cacheKey)) {
+      const result = await inFlightCorrections.get(cacheKey).catch(() => null);
+      if (result) return res.json(result);
+      // If the in-flight request errored, fall through and try ourselves.
+    }
+    // Register our computation so concurrent identical requests can await us.
+    _inFlightKey = cacheKey;
+    const inFlightPromise = new Promise((resolve, reject) => {
+      _resolveInFlight = resolve;
+      _rejectInFlight = reject;
+    });
+    inFlightCorrections.set(cacheKey, inFlightPromise);
 
     // 1) Try backend (Cloud Run) first when within backend limit.
     const correctionsBackend = getCorrectionsBackendBase(req);
@@ -422,6 +445,7 @@ router.post('/corrections', async (req, res) => {
           console.log('[CORRECTIONS] Proxied to Cloud Run', { url: submitUrl, count: proxyRes.data.corrections.length });
           const result = { success: true, corrections: proxyRes.data.corrections };
           setCachedResult(cacheKey, result);
+          if (_resolveInFlight) { _resolveInFlight(result); _inFlightKey = null; inFlightCorrections.delete(cacheKey); }
           return res.json(result);
         }
       } catch (proxyErr) {
@@ -439,11 +463,15 @@ router.post('/corrections', async (req, res) => {
 
     if (!keyRotator.getNextKey()) {
       console.warn('[CORRECTIONS] No Gemini API key - set GEMINI_API_KEY_1 or GOOGLE_GENAI_API_KEY in env (Vercel/Express)');
+      if (_rejectInFlight) _rejectInFlight(new Error('Gemini AI not configured'));
+      if (_inFlightKey) { inFlightCorrections.delete(_inFlightKey); _inFlightKey = null; }
       return res.status(500).json({ success: false, corrections: [], error: 'Gemini AI not configured' });
     }
     if (keyRotator.getAvailableKeyCount() === 0) {
       const waitSecs = keyRotator.getSecondsUntilAvailable();
       console.warn('[CORRECTIONS] All Gemini keys rate limited, returning 503');
+      if (_rejectInFlight) _rejectInFlight(new Error('Rate limited'));
+      if (_inFlightKey) { inFlightCorrections.delete(_inFlightKey); _inFlightKey = null; }
       return res.status(503).json({
         success: false,
         corrections: [],
@@ -508,14 +536,32 @@ router.post('/corrections', async (req, res) => {
    ❌ "ண" க்கு பதில் "ன" (அல்லது நேர்மாறாக) - சூழலைப் பொறுத்து
    ❌ "ற" க்கு பதில் "ர" (அல்லது நேர்மாறாக) - சூழலைப் பொறுத்து
 
+5. வினை இணைப்புப் பிழை (Verb conjugation errors) — type: "grammar":
+   ⚠️ வினை, எண்/ஆள்/காலத்தோடு பொருந்த வேண்டும். இதை கண்டிப்பாக சோதிக்கவும்.
+   a) வினை-எண் பொருந்தல் (Subject–verb number): பன்மை subject + ஒருமை வினை = பிழை
+      ❌ "அவர்கள் வந்தான்" → ✅ "அவர்கள் வந்தார்கள்"
+      ❌ "மக்கள் சொன்னான்" → ✅ "மக்கள் சொன்னார்கள்"
+      ❌ "பிள்ளைகள் விளையாடினான்" → ✅ "பிள்ளைகள் விளையாடினார்கள்"
+   b) பன்மை பெயர்ச்சொல் + நபர் வினைமுறை = பிழை
+      ❌ "நிகழ்வுகள் உறுதிப்படுத்தியுள்ளனர்" → ✅ "நிகழ்வுகள் உறுதிப்படுத்தியுள்ளன"
+      ❌ "விடயங்கள் முடிந்துவிட்டனர்" → ✅ "விடயங்கள் முடிந்துவிட்டன"
+   c) வினை-ஆள் பொருந்தல் (Person–verb agreement): உரையில் ஆள் (நான்/நீ/அவன்/அவள்/அவர்கள்)க்கு வினை முடிவு பொருந்த வேண்டும்
+      ❌ "நான் செய்தான்" → ✅ "நான் செய்தேன்"
+      ❌ "நீ செய்தேன்" → ✅ "நீ செய்தாய்" அல்லது "நீ செய்தீர்" (சூழலுக்கு ஏற்ப)
+      ❌ "அவன் செய்தேன்" → ✅ "அவன் செய்தான்"
+      ❌ "அவள் வந்தான்" → ✅ "அவள் வந்தாள்"
+   d) காலம் ஒத்துழைப்பு (Tense consistency): ஒரே வாக்கியத்தில் காலம் ஒத்திருக்க வேண்டும்
+      ❌ (இறந்தகால சூழல்) "குரல் கொடுத்தாலும்" → ✅ "குரல் கொடுத்திருந்தாலும்"
+      ❌ "அவன் வந்தான், இப்போது செல்கிறான்" (கால குதிப்பு) → ✅ "அவன் வந்தான், பிறகு சென்றான்"
+
 🟢 பிழையாகக் குறிக்க வேண்டாம் - இவை சரியானவை:
 - புணர்ச்சி மாற்றங்கள் இரண்டும் சரி:
   ✅ "வரலாற்றுச் சிறப்பு" = ✅ "வரலாற்று சிறப்பு"
   ✅ "அரசியல்சாசனச் சட்டம்" = ✅ "அரசியல்சாசன சட்டம்"
-- பேச்சு வழக்கு vs இலக்கிய வழக்கு இரண்டும் சரி:
+- பேச்சு வழக்கு vs இலக்கிய வழக்கு இரண்டும் சரி (வினை இணைப்பு பிழை அல்ல):
   ✅ "போனேன்" = ✅ "சென்றேன்" (இரண்டும் சரி)
-  ✅ "செய்தீர்" = ✅ "செய்தீர்கள்" (இரண்டும் சரி)
-  ✅ "வந்தான்" = ✅ "வந்தான்" (பேச்சு வழக்கு சரி)
+  ✅ "செய்தீர்" = ✅ "செய்தீர்கள்" (மரியாதை இருவடிவமும் சரி; எண்/ஆள் தெளிவாகத் தவறாக இருந்தால் மட்டும் குறிக்கவும்)
+  ✅ "வந்தான்" (பேச்சு வழக்கு சரி)
 - வட்டார வழக்குகள் சரியானவை
 
 🔵 முக்கிய அறிவுறுத்தல்கள்:
@@ -538,12 +584,12 @@ router.post('/corrections', async (req, res) => {
           },
           contents: [{
             role: 'user',
-            parts: [{ text: `கீழே உள்ள தமிழ் உரையை பகுப்பாய்வு செய்யுங்கள். இலக்கணப் பிழைகள், எழுத்துப் பிழைகள் மட்டுமே குறிக்கவும். உரை:\n\n${chunk.text}` }]
+            parts: [{ text: `கீழே உள்ள தமிழ் உரையை பகுப்பாய்வு செய்யுங்கள். இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், வினை இணைப்புப் பிழைகள் (எண்/ஆள்/காலம் பொருந்தல்) மட்டுமே குறிக்கவும். உரை:\n\n${chunk.text}` }]
           }],
           generationConfig: {
             temperature: 0,
             topP: 0.1,
-            maxOutputTokens: 800,
+            maxOutputTokens: 400,
             responseMimeType: 'application/json',
             responseSchema: {
               type: 'array',
@@ -630,9 +676,12 @@ router.post('/corrections', async (req, res) => {
     console.log('[CORRECTIONS] Returning', { count: corrections.length, rawSuggestions: allSuggestions.length });
     const result = { success: true, corrections };
     setCachedResult(cacheKey, result);
+    if (_resolveInFlight) { _resolveInFlight(result); _inFlightKey = null; inFlightCorrections.delete(cacheKey); }
     return res.json(result);
   } catch (error) {
     console.error('[CORRECTIONS] Error:', error.message);
+    if (_rejectInFlight) { _rejectInFlight(error); }
+    if (_inFlightKey) { inFlightCorrections.delete(_inFlightKey); _inFlightKey = null; }
     return res.status(500).json({ success: false, corrections: [], error: error.message });
   }
 });

@@ -16,6 +16,9 @@ function isTokenExpired(token) {
 
 console.log('[HomeEditorJS] ✅ Loaded version v20260122a (normalizeComparable fix + paste double-submit fix)');
 
+// Minimum words before AI analysis (match Workspace AI Assistant behavior)
+const MIN_AI_WORDS = 5;
+
 // Suppress AbortError logs from unhandled promise rejections (expected when canceling stale requests)
 if (typeof window !== 'undefined') {
   const originalConsoleError = console.error;
@@ -246,12 +249,13 @@ class HomeEditor {
     this.maxWords = 200;
     this.limitToastTimer = null;
     
-    // Auto-analysis state
+    // Auto-analysis state (match Workspace: suppress re-run right after applying a suggestion)
     this.analysisTimeout = null;
     this.abortController = null;
     this.lastAnalyzedText = '';
     this.isAnalyzing = false;
     this.pendingAnalysis = false;
+    this.suppressAutoAnalyzeUntil = 0;
     
     // Transliteration autocomplete state
     this.translitTimeout = null;
@@ -1615,18 +1619,25 @@ class HomeEditor {
   }
   
   async autoAnalyze() {
-    const text = this.getPlainText();
+    const text = this.getPlainText().trim();
     const wc = this.countWords(text);
-    if (wc < 5 || text.length < 20) {
-      this.showInfo('Grammar suggestions require a full sentence.');
+
+    // Match Workspace: suppress re-run right after applying a suggestion
+    if (this.suppressAutoAnalyzeUntil && Date.now() < this.suppressAutoAnalyzeUntil) {
+      return;
+    }
+
+    // If empty, clear suggestions and reset
+    if (!text || text.length === 0) {
       this.lastAnalyzedText = '';
       this.emptyState = 'idle';
       this.displaySuggestions([]);
       return;
     }
-    
-    // If empty, clear suggestions and reset
-    if (!text) {
+
+    // Match Workspace: minimum words before analysis
+    if (wc < MIN_AI_WORDS) {
+      this.showInfo(`Type or paste at least ${MIN_AI_WORDS} words to get AI suggestions.`);
       this.lastAnalyzedText = '';
       this.emptyState = 'idle';
       this.displaySuggestions([]);
@@ -1642,21 +1653,11 @@ class HomeEditor {
     // Skip if same as last analyzed
     if (text === this.lastAnalyzedText) return;
     
-    // Check if text is mostly Tamil (not English)
-    const tamilChars = text.match(/[\u0B80-\u0BFF]/g) || [];
-    const tamilRatio = tamilChars.length / text.length;
-    
-    console.log('Tamil analysis check:', { 
-      text, 
-      tamilChars: tamilChars.length, 
-      totalChars: text.length, 
-      tamilRatio: tamilRatio.toFixed(2),
-      willAnalyze: tamilRatio >= 0.3
-    });
-    
-    if (tamilRatio < 0.3) {
-      // Not enough Tamil content, skip analysis
-      console.log('Skipping analysis - not enough Tamil content');
+    // Match Workspace: require at least one Tamil character (same as Workspace hasTamil check)
+    const hasTamil = /[\u0B80-\u0BFF]/.test(text);
+    if (!hasTamil) {
+      this.emptyState = 'idle';
+      this.displaySuggestions([]);
       return;
     }
     
@@ -1693,36 +1694,59 @@ class HomeEditor {
         false
       );
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          this.showError('AI analysis failed. Please try again.');
-          return;
-        }
-        const rawErr = await response.text();
-        let msg = `AI analysis failed (HTTP ${response.status})`;
-        try {
-          const j = rawErr ? JSON.parse(rawErr) : null;
-          if (j && (j.error || j.message || j.details)) msg = String(j.error || j.message || j.details);
-        } catch (e) { /* ignore */ }
-        if (rawErr && rawErr.trim() && msg === `AI analysis failed (HTTP ${response.status})`) {
-          msg = `${msg}: ${rawErr.trim().slice(0, 300)}`;
-        }
-        this.showError(msg);
+      const rawBody = await response.text();
+      let data = {};
+      try {
+        data = rawBody ? JSON.parse(rawBody) : {};
+      } catch (e) {
+        data = {};
+      }
+
+      // Match Workspace: handle 503 (all Gemini keys rate limited) with clear message
+      if (response.status === 503) {
+        const msg = (data.error || data.message || 'All Gemini keys are temporarily rate limited. Please try again in 1–2 minutes.').trim();
+        const retrySecs = data.retry_after_seconds;
+        this.showError(retrySecs ? `${msg} (Retry after ${retrySecs}s)` : msg);
         return;
       }
 
-      const rawOk = await response.text();
-      let data = {};
-      try {
-        data = rawOk ? JSON.parse(rawOk) : {};
-      } catch (e) {
-        console.error('[HomeEditor] /api/corrections returned non-JSON:', rawOk?.slice?.(0, 300));
-        this.showError('AI analysis failed: server returned an invalid response.');
+      if (response.status === 401) {
+        this.showError('AI analysis failed. Please try again.');
         return;
       }
-      // Response format: { success: true, corrections: [{ blockId, originalText, correction, reason, type }] }
-      const suggestions = this.extractSuggestionsFromPayload({ corrections: data.corrections || [] });
-      console.log('[HomeEditor] Corrections API suggestions:', suggestions.length, suggestions);
+
+      if (!response.ok) {
+        const msg = (data.error || data.message || data.details || `AI analysis failed (HTTP ${response.status})`).trim();
+        this.showError(msg || `AI analysis failed (HTTP ${response.status})`);
+        return;
+      }
+
+      // Use corrections if success; otherwise fallback to /api/submit (match Workspace behavior)
+      let corrections = (data.success && Array.isArray(data.corrections)) ? data.corrections : null;
+      if (corrections === null) {
+        const submitText = text.length > 500000 ? text.slice(0, 500000) : text;
+        const submitResponse = await apiFetch('/api/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: submitText, save_draft: false }),
+          signal: this.abortController.signal,
+        }, false);
+        const submitRaw = await submitResponse.text();
+        let submitData = {};
+        try {
+          submitData = submitRaw ? JSON.parse(submitRaw) : {};
+        } catch (_e) {}
+        if (submitResponse.ok && Array.isArray(submitData.corrections)) {
+          corrections = submitData.corrections;
+        } else if (!submitResponse.ok) {
+          const submitErr = (submitData.error || submitData.message || `Submit failed (HTTP ${submitResponse.status})`).trim();
+          this.showError(submitErr);
+          return;
+        }
+      }
+
+      const suggestions = this.extractSuggestionsFromPayload({ corrections: corrections || [] });
+      console.log('[HomeEditor] AI suggestions:', suggestions.length, suggestions);
       const errMsg = (data.error || '').trim();
       if (!suggestions.length && errMsg && /temporarily unavailable|not configured|missing|timeout|provider|gemini|ai/i.test(errMsg)) {
         this.emptyState = 'idle';
@@ -2125,6 +2149,9 @@ class HomeEditor {
     
     // Re-render suggestions without the applied one
     this.displaySuggestions(updatedSuggestions);
+    
+    // Match Workspace: suppress auto re-analysis for a short time after applying (avoids clearing panel)
+    this.suppressAutoAnalyzeUntil = Date.now() + 2000;
     
     // DON'T call scheduleAutoAnalysis() here - it causes unnecessary API calls!
     // User can manually trigger analysis if they want fresh suggestions.
