@@ -25,6 +25,7 @@ const (
 type Submission struct {
         ID                  uint             `gorm:"primaryKey" json:"id"`
         UserID              uint             `gorm:"not null;index" json:"user_id"`
+        GroupID              *uint            `gorm:"index:idx_submissions_group_id" json:"group_id,omitempty"` // nil = Ungrouped
         Title               string           `gorm:"size:255" json:"title,omitempty"`
         OriginalText        string           `gorm:"type:text;not null" json:"original_text"`
         OriginalHTML        string           `gorm:"type:text" json:"original_html,omitempty"`
@@ -46,7 +47,8 @@ type Submission struct {
         DeletedAt           gorm.DeletedAt   `gorm:"index" json:"-"`
 
         // Relationships
-        User User `gorm:"foreignKey:UserID" json:"user,omitempty"`
+        User  User        `gorm:"foreignKey:UserID" json:"user,omitempty"`
+        Group *DraftGroup `gorm:"foreignKey:GroupID" json:"group,omitempty"`
 }
 
 type ContactMessage struct {

@@ -43,6 +43,39 @@
   </div>
 </div>
 
+<!-- Duplicate Draft Modal -->
+<div id="duplicate-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="duplicate-modal-title" role="dialog" aria-modal="true">
+  <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20">
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeDuplicateModal()"></div>
+    <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4" id="duplicate-modal-title">Duplicate Draft</h3>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Name of duplicate</label>
+          <input type="text" id="duplicate-name-input" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="e.g. Copy of My Draft" maxlength="255">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Put in group</label>
+          <select id="duplicate-group-select" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+            <option value="">Ungrouped</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-6 flex justify-end gap-3">
+        <button type="button" onclick="closeDuplicateModal()" class="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+        <button type="button" id="duplicate-confirm-btn" onclick="executeDuplicate()" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700">Duplicate</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Move to group popover (shown after clicking "Move to group" in context menu) -->
+<div id="move-group-popover" class="fixed z-[60] hidden bg-white border border-gray-200 rounded-lg shadow-xl py-2 min-w-[180px] text-sm" role="menu">
+  <div class="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase">Choose group</div>
+  <button type="button" data-move-group-id="0" class="move-group-option w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">Ungrouped</button>
+  <div id="move-group-list"></div>
+</div>
+
 <!-- Draft Context Menu -->
 <div id="draft-context-menu" class="fixed z-50 hidden bg-white border border-gray-200 rounded-xl shadow-2xl py-1.5 min-w-[192px] text-sm" role="menu">
   <button id="menu-edit-btn" onclick="menuEdit()" class="w-full text-left px-4 py-2.5 text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors" role="menuitem">
@@ -60,6 +93,10 @@
   <button id="menu-pin-btn" onclick="menuTogglePin()" class="w-full text-left px-4 py-2.5 text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors" role="menuitem">
     <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
     <span id="menu-pin-label">Pin</span>
+  </button>
+  <button id="menu-move-group-btn" onclick="menuMoveToGroup()" class="w-full text-left px-4 py-2.5 text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors" role="menuitem">
+    <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+    Move to group
   </button>
   <div class="border-t border-gray-100 my-1"></div>
   <button id="menu-trash-btn" onclick="menuTrash()" class="w-full text-left px-4 py-2.5 text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors" role="menuitem">
@@ -86,7 +123,29 @@
         </a>
       </div>
 
-      <div class="bg-white shadow-lg rounded-xl border border-gray-200 p-6">
+      <div class="flex flex-col lg:flex-row gap-6">
+        <!-- Groups sidebar -->
+        <div id="groups-sidebar" class="lg:w-56 flex-shrink-0 hidden">
+          <div class="bg-white shadow rounded-xl border border-gray-200 p-4 sticky top-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Groups</h3>
+              <button type="button" id="new-group-btn" class="text-primary-600 hover:text-primary-700 text-sm font-medium" title="New group">+ New</button>
+            </div>
+            <div id="new-group-form" class="hidden mb-2">
+              <input type="text" id="new-group-name-input" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mb-1" placeholder="Group name" maxlength="255">
+              <div class="flex gap-1">
+                <button type="button" id="new-group-save" class="text-xs px-2 py-1 bg-primary-600 text-white rounded">Save</button>
+                <button type="button" id="new-group-cancel" class="text-xs px-2 py-1 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+              </div>
+            </div>
+            <ul id="groups-list" class="space-y-0.5 text-sm">
+              <li><button type="button" data-group-id="all" class="group-filter w-full text-left px-2 py-1.5 rounded hover:bg-gray-100 font-medium text-primary-600">All drafts</button></li>
+              <li><button type="button" data-group-id="0" class="group-filter w-full text-left px-2 py-1.5 rounded hover:bg-gray-100 text-gray-700">Ungrouped</button></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="flex-1 min-w-0 bg-white shadow-lg rounded-xl border border-gray-200 p-6">
         <h3 class="text-lg font-semibold mb-4 text-gray-900">Saved Drafts</h3>
         
         <div id="loading" class="text-center py-12">
@@ -120,6 +179,7 @@
           <a href="/workspace" class="mt-4 inline-block btn-primary">
             Create First Draft
           </a>
+        </div>
         </div>
       </div>
     </div>
@@ -847,27 +907,49 @@
     }
     
     console.log('[DRAFTS] Response data:', data);
-    const drafts = data.submissions || data.data || [];
-    console.log('[DRAFTS] Found', drafts.length, 'drafts');
+    const submissions = data.submissions || data.data || [];
+    const groups = data.groups || [];
+    console.log('[DRAFTS] Found', submissions.length, 'drafts', groups.length, 'groups');
 
     loadingEl.classList.add('hidden');
 
-    if (drafts.length === 0) {
-      emptyEl.classList.remove('hidden');
-      return;
+    // Store for filtering and duplicate modal
+    window.__draftsData = { allDrafts: submissions, groups: groups, selectedGroupId: 'all' };
+
+    // Populate groups sidebar
+    const groupsListEl = document.getElementById('groups-list');
+    const sidebarEl = document.getElementById('groups-sidebar');
+    if (groupsListEl && (groups.length > 0 || submissions.length > 0)) {
+      sidebarEl.classList.remove('hidden');
+      const ungroupedBtn = groupsListEl.querySelector('[data-group-id="0"]');
+      let next = ungroupedBtn ? ungroupedBtn.nextElementSibling : null;
+      while (next) { const n = next.nextElementSibling; next.remove(); next = n; }
+      groups.forEach(g => {
+        const li = document.createElement('li');
+        li.innerHTML = '<button type="button" data-group-id="' + g.id + '" class="group-filter w-full text-left px-2 py-1.5 rounded hover:bg-gray-100 text-gray-700">' + (g.name || '').replace(/</g, '&lt;') + '</button>';
+        groupsListEl.appendChild(li);
+      });
     }
 
-    // Sort: pinned drafts first, then by created_at descending
-    const pinnedIds = getPinnedIds();
-    drafts.sort((a, b) => {
-      const ap = pinnedIds.includes(a.id), bp = pinnedIds.includes(b.id);
-      if (ap !== bp) return bp ? 1 : -1;
-      return new Date(b.created_at) - new Date(a.created_at);
-    });
+    function filterDrafts() {
+      const d = window.__draftsData;
+      if (!d) return [];
+      const id = d.selectedGroupId;
+      if (id === 'all') return d.allDrafts;
+      if (id === '0') return d.allDrafts.filter(x => !x.group_id);
+      return d.allDrafts.filter(x => x.group_id == id);
+    }
 
-    tableEl.classList.remove('hidden');
-
-    drafts.forEach(draft => {
+    function renderDraftsTable(draftsToShow) {
+      if (!bodyEl) return;
+      bodyEl.innerHTML = '';
+      const pinnedIds = getPinnedIds();
+      const sorted = draftsToShow.slice().sort((a, b) => {
+        const ap = pinnedIds.includes(a.id), bp = pinnedIds.includes(b.id);
+        if (ap !== bp) return bp ? 1 : -1;
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+      sorted.forEach(draft => {
       const row = document.createElement('tr');
       row.id = `draft-row-${draft.id}`;
       const title = draft.title || `Draft ${draft.id}`;
@@ -911,7 +993,105 @@
         </td>
       `;
       bodyEl.appendChild(row);
+      });
+      // Highlight active group filter
+      document.querySelectorAll('.group-filter').forEach(btn => {
+        const id = (window.__draftsData && window.__draftsData.selectedGroupId) || 'all';
+        if (String(btn.getAttribute('data-group-id')) === String(id)) {
+          btn.classList.add('bg-primary-50', 'text-primary-700');
+          btn.classList.remove('text-gray-700');
+        } else {
+          btn.classList.remove('bg-primary-50', 'text-primary-700');
+          if (btn.getAttribute('data-group-id') !== 'all') btn.classList.add('text-gray-700');
+        }
+      });
+    }
+
+    const filtered = filterDrafts();
+    if (filtered.length === 0) {
+      emptyEl.classList.remove('hidden');
+      tableEl.classList.add('hidden');
+    } else {
+      emptyEl.classList.add('hidden');
+      tableEl.classList.remove('hidden');
+      renderDraftsTable(filtered);
+    }
+
+    // Group filter clicks
+    document.querySelectorAll('.group-filter').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const id = this.getAttribute('data-group-id');
+        if (window.__draftsData) window.__draftsData.selectedGroupId = id;
+        const filtered = filterDrafts();
+        if (filtered.length === 0) {
+          emptyEl.classList.remove('hidden');
+          tableEl.classList.add('hidden');
+          bodyEl.innerHTML = '';
+        } else {
+          emptyEl.classList.add('hidden');
+          tableEl.classList.remove('hidden');
+          renderDraftsTable(filtered);
+        }
+      });
     });
+
+    // New group form
+    const newGroupBtn = document.getElementById('new-group-btn');
+    const newGroupForm = document.getElementById('new-group-form');
+    const newGroupInput = document.getElementById('new-group-name-input');
+    const newGroupSave = document.getElementById('new-group-save');
+    const newGroupCancel = document.getElementById('new-group-cancel');
+    if (newGroupBtn && newGroupForm) {
+      newGroupBtn.addEventListener('click', function() {
+        newGroupForm.classList.remove('hidden');
+        newGroupInput.value = '';
+        newGroupInput.focus();
+      });
+      if (newGroupCancel) newGroupCancel.addEventListener('click', function() {
+        newGroupForm.classList.add('hidden');
+      });
+      if (newGroupSave && newGroupInput) newGroupSave.addEventListener('click', async function() {
+        const name = newGroupInput.value.trim();
+        if (!name) return;
+        try {
+          const res = await fetch('/api/v1/draft-groups', {
+            method: 'POST',
+            credentials: 'include',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ name: name })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.group && window.__draftsData) {
+              window.__draftsData.groups.push(data.group);
+              const list = document.getElementById('groups-list');
+              if (list) {
+                const li = document.createElement('li');
+                li.innerHTML = '<button type="button" data-group-id="' + data.group.id + '" class="group-filter w-full text-left px-2 py-1.5 rounded hover:bg-gray-100 text-gray-700">' + (data.group.name || '').replace(/</g, '&lt;') + '</button>';
+                list.appendChild(li);
+                li.querySelector('button').addEventListener('click', function() {
+                  window.__draftsData.selectedGroupId = data.group.id;
+                  const filtered = filterDrafts();
+                  if (filtered.length === 0) { emptyEl.classList.remove('hidden'); tableEl.classList.add('hidden'); bodyEl.innerHTML = ''; }
+                  else { emptyEl.classList.add('hidden'); tableEl.classList.remove('hidden'); renderDraftsTable(filtered); }
+                  document.querySelectorAll('.group-filter').forEach(b => {
+                    if (String(b.getAttribute('data-group-id')) === String(data.group.id)) { b.classList.add('bg-primary-50', 'text-primary-700'); b.classList.remove('text-gray-700'); }
+                    else { b.classList.remove('bg-primary-50', 'text-primary-700'); if (b.getAttribute('data-group-id') !== 'all') b.classList.add('text-gray-700'); }
+                  });
+                });
+              }
+            }
+            newGroupForm.classList.add('hidden');
+            showNotification('Group created', 'success');
+          } else {
+            const err = await res.json().catch(() => ({}));
+            showNotification(err.error || 'Failed to create group', 'error');
+          }
+        } catch (_) {
+          showNotification('Failed to create group', 'error');
+        }
+      });
+    }
     } catch (error) {
     // CRITICAL: Check if we've been redirected away from drafts page
     // If so, don't try to show error UI (we're on a different page now)
@@ -1113,7 +1293,11 @@ function showNotification(message, type) {
 // Close modal with Escape key
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
-    closeDeleteModal();
+    if (document.getElementById('duplicate-modal') && !document.getElementById('duplicate-modal').classList.contains('hidden')) {
+      closeDuplicateModal();
+    } else {
+      closeDeleteModal();
+    }
     closeDraftMenu();
   }
 });
@@ -1254,29 +1438,144 @@ function cancelRename(id, input) {
   if (input.parentNode) input.parentNode.replaceChild(span, input);
 }
 
-// ─── Menu: Duplicate ─────────────────────────────────────────────────────────
-async function menuDuplicate() {
+// ─── Menu: Duplicate (modal with name + group) ──────────────────────────────────
+let _duplicateDraftId = null;
+let _duplicateDraftTitle = '';
+
+function menuDuplicate() {
   closeDraftMenu();
   if (!_menuDraftId) return;
-  const id = _menuDraftId;
+  _duplicateDraftId = _menuDraftId;
+  _duplicateDraftTitle = _menuDraftTitle || ('Draft ' + _menuDraftId);
 
+  var nameInput = document.getElementById('duplicate-name-input');
+  var groupSelect = document.getElementById('duplicate-group-select');
+  if (nameInput) nameInput.value = 'Copy of ' + _duplicateDraftTitle;
+  if (groupSelect) {
+    groupSelect.innerHTML = '<option value="">Ungrouped</option>';
+    if (window.__draftsData && window.__draftsData.groups) {
+      window.__draftsData.groups.forEach(function(g) {
+        var opt = document.createElement('option');
+        opt.value = g.id;
+        opt.textContent = g.name || '';
+        groupSelect.appendChild(opt);
+      });
+    }
+  }
+  document.getElementById('duplicate-modal').classList.remove('hidden');
+}
+
+function closeDuplicateModal() {
+  document.getElementById('duplicate-modal').classList.add('hidden');
+  _duplicateDraftId = null;
+}
+
+async function executeDuplicate() {
+  if (!_duplicateDraftId) return;
+  var nameInput = document.getElementById('duplicate-name-input');
+  var groupSelect = document.getElementById('duplicate-group-select');
+  var btn = document.getElementById('duplicate-confirm-btn');
+  var name = nameInput ? nameInput.value.trim() : '';
+  if (!name) name = 'Copy of ' + _duplicateDraftTitle;
+  var groupId = groupSelect && groupSelect.value ? parseInt(groupSelect.value, 10) : null;
+  if (isNaN(groupId)) groupId = null;
+
+  btn.disabled = true;
+  btn.textContent = 'Duplicating...';
   try {
-    const res = await fetch(`/api/v1/submissions/${id}/duplicate`, {
+    var body = { name: name };
+    if (groupId) body.group_id = groupId;
+    var res = await fetch('/api/v1/submissions/' + _duplicateDraftId + '/duplicate', {
       method: 'POST',
       credentials: 'include',
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body)
     });
 
     if (res.ok) {
       showNotification('Draft duplicated successfully!', 'success');
-      setTimeout(() => window.location.reload(), 900);
+      closeDuplicateModal();
+      setTimeout(function() { window.location.reload(); }, 800);
     } else {
-      const err = await res.json().catch(() => ({}));
+      var err = await res.json().catch(function() { return {}; });
       showNotification(err.error || 'Failed to duplicate draft', 'error');
     }
   } catch (_) {
     showNotification('Failed to duplicate draft', 'error');
   }
+  btn.disabled = false;
+  btn.textContent = 'Duplicate';
+}
+
+function filterDrafts() {
+  var d = window.__draftsData;
+  if (!d) return [];
+  var id = d.selectedGroupId;
+  if (id === 'all') return d.allDrafts;
+  if (id === '0') return d.allDrafts.filter(function(x) { return !x.group_id; });
+  return d.allDrafts.filter(function(x) { return x.group_id == id; });
+}
+
+// ─── Menu: Move to group ─────────────────────────────────────────────────────
+function menuMoveToGroup() {
+  closeDraftMenu();
+  if (!_menuDraftId) return;
+  var popover = document.getElementById('move-group-popover');
+  var listEl = document.getElementById('move-group-list');
+  if (!popover || !listEl) return;
+  listEl.innerHTML = '';
+  if (window.__draftsData && window.__draftsData.groups) {
+    window.__draftsData.groups.forEach(function(g) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'move-group-option w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700';
+      btn.setAttribute('data-move-group-id', g.id);
+      btn.textContent = g.name || '';
+      listEl.appendChild(btn);
+    });
+  }
+  var menuEl = document.getElementById('draft-context-menu');
+  if (menuEl) {
+    var rect = menuEl.getBoundingClientRect();
+    popover.style.left = rect.left + 'px';
+    popover.style.top = (rect.bottom + 4) + 'px';
+  }
+  popover.classList.remove('hidden');
+
+  function closePopover() {
+    popover.classList.add('hidden');
+    document.removeEventListener('click', closePopover);
+  }
+  setTimeout(function() { document.addEventListener('click', closePopover); }, 0);
+
+  popover.querySelectorAll('.move-group-option').forEach(function(btn) {
+    btn.addEventListener('click', async function(e) {
+      e.stopPropagation();
+      var gid = this.getAttribute('data-move-group-id');
+      var groupId = gid === '0' ? null : parseInt(gid, 10);
+      if (isNaN(groupId)) groupId = null;
+      try {
+        var body = { title: _menuDraftTitle || ('Draft ' + _menuDraftId) };
+        if (groupId !== null) body.group_id = groupId; else body.group_id = 0;
+        var res = await fetch('/api/v1/submissions/' + _menuDraftId, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          closePopover();
+          showNotification('Draft moved to group', 'success');
+          setTimeout(function() { window.location.reload(); }, 600);
+        } else {
+          var err = await res.json().catch(function() { return {}; });
+          showNotification(err.error || 'Failed to move', 'error');
+        }
+      } catch (_) {
+        showNotification('Failed to move draft', 'error');
+      }
+    });
+  });
 }
 
 // ─── Menu: Pin / Unpin ───────────────────────────────────────────────────────

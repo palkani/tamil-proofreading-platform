@@ -573,9 +573,10 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		}
 	}
 
-	// Create submission record with pending status first
+	// Create submission record with pending status first (draft name stored in DB)
 	submission := &models.Submission{
 		UserID:              userID,
+		Title:               "Untitled draft", // user can rename on drafts page
 		OriginalText:        req.Text,
 		OriginalHTML:        req.HTML,
 		RequestID:           requestID,
@@ -866,7 +867,7 @@ func (h *Handlers) checkSubscriptionLimits(plan *models.SubscriptionPlan, wordCo
 	return (totalUsage + wordCount) <= monthlyLimit
 }
 
-// GetSubmissions retrieves user's submissions
+// GetSubmissions retrieves user's submissions, optionally filtered by group_id. Returns groups when not filtering.
 func (h *Handlers) GetSubmissions(c *gin.Context) {
 	userID, err := middleware.GetUserFromContext(c)
 	if err != nil {
@@ -874,26 +875,36 @@ func (h *Handlers) GetSubmissions(c *gin.Context) {
 		return
 	}
 
-	var submissions []models.Submission
-	limitStr := c.DefaultQuery("limit", "10")
+	limitStr := c.DefaultQuery("limit", "100")
 	offsetStr := c.DefaultQuery("offset", "0")
+	groupIDStr := c.Query("group_id")
 
 	limit, err := strconv.Atoi(limitStr)
-	if err != nil {
-		limit = 10
+	if err != nil || limit < 1 {
+		limit = 100
 	}
-
+	if limit > 500 {
+		limit = 500
+	}
 	offset, err := strconv.Atoi(offsetStr)
-	if err != nil {
+	if err != nil || offset < 0 {
 		offset = 0
 	}
 
-	if err := h.db.Where("user_id = ?", userID).
-		Where("archived = ?", false).
-		Order("created_at DESC").
-		Limit(limit).
-		Offset(offset).
-		Find(&submissions).Error; err != nil {
+	q := h.db.Where("user_id = ?", userID).Where("archived = ?", false).Order("created_at DESC").Limit(limit).Offset(offset)
+	if groupIDStr != "" {
+		if groupIDStr == "0" || groupIDStr == "null" {
+			q = q.Where("group_id IS NULL")
+		} else {
+			gID, parseErr := strconv.ParseUint(groupIDStr, 10, 32)
+			if parseErr == nil {
+				q = q.Where("group_id = ?", uint(gID))
+			}
+		}
+	}
+
+	var submissions []models.Submission
+	if err := q.Find(&submissions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to fetch submissions",
 			"details": err.Error(),
@@ -901,7 +912,17 @@ func (h *Handlers) GetSubmissions(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"submissions": submissions})
+	resp := gin.H{"submissions": submissions}
+	// When not filtering by group, include user's groups so frontend can show sidebar
+	if groupIDStr == "" {
+		var groups []models.DraftGroup
+		if err := h.db.Where("user_id = ?", userID).Order("sort_order ASC, name ASC").Find(&groups).Error; err == nil {
+			resp["groups"] = groups
+		} else {
+			resp["groups"] = []models.DraftGroup{}
+		}
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // GetSubmission retrieves a single submission
@@ -950,7 +971,8 @@ func (h *Handlers) GetSubmission(c *gin.Context) {
 
 // UpdateSubmissionRequest defines the body for PATCH /api/v1/submissions/:id
 type UpdateSubmissionRequest struct {
-	Title *string `json:"title"`
+	Title   *string `json:"title"`
+	GroupID *uint   `json:"group_id"` // nil or omit = ungrouped; 0 = ungrouped; set to group id to assign
 }
 
 // UpdateSubmission updates a submission's title
@@ -969,8 +991,12 @@ func (h *Handlers) UpdateSubmission(c *gin.Context) {
 	}
 
 	var req UpdateSubmissionRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.Title == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "title field is required"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+	if req.Title == nil && req.GroupID == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Provide at least one of title or group_id"})
 		return
 	}
 
@@ -984,19 +1010,40 @@ func (h *Handlers) UpdateSubmission(c *gin.Context) {
 		return
 	}
 
-	title := strings.TrimSpace(*req.Title)
-	if err := h.db.Model(&models.Submission{}).Where("id = ?", submission.ID).
-		Update("title", title).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update submission"})
-		return
+	updates := map[string]interface{}{}
+	if req.Title != nil {
+		title := strings.TrimSpace(*req.Title)
+		updates["title"] = title
+		submission.Title = title
 	}
-
-	submission.Title = title
-	log.Printf("[SUBMISSION] Updated title of submission %d for user %d", submission.ID, userID)
+	if req.GroupID != nil {
+		var groupID *uint
+		if *req.GroupID != 0 {
+			var g models.DraftGroup
+			if err := h.db.Where("id = ? AND user_id = ?", *req.GroupID, userID).First(&g).Error; err == nil {
+				groupID = req.GroupID
+			}
+		}
+		updates["group_id"] = groupID
+		submission.GroupID = groupID
+	}
+	if len(updates) > 0 {
+		if err := h.db.Model(&models.Submission{}).Where("id = ?", submission.ID).Updates(updates).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update submission"})
+			return
+		}
+	}
+	log.Printf("[SUBMISSION] Updated submission %d for user %d", submission.ID, userID)
 	c.JSON(http.StatusOK, gin.H{"success": true, "submission": submission})
 }
 
-// DuplicateSubmission creates a copy of an existing submission
+// DuplicateSubmissionRequest is the optional body for POST /submissions/:id/duplicate
+type DuplicateSubmissionRequest struct {
+	Name    *string `json:"name"`    // display name for the new draft (default: "Copy of <original title>")
+	GroupID *uint   `json:"group_id"` // put duplicate in this group (nil = Ungrouped)
+}
+
+// DuplicateSubmission creates a copy of an existing submission and saves it to the DB
 func (h *Handlers) DuplicateSubmission(c *gin.Context) {
 	userID, err := middleware.GetUserFromContext(c)
 	if err != nil {
@@ -1021,9 +1068,27 @@ func (h *Handlers) DuplicateSubmission(c *gin.Context) {
 		return
 	}
 
+	var body DuplicateSubmissionRequest
+	_ = c.ShouldBindJSON(&body)
+
 	copyTitle := "Copy of " + original.Title
 	if original.Title == "" {
 		copyTitle = "Copy of Draft " + submissionIDStr
+	}
+	if body.Name != nil {
+		trimmed := strings.TrimSpace(*body.Name)
+		if trimmed != "" {
+			copyTitle = trimmed
+		}
+	}
+
+	// If group_id provided, verify it belongs to user
+	var groupID *uint
+	if body.GroupID != nil && *body.GroupID != 0 {
+		var g models.DraftGroup
+		if err := h.db.Where("id = ? AND user_id = ?", *body.GroupID, userID).First(&g).Error; err == nil {
+			groupID = body.GroupID
+		}
 	}
 
 	modelType := models.ModelA
@@ -1033,6 +1098,7 @@ func (h *Handlers) DuplicateSubmission(c *gin.Context) {
 
 	newSubmission := models.Submission{
 		UserID:       userID,
+		GroupID:      groupID,
 		Title:        copyTitle,
 		OriginalText: original.OriginalText,
 		OriginalHTML: original.OriginalHTML,
@@ -1200,6 +1266,136 @@ func (h *Handlers) GetArchivedSubmissions(c *gin.Context) {
 		"retention_days": 45,
 		"message":        "Drafts stay here for 45 days before permanent deletion.",
 	})
+}
+
+// GetDraftGroups returns the current user's draft groups
+func (h *Handlers) GetDraftGroups(c *gin.Context) {
+	userID, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	var groups []models.DraftGroup
+	if err := h.db.Where("user_id = ?", userID).Order("sort_order ASC, name ASC").Find(&groups).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch groups", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"groups": groups})
+}
+
+// CreateDraftGroupRequest is the body for POST /draft-groups
+type CreateDraftGroupRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
+// CreateDraftGroup creates a new draft group for the user
+func (h *Handlers) CreateDraftGroup(c *gin.Context) {
+	userID, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	var req CreateDraftGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name cannot be empty"})
+		return
+	}
+	if len(name) > 255 {
+		name = name[:255]
+	}
+	g := models.DraftGroup{UserID: userID, Name: name}
+	if err := h.db.Create(&g).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group"})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"success": true, "group": g})
+}
+
+// UpdateDraftGroupRequest is the body for PATCH /draft-groups/:id
+type UpdateDraftGroupRequest struct {
+	Name string `json:"name"`
+}
+
+// UpdateDraftGroup renames a draft group
+func (h *Handlers) UpdateDraftGroup(c *gin.Context) {
+	userID, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid group ID"})
+		return
+	}
+	var req UpdateDraftGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name cannot be empty"})
+		return
+	}
+	if len(name) > 255 {
+		name = name[:255]
+	}
+	var g models.DraftGroup
+	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&g).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find group"})
+		return
+	}
+	if err := h.db.Model(&g).Update("name", name).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update group"})
+		return
+	}
+	g.Name = name
+	c.JSON(http.StatusOK, gin.H{"success": true, "group": g})
+}
+
+// DeleteDraftGroup deletes a group and moves its drafts to Ungrouped (group_id = NULL)
+func (h *Handlers) DeleteDraftGroup(c *gin.Context) {
+	userID, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid group ID"})
+		return
+	}
+	var g models.DraftGroup
+	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&g).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find group"})
+		return
+	}
+	// Unassign all drafts from this group
+	if err := h.db.Model(&models.Submission{}).Where("group_id = ?", g.ID).Update("group_id", nil).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unassign drafts"})
+		return
+	}
+	if err := h.db.Delete(&g).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete group"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Group deleted; drafts moved to Ungrouped"})
 }
 
 // StreamSubmission streams submission updates using Server-Sent Events

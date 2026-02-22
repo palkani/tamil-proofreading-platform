@@ -149,6 +149,7 @@ func main() {
 		log.Println("Running database migrations...")
 		if err := db.AutoMigrate(
 			&models.User{},
+			&models.DraftGroup{},
 			&models.TamilWord{},
 			&models.Submission{},
 			&models.Usage{},
@@ -302,6 +303,12 @@ func main() {
 			protected.PUT("/submissions/:id/archive", h.ArchiveSubmission)
 			protected.DELETE("/submissions/:id", h.DeleteSubmission)
 			protected.GET("/submissions/:id/stream", h.StreamSubmission)
+
+			// Draft groups (organize drafts by named groups)
+			protected.GET("/draft-groups", h.GetDraftGroups)
+			protected.POST("/draft-groups", h.CreateDraftGroup)
+			protected.PATCH("/draft-groups/:id", h.UpdateDraftGroup)
+			protected.DELETE("/draft-groups/:id", h.DeleteDraftGroup)
 
 			// Tamil word management
 			protected.POST("/tamil-words", h.AddTamilWord)
