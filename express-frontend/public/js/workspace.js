@@ -4878,6 +4878,7 @@ class WorkspaceController {
           text: saveText,
           model: 'gemini-flash',
           save_draft: true,
+          ...(this.currentDraft?.id ? { submission_id: this.currentDraft.id } : {}),
         })
       });
 

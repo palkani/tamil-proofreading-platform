@@ -1480,6 +1480,11 @@ router.post('/submit', async (req, res) => {
     if (req.body?.save_draft !== undefined) {
       requestBody.save_draft = req.body.save_draft;
     }
+
+    // Forward submission_id so the backend updates the existing draft instead of creating a new one
+    if (req.body?.submission_id) {
+      requestBody.submission_id = req.body.submission_id;
+    }
     
     const response = await axiosWithPool.post(url, requestBody, {
       headers,

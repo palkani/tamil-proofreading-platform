@@ -28,6 +28,7 @@ type SubmitTextRequest struct {
 	HTML                string `json:"html"`
 	IncludeAlternatives bool   `json:"include_alternatives"`
 	SaveDraft           *bool  `json:"save_draft"`
+	SubmissionID        *uint  `json:"submission_id,omitempty"`
 }
 
 var htmlTagRegex = regexp.MustCompile("<[^>]+>")
@@ -518,6 +519,59 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 
 	// Determine model to use
 	modelType := h.selectModel(wordCount)
+
+	// ---- Update existing draft if submission_id is provided ----
+	if req.SubmissionID != nil && *req.SubmissionID > 0 {
+		var existing models.Submission
+		if err := h.db.First(&existing, *req.SubmissionID).Error; err == nil && existing.UserID == userID {
+			existing.OriginalText = req.Text
+			existing.OriginalHTML = req.HTML
+			existing.WordCount = wordCount
+			existing.ModelUsed = modelType
+			existing.Status = models.StatusPending
+			existing.Suggestions = "[]"
+			existing.Alternatives = "[]"
+			existing.ProofreadText = ""
+			existing.Error = ""
+			existing.RequestID = requestID
+			if saveErr := h.db.Save(&existing).Error; saveErr != nil {
+				log.Printf("Error updating submission %d: %v", *req.SubmissionID, saveErr)
+				// Fall through to create a new submission
+			} else {
+				auditlog.Info(c, "submission.updated", map[string]any{
+					"submission_id": existing.ID,
+					"request_id":    requestID,
+					"word_count":    wordCount,
+				})
+				updUsage := &models.Usage{
+					UserID:       userID,
+					WordCount:    wordCount,
+					TokenCount:   reservedTokens,
+					ModelUsed:    modelType,
+					SubmissionID: &existing.ID,
+					Date:         time.Now(),
+				}
+				if err := h.db.Create(updUsage).Error; err != nil {
+					log.Printf("Error creating usage record for update: %v", err)
+				}
+				go h.processSubmission(context.Background(), existing.ID, requestID, req.Text, wordCount, modelType, req.IncludeAlternatives, capOutput, updUsage.ID)
+				c.JSON(http.StatusAccepted, gin.H{
+					"success":     true,
+					"submission":  existing,
+					"corrections": []any{},
+					"message":     "Submission updated, proofreading started...",
+					"request_id":  requestID,
+					"quota": gin.H{
+						"limit":     dailyTokenLimit,
+						"used":      usedToday,
+						"reserved":  reservedTokens,
+						"remaining": remaining,
+					},
+				})
+				return
+			}
+		}
+	}
 
 	// Create submission record with pending status first
 	submission := &models.Submission{
