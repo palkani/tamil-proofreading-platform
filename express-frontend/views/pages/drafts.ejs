@@ -43,6 +43,31 @@
   </div>
 </div>
 
+<!-- Draft Context Menu -->
+<div id="draft-context-menu" class="fixed z-50 hidden bg-white border border-gray-200 rounded-xl shadow-2xl py-1.5 min-w-[192px] text-sm" role="menu">
+  <button id="menu-edit-btn" onclick="menuEdit()" class="w-full text-left px-4 py-2.5 text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors" role="menuitem">
+    <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+    Edit
+  </button>
+  <button id="menu-rename-btn" onclick="menuRename()" class="w-full text-left px-4 py-2.5 text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors" role="menuitem">
+    <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+    Rename
+  </button>
+  <button id="menu-duplicate-btn" onclick="menuDuplicate()" class="w-full text-left px-4 py-2.5 text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors" role="menuitem">
+    <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+    Duplicate
+  </button>
+  <button id="menu-pin-btn" onclick="menuTogglePin()" class="w-full text-left px-4 py-2.5 text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors" role="menuitem">
+    <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+    <span id="menu-pin-label">Pin</span>
+  </button>
+  <div class="border-t border-gray-100 my-1"></div>
+  <button id="menu-trash-btn" onclick="menuTrash()" class="w-full text-left px-4 py-2.5 text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors" role="menuitem">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+    Move to trash
+  </button>
+</div>
+
 <div class="min-h-screen bg-gray-50">
   <!-- Header Navigation -->
   <%- include('../partials/nav', { active: 'drafts', user: user }) %>
@@ -832,30 +857,41 @@
       return;
     }
 
-    // Sort by created_at descending (newest first)
-    drafts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    // Sort: pinned drafts first, then by created_at descending
+    const pinnedIds = getPinnedIds();
+    drafts.sort((a, b) => {
+      const ap = pinnedIds.includes(a.id), bp = pinnedIds.includes(b.id);
+      if (ap !== bp) return bp ? 1 : -1;
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
 
     tableEl.classList.remove('hidden');
-    
+
     drafts.forEach(draft => {
       const row = document.createElement('tr');
       row.id = `draft-row-${draft.id}`;
+      const title = draft.title || `Draft ${draft.id}`;
+      row.setAttribute('data-title', title);
+      const pinned = pinnedIds.includes(draft.id);
+      if (pinned) row.classList.add('bg-amber-50');
+
       const preview = draft.original_text ? draft.original_text.substring(0, 100) + '...' : 'No preview';
       const statusClass = draft.status === 'completed' ? 'bg-green-200 text-green-900' :
                          draft.status === 'processing' ? 'bg-yellow-200 text-yellow-900' :
-                         draft.status === 'failed' ? 'bg-red-200 text-red-900' :
-                         'bg-gray-200 text-gray-900';
-      
+                         draft.status === 'failed'     ? 'bg-red-200 text-red-900' :
+                                                         'bg-gray-200 text-gray-900';
+
       row.innerHTML = `
         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-          ${draft.title || `Draft ${draft.id}`}
+          <div class="flex items-center gap-2">
+            <svg id="pin-icon-${draft.id}" class="w-3.5 h-3.5 text-amber-500 flex-shrink-0 ${pinned ? '' : 'hidden'}" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+            </svg>
+            <span id="draft-title-${draft.id}" class="truncate max-w-[220px] block" title="${title.replace(/"/g, '&quot;')}">${title.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
+          </div>
         </td>
-        <td class="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
-          ${preview}
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-          ${draft.word_count || 0}
-        </td>
+        <td class="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">${preview}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${draft.word_count || 0}</td>
         <td class="px-6 py-4 whitespace-nowrap">
           <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
             ${draft.status || 'pending'}
@@ -865,14 +901,17 @@
           ${new Date(draft.created_at).toLocaleDateString()}
         </td>
         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-          <a href="/workspace?draftId=${draft.id}&mode=view" class="text-indigo-600 hover:text-indigo-900 mr-3">View</a>
-          <a href="/workspace?draftId=${draft.id}" class="text-indigo-600 hover:text-indigo-900 mr-3">Edit</a>
-          <button onclick="confirmDeleteDraft(${draft.id}, '${(draft.title || `Draft ${draft.id}`).replace(/'/g, "\\'")}')" 
-                  class="text-red-600 hover:text-red-900 font-medium">Delete</button>
+          <button onclick="toggleDraftMenu(event, ${draft.id})"
+                  class="p-1.5 text-gray-400 hover:text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
+                  aria-label="Draft options">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 6a2 2 0 100-4 2 2 0 000 4zm0 8a2 2 0 100-4 2 2 0 000 4zm0 8a2 2 0 100-4 2 2 0 000 4z"/>
+            </svg>
+          </button>
         </td>
       `;
       bodyEl.appendChild(row);
-      });
+    });
     } catch (error) {
     // CRITICAL: Check if we've been redirected away from drafts page
     // If so, don't try to show error UI (we're on a different page now)
@@ -1075,8 +1114,234 @@ function showNotification(message, type) {
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeDeleteModal();
+    closeDraftMenu();
   }
 });
+
+// ─── Pin state (localStorage) ────────────────────────────────────────────────
+function getPinnedIds() {
+  try { return JSON.parse(localStorage.getItem('pinnedDrafts') || '[]'); }
+  catch (_) { return []; }
+}
+function setPinnedIds(ids) {
+  localStorage.setItem('pinnedDrafts', JSON.stringify(ids));
+}
+
+// ─── Auth helper ─────────────────────────────────────────────────────────────
+function getAuthHeaders() {
+  const h = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+  const token = localStorage.getItem('access_token');
+  if (token) h['Authorization'] = `Bearer ${token}`;
+  return h;
+}
+
+// ─── Context menu ─────────────────────────────────────────────────────────────
+let _menuDraftId   = null;
+let _menuDraftTitle = '';
+
+function toggleDraftMenu(event, id) {
+  event.stopPropagation();
+  const menu = document.getElementById('draft-context-menu');
+  const row  = document.getElementById(`draft-row-${id}`);
+  _menuDraftId    = id;
+  _menuDraftTitle = row ? (row.getAttribute('data-title') || `Draft ${id}`) : `Draft ${id}`;
+
+  // Update pin label to reflect current state
+  const ids = getPinnedIds();
+  const pinLabel = document.getElementById('menu-pin-label');
+  if (pinLabel) pinLabel.textContent = ids.includes(id) ? 'Unpin' : 'Pin';
+
+  // Position below the button, aligned to its right edge
+  const rect = event.currentTarget.getBoundingClientRect();
+  const menuW = 192;
+  let top  = rect.bottom + 4;
+  let left = rect.right - menuW;
+  if (left < 8) left = 8;
+  if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+  // Flip upward if too close to the bottom
+  if (top + 240 > window.innerHeight) top = rect.top - 244;
+  if (top < 8) top = 8;
+
+  menu.style.top  = top  + 'px';
+  menu.style.left = left + 'px';
+  menu.classList.toggle('hidden');
+}
+
+function closeDraftMenu() {
+  document.getElementById('draft-context-menu')?.classList.add('hidden');
+}
+document.addEventListener('click', closeDraftMenu);
+
+// ─── Menu: Edit ───────────────────────────────────────────────────────────────
+function menuEdit() {
+  closeDraftMenu();
+  if (_menuDraftId) window.location.href = `/workspace?draftId=${_menuDraftId}`;
+}
+
+// ─── Menu: Rename (inline) ────────────────────────────────────────────────────
+function menuRename() {
+  closeDraftMenu();
+  if (!_menuDraftId) return;
+  const id      = _menuDraftId;
+  const titleEl = document.getElementById(`draft-title-${id}`);
+  if (!titleEl) return;
+  const current = titleEl.textContent.trim();
+
+  const input = document.createElement('input');
+  input.type      = 'text';
+  input.value     = current;
+  input.className = 'border border-primary-400 rounded px-2 py-0.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-primary-500';
+  input.setAttribute('data-original', current);
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter')  { e.preventDefault(); saveRename(id, input); }
+    if (e.key === 'Escape') { input._cancelled = true; cancelRename(id, input); }
+  });
+  input.addEventListener('blur', () => { if (!input._cancelled) saveRename(id, input); });
+
+  titleEl.parentNode.replaceChild(input, titleEl);
+  input.focus();
+  input.select();
+}
+
+async function saveRename(id, input) {
+  if (input._saving) return;
+  input._saving = true;
+
+  const newTitle = input.value.trim();
+  if (!newTitle || newTitle === input.getAttribute('data-original')) {
+    cancelRename(id, input);
+    return;
+  }
+  input.disabled = true;
+
+  try {
+    const res = await fetch(`/api/v1/submissions/${id}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ title: newTitle })
+    });
+
+    if (res.ok) {
+      const span = document.createElement('span');
+      span.id        = `draft-title-${id}`;
+      span.className = 'truncate max-w-[220px] block';
+      span.title     = newTitle;
+      span.textContent = newTitle;
+      if (input.parentNode) input.parentNode.replaceChild(span, input);
+      const row = document.getElementById(`draft-row-${id}`);
+      if (row) row.setAttribute('data-title', newTitle);
+      showNotification('Draft renamed successfully', 'success');
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showNotification(err.error || 'Failed to rename draft', 'error');
+      cancelRename(id, input);
+    }
+  } catch (_) {
+    showNotification('Failed to rename draft', 'error');
+    cancelRename(id, input);
+  }
+}
+
+function cancelRename(id, input) {
+  const original = input.getAttribute('data-original');
+  const span = document.createElement('span');
+  span.id          = `draft-title-${id}`;
+  span.className   = 'truncate max-w-[220px] block';
+  span.title       = original;
+  span.textContent = original;
+  if (input.parentNode) input.parentNode.replaceChild(span, input);
+}
+
+// ─── Menu: Duplicate ─────────────────────────────────────────────────────────
+async function menuDuplicate() {
+  closeDraftMenu();
+  if (!_menuDraftId) return;
+  const id = _menuDraftId;
+
+  try {
+    const res = await fetch(`/api/v1/submissions/${id}/duplicate`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: getAuthHeaders()
+    });
+
+    if (res.ok) {
+      showNotification('Draft duplicated successfully!', 'success');
+      setTimeout(() => window.location.reload(), 900);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showNotification(err.error || 'Failed to duplicate draft', 'error');
+    }
+  } catch (_) {
+    showNotification('Failed to duplicate draft', 'error');
+  }
+}
+
+// ─── Menu: Pin / Unpin ───────────────────────────────────────────────────────
+function menuTogglePin() {
+  closeDraftMenu();
+  if (!_menuDraftId) return;
+  const id  = _menuDraftId;
+  const ids = getPinnedIds();
+  const idx = ids.indexOf(id);
+
+  if (idx === -1) {
+    ids.push(id);
+    setPinnedIds(ids);
+    document.getElementById(`pin-icon-${id}`)?.classList.remove('hidden');
+    document.getElementById(`draft-row-${id}`)?.classList.add('bg-amber-50');
+    showNotification('Draft pinned', 'success');
+  } else {
+    ids.splice(idx, 1);
+    setPinnedIds(ids);
+    document.getElementById(`pin-icon-${id}`)?.classList.add('hidden');
+    document.getElementById(`draft-row-${id}`)?.classList.remove('bg-amber-50');
+    showNotification('Draft unpinned', 'success');
+  }
+}
+
+// ─── Menu: Move to trash (archive) ───────────────────────────────────────────
+async function menuTrash() {
+  closeDraftMenu();
+  if (!_menuDraftId) return;
+  const id    = _menuDraftId;
+  const title = _menuDraftTitle;
+
+  if (!confirm(`Move "${title}" to trash?\n\nIt will be kept for 45 days before permanent deletion.`)) return;
+
+  try {
+    const res = await fetch(`/api/v1/submissions/${id}/archive`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: getAuthHeaders()
+    });
+
+    if (res.ok) {
+      const row = document.getElementById(`draft-row-${id}`);
+      if (row) {
+        row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        row.style.opacity    = '0';
+        row.style.transform  = 'translateX(16px)';
+        setTimeout(() => {
+          row.remove();
+          const bodyEl = document.getElementById('drafts-body');
+          if (bodyEl && bodyEl.children.length === 0) {
+            document.getElementById('drafts-table')?.classList.add('hidden');
+            document.getElementById('empty-state')?.classList.remove('hidden');
+          }
+        }, 320);
+      }
+      showNotification('Draft moved to trash', 'success');
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showNotification(err.error || 'Failed to move draft to trash', 'error');
+    }
+  } catch (_) {
+    showNotification('Failed to move draft to trash', 'error');
+  }
+}
 </script>
 
 <%- include('../partials/footer') %>

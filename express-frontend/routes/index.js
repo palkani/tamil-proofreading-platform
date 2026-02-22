@@ -147,17 +147,6 @@ router.get('/tools/event-name-suggester', (req, res) => {
   });
 });
 
-// Font Converter Tool page - accessible to everyone
-router.get('/tools/font-converter', (req, res) => {
-  const user = getCurrentUser(req);
-  const seo = getSeoData('fontConverterTool') || getSeoData('home');
-  res.render('pages/font-converter', {
-    title: 'Tamil Font Converter - Bamini / TSCII to Unicode | ProofTamil',
-    seo,
-    user,
-  });
-});
-
 // Email Spam Detector Tool page - accessible to everyone
 router.get('/tools/email-spam-detector', (req, res) => {
   const user = getCurrentUser(req);
@@ -675,7 +664,6 @@ router.get('/sitemap.xml', (req, res) => {
     { url: '/tools/ocr', priority: '0.85', changefreq: 'weekly' },
     { url: '/tools/handwriting-ocr', priority: '0.85', changefreq: 'weekly' },
     { url: '/tools/converter', priority: '0.85', changefreq: 'weekly' },
-    { url: '/tools/font-converter', priority: '0.85', changefreq: 'weekly' },
     { url: '/tools/ai-content-writer', priority: '0.8', changefreq: 'weekly' },
     { url: '/tools/event-name-suggester', priority: '0.75', changefreq: 'weekly' },
     { url: '/tools/email-spam-detector', priority: '0.75', changefreq: 'weekly' },

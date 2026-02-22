@@ -26,6 +26,16 @@ except ImportError:
     get_ocr_engine = None
     OCR_AVAILABLE = False
 
+# Optional: Tesseract fallback when no ML model (works for printed/clear handwriting)
+try:
+    import pytesseract
+    from PIL import Image
+    TESSERACT_AVAILABLE = True
+except ImportError:
+    pytesseract = None
+    Image = None
+    TESSERACT_AVAILABLE = False
+
 
 # ==================== Configuration ====================
 
@@ -154,6 +164,22 @@ def python_preprocess(image: np.ndarray) -> np.ndarray:
     )
     return binary
 
+def tesseract_fallback(image: np.ndarray) -> str:
+    """Run Tesseract OCR on image when ML model is not available. Good for printed/clear Tamil."""
+    if not TESSERACT_AVAILABLE or pytesseract is None or Image is None:
+        return ""
+    try:
+        if len(image.shape) == 3:
+            pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        else:
+            pil_image = Image.fromarray(image)
+        text = pytesseract.image_to_string(pil_image, lang="tam")
+        return (text or "").strip()
+    except Exception as e:
+        logger.warning("Tesseract fallback failed: %s", e)
+        return ""
+
+
 def python_segment(binary: np.ndarray) -> Dict:
     """Segment lines and words using Python/OpenCV"""
     h_proj = np.sum(binary, axis=1)
@@ -219,7 +245,8 @@ async def health_check():
     return {
         "status": "healthy",
         "version": settings.VERSION,
-        "ocr_available": ocr_engine is not None
+        "ocr_available": ocr_engine is not None,
+        "tesseract_fallback": TESSERACT_AVAILABLE
     }
 
 @app.post("/api/ocr/extract-words", response_model=OCRResponse)
@@ -276,6 +303,12 @@ async def extract_words(file: UploadFile = File(...)):
         if line_text:
             full_text_lines.append(line_text)
     full_text = "\n".join(full_text_lines)
+    # When ML model is not loaded, use Tesseract on full image so we still return text
+    if not full_text and ocr_engine is None and TESSERACT_AVAILABLE:
+        fallback_text = tesseract_fallback(image)
+        if fallback_text:
+            full_text = fallback_text
+            logger.info("Used Tesseract fallback: %s chars", len(full_text))
     processing_time = (time.time() - start_time) * 1000
     return OCRResponse(
         success=True,

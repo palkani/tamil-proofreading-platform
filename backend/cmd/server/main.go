@@ -297,6 +297,8 @@ func main() {
 			// Submissions (draft list, get/update/delete) - submit is above with optional auth
 			protected.GET("/submissions", h.GetSubmissions)
 			protected.GET("/submissions/:id", h.GetSubmission)
+			protected.PATCH("/submissions/:id", h.UpdateSubmission)
+			protected.POST("/submissions/:id/duplicate", h.DuplicateSubmission)
 			protected.PUT("/submissions/:id/archive", h.ArchiveSubmission)
 			protected.DELETE("/submissions/:id", h.DeleteSubmission)
 			protected.GET("/submissions/:id/stream", h.StreamSubmission)

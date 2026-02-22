@@ -948,6 +948,113 @@ func (h *Handlers) GetSubmission(c *gin.Context) {
 	})
 }
 
+// UpdateSubmissionRequest defines the body for PATCH /api/v1/submissions/:id
+type UpdateSubmissionRequest struct {
+	Title *string `json:"title"`
+}
+
+// UpdateSubmission updates a submission's title
+func (h *Handlers) UpdateSubmission(c *gin.Context) {
+	userID, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	submissionIDStr := c.Param("id")
+	submissionID, err := strconv.ParseUint(submissionIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid submission ID"})
+		return
+	}
+
+	var req UpdateSubmissionRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.Title == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title field is required"})
+		return
+	}
+
+	var submission models.Submission
+	if err := h.db.Where("id = ? AND user_id = ?", submissionID, userID).First(&submission).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Submission not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to locate submission"})
+		return
+	}
+
+	title := strings.TrimSpace(*req.Title)
+	if err := h.db.Model(&models.Submission{}).Where("id = ?", submission.ID).
+		Update("title", title).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update submission"})
+		return
+	}
+
+	submission.Title = title
+	log.Printf("[SUBMISSION] Updated title of submission %d for user %d", submission.ID, userID)
+	c.JSON(http.StatusOK, gin.H{"success": true, "submission": submission})
+}
+
+// DuplicateSubmission creates a copy of an existing submission
+func (h *Handlers) DuplicateSubmission(c *gin.Context) {
+	userID, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	submissionIDStr := c.Param("id")
+	submissionID, err := strconv.ParseUint(submissionIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid submission ID"})
+		return
+	}
+
+	var original models.Submission
+	if err := h.db.Where("id = ? AND user_id = ?", submissionID, userID).First(&original).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Submission not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to locate submission"})
+		return
+	}
+
+	copyTitle := "Copy of " + original.Title
+	if original.Title == "" {
+		copyTitle = "Copy of Draft " + submissionIDStr
+	}
+
+	modelType := models.ModelA
+	if original.WordCount >= 500 {
+		modelType = models.ModelB
+	}
+
+	newSubmission := models.Submission{
+		UserID:       userID,
+		Title:        copyTitle,
+		OriginalText: original.OriginalText,
+		OriginalHTML: original.OriginalHTML,
+		WordCount:    original.WordCount,
+		ModelUsed:    modelType,
+		Status:       models.StatusPending,
+	}
+
+	if err := h.db.Create(&newSubmission).Error; err != nil {
+		log.Printf("[SUBMISSION] Failed to duplicate submission %d: %v", submissionID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to duplicate draft"})
+		return
+	}
+
+	log.Printf("[SUBMISSION] Duplicated submission %d as %d for user %d", submissionID, newSubmission.ID, userID)
+	c.JSON(http.StatusCreated, gin.H{
+		"success":    true,
+		"submission": newSubmission,
+		"message":    "Draft duplicated successfully",
+	})
+}
+
 // ArchiveSubmission marks a submission as archived for 45 days before deletion
 func (h *Handlers) ArchiveSubmission(c *gin.Context) {
 	userID, err := middleware.GetUserFromContext(c)

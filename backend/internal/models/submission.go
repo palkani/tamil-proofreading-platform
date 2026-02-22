@@ -25,6 +25,7 @@ const (
 type Submission struct {
         ID                  uint             `gorm:"primaryKey" json:"id"`
         UserID              uint             `gorm:"not null;index" json:"user_id"`
+        Title               string           `gorm:"size:255" json:"title,omitempty"`
         OriginalText        string           `gorm:"type:text;not null" json:"original_text"`
         OriginalHTML        string           `gorm:"type:text" json:"original_html,omitempty"`
         RequestID           string           `gorm:"size:64;index" json:"request_id,omitempty"`

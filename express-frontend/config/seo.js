@@ -92,16 +92,6 @@ const seoConfig = {
     pageType: 'tool'
   },
 
-  fontConverterTool: {
-    title: 'Tamil Font Converter - Bamini / TSCII to Unicode | ProofTamil',
-    description: 'Convert Tamil text between legacy font encodings (Bamini, TSCII) and Unicode. Paste your text and convert instantly. Preserve Tamil content for WhatsApp, Google Docs, and publishing.',
-    keywords: 'tamil font converter, bamini to unicode, unicode to bamini, tscii to unicode, unicode to tscii, tamil legacy font converter, tamil encoding converter',
-    canonical: BASE_URL + '/tools/font-converter',
-    ogTitle: 'Tamil Font Converter - ProofTamil',
-    ogDescription: 'Convert Bamini/TSCII Tamil text to clean Unicode (and back) instantly.',
-    pageType: 'tool'
-  },
-
   emailSpamDetectorTool: {
     title: 'Email Spam Detector - Check if Email is Spam | ProofTamil',
     description: 'Check if an email (subject and body) looks like spam. Uses heuristics: keywords, link density, caps, urgency language. Free quick check for Tamil and English emails.',

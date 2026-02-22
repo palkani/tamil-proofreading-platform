@@ -968,8 +968,8 @@ router.get('/v1/auth/google/callback', async (req, res) => {
 
 // OCR Tool - Direct implementation using Tesseract.js
 const OCR_SERVICE_URL = process.env.OCR_SERVICE_URL;
-// Handwriting OCR - Tamil handwritten notes to text (Python service)
-const HANDWRITING_OCR_URL = process.env.HANDWRITING_OCR_URL || 'http://localhost:8000';
+// Handwriting OCR - Tamil handwritten notes to text (Python service). Must be set for the tool to work.
+const HANDWRITING_OCR_URL = (process.env.HANDWRITING_OCR_URL || '').trim() || null;
 let ocrService = null;
 
 // Try to load OCR service (direct implementation)
@@ -1357,19 +1357,33 @@ const uploadHandwriting = multer({
 });
 
 router.get('/handwriting-ocr/health', async (req, res) => {
+  if (!HANDWRITING_OCR_URL) {
+    return res.status(503).json({
+      status: 'unhealthy',
+      error: 'Handwriting OCR is not configured',
+      details: 'Set HANDWRITING_OCR_URL to your Tamil Handwriting OCR service URL (e.g. http://localhost:8000). See services/tamil-handwriting-ocr/README.md'
+    });
+  }
   try {
     const response = await axiosWithPool.get(`${HANDWRITING_OCR_URL}/health`, { timeout: 5000 });
     return res.json(response.data);
   } catch (err) {
+    const details = err.code === 'ECONNREFUSED' ? 'Service not running. Start it with: cd services/tamil-handwriting-ocr && uvicorn api_server:app --port 8000' : err.message;
     return res.status(503).json({
       status: 'unhealthy',
       error: 'Handwriting OCR service is not available',
-      details: err.message
+      details
     });
   }
 });
 
 router.post('/handwriting-ocr/extract-words', uploadHandwriting.single('file'), async (req, res) => {
+  if (!HANDWRITING_OCR_URL) {
+    return res.status(503).json({
+      success: false,
+      error: 'Handwriting OCR is not configured. Set HANDWRITING_OCR_URL and run the service (see services/tamil-handwriting-ocr/README.md).'
+    });
+  }
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -1390,8 +1404,11 @@ router.post('/handwriting-ocr/extract-words', uploadHandwriting.single('file'), 
   } catch (error) {
     const status = error.response?.status || 500;
     const data = error.response?.data;
-    const message = data?.detail || (Array.isArray(data?.detail) ? data.detail.map(d => d.msg).join(' ') : null) || data?.message || error.message;
-    return res.status(status).json({
+    let message = data?.detail || (Array.isArray(data?.detail) ? data.detail.map(d => d.msg).join(' ') : null) || data?.message || error.message;
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      message = 'Handwriting OCR service is not running. Start it with: cd services/tamil-handwriting-ocr && pip install -r requirements.txt && uvicorn api_server:app --port 8000';
+    }
+    return res.status(status >= 400 ? status : 502).json({
       success: false,
       error: message || 'Failed to process handwritten image'
     });

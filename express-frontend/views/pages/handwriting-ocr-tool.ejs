@@ -54,6 +54,16 @@
       <div id="loadingHint" class="text-sm text-gray-600 mt-2">This may take a few moments</div>
     </div>
 
+    <div id="serviceUnavailable" class="hidden bg-amber-50 border border-amber-300 rounded-xl p-4 mb-6">
+      <div class="flex items-start gap-2 text-amber-800">
+        <span class="text-xl">⚠️</span>
+        <div>
+          <div class="font-semibold">Handwriting OCR service is not available</div>
+          <div id="serviceUnavailableDetails" class="text-sm mt-1 opacity-90"></div>
+          <div class="text-sm mt-2">To run locally: <code class="bg-amber-100 px-1 rounded">cd services/tamil-handwriting-ocr && pip install -r requirements.txt && uvicorn api_server:app --port 8000</code></div>
+        </div>
+      </div>
+    </div>
     <div id="error" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
       <div class="flex items-center gap-2 text-red-700">
         <span class="text-xl">❌</span>
@@ -121,9 +131,29 @@
   const fileInfo = document.getElementById('fileInfo');
   const fileName = document.getElementById('fileName');
   const fileSize = document.getElementById('fileSize');
+  const serviceUnavailable = document.getElementById('serviceUnavailable');
+  const serviceUnavailableDetails = document.getElementById('serviceUnavailableDetails');
 
   let selectedFile = null;
   let extractedText = '';
+
+  // Check if Handwriting OCR service is available on load
+  (function checkHealth() {
+    fetch('/api/handwriting-ocr/health', { credentials: 'include' })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (result) {
+        if (!result.ok) {
+          serviceUnavailableDetails.textContent = result.data?.details || result.data?.error || 'Service not configured or not running.';
+          serviceUnavailable.classList.remove('hidden');
+        } else {
+          serviceUnavailable.classList.add('hidden');
+        }
+      })
+      .catch(function () {
+        serviceUnavailableDetails.textContent = 'Could not reach the service.';
+        serviceUnavailable.classList.remove('hidden');
+      });
+  })();
 
   uploadArea.addEventListener('click', function () { fileInput.click(); });
   fileInput.addEventListener('change', function (e) {
@@ -176,10 +206,16 @@
       processBtn.disabled = false;
 
       if (!res.ok || data.error) {
-        errorText.textContent = data.error || data.details || 'Failed to process image';
+        var msg = data.error || data.details || 'Failed to process image';
+        if (res.status === 503) {
+          serviceUnavailableDetails.textContent = msg;
+          serviceUnavailable.classList.remove('hidden');
+        }
+        errorText.textContent = msg;
         error.classList.remove('hidden');
         return;
       }
+      serviceUnavailable.classList.add('hidden');
 
       extractedText = data.full_text || '';
       resultText.textContent = extractedText || '(No text detected)';
@@ -205,7 +241,7 @@
     } catch (err) {
       loading.classList.add('hidden');
       processBtn.disabled = false;
-      errorText.textContent = err.message || 'Failed to process image';
+      errorText.textContent = err.message || 'Network error. Is the Handwriting OCR service running?';
       error.classList.remove('hidden');
     }
   });

@@ -44,15 +44,32 @@
 
       <!-- Format Selection -->
       <div id="formatSelection" class="hidden mt-6">
+        <style>
+          /* Highlight selected From format (source) */
+          #fromFormat.format-selected {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+            outline: none;
+          }
+          /* Highlight To dropdown when user has selected an option */
+          #toFormat.has-selection {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(30, 58, 138, 0.08) 100%);
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+          }
+          #toFormat.has-selection option:checked,
+          #toFormat.has-selection option:hover {
+            background: rgba(59, 130, 246, 0.2);
+          }
+        </style>
         <div class="flex items-center justify-center gap-4 mb-4">
           <div class="text-center">
             <label class="block text-sm font-semibold text-gray-700 mb-2">From:</label>
-            <div id="fromFormat" class="px-6 py-3 bg-primary-600 text-white rounded-lg font-bold text-lg"></div>
+            <div id="fromFormat" class="format-selected px-6 py-3 bg-primary-600 text-white rounded-lg font-bold text-lg"></div>
           </div>
           <div class="text-3xl text-primary-600 font-bold">→</div>
           <div class="text-center">
             <label class="block text-sm font-semibold text-gray-700 mb-2">To:</label>
-            <select id="toFormat" class="px-6 py-3 border-2 border-primary-600 rounded-lg font-semibold text-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+            <select id="toFormat" class="px-6 py-3 border-2 border-primary-600 rounded-lg font-semibold text-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all">
               <option value="">Select format...</option>
             </select>
           </div>
@@ -115,11 +132,14 @@
     <div class="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
       <h3 class="text-2xl font-bold text-gray-900 mb-6 text-center">Supported Conversions</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="p-4 bg-blue-50 rounded-lg border border-primary-200">
-          <strong class="text-primary-700">PDF →</strong> DOCX, TXT, HTML, RTF
+        <div class="p-4 bg-blue-50 rounded-lg border-2 border-primary-300">
+          <strong class="text-primary-700">PDF ↔ Word</strong> — PDF to Word (DOCX), Word to PDF
         </div>
         <div class="p-4 bg-blue-50 rounded-lg border border-primary-200">
-          <strong class="text-primary-700">DOCX →</strong> PDF, TXT, HTML, RTF, ODT
+          <strong class="text-primary-700">PDF →</strong> Word (DOCX), TXT, HTML, RTF
+        </div>
+        <div class="p-4 bg-blue-50 rounded-lg border border-primary-200">
+          <strong class="text-primary-700">Word (DOCX) →</strong> PDF, TXT, HTML, RTF, ODT
         </div>
         <div class="p-4 bg-blue-50 rounded-lg border border-primary-200">
           <strong class="text-primary-700">TXT →</strong> PDF, DOCX, HTML, RTF
@@ -213,6 +233,15 @@
     }
   });
 
+  // Highlight To dropdown when user selects an option
+  toFormat.addEventListener('change', function() {
+    if (this.value) {
+      this.classList.add('has-selection');
+    } else {
+      this.classList.remove('has-selection');
+    }
+  });
+
   function handleFileSelect(file) {
     selectedFile = file;
     const ext = file.name.split('.').pop().toLowerCase();
@@ -228,14 +257,27 @@
     fromFormat.textContent = format.toUpperCase();
     toFormat.innerHTML = '<option value="">Select format...</option>';
     
+    // Friendly labels (Word = DOCX so users see "Word to PDF" / "PDF to Word")
+    const formatLabels = {
+      docx: 'Word (DOCX)',
+      pdf: 'PDF',
+      txt: 'Text (TXT)',
+      html: 'HTML',
+      rtf: 'RTF',
+      odt: 'ODT'
+    };
+
     if (conversions[format]) {
       conversions[format].forEach(fmt => {
         const option = document.createElement('option');
         option.value = fmt;
-        option.textContent = fmt.toUpperCase();
+        option.textContent = formatLabels[fmt] || fmt.toUpperCase();
         toFormat.appendChild(option);
       });
     }
+
+    toFormat.classList.remove('has-selection');
+    if (toFormat.value) toFormat.classList.add('has-selection');
 
     formatSelection.classList.remove('hidden');
     convertBtn.disabled = false;
