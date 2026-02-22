@@ -592,7 +592,7 @@ router.post('/corrections', async (req, res) => {
           generationConfig: {
             temperature: 0,
             topP: 0.1,
-            maxOutputTokens: 400,
+            maxOutputTokens: 4096,
             responseMimeType: 'application/json',
             responseSchema: {
               type: 'array',
@@ -622,7 +622,7 @@ router.post('/corrections', async (req, res) => {
             const response = await axiosWithPool.post(
               `${baseUrl}/models/gemini-2.5-flash:generateContent`,
               payload,
-              { headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, timeout: 10000 }
+              { headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, timeout: 30000 }
             );
             if (response.status === 429) {
               keyRotator.markRateLimited(keyIndex);
@@ -633,14 +633,41 @@ router.post('/corrections', async (req, res) => {
               return [];
             }
             if (response.status !== 200) return [];
-            let cleanedJson = (response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]').trim();
-            if (!cleanedJson.endsWith(']')) {
-              const lastComplete = cleanedJson.lastIndexOf('}');
-              if (lastComplete > 0) cleanedJson = cleanedJson.substring(0, lastComplete + 1) + ']';
-              else cleanedJson = '[]';
+            const candidate = response.data?.candidates?.[0];
+            const finishReason = candidate?.finishReason;
+            if (finishReason === 'MAX_TOKENS') {
+              console.warn('[CORRECTIONS] Gemini hit MAX_TOKENS — response truncated. Some corrections may be missing. Consider reducing chunk size.');
             }
-            const arr = JSON.parse(cleanedJson);
-            return Array.isArray(arr) ? arr : [];
+            let rawText = (candidate?.content?.parts?.[0]?.text || '[]').trim();
+            // Robust JSON repair: if response was truncated, extract all complete objects
+            let arr = [];
+            try {
+              arr = JSON.parse(rawText);
+              if (!Array.isArray(arr)) arr = [];
+            } catch (_parseErr) {
+              // Response is truncated — extract complete JSON objects using balanced-brace scanning
+              const items = [];
+              let depth = 0, start = -1;
+              for (let ci = 0; ci < rawText.length; ci++) {
+                const ch = rawText[ci];
+                if (ch === '{') { if (depth === 0) start = ci; depth++; }
+                else if (ch === '}') {
+                  depth--;
+                  if (depth === 0 && start >= 0) {
+                    try {
+                      const obj = JSON.parse(rawText.slice(start, ci + 1));
+                      if (obj && typeof obj === 'object') items.push(obj);
+                    } catch (_e) { /* skip malformed object */ }
+                    start = -1;
+                  }
+                }
+              }
+              arr = items;
+              if (arr.length > 0) {
+                console.log(`[CORRECTIONS] Repaired truncated JSON: recovered ${arr.length} item(s)`);
+              }
+            }
+            return arr;
           } catch (e) {
             const status = e.response?.status;
             if (status === 429 && attempt === 0) {

@@ -4294,12 +4294,13 @@ class WorkspaceController {
           signal: this.abortController.signal
         });
         const correctionsJson = await correctionsResponse.json().catch(() => ({}));
-        if (correctionsResponse.ok && correctionsJson.success && Array.isArray(correctionsJson.corrections)) {
+        if (correctionsResponse.ok && correctionsJson.success && Array.isArray(correctionsJson.corrections) && correctionsJson.corrections.length > 0) {
           console.log('[AI] ✅ Got corrections from Gemini:', correctionsJson.corrections.length);
           data = { corrections: correctionsJson.corrections };
           this.lastAnalyzedText = text;
         }
-        // Fallback to backend /api/submit if corrections API failed or returned nothing
+        // Fallback to backend /api/submit if corrections API failed, returned nothing, or returned empty
+        // (empty may indicate token-limit truncation on the Gemini side — backend is more reliable)
         if (!data) {
           // Truncate text to backend limit before fallback submit.
           const MAX_SUBMIT_CHARS = 30_000;

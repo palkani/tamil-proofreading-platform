@@ -1721,8 +1721,9 @@ class HomeEditor {
         return;
       }
 
-      // Use corrections if success; otherwise fallback to /api/submit (match Workspace behavior)
-      let corrections = (data.success && Array.isArray(data.corrections)) ? data.corrections : null;
+      // Use corrections if success AND non-empty; otherwise fallback to /api/submit (match Workspace behavior).
+      // Empty array may mean Gemini hit its token limit and truncated — backend gives a more reliable result.
+      let corrections = (data.success && Array.isArray(data.corrections) && data.corrections.length > 0) ? data.corrections : null;
       if (corrections === null) {
         const submitText = text.length > 500000 ? text.slice(0, 500000) : text;
         const submitResponse = await apiFetch('/api/submit', {
