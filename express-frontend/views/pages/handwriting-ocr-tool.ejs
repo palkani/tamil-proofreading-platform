@@ -1,258 +1,442 @@
 <%- include('../partials/header') %>
 <%- include('../partials/nav', { active: 'tools', user: user || null }) %>
 
+<style>
+  .font-tamil { font-family: 'Noto Sans Tamil', 'Latha', 'Vijaya', system-ui, sans-serif; }
+  #dropZone.drag-over { border-color: #b45309; background: #fef3c7; }
+  #imagePreview img { max-height: 320px; object-fit: contain; }
+  .word-chip { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 13px; margin: 3px; border: 1px solid; cursor: default; transition: transform 0.1s; font-family: 'Noto Sans Tamil', 'Latha', system-ui, sans-serif; }
+  .word-chip:hover { transform: scale(1.05); }
+  .word-chip.high   { background: #dcfce7; border-color: #86efac; color: #166534; }
+  .word-chip.mid    { background: #fef9c3; border-color: #fde047; color: #713f12; }
+  .word-chip.low    { background: #f3f4f6; border-color: #d1d5db; color: #374151; }
+  .step-dot { width: 10px; height: 10px; border-radius: 50%; background: #d1d5db; transition: background 0.3s; }
+  .step-dot.active  { background: #b45309; }
+  .step-dot.done    { background: #16a34a; }
+  #resultText { font-family: 'Noto Sans Tamil', 'Latha', system-ui, sans-serif; font-size: 16px; line-height: 1.9; }
+</style>
+
 <div class="min-h-screen bg-gradient-to-b from-amber-50 via-white to-white py-12">
   <div class="max-w-4xl mx-auto px-6">
+
     <!-- Header -->
-    <div class="text-center mb-12">
+    <div class="text-center mb-10">
       <div class="inline-block px-4 py-2 bg-amber-100 text-amber-800 rounded-full text-sm font-semibold mb-4">
-        Tamil Handwriting to Text
+        ✍️ Powered by Gemini AI Vision
       </div>
       <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
         Handwritten Tamil Notes to Text
       </h1>
-      <p class="text-xl text-gray-600 max-w-2xl mx-auto">
-        Upload an image of handwritten Tamil (notes, whiteboard, letters) and get editable text. Optimized for handwritten Tamil script.
+      <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+        Upload a photo of handwritten Tamil (notes, whiteboard, letters) — Gemini AI reads and converts it to editable text instantly.
       </p>
     </div>
 
-    <!-- Upload Area -->
+    <!-- Upload Card -->
     <div class="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 mb-6">
-      <div 
-        id="uploadArea" 
-        class="border-3 border-dashed border-amber-300 rounded-xl p-12 text-center bg-amber-50 cursor-pointer transition-all hover:bg-amber-100 hover:border-amber-400"
+
+      <!-- Drop Zone -->
+      <div
+        id="dropZone"
+        class="border-2 border-dashed border-amber-300 rounded-xl p-10 text-center bg-amber-50 cursor-pointer transition-all hover:bg-amber-100 hover:border-amber-400"
       >
-        <div class="text-6xl mb-4">✍️</div>
-        <div class="text-xl font-semibold text-amber-800 mb-2">Click to upload or drag and drop</div>
-        <div class="text-sm text-gray-600">Supports: JPG, PNG, BMP, TIFF (Max 10MB). Handwritten Tamil only.</div>
-        <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.bmp,.tiff,image/*" class="hidden">
+        <div class="text-5xl mb-3">✍️</div>
+        <div class="text-lg font-semibold text-amber-800 mb-1">Click to upload or drag &amp; drop</div>
+        <div class="text-sm text-gray-500">JPG, PNG, WEBP, BMP, TIFF · Max 10 MB</div>
+        <input type="file" id="fileInput" accept="image/*,.jpg,.jpeg,.png,.bmp,.tiff,.webp" class="hidden">
       </div>
 
-      <div id="fileInfo" class="hidden mt-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
-        <div class="flex items-center gap-2 text-amber-800">
-          <span class="text-xl">📎</span>
-          <span id="fileName" class="font-semibold"></span>
-          <span id="fileSize" class="text-sm text-gray-600"></span>
-        </div>
+      <!-- Paste from clipboard -->
+      <div class="mt-3 text-center">
+        <button id="pasteBtn" class="text-sm text-amber-700 underline hover:text-amber-900">
+          📋 Paste image from clipboard (Ctrl+V)
+        </button>
       </div>
 
+      <!-- Image Preview -->
+      <div id="imagePreview" class="hidden mt-5 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 text-center p-3">
+        <img id="previewImg" src="" alt="Preview" class="mx-auto rounded-lg shadow">
+        <div id="fileInfoLine" class="mt-2 text-sm text-gray-500"></div>
+      </div>
+
+      <!-- Language Selector -->
+      <div class="mt-5 flex items-center gap-3 justify-center flex-wrap">
+        <span class="text-sm font-medium text-gray-600">Image language:</span>
+        <label class="flex items-center gap-1.5 cursor-pointer text-sm text-gray-700">
+          <input type="radio" name="ocrLang" value="tamil" checked class="accent-amber-600"> Tamil only
+        </label>
+        <label class="flex items-center gap-1.5 cursor-pointer text-sm text-gray-700">
+          <input type="radio" name="ocrLang" value="mixed" class="accent-amber-600"> Tamil + English
+        </label>
+      </div>
+
+      <!-- Extract Button -->
       <div class="mt-6 text-center">
-        <button 
-          id="processBtn" 
+        <button
+          id="processBtn"
           disabled
-          class="px-8 py-4 bg-amber-600 text-white rounded-full font-semibold text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-          style="background: linear-gradient(135deg, #b45309 0%, #d97706 50%, #ea580c 100%);"
+          class="px-10 py-4 rounded-full font-bold text-lg text-white shadow-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          style="background: linear-gradient(135deg, #92400e 0%, #d97706 60%, #ea580c 100%);"
         >
           ✨ Extract Handwritten Text
         </button>
       </div>
     </div>
 
-    <div id="loading" class="hidden bg-white rounded-2xl shadow-xl border border-gray-200 p-12 text-center mb-6">
-      <div class="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-amber-600 mb-4"></div>
-      <div id="loadingTitle" class="text-xl font-semibold text-amber-700">Extracting handwritten text...</div>
-      <div id="loadingHint" class="text-sm text-gray-600 mt-2">This may take a few moments</div>
+    <!-- Loading State -->
+    <div id="loading" class="hidden bg-white rounded-2xl shadow-xl border border-gray-200 p-10 text-center mb-6">
+      <div class="inline-block animate-spin rounded-full h-14 w-14 border-b-4 border-amber-600 mb-5"></div>
+      <!-- Step indicators -->
+      <div class="flex items-center justify-center gap-3 mb-4">
+        <div class="flex flex-col items-center gap-1">
+          <div id="step1dot" class="step-dot"></div>
+          <span class="text-xs text-gray-500">Upload</span>
+        </div>
+        <div class="h-px w-8 bg-gray-300"></div>
+        <div class="flex flex-col items-center gap-1">
+          <div id="step2dot" class="step-dot"></div>
+          <span class="text-xs text-gray-500">Analyse</span>
+        </div>
+        <div class="h-px w-8 bg-gray-300"></div>
+        <div class="flex flex-col items-center gap-1">
+          <div id="step3dot" class="step-dot"></div>
+          <span class="text-xs text-gray-500">Extract</span>
+        </div>
+      </div>
+      <div id="loadingMsg" class="text-base font-semibold text-amber-700">Uploading image…</div>
+      <div class="text-sm text-gray-400 mt-1">Gemini AI is reading your handwriting</div>
     </div>
 
-    <div id="serviceUnavailable" class="hidden bg-amber-50 border border-amber-300 rounded-xl p-4 mb-6">
-      <div class="flex items-start gap-2 text-amber-800">
-        <span class="text-xl">⚠️</span>
+    <!-- Error -->
+    <div id="error" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+      <div class="flex items-start gap-2 text-red-700">
+        <span class="text-xl mt-0.5">❌</span>
         <div>
-          <div class="font-semibold">Handwriting OCR service is not available</div>
-          <div id="serviceUnavailableDetails" class="text-sm mt-1 opacity-90"></div>
-          <div class="text-sm mt-2">To run locally: <code class="bg-amber-100 px-1 rounded">cd services/tamil-handwriting-ocr && pip install -r requirements.txt && uvicorn api_server:app --port 8000</code></div>
+          <div class="font-semibold">Extraction failed</div>
+          <div id="errorText" class="text-sm mt-1"></div>
         </div>
       </div>
     </div>
-    <div id="error" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-      <div class="flex items-center gap-2 text-red-700">
-        <span class="text-xl">❌</span>
-        <span id="errorText" class="font-semibold"></span>
+
+    <!-- Results -->
+    <div id="resultArea" class="hidden bg-white rounded-2xl shadow-xl border border-gray-200 mb-6 overflow-hidden">
+      <!-- Result Header -->
+      <div class="flex flex-wrap items-center justify-between gap-3 px-7 py-5 border-b border-gray-100 bg-gradient-to-r from-amber-50 to-white">
+        <div>
+          <h2 class="text-xl font-bold text-gray-900">✨ Extracted Text</h2>
+          <div id="stats" class="text-sm text-gray-500 mt-0.5"></div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button id="copyBtn" class="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-semibold hover:bg-amber-700 transition-colors shadow">
+            📋 Copy
+          </button>
+          <a id="downloadTxt" href="#" class="hidden px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-200 transition-colors inline-block">
+            📥 Download .txt
+          </a>
+          <button id="openEditorBtn" class="hidden px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors shadow"
+            style="background: #7c3aed;"
+            onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#7c3aed'">
+            ✏️ Open in Editor
+          </button>
+        </div>
+      </div>
+
+      <!-- Side-by-side: image + text -->
+      <div class="flex flex-col md:flex-row">
+        <!-- Uploaded image thumbnail -->
+        <div id="resultImageWrap" class="hidden md:flex flex-col items-center justify-start p-5 border-r border-gray-100 bg-gray-50 min-w-0 md:w-48 lg:w-64">
+          <img id="resultImg" src="" alt="Uploaded" class="rounded-lg shadow max-w-full max-h-64 object-contain">
+          <div class="text-xs text-gray-400 mt-2 text-center" id="resultImgName"></div>
+        </div>
+        <!-- Extracted text -->
+        <div class="flex-1 p-6">
+          <div id="resultText" class="bg-gray-50 rounded-xl p-5 min-h-32 max-h-80 overflow-y-auto border border-gray-200 whitespace-pre-wrap text-gray-900 leading-relaxed font-tamil"></div>
+        </div>
+      </div>
+
+      <!-- Word Chips -->
+      <div id="wordChipsSection" class="hidden px-6 pb-6">
+        <div class="text-sm font-semibold text-gray-600 mb-2">Individual words with confidence:</div>
+        <div id="wordChips" class="flex flex-wrap"></div>
+        <div class="mt-2 flex gap-4 text-xs text-gray-500">
+          <span><span class="inline-block w-3 h-3 rounded-full bg-green-300 mr-1"></span>High (&gt;85%)</span>
+          <span><span class="inline-block w-3 h-3 rounded-full bg-yellow-300 mr-1"></span>Medium (55–85%)</span>
+          <span><span class="inline-block w-3 h-3 rounded-full bg-gray-300 mr-1"></span>Low (&lt;55%)</span>
+        </div>
       </div>
     </div>
 
-    <div id="resultArea" class="hidden bg-white rounded-2xl shadow-xl border border-gray-200 p-8 mb-6">
-      <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold text-gray-900">✨ Extracted Text</h2>
-        <div id="stats" class="text-sm text-gray-600"></div>
-      </div>
-      <div id="resultText" class="bg-gray-50 rounded-lg p-6 max-h-96 overflow-y-auto mb-6 border border-gray-200 whitespace-pre-wrap text-gray-900 leading-relaxed font-tamil"></div>
-      <div class="flex flex-wrap gap-3 justify-center">
-        <button id="copyBtn" class="px-6 py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 transition-colors shadow-lg">
-          📋 Copy Text
-        </button>
-        <a id="downloadTxt" href="#" download="handwriting-extracted.txt" class="hidden px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors inline-block">
-          📥 Download TXT
-        </a>
-      </div>
-      <div id="wordChips" class="mt-6 flex flex-wrap gap-2"></div>
-    </div>
-
-    <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
-      <h3 class="text-lg font-bold text-gray-900 mb-4">💡 Tips for Handwritten Tamil</h3>
-      <ul class="space-y-2 text-gray-600">
-        <li class="flex items-start gap-2">
-          <span class="text-amber-600">•</span>
-          <span>Use a clear, well-lit photo of your handwritten notes</span>
-        </li>
-        <li class="flex items-start gap-2">
-          <span class="text-amber-600">•</span>
-          <span>Write on plain paper or whiteboard for best results</span>
-        </li>
-        <li class="flex items-start gap-2">
-          <span class="text-amber-600">•</span>
-          <span>Avoid heavy shadows or blur; keep the image straight</span>
-        </li>
-        <li class="flex items-start gap-2">
-          <span class="text-amber-600">•</span>
-          <span>For printed Tamil documents, use the main <a href="/tools/ocr" class="text-primary-600 hover:underline">Tamil OCR</a> tool instead</span>
-        </li>
+    <!-- Tips -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+      <h3 class="text-base font-bold text-gray-900 mb-3">💡 Tips for best results</h3>
+      <ul class="space-y-2 text-sm text-gray-600">
+        <li class="flex items-start gap-2"><span class="text-amber-600 mt-0.5">•</span><span>Use a clear, well-lit photo — avoid heavy shadows or blurry images</span></li>
+        <li class="flex items-start gap-2"><span class="text-amber-600 mt-0.5">•</span><span>Write on plain white paper or whiteboard for cleanest recognition</span></li>
+        <li class="flex items-start gap-2"><span class="text-amber-600 mt-0.5">•</span><span>Keep the image straight; rotate before uploading if text is sideways</span></li>
+        <li class="flex items-start gap-2"><span class="text-amber-600 mt-0.5">•</span><span>Works with notebooks, letters, exam sheets, and whiteboard photos</span></li>
+        <li class="flex items-start gap-2"><span class="text-amber-600 mt-0.5">•</span><span>For printed Tamil documents, use the <a href="/tools/ocr" class="text-amber-700 hover:underline font-medium">Tamil OCR tool</a> instead</span></li>
       </ul>
     </div>
+
   </div>
 </div>
 
 <script>
 (function () {
-  const uploadArea = document.getElementById('uploadArea');
-  const fileInput = document.getElementById('fileInput');
-  const processBtn = document.getElementById('processBtn');
-  const loading = document.getElementById('loading');
-  const loadingTitle = document.getElementById('loadingTitle');
-  const loadingHint = document.getElementById('loadingHint');
-  const error = document.getElementById('error');
-  const errorText = document.getElementById('errorText');
-  const resultArea = document.getElementById('resultArea');
-  const resultText = document.getElementById('resultText');
-  const stats = document.getElementById('stats');
-  const copyBtn = document.getElementById('copyBtn');
-  const downloadTxt = document.getElementById('downloadTxt');
-  const wordChips = document.getElementById('wordChips');
-  const fileInfo = document.getElementById('fileInfo');
-  const fileName = document.getElementById('fileName');
-  const fileSize = document.getElementById('fileSize');
-  const serviceUnavailable = document.getElementById('serviceUnavailable');
-  const serviceUnavailableDetails = document.getElementById('serviceUnavailableDetails');
+  'use strict';
+
+  // ── DOM refs ─────────────────────────────────────────────────────────────
+  const dropZone     = document.getElementById('dropZone');
+  const fileInput    = document.getElementById('fileInput');
+  const processBtn   = document.getElementById('processBtn');
+  const pasteBtn     = document.getElementById('pasteBtn');
+  const imagePreview = document.getElementById('imagePreview');
+  const previewImg   = document.getElementById('previewImg');
+  const fileInfoLine = document.getElementById('fileInfoLine');
+  const loading      = document.getElementById('loading');
+  const loadingMsg   = document.getElementById('loadingMsg');
+  const errorEl      = document.getElementById('error');
+  const errorText    = document.getElementById('errorText');
+  const resultArea   = document.getElementById('resultArea');
+  const resultText   = document.getElementById('resultText');
+  const stats        = document.getElementById('stats');
+  const copyBtn      = document.getElementById('copyBtn');
+  const downloadTxt  = document.getElementById('downloadTxt');
+  const openEditorBtn= document.getElementById('openEditorBtn');
+  const wordChipsSection = document.getElementById('wordChipsSection');
+  const wordChips    = document.getElementById('wordChips');
+  const resultImageWrap = document.getElementById('resultImageWrap');
+  const resultImg    = document.getElementById('resultImg');
+  const resultImgName= document.getElementById('resultImgName');
+
+  // Step dots
+  const step1 = document.getElementById('step1dot');
+  const step2 = document.getElementById('step2dot');
+  const step3 = document.getElementById('step3dot');
 
   let selectedFile = null;
   let extractedText = '';
 
-  // Check if Handwriting OCR service is available on load
-  (function checkHealth() {
-    fetch('/api/handwriting-ocr/health', { credentials: 'include' })
-      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
-      .then(function (result) {
-        if (!result.ok) {
-          serviceUnavailableDetails.textContent = result.data?.details || result.data?.error || 'Service not configured or not running.';
-          serviceUnavailable.classList.remove('hidden');
-        } else {
-          serviceUnavailable.classList.add('hidden');
-        }
-      })
-      .catch(function () {
-        serviceUnavailableDetails.textContent = 'Could not reach the service.';
-        serviceUnavailable.classList.remove('hidden');
-      });
-  })();
-
-  uploadArea.addEventListener('click', function () { fileInput.click(); });
-  fileInput.addEventListener('change', function (e) {
-    if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
-  });
-  uploadArea.addEventListener('dragover', function (e) {
-    e.preventDefault();
-    uploadArea.classList.add('border-amber-500', 'bg-amber-100');
-  });
-  uploadArea.addEventListener('dragleave', function () {
-    uploadArea.classList.remove('border-amber-500', 'bg-amber-100');
-  });
-  uploadArea.addEventListener('drop', function (e) {
-    e.preventDefault();
-    uploadArea.classList.remove('border-amber-500', 'bg-amber-100');
-    if (e.dataTransfer.files.length > 0) handleFileSelect(e.dataTransfer.files[0]);
-  });
-
-  function handleFileSelect(file) {
-    if (!file || !file.type.startsWith('image/')) return;
-    selectedFile = file;
-    processBtn.disabled = false;
-    error.classList.add('hidden');
-    resultArea.classList.add('hidden');
-    fileName.textContent = file.name;
-    fileSize.textContent = '(' + (file.size / 1024 / 1024).toFixed(2) + ' MB)';
-    fileInfo.classList.remove('hidden');
+  // ── Step animation ───────────────────────────────────────────────────────
+  let _stepTimer = null;
+  function runSteps() {
+    [step1, step2, step3].forEach(d => d.className = 'step-dot');
+    let s = 0;
+    const dots = [step1, step2, step3];
+    const msgs = ['Uploading image…', 'Gemini AI is reading your handwriting…', 'Extracting text…'];
+    function advance() {
+      if (s < dots.length) {
+        dots[s].classList.add('active');
+        loadingMsg.textContent = msgs[s];
+        s++;
+        _stepTimer = setTimeout(advance, 1800);
+      }
+    }
+    advance();
+  }
+  function finishSteps() {
+    clearTimeout(_stepTimer);
+    [step1, step2, step3].forEach(d => { d.classList.remove('active'); d.classList.add('done'); });
   }
 
-  processBtn.addEventListener('click', async function () {
+  // ── File select helpers ───────────────────────────────────────────────────
+  function getLanguageHint() {
+    const v = document.querySelector('input[name="ocrLang"]:checked')?.value;
+    return v === 'mixed' ? ' (Tamil + English)' : ' (Tamil)';
+  }
+
+  function setFile(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      showError('Please select an image file (JPG, PNG, WEBP, BMP, TIFF).');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showError('File is too large. Maximum size is 10 MB.');
+      return;
+    }
+    selectedFile = file;
+    processBtn.disabled = false;
+    errorEl.classList.add('hidden');
+    resultArea.classList.add('hidden');
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = e => {
+      previewImg.src = e.target.result;
+      imagePreview.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+    fileInfoLine.textContent = file.name + ' · ' + (file.size / 1024 / 1024).toFixed(2) + ' MB';
+  }
+
+  // ── Drag & drop ──────────────────────────────────────────────────────────
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const f = e.dataTransfer?.files?.[0];
+    if (f) setFile(f);
+  });
+
+  // ── Paste from clipboard ─────────────────────────────────────────────────
+  pasteBtn.addEventListener('click', async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) {
+            const blob = await item.getType(type);
+            setFile(new File([blob], 'pasted-image.' + type.split('/')[1], { type }));
+            return;
+          }
+        }
+      }
+      showError('No image found in clipboard. Copy an image first then paste.');
+    } catch (_) {
+      showError('Could not access clipboard. Try dragging the image directly into the upload area.');
+    }
+  });
+
+  // Keyboard Ctrl+V paste
+  document.addEventListener('paste', e => {
+    const items = e.clipboardData?.items || [];
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        setFile(item.getAsFile());
+        e.preventDefault();
+        return;
+      }
+    }
+  });
+
+  // ── Error display ─────────────────────────────────────────────────────────
+  function showError(msg) {
+    loading.classList.add('hidden');
+    processBtn.disabled = !selectedFile;
+    errorText.textContent = msg;
+    errorEl.classList.remove('hidden');
+  }
+
+  // ── Main extract ──────────────────────────────────────────────────────────
+  processBtn.addEventListener('click', async () => {
     if (!selectedFile) return;
+
+    // Show loading
     loading.classList.remove('hidden');
     processBtn.disabled = true;
-    error.classList.add('hidden');
+    errorEl.classList.remove('hidden', 'hidden');
+    errorEl.classList.add('hidden');
     resultArea.classList.add('hidden');
-    loadingTitle.textContent = 'Extracting handwritten text...';
-    loadingHint.textContent = 'This may take a few moments';
+    runSteps();
 
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
+
       const res = await fetch('/api/handwriting-ocr/extract-words', {
         method: 'POST',
         body: formData,
         credentials: 'include'
       });
-      const data = await res.json().catch(function () { return { error: 'Invalid response' }; });
+      const data = await res.json().catch(() => ({ error: 'Invalid response from server' }));
 
+      finishSteps();
       loading.classList.add('hidden');
       processBtn.disabled = false;
 
       if (!res.ok || data.error) {
-        var msg = data.error || data.details || 'Failed to process image';
-        if (res.status === 503) {
-          serviceUnavailableDetails.textContent = msg;
-          serviceUnavailable.classList.remove('hidden');
-        }
-        errorText.textContent = msg;
-        error.classList.remove('hidden');
+        showError(data.error || data.details || 'Failed to process image. Please try again.');
         return;
       }
-      serviceUnavailable.classList.add('hidden');
 
+      // ── Render results ───────────────────────────────────────────────────
       extractedText = data.full_text || '';
-      resultText.textContent = extractedText || '(No text detected)';
-      stats.textContent = (data.lines_count != null ? data.lines_count + ' lines · ' : '') + (data.words_count != null ? data.words_count + ' words' : '') + (data.processing_time_ms != null ? ' · ' + data.processing_time_ms + ' ms' : '');
-      resultArea.classList.remove('hidden');
+      resultText.textContent = extractedText || '(No text detected in the image)';
 
-      if (data.words && data.words.length > 0) {
-        wordChips.innerHTML = data.words.map(function (w) {
-          const conf = (w.confidence != null ? (w.confidence * 100).toFixed(0) : '—') + '%';
-          const cls = (w.confidence != null && w.confidence > 0.8) ? 'bg-green-100 border-green-300' : (w.confidence != null && w.confidence > 0.5) ? 'bg-amber-100 border-amber-300' : 'bg-gray-100 border-gray-300';
-          return '<span class="inline-block px-2 py-1 rounded border text-sm ' + cls + '" title="Confidence: ' + conf + '">' + (w.text || '—') + ' <span class="text-gray-500 text-xs">' + conf + '</span></span>';
-        }).join('');
-      } else {
-        wordChips.innerHTML = '';
-      }
+      // Stats line
+      const parts = [];
+      if (data.lines_count) parts.push(data.lines_count + ' lines');
+      if (data.words_count) parts.push(data.words_count + ' words');
+      if (data.processing_time_ms) parts.push(((data.processing_time_ms) / 1000).toFixed(1) + 's');
+      if (data.model_used) parts.push(data.model_used);
+      stats.textContent = parts.join(' · ');
 
-      downloadTxt.classList.add('hidden');
+      // Image in results
+      resultImg.src = previewImg.src;
+      resultImgName.textContent = selectedFile.name;
+      resultImageWrap.classList.remove('hidden');
+
+      // Download link
       if (extractedText) {
         downloadTxt.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(extractedText);
-        downloadTxt.download = (selectedFile.name || 'handwriting').replace(/\.[^/.]+$/, '') + '-extracted.txt';
+        downloadTxt.download = (selectedFile.name.replace(/\.[^/.]+$/, '') || 'handwriting') + '-extracted.txt';
         downloadTxt.classList.remove('hidden');
+        openEditorBtn.classList.remove('hidden');
+      } else {
+        downloadTxt.classList.add('hidden');
+        openEditorBtn.classList.add('hidden');
       }
+
+      // Word chips
+      const words = Array.isArray(data.words) ? data.words : [];
+      if (words.length > 0) {
+        wordChips.innerHTML = words.map(w => {
+          const conf = w.confidence != null ? w.confidence : 0.8;
+          const pct = (conf * 100).toFixed(0) + '%';
+          const cls = conf >= 0.85 ? 'high' : conf >= 0.55 ? 'mid' : 'low';
+          const escaped = (w.text || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          return `<span class="word-chip ${cls}" title="Confidence: ${pct}">${escaped}<span style="font-size:10px;opacity:0.6;margin-left:4px">${pct}</span></span>`;
+        }).join('');
+        wordChipsSection.classList.remove('hidden');
+      } else {
+        wordChipsSection.classList.add('hidden');
+      }
+
+      resultArea.classList.remove('hidden');
+      resultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
     } catch (err) {
-      loading.classList.add('hidden');
-      processBtn.disabled = false;
-      errorText.textContent = err.message || 'Network error. Is the Handwriting OCR service running?';
-      error.classList.remove('hidden');
+      finishSteps();
+      showError(err.message || 'Network error. Please check your connection and try again.');
     }
   });
 
-  copyBtn.addEventListener('click', function () {
+  // ── Copy ──────────────────────────────────────────────────────────────────
+  copyBtn.addEventListener('click', () => {
     if (!extractedText) return;
-    navigator.clipboard.writeText(extractedText).then(function () {
+    navigator.clipboard.writeText(extractedText).then(() => {
       copyBtn.textContent = '✓ Copied!';
-      setTimeout(function () { copyBtn.textContent = '📋 Copy Text'; }, 2000);
+      setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 2200);
+    }).catch(() => {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = extractedText;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      copyBtn.textContent = '✓ Copied!';
+      setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 2200);
     });
   });
+
+  // ── Open in Editor ────────────────────────────────────────────────────────
+  openEditorBtn.addEventListener('click', () => {
+    if (!extractedText) return;
+    // Store text in sessionStorage and open workspace
+    try {
+      sessionStorage.setItem('ocr_import_text', extractedText);
+      sessionStorage.setItem('ocr_import_filename', selectedFile ? selectedFile.name.replace(/\.[^/.]+$/, '') : 'Handwriting');
+    } catch (_) {}
+    window.open('/workspace', '_blank');
+  });
+
 })();
 </script>
 

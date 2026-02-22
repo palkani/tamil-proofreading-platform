@@ -5879,3 +5879,51 @@ setTimeout(function workspaceDebugVerification() {
     console.warn('[WorkspaceJS] Debug verification error:', e);
   }
 }, 600);
+
+// ── OCR Import: load text from handwriting-ocr-tool "Open in Editor" ────────
+setTimeout(function ocrImportFromSession() {
+  try {
+    const ocrText = sessionStorage.getItem('ocr_import_text');
+    if (!ocrText) return;
+    sessionStorage.removeItem('ocr_import_text');
+    const ocrFilename = sessionStorage.getItem('ocr_import_filename') || 'Handwriting';
+    sessionStorage.removeItem('ocr_import_filename');
+
+    // Convert plain text to HTML paragraphs
+    const html = ocrText.split('\n').map(line => {
+      const safe = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return safe.trim() ? `<p>${safe}</p>` : '<p><br></p>';
+    }).join('');
+
+    // Try TipTap first
+    const tiptap = (function() {
+      if (!window.USE_TIPTAP_EDITOR) return null;
+      const g = window.tiptapWorkspaceEditor;
+      return typeof g === 'function' ? g() : (g && g.commands ? g : null);
+    })();
+
+    if (tiptap) {
+      tiptap.commands.setContent(html);
+      tiptap.commands.focus('end');
+      tiptap.emit && tiptap.emit('update', { editor: tiptap });
+    } else {
+      const editorEl = document.getElementById('editor');
+      if (editorEl) {
+        editorEl.innerHTML = html;
+        editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+        editorEl.focus();
+      }
+    }
+
+    console.log('[WorkspaceJS] OCR import loaded:', ocrFilename, '—', ocrText.length, 'chars');
+
+    // Brief toast notification
+    const toast = document.createElement('div');
+    toast.textContent = '✅ Handwriting OCR text loaded into editor';
+    toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:500;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,0.2)';
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.4s'; setTimeout(() => toast.remove(), 400); }, 3000);
+  } catch (e) {
+    console.warn('[WorkspaceJS] OCR import error:', e);
+  }
+}, 900);

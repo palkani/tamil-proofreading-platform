@@ -849,6 +849,82 @@ RULES:
   }
 });
 
+// ── Sentence Rewrite endpoint ──────────────────────────────────────────────
+// POST /api/rewrite
+// Body: { text: string, tone?: 'formal'|'casual'|'simple' }
+// Returns: { rewrites: string[] } — up to 3 Tamil rewrites of the input
+router.post('/rewrite', async (req, res) => {
+  try {
+    const { text, tone = 'formal' } = req.body;
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ error: 'text is required' });
+    }
+    if (text.trim().length > 2000) {
+      return res.status(400).json({ error: 'Text too long. Select up to 2000 characters.' });
+    }
+
+    const keyInfo = keyRotator.getNextKey();
+    if (!keyInfo) {
+      return res.status(500).json({ error: 'AI service not configured' });
+    }
+
+    const toneMap = {
+      formal: 'எழுத்து வடிவம் / Formal written Tamil',
+      casual: 'பேச்சு வழக்கு / Casual spoken Tamil',
+      simple: 'எளிய தமிழ் / Simple and clear Tamil',
+    };
+    const toneDesc = toneMap[tone] || toneMap.formal;
+
+    const response = await axiosWithPool.post(
+      `${keyRotator.baseUrl}/models/gemini-2.5-flash:generateContent`,
+      {
+        systemInstruction: {
+          parts: [{
+            text: `You are an expert Tamil language editor. Rewrite the given Tamil text in 3 different ways using ${toneDesc} style.
+
+OUTPUT FORMAT (strict JSON array, no other text):
+["rewrite 1", "rewrite 2", "rewrite 3"]
+
+RULES:
+- Preserve the original meaning exactly
+- Each rewrite must be meaningfully different
+- Output ONLY the JSON array — no explanation, no markdown
+- All rewrites must be in Tamil script`
+          }]
+        },
+        contents: [{ role: 'user', parts: [{ text: `Rewrite this Tamil text:\n\n${text.trim()}` }] }],
+        generationConfig: {
+          temperature: 0.7,
+          topP: 0.9,
+          maxOutputTokens: 1024,
+          responseMimeType: 'application/json'
+        }
+      },
+      {
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': keyInfo.key },
+        timeout: 25000
+      }
+    );
+
+    const raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    let rewrites;
+    try {
+      rewrites = JSON.parse(raw.trim());
+      if (!Array.isArray(rewrites)) rewrites = [String(raw)];
+    } catch (_) {
+      const matches = raw.match(/"([^"]+)"/g);
+      rewrites = matches ? matches.map(s => s.replace(/^"|"$/g, '')) : [raw.trim()];
+    }
+
+    console.log('[REWRITE] Generated', rewrites.length, 'alternatives for text:', text.substring(0, 40));
+    res.json({ success: true, rewrites: rewrites.slice(0, 3) });
+
+  } catch (error) {
+    console.error('[REWRITE] Error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to rewrite text', details: error.message });
+  }
+});
+
 // Transliteration endpoint - proxies to Go backend
 router.post('/transliterate', async (req, res) => {
   try {
@@ -1342,75 +1418,133 @@ router.get('/ocr/download/:filename', async (req, res) => {
   }
 });
 
-// Handwriting OCR (Tamil handwritten notes to text) - proxy to Python service
+// Handwriting OCR (Tamil handwritten notes to text) - powered by Gemini Vision
 const uploadHandwriting = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/bmp', 'image/tiff'];
+    const allowed = ['image/jpeg', 'image/png', 'image/bmp', 'image/tiff', 'image/webp'];
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPG, PNG, BMP, TIFF images are allowed.'));
+      cb(new Error('Invalid file type. Only JPG, PNG, BMP, TIFF, WEBP images are allowed.'));
     }
   }
 });
 
-router.get('/handwriting-ocr/health', async (req, res) => {
-  if (!HANDWRITING_OCR_URL) {
+router.get('/handwriting-ocr/health', (req, res) => {
+  const keyInfo = keyRotator.getNextKey();
+  if (!keyInfo) {
     return res.status(503).json({
       status: 'unhealthy',
-      error: 'Handwriting OCR is not configured',
-      details: 'Set HANDWRITING_OCR_URL to your Tamil Handwriting OCR service URL (e.g. http://localhost:8000). See services/tamil-handwriting-ocr/README.md'
+      error: 'AI service not configured',
+      details: 'Gemini API key is not set. Add GEMINI_API_KEY to your environment.'
     });
   }
-  try {
-    const response = await axiosWithPool.get(`${HANDWRITING_OCR_URL}/health`, { timeout: 5000 });
-    return res.json(response.data);
-  } catch (err) {
-    const details = err.code === 'ECONNREFUSED' ? 'Service not running. Start it with: cd services/tamil-handwriting-ocr && uvicorn api_server:app --port 8000' : err.message;
-    return res.status(503).json({
-      status: 'unhealthy',
-      error: 'Handwriting OCR service is not available',
-      details
-    });
-  }
+  return res.json({ status: 'ok', service: 'gemini-vision', model: 'gemini-2.5-flash' });
 });
 
 router.post('/handwriting-ocr/extract-words', uploadHandwriting.single('file'), async (req, res) => {
-  if (!HANDWRITING_OCR_URL) {
-    return res.status(503).json({
-      success: false,
-      error: 'Handwriting OCR is not configured. Set HANDWRITING_OCR_URL and run the service (see services/tamil-handwriting-ocr/README.md).'
-    });
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
   }
+
+  const keyInfo = keyRotator.getNextKey();
+  if (!keyInfo) {
+    return res.status(500).json({ error: 'AI service not configured' });
+  }
+
+  const t0 = Date.now();
+  const imageBase64 = req.file.buffer.toString('base64');
+  // Normalize mime type for Gemini (bmp/tiff → jpeg fallback handled gracefully)
+  const mimeType = req.file.mimetype === 'image/bmp' || req.file.mimetype === 'image/tiff'
+    ? 'image/jpeg'
+    : req.file.mimetype;
+
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
-    const form = new FormData();
-    form.append('file', req.file.buffer, { filename: req.file.originalname || 'image.png', contentType: req.file.mimetype });
     const response = await axiosWithPool.post(
-      `${HANDWRITING_OCR_URL}/api/ocr/extract-words`,
-      form,
+      `${keyRotator.baseUrl}/models/gemini-2.5-flash:generateContent`,
       {
-        headers: form.getHeaders(),
-        timeout: 60000,
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity
+        contents: [{
+          parts: [
+            {
+              inlineData: {
+                mimeType,
+                data: imageBase64
+              }
+            },
+            {
+              text: `You are an expert Tamil OCR system specialized in handwritten Tamil script (தமிழ் கையெழுத்து).
+
+Carefully examine this image and extract ALL visible Tamil text — handwritten notes, letters, words, and sentences.
+
+Return ONLY a strict JSON object with this exact structure (no markdown, no explanation):
+{
+  "full_text": "complete extracted text with newlines between lines",
+  "lines": ["line 1 text", "line 2 text"],
+  "words": [
+    {"text": "word1", "confidence": 0.95},
+    {"text": "word2", "confidence": 0.75}
+  ]
+}
+
+Confidence scoring guide:
+- 0.90–1.0: clearly written, certain
+- 0.65–0.89: mostly clear, minor ambiguity
+- 0.40–0.64: difficult handwriting, uncertain
+- Below 0.4: very unclear
+
+If the image has no Tamil text, return: {"full_text":"","lines":[],"words":[]}
+If text is mixed Tamil+English, include both. Output ONLY the JSON object.`
+            }
+          ]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          topP: 0.95,
+          maxOutputTokens: 4096,
+          responseMimeType: 'application/json'
+        }
+      },
+      {
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': keyInfo.key },
+        timeout: 45000
       }
     );
-    return res.json(response.data);
-  } catch (error) {
-    const status = error.response?.status || 500;
-    const data = error.response?.data;
-    let message = data?.detail || (Array.isArray(data?.detail) ? data.detail.map(d => d.msg).join(' ') : null) || data?.message || error.message;
-    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-      message = 'Handwriting OCR service is not running. Start it with: cd services/tamil-handwriting-ocr && pip install -r requirements.txt && uvicorn api_server:app --port 8000';
+
+    const raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    let parsed;
+    try {
+      parsed = JSON.parse(raw.trim());
+    } catch (_) {
+      // If JSON parse fails, treat the raw text as the full_text
+      parsed = { full_text: raw.trim(), lines: raw.trim().split('\n').filter(Boolean), words: [] };
     }
-    return res.status(status >= 400 ? status : 502).json({
+
+    const fullText = parsed.full_text || '';
+    const words = Array.isArray(parsed.words) ? parsed.words : [];
+    const lines = Array.isArray(parsed.lines) ? parsed.lines : fullText.split('\n').filter(Boolean);
+
+    const processingMs = Date.now() - t0;
+    console.log(`[HANDWRITING-OCR] Extracted ${words.length} words, ${lines.length} lines in ${processingMs}ms`);
+
+    return res.json({
+      success: true,
+      full_text: fullText,
+      lines,
+      words,
+      lines_count: lines.length,
+      words_count: words.length || fullText.split(/\s+/).filter(Boolean).length,
+      processing_time_ms: processingMs,
+      model_used: 'gemini-2.5-flash'
+    });
+
+  } catch (error) {
+    console.error('[HANDWRITING-OCR] Gemini error:', error.response?.data || error.message);
+    const status = error.response?.status || 500;
+    return res.status(status >= 400 && status < 600 ? status : 500).json({
       success: false,
-      error: message || 'Failed to process handwritten image'
+      error: error.response?.data?.error?.message || error.message || 'Failed to process handwritten image'
     });
   }
 });

@@ -1016,9 +1016,20 @@
               <path d="M21 21l-4.3-4.3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-          
+
+          <!-- Import Document (.txt / .docx) -->
+          <button class="toolbar-btn" id="import-doc-btn" onclick="window.docImport && window.docImport.open()"
+                  title="Import document (.txt or .docx)" aria-label="Import document">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+          </button>
+
           <div class="toolbar-divider"></div>
-          
+
           <!-- Translate English to Tamil (dark grey icon) -->
           <button class="toolbar-btn" id="translate-english-btn" title="Translate English to Tamil" aria-label="Translate English to Tamil">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1144,6 +1155,8 @@
 <script src="/js/suggestions.js?v=20251127b"></script>
 <script src="/js/workspace.js?v=20251229b&_ts=<%= new Date().getTime() %>&_cb=<%= Math.random().toString(36).slice(2) %>"></script>
 <script src="/js/oauth-callback.js"></script>
-<script src="/js/voice-typing.js?v=20260222a"></script>
+<script src="/js/voice-typing.js?v=20260222b"></script>
+<script src="/js/doc-import.js?v=20260222a"></script>
+<script src="/js/sentence-rewrite.js?v=20260222a"></script>
 
 <%- include('../partials/footer') %>

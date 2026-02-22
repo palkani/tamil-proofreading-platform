@@ -1543,12 +1543,10 @@ function menuMoveToGroup() {
       listEl.appendChild(btn);
     });
   }
-  var menuEl = document.getElementById('draft-context-menu');
-  if (menuEl) {
-    var rect = menuEl.getBoundingClientRect();
-    popover.style.left = rect.left + 'px';
-    popover.style.top = (rect.bottom + 4) + 'px';
-  }
+  // Center the "Choose group" popover in the middle of the page
+  popover.style.left = '50%';
+  popover.style.top = '50%';
+  popover.style.transform = 'translate(-50%, -50%)';
   popover.classList.remove('hidden');
 
   function closePopover() {
