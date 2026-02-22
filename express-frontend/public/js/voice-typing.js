@@ -125,9 +125,10 @@
   function setButtonActive(active) {
     document.querySelectorAll('.voice-typing-btn').forEach((btn) => {
       btn.classList.toggle('voice-typing-active', active);
+      const label = currentLang === 'ta-IN' ? 'Tamil' : 'English';
       btn.setAttribute(
         'title',
-        active ? 'Stop voice typing (click to stop)' : 'Voice typing — speak in Tamil'
+        active ? 'Stop voice typing (click to stop)' : 'Voice typing — speak in ' + label
       );
       btn.setAttribute('aria-pressed', String(active));
     });
@@ -247,7 +248,15 @@
     currentLang = lang;
     if (recognition) recognition.lang = lang;
 
-    // Update language button labels
+    // Update oval language toggle (தமிழ்) if present: Tamil = on (knob right), English = off (knob left)
+    const toggleEl = document.getElementById('voice-lang-toggle');
+    if (toggleEl) {
+      const isTamil = lang === 'ta-IN';
+      toggleEl.setAttribute('aria-checked', isTamil ? 'true' : 'false');
+      toggleEl.setAttribute('title', isTamil ? 'Tamil voice input (click for English)' : 'English voice input (click for Tamil)');
+    }
+
+    // Legacy: update .voice-lang-btn if present
     document.querySelectorAll('.voice-lang-btn').forEach((btn) => {
       const btnLang = btn.getAttribute('data-lang');
       btn.classList.toggle('voice-lang-active', btnLang === lang);

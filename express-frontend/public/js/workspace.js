@@ -4807,7 +4807,7 @@ class WorkspaceController {
     const count = countWords(text);
     const wordCountEl = document.getElementById('word-count');
     if (wordCountEl) {
-      wordCountEl.textContent = `Words: ${count}`;
+      wordCountEl.textContent = count;
     }
   }
 
@@ -4815,7 +4815,7 @@ class WorkspaceController {
     const count = this.suggestionsPanel.getAcceptedCount();
     const acceptedCountEl = document.getElementById('accepted-count');
     if (acceptedCountEl) {
-      acceptedCountEl.textContent = `Accepted: ${count}`;
+      acceptedCountEl.textContent = count;
     }
   }
 

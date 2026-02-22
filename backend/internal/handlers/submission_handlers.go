@@ -1310,7 +1310,8 @@ func (h *Handlers) CreateDraftGroup(c *gin.Context) {
 	}
 	g := models.DraftGroup{UserID: userID, Name: name}
 	if err := h.db.Create(&g).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group"})
+		log.Printf("[DRAFT_GROUPS] Create failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group. Please try again."})
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"success": true, "group": g})

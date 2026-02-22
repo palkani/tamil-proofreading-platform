@@ -132,7 +132,7 @@
               <button type="button" id="new-group-btn" class="text-primary-600 hover:text-primary-700 text-sm font-medium" title="New group">+ New</button>
             </div>
             <div id="new-group-form" class="hidden mb-2">
-              <input type="text" id="new-group-name-input" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mb-1" placeholder="Group name" maxlength="255">
+              <input type="text" id="new-group-name-input" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mb-1 text-gray-900 bg-white placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="Group name" maxlength="255">
               <div class="flex gap-1">
                 <button type="button" id="new-group-save" class="text-xs px-2 py-1 bg-primary-600 text-white rounded">Save</button>
                 <button type="button" id="new-group-cancel" class="text-xs px-2 py-1 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
@@ -1084,11 +1084,20 @@
             newGroupForm.classList.add('hidden');
             showNotification('Group created', 'success');
           } else {
-            const err = await res.json().catch(() => ({}));
-            showNotification(err.error || 'Failed to create group', 'error');
+            let errMsg = 'Failed to save group name';
+            try {
+              const err = await res.json().catch(() => ({}));
+              errMsg = err.error || errMsg;
+            } catch (_) { /* use default */ }
+            if (res.status === 401) {
+              errMsg = 'Please log in to create groups.';
+            }
+            console.warn('[DRAFTS] Create group failed:', res.status, errMsg);
+            showNotification(errMsg, 'error');
           }
-        } catch (_) {
-          showNotification('Failed to create group', 'error');
+        } catch (e) {
+          console.warn('[DRAFTS] Create group request failed:', e);
+          showNotification('Failed to save group name. Check your connection and try again.', 'error');
         }
       });
     }
