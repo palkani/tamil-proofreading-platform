@@ -231,6 +231,67 @@ router.get('/blog', async (req, res) => {
   }
 });
 
+// RSS feed for blog (public) — must be before /blog/:slug so "rss.xml" is not treated as a slug
+router.get('/blog/rss.xml', async (req, res) => {
+  const baseUrl = 'https://prooftamil.com';
+  try {
+    const backendRes = await getWithColdStartRetry(`${req._backendUrl}/blog/posts`, {
+      params: { page: 1, limit: 50 },
+      timeout: 10000,
+    });
+    const posts = backendRes.status >= 200 && backendRes.status < 300 ? (backendRes.data?.posts || []) : [];
+
+    const escapeXml = (s) =>
+      String(s || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&apos;');
+
+    const items = posts
+      .filter((p) => p && p.slug && p.title)
+      .map((p) => {
+        const link = `${baseUrl}/blog/${p.slug}`;
+        const pub = p.published_at || p.created_at;
+        const pubDate = pub ? new Date(pub).toUTCString() : new Date().toUTCString();
+        const desc =
+          (p.meta_description && String(p.meta_description).trim()) ||
+          (p.excerpt && String(p.excerpt).trim()) ||
+          String(p.content_text || '').trim().slice(0, 200);
+        return `
+          <item>
+            <title>${escapeXml(p.title)}</title>
+            <link>${escapeXml(link)}</link>
+            <guid isPermaLink="true">${escapeXml(link)}</guid>
+            <pubDate>${escapeXml(pubDate)}</pubDate>
+            <description>${escapeXml(desc)}</description>
+          </item>
+        `.trim();
+      })
+      .join('\n');
+
+    const rss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>ProofTamil Blog</title>
+    <link>${baseUrl}/blog</link>
+    <description>Tamil writing tips, proofreading examples, and AI-assisted workflows.</description>
+    <language>ta</language>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+${items}
+  </channel>
+</rss>`;
+
+    res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=1800, stale-while-revalidate=86400');
+    return res.send(rss);
+  } catch (e) {
+    res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
+    return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>ProofTamil Blog</title><link>${baseUrl}/blog</link><description>Blog feed temporarily unavailable</description></channel></rss>`);
+  }
+});
+
 router.get('/blog/:slug', async (req, res) => {
   const user = getCurrentUser(req);
   const seoBase = getSeoData('blogPost') || getSeoData('home');
@@ -274,7 +335,7 @@ router.get('/blog/:slug', async (req, res) => {
       'content_html length:', post.content_html?.length || 0,
       'content_text length:', post.content_text?.length || 0);
 
-    const canonical = `https://prooftamil.com/blog/${encodeURIComponent(post.slug || slug)}`;
+    const canonical = `https://prooftamil.com/blog/${post.slug || slug}`;
     const desc =
       (post.meta_description && String(post.meta_description).trim()) ||
       (post.excerpt && String(post.excerpt).trim()) ||
@@ -329,67 +390,6 @@ router.get('/blog/:slug', async (req, res) => {
       post: null,
       error: e.message || 'Failed to load post',
     });
-  }
-});
-
-// RSS feed for blog (public)
-router.get('/blog/rss.xml', async (req, res) => {
-  const baseUrl = 'https://prooftamil.com';
-  try {
-    const backendRes = await getWithColdStartRetry(`${req._backendUrl}/blog/posts`, {
-      params: { page: 1, limit: 50 },
-      timeout: 10000,
-    });
-    const posts = backendRes.status >= 200 && backendRes.status < 300 ? (backendRes.data?.posts || []) : [];
-
-    const escapeXml = (s) =>
-      String(s || '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&apos;');
-
-    const items = posts
-      .filter((p) => p && p.slug && p.title)
-      .map((p) => {
-        const link = `${baseUrl}/blog/${encodeURIComponent(p.slug)}`;
-        const pub = p.published_at || p.created_at;
-        const pubDate = pub ? new Date(pub).toUTCString() : new Date().toUTCString();
-        const desc =
-          (p.meta_description && String(p.meta_description).trim()) ||
-          (p.excerpt && String(p.excerpt).trim()) ||
-          String(p.content_text || '').trim().slice(0, 200);
-        return `
-          <item>
-            <title>${escapeXml(p.title)}</title>
-            <link>${escapeXml(link)}</link>
-            <guid isPermaLink="true">${escapeXml(link)}</guid>
-            <pubDate>${escapeXml(pubDate)}</pubDate>
-            <description>${escapeXml(desc)}</description>
-          </item>
-        `.trim();
-      })
-      .join('\n');
-
-    const rss = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>ProofTamil Blog</title>
-    <link>${baseUrl}/blog</link>
-    <description>Tamil writing tips, proofreading examples, and AI-assisted workflows.</description>
-    <language>ta</language>
-    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
-${items}
-  </channel>
-</rss>`;
-
-    res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=1800, stale-while-revalidate=86400');
-    return res.send(rss);
-  } catch (e) {
-    res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
-    return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>ProofTamil Blog</title><link>${baseUrl}/blog</link><description>Blog feed temporarily unavailable</description></channel></rss>`);
   }
 });
 
@@ -570,8 +570,8 @@ router.get('/analytics', (req, res) => {
   // Check if user is admin
   const user = req.user;
   const adminEmails = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com'];
-  const userEmail = String(user.email || '').toLowerCase();
-  if (!adminEmails.includes(userEmail) && user.role !== 'admin') {
+  const userEmail = String((user && user.email) || '').toLowerCase();
+  if (!user || (!adminEmails.includes(userEmail) && user.role !== 'admin')) {
     const seo = getSeoData('error');
     return res.status(403).render('pages/error', {
       title: 'Access Denied',
@@ -681,8 +681,6 @@ router.get('/sitemap.xml', (req, res) => {
     { url: '/tools/event-name-suggester', priority: '0.75', changefreq: 'weekly' },
     { url: '/tools/email-spam-detector', priority: '0.75', changefreq: 'weekly' },
     { url: '/contact', priority: '0.7', changefreq: 'monthly' },
-    { url: '/login', priority: '0.6', changefreq: 'monthly' },
-    { url: '/register', priority: '0.6', changefreq: 'monthly' },
     { url: '/privacy', priority: '0.4', changefreq: 'yearly' },
     { url: '/terms', priority: '0.4', changefreq: 'yearly' },
   ];
@@ -756,7 +754,7 @@ router.get('/sitemap.xml', (req, res) => {
             p.published_at || p.publishedAt || p.PublishedAt || ''
           ).slice(0, 10);
           return {
-            loc: `${BASE_URL}/blog/${encodeURIComponent(slug)}`,
+            loc: `${BASE_URL}/blog/${slug}`,
             lastmod: updated || currentDate,
             changefreq: 'monthly',
             priority: '0.65',

@@ -142,7 +142,7 @@ const seoConfig = {
     ogTitle: 'Login to ProofTamil - Tamil Grammar Checker',
     ogDescription: 'Login to access your Tamil proofreading workspace and saved drafts.',
     pageType: 'login',
-    noIndex: false
+    noIndex: true
   },
 
   register: {
@@ -153,7 +153,7 @@ const seoConfig = {
     ogTitle: 'Sign Up Free - ProofTamil Tamil Grammar Checker',
     ogDescription: 'Create your free account for AI-powered Tamil grammar checking and proofreading.',
     pageType: 'register',
-    noIndex: false
+    noIndex: true
   },
 
   dashboard: {

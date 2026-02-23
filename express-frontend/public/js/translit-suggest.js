@@ -90,7 +90,11 @@
     if (_cache.has(k)) return _cache.get(k);
     let words = [];
     if (typeof window.getTamilSuggestionsFromEnglish === 'function') {
-      try { words = window.getTamilSuggestionsFromEnglish(token) || []; } catch (_) {}
+      try {
+        // Pass the global dictionary so prefix-matching in steps 5/6 works correctly
+        const dict = Array.isArray(window.tamilDictionary) ? window.tamilDictionary : [];
+        words = window.getTamilSuggestionsFromEnglish(token, dict) || [];
+      } catch (_) {}
     } else if (typeof window.transliterateToTamil === 'function') {
       try { const t = window.transliterateToTamil(token); if (t && t !== token) words = [t]; } catch (_) {}
     }
@@ -121,11 +125,11 @@
     } catch (_) { return []; }
   }
 
-  /** Backend results go first (higher quality), local fill gaps */
+  /** Local exact matches first (commonWordMap hits), backend fills remaining slots */
   function mergeSuggestions(local, backend) {
     const seen = new Set();
     const out = [];
-    for (const w of [...backend, ...local]) {
+    for (const w of [...local, ...backend]) {
       const k = (w || '').normalize?.('NFC') || w;
       if (k && !seen.has(k)) { seen.add(k); out.push(w); }
       if (out.length >= MAX_SHOW) break;

@@ -183,6 +183,32 @@ func findFirstUnusedOccurrence(haystack, needle string, used []usedRange) (int, 
 	}
 }
 
+// findAllUnusedOccurrences returns all non-overlapping (start, end) pairs for needle in haystack
+// that do not overlap with used ranges. Used so we can show one correction per occurrence (like competitors).
+func findAllUnusedOccurrences(haystack, needle string, used []usedRange) [][2]int {
+	var out [][2]int
+	if needle == "" || haystack == "" {
+		return out
+	}
+	searchFrom := 0
+	for {
+		idx := strings.Index(haystack[searchFrom:], needle)
+		if idx < 0 {
+			break
+		}
+		start := searchFrom + idx
+		end := start + len(needle)
+		if !overlapsAny(start, end, used) {
+			out = append(out, [2]int{start, end})
+		}
+		searchFrom = end
+		if searchFrom >= len(haystack) {
+			break
+		}
+	}
+	return out
+}
+
 func buildCorrectionsForSubmission(sub models.Submission) []gin.H {
 	corrections := []gin.H{}
 	raw := strings.TrimSpace(sub.Suggestions)
@@ -363,10 +389,10 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 			"word_count": wordCount,
 		})
 
-		// Map to required corrections format (stable schema); dedupe by (original, corrected) so same fix shows once
+		// Map to required corrections format. Include every occurrence of each (original, corrected)
+		// so correction count is comparable to competitors (e.g. 200+ when the same error repeats).
 		blockID := "0"
 		used := []usedRange{}
-		seenKey := make(map[string]bool)
 		corrections := []submitCachedCorrection{}
 		for _, s := range result.Suggestions {
 			oNorm := normalizeComparableText(s.Original)
@@ -374,28 +400,28 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 			if oNorm == "" || cNorm == "" || oNorm == cNorm {
 				continue
 			}
-			key := oNorm + "|" + cNorm
-			if seenKey[key] {
+			// Must be grounded in the text
+			if !strings.Contains(req.Text, s.Original) {
 				continue
 			}
-			seenKey[key] = true
-			startIdx := s.StartIndex
-			endIdx := s.EndIndex
-			if startIdx <= 0 || endIdx <= 0 || startIdx >= endIdx {
-				startIdx, endIdx = findFirstUnusedOccurrence(req.Text, s.Original, used)
+			// Expand to all occurrences: one correction per instance (like competitor apps).
+			occurrences := findAllUnusedOccurrences(req.Text, s.Original, used)
+			if len(occurrences) == 0 && s.StartIndex > 0 && s.EndIndex > s.StartIndex && !overlapsAny(s.StartIndex, s.EndIndex, used) {
+				occurrences = [][2]int{{s.StartIndex, s.EndIndex}}
 			}
-			if startIdx > 0 && endIdx > startIdx {
+			for _, pos := range occurrences {
+				startIdx, endIdx := pos[0], pos[1]
 				used = append(used, usedRange{Start: startIdx, End: endIdx})
+				corrections = append(corrections, submitCachedCorrection{
+					BlockID:      blockID,
+					OriginalText: s.Original,
+					Correction:   s.Corrected,
+					Reason:       s.Reason,
+					Type:         s.Type,
+					StartIndex:   startIdx,
+					EndIndex:     endIdx,
+				})
 			}
-			corrections = append(corrections, submitCachedCorrection{
-				BlockID:      blockID,
-				OriginalText: s.Original,
-				Correction:   s.Corrected,
-				Reason:       s.Reason,
-				Type:         s.Type,
-				StartIndex:   startIdx,
-				EndIndex:     endIdx,
-			})
 		}
 		setSubmitCache(cacheKey, corrections)
 

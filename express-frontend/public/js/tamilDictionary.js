@@ -48,6 +48,11 @@ const tamilDictionary = [
   'பெரிய', 'சிறிய', 'நல்ல', 'கெட்ட', 'புதிய', 'பழைய', 'அழகான', 'அற்புதமான', 'சிறந்த', 'மிகச்சிறந்த',
 ];
 
+// Expose as browser global so getTamilSuggestionsFromEnglish can use it without being passed explicitly
+if (typeof window !== 'undefined') {
+  window.tamilDictionary = tamilDictionary;
+}
+
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = tamilDictionary;

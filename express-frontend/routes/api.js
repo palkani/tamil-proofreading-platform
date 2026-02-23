@@ -3160,4 +3160,67 @@ router.all('/v1/*', async (req, res) => {
   }
 });
 
+// ── Contact Form ──────────────────────────────────────────────────────────────
+// POST /api/v1/contact  — sends contact message to prooftamil@gmail.com via SendGrid SMTP
+router.post('/v1/contact', async (req, res) => {
+  const { email, subject, message } = req.body || {};
+
+  if (!email || !subject || !message) {
+    return res.status(400).json({ error: 'Email, subject, and message are required' });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Invalid email address' });
+  }
+  if (message.length > 5000) {
+    return res.status(400).json({ error: 'Message too long (max 5000 characters)' });
+  }
+
+  // Escape HTML to prevent XSS in the email body
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  try {
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.sendgrid.net',
+      port: 587,
+      secure: false,
+      auth: {
+        user: 'apikey',
+        pass: process.env.SENDGRID_SMTP_PASSWORD,
+      },
+    });
+
+    await transporter.sendMail({
+      from: '"ProofTamil" <noreply@prooftamil.com>',
+      to: 'prooftamil@gmail.com',
+      replyTo: email,
+      subject: `[Contact] ${subject}`,
+      text: `From: ${email}\nSubject: ${subject}\n\n${message}`,
+      html: `
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1f2937;">
+          <div style="background:#1e3a8a;padding:20px 24px;border-radius:8px 8px 0 0;">
+            <h2 style="color:#fff;margin:0;font-size:18px;">New Contact Form Message</h2>
+          </div>
+          <div style="background:#f9fafb;padding:20px 24px;border:1px solid #e5e7eb;border-top:none;">
+            <p style="margin:0 0 6px;"><strong>From:</strong> ${esc(email)}</p>
+            <p style="margin:0 0 16px;"><strong>Subject:</strong> ${esc(subject)}</p>
+            <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:16px;">
+              <p style="white-space:pre-wrap;margin:0;line-height:1.6;">${esc(message)}</p>
+            </div>
+            <p style="color:#6b7280;font-size:12px;margin-top:16px;">
+              Reply directly to this email to respond to <strong>${esc(email)}</strong>
+            </p>
+          </div>
+        </div>
+      `,
+    });
+
+    console.log(`[Contact] Message sent from ${email} — "${subject}"`);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('[Contact] SendGrid error:', error.message);
+    return res.status(500).json({ error: 'Failed to send message. Please try again later.' });
+  }
+});
+
 module.exports = router;

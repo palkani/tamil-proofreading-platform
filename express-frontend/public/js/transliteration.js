@@ -558,7 +558,94 @@ const commonWordMap = {
   'kalyanam': 'கல்யாணம்',
   'marriage': 'கல்யாணம',
   'thirumanam': 'திருமணம்',
-  'wedding': 'திருமணம்'
+  'wedding': 'திருமணம்',
+
+  // ── Possessives & Pronouns (commonly typed in English) ──────────────────
+  'enath':   'எனது',
+  'enathu':  'எனது',
+  'enadu':   'எனது',
+  'ennoda':  'என்னோட',
+  'enakku':  'எனக்கு',
+  'unakku':  'உனக்கு',
+  'unaku':   'உனக்கு',
+  'ungal':   'உங்கள்',
+  'unkal':   'உங்கள்',
+  'ungaluku':'உங்களுக்கு',
+  'nammal':  'நாம்',
+  'namma':   'நம்ம',
+  'naanga':  'நாங்க',
+  'avanga':  'அவங்க',
+  'ivan':    'இவன்',
+  'ival':    'இவள்',
+  'ivar':    'இவர்',
+
+  // ── Grammar connectors ───────────────────────────────────────────────────
+  'enave':   'எனவே',
+  'aanal':   'ஆனால்',
+  'aana':    'ஆனா',
+  'athanal': 'அதனால்',
+  'aaganave':'ஆகவே',
+  'matrum':  'மற்றும்',
+  'allatu':  'அல்லது',
+  'alladu':  'அல்லது',
+  'aanal':   'ஆனால்',
+  'podhu':   'பொது',
+  'patri':   'பற்றி',
+  'pathu':   'பத்து',
+
+  // ── Common response words ─────────────────────────────────────────────────
+  'sari':    'சரி',
+  'illai':   'இல்லை',
+  'illa':    'இல்ல',
+  'aam':     'ஆமாம்',
+  'aamam':   'ஆமாம்',
+  'ille':    'இல்லே',
+
+  // ── Auxiliaries / modal verbs ─────────────────────────────────────────────
+  'vendum':     'வேண்டும்',
+  'vendam':     'வேண்டாம்',
+  'mudiyum':    'முடியும்',
+  'mudiyathu':  'முடியாது',
+  'theriyum':   'தெரியும்',
+  'theriyathu': 'தெரியாது',
+  'theruma':    'தெரியுமா',
+  'pidikkum':   'பிடிக்கும்',
+
+  // ── Colloquial verb forms ──────────────────────────────────────────────────
+  'paaru':   'பாரு',
+  'paarum':  'பாருங்க',
+  'vanga':   'வாங்க',
+  'ponga':   'போங்க',
+  'solunga': 'சொல்லுங்க',
+  'kelunga': 'கேளுங்க',
+  'parunga': 'பாருங்க',
+  'kudunga': 'குடுங்க',
+  'kudu':    'குடு',
+  'thaa':    'தா',
+  'thaango': 'தாங்க',
+
+  // ── Place / direction words ────────────────────────────────────────────────
+  'mela':    'மேல',
+  'kizha':   'கீழ',
+  'munna':   'முன்ன',
+  'pinna':   'பின்ன',
+  'vela':    'வெளி',
+  'ulle':    'உள்ள',
+
+  // ── Commonly missed words ──────────────────────────────────────────────────
+  'ithu':    'இது',
+  'athu':    'அது',
+  'inga':    'இங்க',
+  'anga':    'அங்க',
+  'epdi':    'எப்படி',
+  'eppo':    'எப்போ',
+  'enga':    'எங்க',
+  'yenna':   'என்ன',
+  'yenakku': 'எனக்கு',
+  'romba':   'ரொம்ப',
+  'semma':   'சேம்மா',
+  'super':   'சூப்பர்',
+  'nandri':  'நன்றி'
 };
 
 /**
@@ -786,23 +873,26 @@ function getTamilSuggestionsFromEnglish(englishInput, tamilWords) {
   
   // 5. Try single transliteration for phonetic matching
   const transliterated = transliterateToTamil(lower);
-  
+  // Use passed-in tamilWords, or fall back to window.tamilDictionary, or empty array
+  const wordList = Array.isArray(tamilWords) ? tamilWords
+    : (typeof window !== 'undefined' && Array.isArray(window.tamilDictionary) ? window.tamilDictionary : []);
+
   // Find Tamil words that start with the transliterated text
   if (transliterated && transliterated !== lower) {
     addSuggestion(transliterated, 75);
-    
-    tamilWords.forEach(word => {
+
+    wordList.forEach(word => {
       if (word.startsWith(transliterated)) {
         addSuggestion(word, 70);
       }
     });
   }
-  
+
   // 6. Partial transliteration (first 2-3 chars)
   if (lower.length >= 2) {
     const partialTranslit = transliterateToTamil(lower.substring(0, Math.min(3, lower.length)));
     if (partialTranslit && partialTranslit !== lower.substring(0, Math.min(3, lower.length))) {
-      tamilWords.forEach(word => {
+      wordList.forEach(word => {
         if (word.startsWith(partialTranslit)) {
           addSuggestion(word, 60);
         }
