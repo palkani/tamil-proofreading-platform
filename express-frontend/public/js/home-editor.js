@@ -958,6 +958,11 @@ class HomeEditor {
   }
 
   renderSuggestions(suggestions) {
+    // V3 module handles all suggestion UI — keep old dropdown hidden
+    if (window.__TRANSLIT_V3_LOADED) {
+      this.autocompleteBox?.classList.add('hidden');
+      return;
+    }
     if (!this.autocompleteBox) {
       console.error('[AUTOCOMPLETE] Dropdown element not found!');
       return;

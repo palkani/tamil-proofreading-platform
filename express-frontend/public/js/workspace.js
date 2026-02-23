@@ -1960,9 +1960,14 @@ class WorkspaceController {
    * @param {Array} suggestions - Array of suggestion objects with {text, score}
    */
   displaySuggestions(suggestions) {
+    // V3 module handles all suggestion UI — skip legacy pipeline to avoid conflicts
+    if (window.__TRANSLIT_V3_LOADED) {
+      this._isRenderingDropdown = false;
+      return;
+    }
     console.log('[IME] 🔍 displaySuggestions called with:', suggestions ? suggestions.length : 0, 'suggestions');
     console.log('[IME] Suggestions data:', suggestions);
-    
+
     // CRITICAL: Prevent multiple simultaneous renders with a lock
     if (this._isRenderingDropdown) {
       console.warn('[IME] ⚠️ Already rendering dropdown, ignoring duplicate call');
