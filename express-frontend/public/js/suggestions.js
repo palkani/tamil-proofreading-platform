@@ -157,7 +157,17 @@ class SuggestionsPanel {
     const card = document.querySelector(`.suggestion-card[data-suggestion-id="${id}"]`);
     if (card) {
       card.classList.add('focused');
-      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      // Scroll ONLY the AI panel container — never the editor or the page.
+      // scrollIntoView() walks ALL ancestors, which causes the editor to jump.
+      const panel = document.getElementById('suggestions-container');
+      if (panel) {
+        const panelRect = panel.getBoundingClientRect();
+        const cardRect  = card.getBoundingClientRect();
+        // Card is already fully visible inside the panel — nothing to do.
+        if (cardRect.top >= panelRect.top && cardRect.bottom <= panelRect.bottom) return;
+        const targetScrollTop = panel.scrollTop + (cardRect.top - panelRect.top) - 16;
+        panel.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+      }
     }
   }
 
@@ -178,7 +188,20 @@ class SuggestionsPanel {
     const span = document.querySelector(`.correction-highlight[data-suggestion-id="${suggestion.id}"]`);
     if (span) {
       span.classList.add('correction-active');
-      span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Scroll only the editor's scroll wrapper, not the whole page.
+      const editorScroll = span.closest('.overflow-auto') || span.closest('[data-editor-scroll]');
+      if (editorScroll) {
+        const wrapRect  = editorScroll.getBoundingClientRect();
+        const spanRect  = span.getBoundingClientRect();
+        const alreadyVisible = spanRect.top >= wrapRect.top && spanRect.bottom <= wrapRect.bottom;
+        if (!alreadyVisible) {
+          const target = editorScroll.scrollTop + (spanRect.top - wrapRect.top) - (wrapRect.height / 2 - spanRect.height / 2);
+          editorScroll.scrollTo({ top: target, behavior: 'smooth' });
+        }
+      } else {
+        // Fallback: no wrapper found, don't scroll the page
+        span.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     }
   }
 

@@ -94,7 +94,9 @@
     } else if (typeof window.transliterateToTamil === 'function') {
       try { const t = window.transliterateToTamil(token); if (t && t !== token) words = [t]; } catch (_) {}
     }
-    const out = [...new Set(words.filter(Boolean))].slice(0, MAX_SHOW);
+    // For longer English tokens, require longer Tamil results (avoid phoneme fragments)
+    const minTamilChars = token.length >= 5 ? 4 : token.length >= 4 ? 3 : token.length >= 3 ? 2 : 1;
+    const out = [...new Set(words.filter(w => w && [...w].length >= minTamilChars))].slice(0, MAX_SHOW);
     _cache.set(k, out);
     return out;
   }
@@ -109,9 +111,11 @@
       );
       if (!res.ok) return [];
       const d = await res.json();
+      // For longer English tokens, require longer Tamil results (avoid phoneme fragments)
+      const minTamilChars = token.length >= 5 ? 4 : token.length >= 4 ? 3 : token.length >= 3 ? 2 : 1;
       const words = (d.suggestions || [])
         .map(s => typeof s === 'string' ? s : (s.word || s.text || s.ta || ''))
-        .filter(Boolean);
+        .filter(w => w && [...w].length >= minTamilChars);
       if (words.length) _cache.set(k, words.slice(0, MAX_SHOW));
       return words.slice(0, MAX_SHOW);
     } catch (_) { return []; }

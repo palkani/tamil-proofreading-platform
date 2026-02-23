@@ -1066,22 +1066,25 @@
         </div>
       </div>
 
-      <!-- Editor -->
-      <div class="flex-1 overflow-auto px-6 py-4 pb-6 relative">
-        <!-- Legacy Editor (hidden when TipTap is active) -->
-        <div 
-          id="editor" 
-          class="editor-content bg-white rounded-xl shadow-sm border border-gray-200 min-h-[calc(100vh-280px)] p-6 tamil-text text-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
-          contenteditable="true"
-          spellcheck="false"
-          placeholder="தமிழில் எழுதத் தொடங்குங்கள்..."
-        ></div>
-        
-        <!-- TipTap Editor Container (hidden by default, shown when migration flag is active) -->
-        <div id="tiptap-workspace-editor" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 min-h-[calc(100vh-280px)] p-6 tamil-text text-lg"></div>
+      <!-- Editor — outer wrapper holds both the scroll area and the sticky badge -->
+      <div class="flex-1 relative overflow-hidden">
+        <!-- Inner scroll area (editor content scrolls here) -->
+        <div class="absolute inset-0 overflow-auto px-6 py-4 pb-6">
+          <!-- Legacy Editor (hidden when TipTap is active) -->
+          <div
+            id="editor"
+            class="editor-content bg-white rounded-xl shadow-sm border border-gray-200 min-h-[calc(100vh-280px)] p-6 tamil-text text-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+            contenteditable="true"
+            spellcheck="false"
+            placeholder="தமிழில் எழுதத் தொடங்குங்கள்..."
+          ></div>
 
-        <!-- Word count badge at bottom of text editor -->
-        <div id="editor-word-count-badge" class="absolute bottom-6 right-10 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 text-sm text-gray-600 shadow-sm pointer-events-none">
+          <!-- TipTap Editor Container (hidden by default, shown when migration flag is active) -->
+          <div id="tiptap-workspace-editor" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 min-h-[calc(100vh-280px)] p-6 tamil-text text-lg"></div>
+        </div>
+
+        <!-- Word count badge — always visible at bottom-right of the editor area, never scrolls away -->
+        <div id="editor-word-count-badge" class="absolute bottom-4 right-6 px-3 py-1.5 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 text-sm text-gray-500 shadow-sm pointer-events-none z-10">
           <span id="word-count">0</span> words • <span id="accepted-count">0</span> accepted
         </div>
       </div>

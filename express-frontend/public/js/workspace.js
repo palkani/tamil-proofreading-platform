@@ -1197,6 +1197,14 @@ class WorkspaceController {
   }
 
   init() {
+    // Guard: prevent double-init (constructor calls init() AND the bootstrap code calls it again)
+    // Without this, periodicSaveInterval runs twice → two /api/submit calls every 30 seconds
+    if (this._initCalled) {
+      console.warn('[WorkspaceJS] init() already called — ignoring duplicate');
+      return;
+    }
+    this._initCalled = true;
+
     // CRITICAL: Check USE_TIPTAP_EDITOR flag - ensure it's actually false
     console.log('[WorkspaceJS] Initializing - USE_TIPTAP_EDITOR:', window.USE_TIPTAP_EDITOR);
     
@@ -4105,9 +4113,11 @@ class WorkspaceController {
     if (!editor) return;
 
     // Click on an underlined span → focus the matching card in the AI panel.
+    // preventDefault stops the browser from repositioning the caret (which can cause editor scroll).
     editor.addEventListener('click', (e) => {
       const span = e.target.closest('.correction-highlight');
       if (!span) return;
+      e.preventDefault();
       const id = span.dataset.suggestionId;
       if (!id) return;
       editor.querySelectorAll('.correction-highlight.correction-active').forEach(s => s.classList.remove('correction-active'));

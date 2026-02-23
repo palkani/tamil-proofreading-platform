@@ -1,30 +1,12 @@
 // Tamil text processing utilities
 
-// Count words in Tamil text.
-// For Tamil text that has missing spaces (joined words like "வேண்டும்ஆன்மிக"),
-// detects word boundaries inside each token using the pattern:
-//   (virama ் or any vowel sign) followed by a pure Tamil vowel (அ–ஔ)
-// This catches "வேண்டும்ஆன்மிக" (ம்+ஆ), "வினைஎன்னையே" (ை+எ), etc.
-// without generating false positives for valid consonant clusters (ன்ம, க்க).
+// Count words in Tamil (or mixed) text.
+// Splits on whitespace only — matches what word processors and competitor tools report.
 function countWords(text) {
   if (!text || typeof text !== 'string') return 0;
   const trimmed = text.trim();
   if (trimmed.length === 0) return 0;
-
-  const tokens = trimmed.split(/\s+/).filter(w => w.length > 0);
-  let count = tokens.length;
-
-  // Detect intra-token Tamil word boundaries only for tokens that contain Tamil script
-  const tamilRange = /[\u0B80-\u0BFF]/;
-  // (virama U+0BCD, or vowel signs U+0BBE–U+0BCC) followed by a pure Tamil vowel (U+0B85–U+0B94)
-  const joinBoundary = /[\u0BBE-\u0BCD][\u0B85-\u0B94]/g;
-  for (const token of tokens) {
-    if (tamilRange.test(token)) {
-      const joins = (token.match(joinBoundary) || []).length;
-      count += joins;
-    }
-  }
-  return count;
+  return trimmed.split(/\s+/).filter(w => w.length > 0).length;
 }
 
 // Extract plain text from HTML
