@@ -172,6 +172,10 @@ function createApp() {
     })
   );
 
+  // Firebase Hosting reserved paths — respond 200 so domain verification passes.
+  // Firebase sends GET /__/hosting/verification when verifying custom domains.
+  app.use('/__/', (req, res) => res.sendStatus(200));
+
   // Normalise legacy OAuth callback paths to the canonical backend path.
   app.get(['/v1/auth/google/callback', '/auth/google/callback'], (req, res) => {
     const qs = querystring.stringify(req.query);

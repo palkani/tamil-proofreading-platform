@@ -45,6 +45,22 @@ function getBackendApiUrl() {
 }
 const BACKEND_URL = getBackendApiUrl(); // fallback — handlers use req._backendUrl
 
+// Retry GET on backend 503 "starting" (Cloud Run cold start). Max 3 attempts, 2.5s apart.
+async function getWithColdStartRetry(url, options = {}, maxRetries = 3) {
+  const delayMs = 2500;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const res = await axiosWithPool.get(url, { ...options, validateStatus: () => true });
+    if (res.status !== 503) return res;
+    const body = res.data || {};
+    if (body.status !== 'starting' && body.status !== 'Starting') return res;
+    if (attempt < maxRetries) {
+      if (process.env.NODE_ENV !== 'test') console.log(`[BLOG] Backend 503 (starting), retry ${attempt}/${maxRetries} in ${delayMs}ms`);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return axiosWithPool.get(url, { ...options, validateStatus: () => true });
+}
+
 // Demo banner should only show in development / explicit demo deployments.
 // NOTE: keep false by default in production.
 function isDemoModeEnabled() {
@@ -172,10 +188,9 @@ router.get('/blog', async (req, res) => {
     const blogUrl = `${req._backendUrl}/blog/posts`;
     console.log(`[BLOG] Fetching posts from: ${blogUrl}`);
     
-    const backendRes = await axiosWithPool.get(blogUrl, {
+    const backendRes = await getWithColdStartRetry(blogUrl, {
       params: { page, limit: 12 },
       timeout: 10000,
-      validateStatus: () => true,
     });
     
     console.log(`[BLOG] Backend response: status=${backendRes.status}, posts=${backendRes.data?.posts?.length || 0}`);
@@ -221,9 +236,8 @@ router.get('/blog/:slug', async (req, res) => {
   const seoBase = getSeoData('blogPost') || getSeoData('home');
   const slug = String(req.params.slug || '').trim();
   try {
-    const backendRes = await axiosWithPool.get(`${req._backendUrl}/blog/posts/${encodeURIComponent(slug)}`, {
+    const backendRes = await getWithColdStartRetry(`${req._backendUrl}/blog/posts/${encodeURIComponent(slug)}`, {
       timeout: 10000,
-      validateStatus: () => true,
     });
     if (backendRes.status === 404) {
       const seoErr = getSeoData('error');
@@ -322,10 +336,9 @@ router.get('/blog/:slug', async (req, res) => {
 router.get('/blog/rss.xml', async (req, res) => {
   const baseUrl = 'https://prooftamil.com';
   try {
-    const backendRes = await axiosWithPool.get(`${req._backendUrl}/blog/posts`, {
+    const backendRes = await getWithColdStartRetry(`${req._backendUrl}/blog/posts`, {
       params: { page: 1, limit: 50 },
       timeout: 10000,
-      validateStatus: () => true,
     });
     const posts = backendRes.status >= 200 && backendRes.status < 300 ? (backendRes.data?.posts || []) : [];
 
@@ -727,13 +740,11 @@ router.get('/sitemap.xml', (req, res) => {
     return sendSitemap();
   }
 
-  // Fetch up to 200 blog posts; keep timeout low so sitemap stays responsive.
-  axiosWithPool
-    .get(`${req._backendUrl}/blog/posts`, {
-      params: { page: 1, limit: 200 },
-      timeout: 2500,
-      validateStatus: () => true,
-    })
+  // Fetch up to 200 blog posts; keep timeout low so sitemap stays responsive. Retry on 503 (cold start).
+  getWithColdStartRetry(`${req._backendUrl}/blog/posts`, {
+    params: { page: 1, limit: 200 },
+    timeout: 2500,
+  })
     .then((r) => {
       const posts = r.data?.posts || [];
       const blogUrls = posts
