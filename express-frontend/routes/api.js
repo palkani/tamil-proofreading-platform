@@ -174,32 +174,64 @@ function docJsonToPlainText(docJson) {
 }
 
 // Helper function to split text into manageable chunks for better accuracy.
-// Chunk size 800: halves the number of Gemini API calls vs 400-char chunks.
-// Gemini 2.5 Flash handles 800-char Tamil paragraphs accurately.
+// ALWAYS produces chunks of at most CHUNK_SIZE chars, even when there are no
+// sentence delimiters (e.g. plain Tamil paragraphs without . or ।).
+// Without this guarantee, large texts become a single chunk → Gemini hits
+// maxOutputTokens mid-document → corrections only for the first ~533 words.
+const SPLIT_CHUNK_SIZE = 600;
+
 function splitIntoSentences(text) {
-  // Split by common Tamil and English sentence delimiters
-  const sentences = text.split(/([.!?।]\s*)/g);
+  // Split by sentence delimiters: . ! ? । (Devanagari danda) | (Tamil pipe) and newlines.
+  // Capturing group keeps the delimiter attached to the preceding segment.
+  const parts = text.split(/([.!?।|]\s*|\n+)/g);
   const chunks = [];
   let current = '';
   let globalOffset = 0;
 
-  for (const part of sentences) {
-    if (current.length + part.length <= 600) {
+  // Flush whatever is in `current` to chunks[].
+  const flushCurrent = () => {
+    if (!current.trim()) return;
+    chunks.push({ text: current.trim(), offset: globalOffset });
+    globalOffset += current.length;
+    current = '';
+  };
+
+  // Hard-break a string longer than SPLIT_CHUNK_SIZE at word boundaries.
+  const hardBreak = (str) => {
+    let rem = str;
+    while (rem.length > SPLIT_CHUNK_SIZE) {
+      // Try to find a space near the chunk boundary to break on.
+      let bp = SPLIT_CHUNK_SIZE;
+      while (bp > 0 && rem[bp] !== ' ' && rem[bp] !== '\n') bp--;
+      if (bp === 0) bp = SPLIT_CHUNK_SIZE; // no space found — force-break
+      const slice = rem.slice(0, bp);
+      if (slice.trim()) chunks.push({ text: slice.trim(), offset: globalOffset });
+      globalOffset += bp;
+      rem = rem.slice(bp);
+    }
+    current = rem; // remainder (< SPLIT_CHUNK_SIZE) continues accumulating
+  };
+
+  for (const part of parts) {
+    if (current.length + part.length <= SPLIT_CHUNK_SIZE) {
+      // Still fits in the current accumulator.
       current += part;
     } else {
-      if (current.trim()) {
-        chunks.push({ text: current.trim(), offset: globalOffset });
-        globalOffset += current.length;
+      // Current accumulator is full — flush it, then handle the new part.
+      flushCurrent();
+      if (part.length > SPLIT_CHUNK_SIZE) {
+        // This single part is already too large (e.g. a paragraph with no delimiters).
+        // Hard-break it at word boundaries so we never send >SPLIT_CHUNK_SIZE to Gemini.
+        hardBreak(part);
+      } else {
+        current = part;
       }
-      current = part;
     }
   }
-  
-  if (current.trim()) {
-    chunks.push({ text: current.trim(), offset: globalOffset });
-  }
-  
-  // If no chunks created (no delimiters), return the whole text
+
+  flushCurrent();
+
+  // Fallback: if somehow nothing was produced, return the whole text as-is.
   return chunks.length > 0 ? chunks : [{ text: text.trim(), offset: 0 }];
 }
 
@@ -837,8 +869,31 @@ router.post('/corrections/stream', async (req, res) => {
     }
 
     const { baseUrl } = keyRotator;
-    const chunks = splitIntoSentences(text);
-    console.log('[CORRECTIONS/STREAM] Starting', { chunks: chunks.length, textLen: text.length });
+
+    // For very large texts, process in segments sequentially (same guard as POST /corrections).
+    // This prevents thousands of concurrent Gemini calls and respects the 240s deadline.
+    const streamSegments = text.length <= EXPRESS_SEGMENT_CHARS
+      ? [text]
+      : (() => {
+          const out = [];
+          for (let i = 0; i < text.length; i += EXPRESS_SEGMENT_CHARS) {
+            out.push(text.slice(i, i + EXPRESS_SEGMENT_CHARS));
+          }
+          return out;
+        })();
+
+    // Build the full chunk list across all segments (with correct absolute offsets).
+    let segmentCharOffset = 0;
+    const chunks = [];
+    for (const seg of streamSegments) {
+      const segChunks = splitIntoSentences(seg);
+      for (const c of segChunks) {
+        chunks.push({ text: c.text, offset: segmentCharOffset + c.offset });
+      }
+      segmentCharOffset += seg.length;
+    }
+
+    console.log('[CORRECTIONS/STREAM] Starting', { chunks: chunks.length, textLen: text.length, segments: streamSegments.length });
 
     const allCorrections = [];
 
