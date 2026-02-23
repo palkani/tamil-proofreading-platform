@@ -155,19 +155,21 @@ class SuggestionsPanel {
     // Scroll the card into view and apply focus styling
     document.querySelectorAll('.suggestion-card.focused').forEach(c => c.classList.remove('focused'));
     const card = document.querySelector(`.suggestion-card[data-suggestion-id="${id}"]`);
-    if (card) {
-      card.classList.add('focused');
-      // Scroll ONLY the AI panel container — never the editor or the page.
-      // scrollIntoView() walks ALL ancestors, which causes the editor to jump.
-      const panel = document.getElementById('suggestions-container');
-      if (panel) {
-        const panelRect = panel.getBoundingClientRect();
-        const cardRect  = card.getBoundingClientRect();
-        // Card is already fully visible inside the panel — nothing to do.
-        if (cardRect.top >= panelRect.top && cardRect.bottom <= panelRect.bottom) return;
-        const targetScrollTop = panel.scrollTop + (cardRect.top - panelRect.top) - 16;
-        panel.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
-      }
+    if (!card) return;
+    card.classList.add('focused');
+    // Pulse animation to make the focused card visually obvious
+    card.classList.remove('suggestion-card-pulse');
+    void card.offsetWidth; // force reflow to restart animation
+    card.classList.add('suggestion-card-pulse');
+    // Scroll ONLY the AI panel container — never the editor or the page.
+    // scrollIntoView() walks ALL ancestors, which causes the editor to jump.
+    const panel = document.getElementById('suggestions-container');
+    if (panel) {
+      const panelRect = panel.getBoundingClientRect();
+      const cardRect  = card.getBoundingClientRect();
+      // Always scroll so the card appears near the top of the panel with a 16px offset
+      const targetScrollTop = panel.scrollTop + (cardRect.top - panelRect.top) - 16;
+      panel.scrollTo({ top: Math.max(0, targetScrollTop), behavior: 'smooth' });
     }
   }
 

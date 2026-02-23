@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 162" role="img" aria-label="Proof தமிழ் Logo">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 162" role="img" aria-label="Proof தமிழ் Logo"
+     text-rendering="optimizeLegibility" shape-rendering="geometricPrecision">
   <title>Proof தமிழ்</title>
   <defs>
     <!-- Shield gradient: bright cyan-blue top → deep blue bottom -->
@@ -24,12 +25,6 @@
   </defs>
 
   <!-- ── Shield body ── -->
-  <!--
-    Classic security badge shape:
-    - Rounded top (gentle arc)
-    - Straight sides tapering inward
-    - Pointed bottom
-  -->
   <path d="
     M 78 6
     C 55 6, 14 18, 10 22
@@ -72,7 +67,7 @@
     stroke-linejoin="round"/>
 
   <!-- ── "Proof" text ── -->
-  <text x="168" y="118"
+  <text x="172" y="118"
     font-family="'Georgia', 'Palatino Linotype', 'Book Antiqua', 'Times New Roman', serif"
     font-size="82"
     font-weight="700"
@@ -80,7 +75,7 @@
     letter-spacing="-1">Proof</text>
 
   <!-- ── "தமிழ்" text ── -->
-  <text x="354" y="118"
+  <text x="415" y="118"
     font-family="'Noto Serif Tamil', 'Latha', 'Tamil MN', 'Vijaya', 'Noto Sans Tamil', serif"
     font-size="82"
     font-weight="700"

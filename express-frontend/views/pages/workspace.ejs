@@ -63,7 +63,7 @@
     background: transparent;
     border: none;
   }
-  /* Oval language toggle (தமிழ்) - purple when Tamil, grey when English */
+  /* Oval language toggle (தமிழ்) - blue when Tamil, grey when English */
   .workspace-toolbar .voice-lang-toggle {
     display: inline-flex;
     align-items: center;
@@ -79,7 +79,7 @@
     min-width: 88px;
   }
   .workspace-toolbar .voice-lang-toggle[aria-checked="true"] {
-    background: #7c3aed;
+    background: #2563eb;
     color: #fff;
   }
   .workspace-toolbar .voice-lang-toggle .voice-lang-toggle-label {
@@ -102,12 +102,12 @@
     left: 4px;
     right: auto;
   }
-  /* Circular purple mic button */
+  /* Circular blue mic button */
   .workspace-toolbar .voice-mic-btn {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: #7c3aed;
+    background: #2563eb;
     color: #fff;
     border: none;
     display: inline-flex;
@@ -117,7 +117,7 @@
     transition: background 0.2s ease, transform 0.1s ease;
   }
   .workspace-toolbar .voice-mic-btn:hover {
-    background: #6d28d9;
+    background: #1d4ed8;
   }
   .workspace-toolbar .voice-mic-btn svg {
     stroke: #fff;
@@ -197,12 +197,12 @@
   #tamil-suggestions-dropdown {
     position: fixed !important;
     background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%) !important;
-    border: 1px solid rgba(79, 70, 229, 0.15) !important;
+    border: 1px solid rgba(37, 99, 235, 0.15) !important;
     border-radius: 16px !important;
     box-shadow:
-      0 20px 40px rgba(79, 70, 229, 0.12),
+      0 20px 40px rgba(37, 99, 235, 0.12),
       0 8px 16px rgba(0, 0, 0, 0.08),
-      0 0 0 1px rgba(79, 70, 229, 0.05) !important;
+      0 0 0 1px rgba(37, 99, 235, 0.05) !important;
     width: auto !important;
     min-width: 200px !important;
     max-width: 500px !important;
@@ -306,9 +306,9 @@
 
   .tamil-suggestions-close:hover {
     background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    color: #4F46E5;
-    border-color: rgba(79, 70, 229, 0.2);
-    box-shadow: 0 4px 8px rgba(79, 70, 229, 0.15);
+    color: #2563eb;
+    border-color: rgba(37, 99, 235, 0.2);
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.15);
     transform: scale(1.05);
   }
 
@@ -349,22 +349,22 @@
   }
 
   .tamil-suggestion-item:hover {
-    background: linear-gradient(90deg, rgba(139, 92, 246, 0.1) 0%, rgba(167, 139, 250, 0.15) 100%) !important;
-    border-left: 3px solid #8b5cf6 !important;
+    background: linear-gradient(90deg, rgba(37, 99, 235, 0.1) 0%, rgba(59, 130, 246, 0.15) 100%) !important;
+    border-left: 3px solid #3b82f6 !important;
     transform: translateX(2px) !important;
-    box-shadow: 0 2px 6px rgba(139, 92, 246, 0.15) !important;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.15) !important;
   }
 
   .tamil-suggestion-item.active {
-    background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%) !important;
-    border-left: 4px solid #4F46E5 !important;
-    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2) !important;
+    background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%) !important;
+    border-left: 4px solid #1d4ed8 !important;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2) !important;
     color: white !important;
   }
 
   .tamil-suggestion-number {
     display: inline-block !important;
-    color: #4F46E5 !important;
+    color: #2563eb !important;
     font-size: 16px !important;
     font-weight: 700 !important;
     flex-shrink: 0 !important;
@@ -410,9 +410,9 @@
   }
 
   .tamil-suggestions-instruction strong {
-    color: #4F46E5;
+    color: #2563eb;
     font-weight: 700;
-    background: linear-gradient(135deg, #4F46E5 0%, #6366f1 100%);
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -571,6 +571,14 @@
     background-color: #eff6ff;
     scroll-margin-top: 8px;
   }
+  @keyframes suggCardPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45); }
+    60%  { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+  }
+  .suggestion-card-pulse {
+    animation: suggCardPulse 0.6s ease-out forwards;
+  }
 
   /* Type badge */
   .sugg-type-badge {
@@ -640,7 +648,7 @@
   .sugg-accept-btn {
     flex: 1;
     padding: 7px 14px;
-    background: #4f46e5;
+    background: #2563eb;
     color: #ffffff;
     font-size: 13px;
     font-weight: 600;
@@ -649,7 +657,7 @@
     cursor: pointer;
     transition: background 0.13s;
   }
-  .sugg-accept-btn:hover { background: #4338ca; }
+  .sugg-accept-btn:hover { background: #1d4ed8; }
   .sugg-ignore-btn {
     flex: 1;
     padding: 7px 14px;
