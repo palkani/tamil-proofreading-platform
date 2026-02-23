@@ -750,6 +750,240 @@ router.post('/corrections', async (req, res) => {
   }
 });
 
+// ── Streaming corrections endpoint (SSE) ──────────────────────────────────
+// Streams each correction as its text chunk is processed — no waiting for all chunks to finish.
+// Frontend receives `event: correction` for each item and `event: done` at the end.
+// Client disconnect aborts all in-flight Gemini calls immediately.
+router.post('/corrections/stream', async (req, res) => {
+  // Server-Sent Events headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx/proxy response buffering
+  res.flushHeaders();
+
+  // Abort controller — cancelled when the client disconnects
+  const abort = new AbortController();
+  req.on('close', () => { try { abort.abort(); } catch (_) {} });
+
+  function sendEvent(event, data) {
+    if (res.writableEnded) return;
+    try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch (_) {}
+  }
+
+  try {
+    let text = req.body.text;
+    if (req.body.docJson != null) {
+      const extracted = docJsonToPlainText(req.body.docJson);
+      if (extracted.length > 0) text = extracted;
+    }
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      sendEvent('error', { message: 'Text is required' });
+      return res.end();
+    }
+    text = text.trim();
+    if (text.length > MAX_CORRECTIONS_TEXT_CHARS) {
+      sendEvent('error', { message: 'Text too long' });
+      return res.end();
+    }
+
+    // Cache hit: replay cached corrections without touching Gemini
+    const cacheKey = getCacheKey(text);
+    const cached = getCachedResult(cacheKey);
+    if (cached) {
+      for (const c of cached.corrections) sendEvent('correction', c);
+      sendEvent('done', { count: cached.corrections.length, cached: true });
+      return res.end();
+    }
+
+    // Key availability checks
+    if (!keyRotator.getNextKey()) {
+      sendEvent('error', { message: 'Gemini AI not configured' });
+      return res.end();
+    }
+    if (keyRotator.getAvailableKeyCount() === 0) {
+      const waitSecs = keyRotator.getSecondsUntilAvailable();
+      sendEvent('error', { message: `Rate limited. Retry in ${waitSecs || 1}s.`, retry_after_seconds: waitSecs || 90 });
+      return res.end();
+    }
+
+    const { baseUrl } = keyRotator;
+    const chunks = splitIntoSentences(text);
+    console.log('[CORRECTIONS/STREAM] Starting', { chunks: chunks.length, textLen: text.length });
+
+    const allCorrections = [];
+
+    // Process chunks with limited concurrency; emit each correction the moment its chunk resolves
+    const chunkTasks = chunks.map((chunk) => async () => {
+      if (abort.signal.aborted) return;
+
+      const payload = {
+        systemInstruction: {
+          parts: [{
+            text: `நீங்கள் ஒரு தமிழ் மொழி நிபுணர். தமிழ் உரையில் உள்ள இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், தவறான சொற்களை கண்டறியுங்கள்.
+
+🔴 கண்டிப்பான விதிகள் - இவற்றை மட்டுமே பிழையாகக் குறிக்கவும்:
+
+1. புள்ளி (ஒற்று) விடுபட்டது:
+   ❌ "கொடுங்கள" → ✅ "கொடுங்கள்"
+   ❌ "வருகிறார்கள" → ✅ "வருகிறார்கள்"
+   ❌ "சொல்ல" → ✅ "சொல்ல" (சரி) அல்லது ❌ "சொல்" → ✅ "சொல்ல்" (தவறு)
+
+2. எழுத்துப் பிழைகள் (Spelling errors):
+   ❌ "வணகம்" → ✅ "வணக்கம்"
+   ❌ "தமிள்" → ✅ "தமிழ்"
+   ❌ "நன்ரி" → ✅ "நன்றி"
+
+3. இடைவெளி இல்லாமல் சொற்கள் இணைந்தது — Missing space between words (மிக முக்கியம்):
+   ❌ "வேண்டும்ஆன்மிக" → ✅ "வேண்டும் ஆன்மிக"
+   ❌ "மந்திரம்ஓம்" → ✅ "மந்திரம் ஓம்"
+   ⚠️ ஒரு சொல் முடிந்து (ம், ள், ர், ன், க், ல், ட் போன்ற விகுதிகளுடன்) உடனே இடைவெளி இல்லாமல் அடுத்த சொல் ஆரம்பமானால் — அது பிழை.
+
+4. தவறான எழுத்து மாற்றம் (Wrong character substitution):
+   ❌ "ண" க்கு பதில் "ன" - சூழலைப் பொறுத்து
+   ❌ "ற" க்கு பதில் "ர" - சூழலைப் பொறுத்து
+
+5. வினை இணைப்புப் பிழை (Verb conjugation errors) — type: "grammar":
+   a) வினை-எண் பொருந்தல்: ❌ "அவர்கள் வந்தான்" → ✅ "அவர்கள் வந்தார்கள்"
+   b) வினை-ஆள் பொருந்தல்: ❌ "நான் செய்தான்" → ✅ "நான் செய்தேன்"
+   c) காலம் ஒத்துழைப்பு: ஒரே வாக்கியத்தில் காலம் ஒத்திருக்க வேண்டும்
+
+🟢 பிழையாகக் குறிக்க வேண்டாம் - இவை சரியானவை:
+- புணர்ச்சி மாற்றங்கள் இரண்டும் சரி
+- பேச்சு வழக்கு vs இலக்கிய வழக்கு இரண்டும் சரி
+- வட்டார வழக்குகள் சரியானவை
+
+📝 பதில் வடிவம் (JSON Array):
+- id: தனித்துவமான அடையாளம்
+- type: "spelling" அல்லது "grammar" அல்லது "punctuation"
+- title: பிழையின் வகை (தமிழில்)
+- description: விரிவான விளக்கம் (தமிழில்)
+- original: மூல உரையில் உள்ள தவறான சொல்
+- suggestion: சரியான சொல்
+- position: { start: எண், end: எண் }`
+          }]
+        },
+        contents: [{
+          role: 'user',
+          parts: [{ text: `கீழே உள்ள தமிழ் உரையை பகுப்பாய்வு செய்யுங்கள். இலக்கணப் பிழைகள், எழுத்துப் பிழைகள், வினை இணைப்புப் பிழைகள் மற்றும் இடைவெளி விடாமல் சொற்கள் இணைந்திருப்பவை — அனைத்தையும் ஒவ்வொரு occurrence-ம் தனித்தனியே குறிக்கவும். உரை:\n\n${chunk.text}` }]
+        }],
+        generationConfig: {
+          temperature: 0,
+          topP: 0.1,
+          maxOutputTokens: 8192,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                type: { type: 'string' },
+                title: { type: 'string' },
+                description: { type: 'string' },
+                original: { type: 'string' },
+                suggestion: { type: 'string' },
+                position: { type: 'object', properties: { start: { type: 'integer' }, end: { type: 'integer' } } }
+              },
+              required: ['id', 'type', 'title', 'description', 'original', 'suggestion']
+            }
+          }
+        }
+      };
+
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (abort.signal.aborted) return;
+        const keyInfo = keyRotator.getNextKey();
+        if (!keyInfo) return;
+        try {
+          const response = await axiosWithPool.post(
+            `${baseUrl}/models/gemini-2.5-flash:generateContent`,
+            payload,
+            { headers: { 'Content-Type': 'application/json', 'x-goog-api-key': keyInfo.key }, timeout: 30000 }
+          );
+          if (abort.signal.aborted) return;
+          if (response.status === 429) {
+            keyRotator.markRateLimited(keyInfo.index);
+            if (attempt === 0) { await sleep(GEMINI_429_RETRY_MS); continue; }
+            return;
+          }
+          if (response.status !== 200) return;
+
+          const candidate = response.data?.candidates?.[0];
+          if (candidate?.finishReason === 'MAX_TOKENS') {
+            console.warn('[CORRECTIONS/STREAM] MAX_TOKENS hit — some corrections may be missing');
+          }
+          let rawText = (candidate?.content?.parts?.[0]?.text || '[]').trim();
+          let arr = [];
+          try {
+            arr = JSON.parse(rawText);
+            if (!Array.isArray(arr)) arr = [];
+          } catch (_parseErr) {
+            // Recover complete objects from truncated JSON
+            let depth = 0, start = -1;
+            for (let ci = 0; ci < rawText.length; ci++) {
+              const ch = rawText[ci];
+              if (ch === '{') { if (depth === 0) start = ci; depth++; }
+              else if (ch === '}') {
+                depth--;
+                if (depth === 0 && start >= 0) {
+                  try {
+                    const obj = JSON.parse(rawText.slice(start, ci + 1));
+                    if (obj && typeof obj === 'object') arr.push(obj);
+                  } catch (_e) {}
+                  start = -1;
+                }
+              }
+            }
+          }
+
+          for (const s of arr) {
+            const orig = (s.original || '').trim();
+            const sugg = (s.suggestion || s.corrected || '').trim();
+            if (!orig || !sugg) continue;
+            if (orig === sugg) continue;
+            if (orig.normalize('NFC') === sugg.normalize('NFC')) continue;
+            const c = {
+              blockId: '0',
+              originalText: orig,
+              correction: sugg,
+              reason: (s.description || s.title || '').trim() || 'இலக்கண/எழுத்துப் பிழை திருத்தம்.',
+              type: (['spelling', 'grammar', 'punctuation'].includes(s.type)) ? s.type : 'spelling'
+            };
+            allCorrections.push(c);
+            sendEvent('correction', c);
+          }
+          return;
+        } catch (e) {
+          if (abort.signal.aborted) return;
+          if (e.response?.status === 429 && attempt === 0) {
+            keyRotator.markRateLimited(keyInfo.index);
+            await sleep(GEMINI_429_RETRY_MS);
+            continue;
+          }
+          console.warn('[CORRECTIONS/STREAM] Chunk error:', (e.message || '').slice(0, 120));
+          return;
+        }
+      }
+    });
+
+    await runWithConcurrency(chunkTasks, GEMINI_CORRECTIONS_CONCURRENCY);
+
+    if (!abort.signal.aborted) {
+      console.log('[CORRECTIONS/STREAM] Done', { count: allCorrections.length, chunks: chunks.length });
+      setCachedResult(cacheKey, { success: true, corrections: allCorrections });
+      sendEvent('done', { count: allCorrections.length });
+    }
+  } catch (e) {
+    if (!abort.signal.aborted) {
+      console.error('[CORRECTIONS/STREAM] Unhandled error:', e.message);
+      sendEvent('error', { message: e.message });
+    }
+  }
+
+  if (!res.writableEnded) res.end();
+});
+
 // English to Tamil Translation with Gemini AI
 // Pure translation only: returns translated Tamil text (no proofreading pass after)
 router.post('/gemini/translate', async (req, res) => {

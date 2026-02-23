@@ -1,4 +1,4 @@
-// v20260131 - OPTIMIZED: Reduced debounce, added caching, reduced logging for <100ms latency
+// v20260222 - STREAMING: Single SSE corrections request; server aborts Gemini on client disconnect
 // Main Workspace Controller
 
 // PERFORMANCE: Debug logging disabled in production for faster response
@@ -6,7 +6,7 @@
 const IME_DEBUG = typeof window !== 'undefined' && window.IME_DEBUG === true;
 const imeLog = IME_DEBUG ? console.log.bind(console) : () => {};
 
-console.log('[WorkspaceJS] ✅ Loaded version v20260131 - optimized for <100ms latency');
+console.log('[WorkspaceJS] ✅ Loaded version v20260222 - streaming corrections');
 
 // CRITICAL: Ensure USE_TIPTAP_EDITOR is set to false at the very top
 // This prevents any initialization issues
@@ -3991,6 +3991,103 @@ class WorkspaceController {
     return all;
   }
 
+  // ---------------------------------------------------------------------------
+  // SSE streaming corrections (single request — replaces fetchCorrectionsInChunks)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Open a single SSE connection to /api/corrections/stream.
+   * The server handles all chunking and aborts Gemini immediately on disconnect.
+   * Updates the status bar with a live correction count as chunks arrive.
+   * Returns the full array of raw corrections when the stream is done.
+   */
+  async _streamCorrectionsSSE(text, analysisSeq) {
+    const allCorrections = [];
+    let foundCount = 0;
+
+    // Show live progress in the status bar while streaming
+    const _updateProgress = (n) => {
+      if (this.analysisSeq !== analysisSeq) return;
+      const summaryEl = document.getElementById('suggestions-summary');
+      if (!summaryEl) return;
+      summaryEl.innerHTML = `
+        <div class="flex items-center gap-2 text-primary-600">
+          <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span class="text-sm font-medium">Analyzing${n > 0 ? ` — ${n} correction${n > 1 ? 's' : ''} found` : ''}…</span>
+        </div>`;
+    };
+
+    try {
+      const response = await this.apiFetch('/api/corrections/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+        signal: this.abortController ? this.abortController.signal : undefined,
+      });
+
+      if (!response.ok) {
+        console.warn('[AI/Stream] Server returned', response.status, '— falling through');
+        return allCorrections;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let eventName = '';
+      let dataBuf = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        // Stale check: a new autoAnalyze has started
+        if (this.analysisSeq !== analysisSeq) {
+          try { await reader.cancel(); } catch (_) {}
+          return allCorrections;
+        }
+
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop(); // keep incomplete trailing line
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            eventName = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            dataBuf = line.slice(6).trim();
+          } else if (line === '') {
+            // Blank line = message boundary — process accumulated event
+            if (dataBuf) {
+              let parsed;
+              try { parsed = JSON.parse(dataBuf); } catch (_) {}
+              if (parsed) {
+                if (eventName === 'correction') {
+                  allCorrections.push(parsed);
+                  foundCount++;
+                  // Throttle status updates (every 5 corrections to avoid excessive reflows)
+                  if (foundCount % 5 === 1) _updateProgress(foundCount);
+                } else if (eventName === 'error') {
+                  console.warn('[AI/Stream] Error from server:', parsed.message);
+                }
+                // 'done' event: stream finished — nothing extra to do here
+              }
+            }
+            eventName = '';
+            dataBuf = '';
+          }
+        }
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') throw e; // propagate — caller handles
+      console.warn('[AI/Stream] Fetch error:', e.message);
+    }
+
+    console.log('[AI/Stream] Done. Corrections received:', allCorrections.length);
+    return allCorrections;
+  }
+
   // ============================================
   // CORRECTION HIGHLIGHTING IN EDITOR
   // ============================================
@@ -4229,137 +4326,15 @@ class WorkspaceController {
     this.abortController = new AbortController();
     this.updateAnalysisStatus('analyzing');
     
-    // Documents above this threshold are chunked so each request stays well
-    // under HTTP body limits (Tamil text is ~21 bytes/word in UTF-8).
-    const LARGE_DOC_WORD_THRESHOLD = 1500;
-
     let data = null;
     try {
-      if (wordCount > LARGE_DOC_WORD_THRESHOLD) {
-        // ── Large document: split into chunks and send in parallel batches ──
-        console.log(`[AI] 📦 Large document (${wordCount} words) — chunked analysis`);
-        const summaryEl = document.getElementById('suggestions-summary');
-        const chunkedCorrections = await this.fetchCorrectionsInChunks(
-          text,
-          this.abortController.signal,
-          (batchCorrections, done, total) => {
-            // Show progress in status bar so user knows analysis is progressing
-            if (summaryEl) {
-              summaryEl.innerHTML = `
-                <div class="flex items-center gap-2 text-primary-600">
-                  <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span class="text-sm font-medium">Analyzing section ${done}/${total}…</span>
-                </div>`;
-            }
-          }
-        );
-        if (chunkedCorrections.length > 0) {
-          // Chunked corrections arrived — use them directly
-          data = { corrections: chunkedCorrections };
-        } else {
-          // Chunked /api/corrections returned nothing (Cloud Run timeout + Gemini unavailable).
-          // Fall back to a single /api/submit call which uses Cloud Run inline correction.
-          console.log('[AI] ⚠️ Chunked corrections empty — falling back to /api/submit');
-          const MAX_SUBMIT_CHARS = 30_000;
-          const submitText = text.length > MAX_SUBMIT_CHARS ? text.slice(0, MAX_SUBMIT_CHARS) : text;
-          const fbResponse = await this.apiFetch('/api/submit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: submitText, save_draft: true }),
-            signal: this.abortController.signal
-          });
-          const fbRaw = await fbResponse.text();
-          try { data = fbRaw ? JSON.parse(fbRaw) : {}; } catch (_e) { data = {}; }
-          if (fbResponse.status === 429) {
-            const remaining = (data && typeof data.remaining === 'number') ? data.remaining : null;
-            const code = String(data?.error || '').trim();
-            const msgBase = String(data?.message || 'Request blocked.').trim();
-            const showRemaining = remaining !== null && (code === 'daily_limit_exceeded' || code === 'quota_insufficient_for_request');
-            this.updateAnalysisStatus('');
-            if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
-              this.suggestionsPanel.setEmptyState('idle');
-            }
-            this.showNotification(showRemaining ? `${msgBase} (Remaining: ${remaining})` : msgBase, 'warning');
-            return;
-          }
-          if (fbResponse.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
-            const submissionId = data.submission?.id;
-            data = await this.awaitSubmissionResult(submissionId, analysisSeq);
-            const polledStatus = String(data?.submission?.status || '').toLowerCase();
-            if (!data?.submission || (polledStatus && polledStatus !== 'completed' && polledStatus !== 'failed')) {
-              this.updateAnalysisStatus('analyzing');
-              return;
-            }
-          } else if (!fbResponse.ok) {
-            console.warn('[AI] /api/submit fallback also failed:', data?.error || 'Unknown error');
-            data = { corrections: [] };
-          }
-        }
-        this.lastAnalyzedText = text;
-      } else {
-        // ── Small document: single /api/corrections request ──
-        console.log('[AI] 🚀 Calling /api/corrections (Gemini) with text length:', text.length);
-        const correctionsResponse = await this.apiFetch('/api/corrections', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }),
-          signal: this.abortController.signal
-        });
-        const correctionsJson = await correctionsResponse.json().catch(() => ({}));
-        if (correctionsResponse.ok && correctionsJson.success && Array.isArray(correctionsJson.corrections) && correctionsJson.corrections.length > 0) {
-          console.log('[AI] ✅ Got corrections from Gemini:', correctionsJson.corrections.length);
-          data = { corrections: correctionsJson.corrections };
-          this.lastAnalyzedText = text;
-        }
-        // Fallback to backend /api/submit if corrections API failed, returned nothing, or returned empty
-        // (empty may indicate token-limit truncation on the Gemini side — backend is more reliable)
-        if (!data) {
-          // Truncate text to backend limit before fallback submit.
-          const MAX_SUBMIT_CHARS = 30_000;
-          const submitText = text.length > MAX_SUBMIT_CHARS ? text.slice(0, MAX_SUBMIT_CHARS) : text;
-          console.log('[AI] 🚀 Fallback: calling /api/submit with text length:', submitText.length);
-          const response = await this.apiFetch('/api/submit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: submitText, save_draft: true }),
-            signal: this.abortController.signal
-          });
-          const raw = await response.text();
-          try {
-            data = raw ? JSON.parse(raw) : {};
-          } catch (e) {
-            data = { error: 'invalid_json', raw: raw?.slice?.(0, 300) };
-          }
-          if (response.status === 429) {
-            const remaining = (data && typeof data.remaining === 'number') ? data.remaining : null;
-            const code = String(data?.error || '').trim();
-            const msgBase = String(data?.message || 'Request blocked.').trim();
-            const showRemaining = remaining !== null && (code === 'daily_limit_exceeded' || code === 'quota_insufficient_for_request');
-            this.updateAnalysisStatus('');
-            if (this.suggestionsPanel && typeof this.suggestionsPanel.setEmptyState === 'function') {
-              this.suggestionsPanel.setEmptyState('idle');
-            }
-            this.showNotification(showRemaining ? `${msgBase} (Remaining: ${remaining})` : msgBase, 'warning');
-            return;
-          }
-          if (response.status === 202 || (data.submission && data.submission.status && data.submission.status.toLowerCase() === 'pending')) {
-            const submissionId = data.submission?.id;
-            data = await this.awaitSubmissionResult(submissionId, analysisSeq);
-            const polledStatus = String(data?.submission?.status || '').toLowerCase();
-            if (!data?.submission || (polledStatus && polledStatus !== 'completed' && polledStatus !== 'failed')) {
-              this.updateAnalysisStatus('analyzing');
-              return;
-            }
-          } else if (!response.ok) {
-            throw new Error(data?.error || data?.message || 'Failed to analyze text');
-          }
-          this.lastAnalyzedText = text;
-        }
-      }
-      
+      // ── Single streaming request — server handles all chunking, no concurrent requests ──
+      // Aborts server-side Gemini calls immediately when client disconnects or new analysis starts.
+      console.log('[AI] 🚀 Starting streaming corrections for text length:', text.length);
+      const streamedCorrections = await this._streamCorrectionsSSE(text, analysisSeq);
+      data = { corrections: streamedCorrections };
+      this.lastAnalyzedText = text;
+
       // Debug: Log the API response
       console.log('[AI Debug] API Response:', JSON.stringify(data, null, 2));
       
