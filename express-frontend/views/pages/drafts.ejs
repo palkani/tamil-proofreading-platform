@@ -1409,7 +1409,8 @@ async function saveRename(id, input) {
   input.disabled = true;
 
   try {
-    const res = await fetch(`/api/v1/submissions/${id}`, {
+    const submissionId = String(id);
+    const res = await fetch(`/api/v1/submissions/${submissionId}`, {
       method: 'PATCH',
       credentials: 'include',
       headers: getAuthHeaders(),

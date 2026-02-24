@@ -1054,7 +1054,9 @@ func (h *Handlers) UpdateSubmission(c *gin.Context) {
 		submission.GroupID = groupID
 	}
 	if len(updates) > 0 {
-		if err := h.db.Model(&models.Submission{}).Where("id = ?", submission.ID).Updates(updates).Error; err != nil {
+		// Use Model(&submission) and Updates so GORM targets the loaded row; log DB error on failure.
+		if err := h.db.Model(&submission).Updates(updates).Error; err != nil {
+			log.Printf("[SUBMISSION] Update failed for id=%d user_id=%d: %v", submission.ID, userID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update submission"})
 			return
 		}
