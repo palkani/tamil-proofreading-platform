@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" itemscope itemtype="https://schema.org/WebSite">
+<html lang="en" xml:lang="en" itemscope itemtype="https://schema.org/WebSite">
 <head>
   <% 
   const baseUrl = 'https://prooftamil.com';
@@ -35,12 +35,18 @@
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
   <% } %>
   <meta name="language" content="Tamil, English">
+  <meta name="content-language" content="ta, en">
   <meta name="revisit-after" content="3 days">
   <meta name="rating" content="General">
   <meta name="distribution" content="global">
   <meta name="geo.region" content="IN-TN">
   <meta name="geo.placename" content="Tamil Nadu, India">
-  <meta name="theme-color" content="#1e3a8a">
+  <meta name="geo.position" content="11.1271;78.6569">
+  <meta name="ICBM" content="11.1271, 78.6569">
+  <!-- Tamil-script meta for Tamil-language searches on Google India -->
+  <meta name="keywords" lang="ta" content="தமிழ் இலக்கண சரிபார்ப்பு, தமிழ் வரிசை சரிபார்ப்பு, தமிழ் எழுத்து திருத்தி, தமிழ் ஆய்வு கருவி, தமிழ் தட்டச்சு, இலவச தமிழ் திருத்தி">
+  <meta name="description" lang="ta" content="ProofTamil - இலவச தமிழ் இலக்கண சரிபார்ப்பு கருவி. AI-உதவியுடன் தமிழ் எழுத்துப்பிழை, இலக்கண பிழைகளை சரிபார்க்கவும். prooftamil.com">
+  <meta name="theme-color" content="#1e2d7d">
   <!-- Global injection of Google Client ID for browser usage (must be xxx.apps.googleusercontent.com, never a domain) -->
   <script>
     (function() {
@@ -73,7 +79,10 @@
   <meta property="og:site_name" content="ProofTamil - Tamil Grammar Checker & Proofreading Tool">
   <meta property="og:locale" content="ta_IN">
   <meta property="og:locale:alternate" content="en_US">
-  <meta property="og:image" content="<%= baseUrl %>/images/tamil-logo.svg">
+  <meta property="og:image" content="<%= baseUrl %>/images/favicon-512x512.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
   <meta property="og:image:alt" content="ProofTamil - Free Tamil Grammar Checker and Proofreading Tool">
   <% if (typeof seo !== 'undefined' && seo.article) { %>
   <% if (seo.article.publishedTime) { %><meta property="article:published_time" content="<%= seo.article.publishedTime %>"><% } %>
@@ -81,12 +90,14 @@
   <% if (seo.article.section) { %><meta property="article:section" content="<%= seo.article.section %>"><% } %>
   <% } %>
   
-  <!-- Twitter -->
-  <meta name="twitter:card" content="summary">
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@prooftamil">
   <meta name="twitter:url" content="<%= canonicalUrl %>">
   <meta name="twitter:title" content="<%= ogTitle %>">
   <meta name="twitter:description" content="<%= ogDescription %>">
-  <meta name="twitter:image" content="<%= baseUrl %>/images/tamil-logo.svg">
+  <meta name="twitter:image" content="<%= baseUrl %>/images/favicon-512x512.png">
+  <meta name="twitter:image:alt" content="ProofTamil - Free Tamil Grammar Checker">
   
   <!-- Canonical URL -->
   <link rel="canonical" href="<%= canonicalUrl %>">
@@ -107,13 +118,15 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
   <link rel="shortcut icon" href="/images/favicon.ico">
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#1e3a8a">
+  <meta name="theme-color" content="#1e2d7d">
   
   <!-- Preconnect for performance - Critical resources -->
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
   <link rel="dns-prefetch" href="https://www.googletagmanager.com">
+  <!-- Inter font (Razorpay-style) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   
   <!-- Preload critical assets -->
   <link rel="preload" href="/css/output.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -130,10 +143,10 @@
     "@context": "https://schema.org",
     "@type": "Brand",
     "name": "ProofTamil",
-    "alternateName": ["prooftamil", "prooftamil.com"],
+    "alternateName": ["prooftamil", "prooftamil.com", "Proof Tamil", "ProofTamil.com", "Tamil Grammar Checker"],
     "url": "<%= baseUrl %>",
-    "logo": "<%= baseUrl %>/images/tamil-logo.svg",
-    "description": "ProofTamil - The leading free Tamil grammar checker and AI proofreading tool. Visit prooftamil.com for instant Tamil writing correction.",
+    "logo": "<%= baseUrl %>/images/favicon-512x512.png",
+    "description": "ProofTamil - The best free Tamil grammar checker and AI proofreading tool. Visit prooftamil.com for instant Tamil writing correction, spell check, and phonetic Tamil typing.",
     "slogan": "Free Tamil Grammar Checker & AI Proofreading Tool"
   }
   </script>
@@ -194,11 +207,19 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "ProofTamil",
-    "alternateName": ["prooftamil", "prooftamil.com"],
+    "alternateName": ["prooftamil", "prooftamil.com", "Proof Tamil", "ProofTamil.com"],
     "url": "<%= baseUrl %>",
-    "logo": "<%= baseUrl %>/images/tamil-logo.svg",
-    "description": "ProofTamil (prooftamil.com) - Free Tamil proofreading and AI grammar checking platform. Best online tool for Tamil writing correction, spell check, and grammar improvement.",
-    "sameAs": [],
+    "logo": {
+      "@type": "ImageObject",
+      "url": "<%= baseUrl %>/images/favicon-512x512.png",
+      "width": 512,
+      "height": 512
+    },
+    "description": "ProofTamil (prooftamil.com) - Free Tamil proofreading and AI grammar checking platform. Best online tool for Tamil writing correction, spell check, and grammar improvement. தமிழ் இலக்கண சரிபார்ப்பு இலவச கருவி.",
+    "foundingDate": "2024",
+    "areaServed": ["IN", "SG", "MY", "LK", "CA", "US", "GB", "AU"],
+    "knowsAbout": ["Tamil language", "Tamil grammar", "Tamil proofreading", "AI writing tools"],
+    "sameAs": ["https://prooftamil.com"],
     "contactPoint": {
       "@type": "ContactPoint",
       "contactType": "customer service",
@@ -277,11 +298,35 @@
           "@type": "Answer",
           "text": "ProofTamil fixes: Tamil grammar errors, spelling mistakes, verb conjugation errors, sandhi rule violations, subject-verb agreement issues, punctuation errors, and provides sentence rewriting suggestions."
         }
+      },
+      {
+        "@type": "Question",
+        "name": "Where can I find a free Tamil editor online?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ProofTamil offers the best free Tamil editor online at prooftamil.com/free-tamil-editor. Type in Tanglish (phonetic English like 'vanakkam') and it auto-converts to Tamil, or paste existing Tamil text. No download or sign-up required."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I type Tamil online without a Tamil keyboard?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "With ProofTamil's phonetic typing (Tanglish), you can type Tamil words using English letters. Type 'vanakkam' to get வணக்கம்', 'nandri' to get நன்றி. Works on any device — no special keyboard or app download needed."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between ProofTamil Free and Pro?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ProofTamil Free gives 200 words per analysis and 30 AI checks per day — plenty for casual writing. ProofTamil Pro unlocks unlimited words, unlimited daily checks, all correction types, and unlimited draft saves."
+        }
       }
     ]
   }
   </script>
-  
+
   <!-- Structured Data - SoftwareApplication -->
   <script type="application/ld+json">
   {
@@ -306,6 +351,29 @@
 
   <% if (typeof seo !== 'undefined' && seo.jsonLd) { %>
   <script type="application/ld+json"><%- seo.jsonLd %></script>
+  <% } %>
+
+  <!-- Structured Data - WebSite (site-wide: enables Google Sitelinks & brand disambiguation) -->
+  <% if (!noIndex) { %>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "ProofTamil",
+    "alternateName": ["prooftamil.com", "Proof Tamil", "ProofTamil.com", "Tamil Grammar Checker", "Free Tamil Editor"],
+    "url": "<%= baseUrl %>",
+    "description": "Free Tamil grammar checker, spell checker, and AI proofreading tool. Type in Tanglish or paste Tamil text and get instant corrections.",
+    "inLanguage": ["ta", "en"],
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": "<%= baseUrl %>/blog?q={search_term_string}"
+      },
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
   <% } %>
   
   <% if (pageType === 'article' || pageType === 'howToUse') { %>

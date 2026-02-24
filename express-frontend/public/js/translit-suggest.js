@@ -130,8 +130,14 @@
    * The backend (language-model powered) knows which word is most relevant —
    * if it ranks a word higher than the local heuristic did, we honour that.
    * Words only in local are kept; words only in backend fill remaining slots.
+   *
+   * @param {string[]} local        - locally-generated suggestions
+   * @param {string[]} backend      - backend-returned suggestions
+   * @param {string}   localTranslit - direct transliteration of the typed token
+   *                                  used to filter phonetically inconsistent
+   *                                  backend-only words (e.g. "உயை" for "uyi")
    */
-  function mergeSuggestions(local, backend) {
+  function mergeSuggestions(local, backend, localTranslit) {
     // Build a backend score map: position 0 = best (highest score)
     const backendRank = new Map();
     backend.forEach((w, i) => {
@@ -159,10 +165,21 @@
       if (k && !seen.has(k)) { seen.add(k); out.push(w); }
       if (out.length >= MAX_SHOW) break;
     }
-    // 2. Fill remaining slots with backend-only words
+    // 2. Fill remaining slots with backend-only words, filtered for phonetic consistency.
+    // If the local engine produced a transliteration (e.g. "உயி" for "uyi"), only
+    // include backend-only words that share it as a prefix — or have it as their prefix.
+    // This prevents Aksharamukha quirks like "uyi" → "உயை" from polluting the list.
+    const translit = (localTranslit || '').normalize ? localTranslit.normalize('NFC') : (localTranslit || '');
     for (const w of backend) {
       const k = (w || '').normalize?.('NFC') || w;
-      if (k && !seen.has(k)) { seen.add(k); out.push(w); }
+      if (!k || seen.has(k)) continue;
+      // Phonetic consistency gate (only when local engine produced a result)
+      if (translit && translit.length >= 2) {
+        const wn = w.normalize ? w.normalize('NFC') : w;
+        const phonOk = wn.startsWith(translit) || translit.startsWith(wn);
+        if (!phonOk) continue; // skip phonetically inconsistent backend word
+      }
+      seen.add(k); out.push(w);
       if (out.length >= MAX_SHOW) break;
     }
     return out;
@@ -390,16 +407,26 @@
       const local = localSuggestions(info.token);
       if (local.length > 0) openDropdown(local);
 
+      // Compute local transliteration for backend phonetic filtering
+      let localTranslit = '';
+      if (typeof window.transliterateToTamil === 'function') {
+        try {
+          const t = window.transliterateToTamil(info.token);
+          if (t && t !== info.token) localTranslit = t;
+        } catch (_) {}
+      }
+
       // 2️⃣  BACKEND: fetch /api/v1/suggest in parallel, merge when it arrives
       _abort = new AbortController();
       const { signal } = _abort;
       const capturedToken = info.token;
+      const capturedTranslit = localTranslit;
 
       const backend = await backendSuggestions(capturedToken, signal).catch(() => []);
       if (signal.aborted || _token !== capturedToken) return; // stale
 
       if (backend.length > 0) {
-        const merged = mergeSuggestions(local, backend);
+        const merged = mergeSuggestions(local, backend, capturedTranslit);
         // Only re-render if the merged list is different from what we're showing
         const merged_str = merged.join('|');
         const current_str = _words.join('|');

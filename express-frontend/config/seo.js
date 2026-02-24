@@ -3,8 +3,8 @@ const BASE_URL = 'https://prooftamil.com';
 const seoConfig = {
   home: {
     title: 'ProofTamil - Free Tamil Grammar Checker & AI Proofreading Tool | prooftamil.com',
-    description: 'ProofTamil (prooftamil.com) - Free Tamil proofreading tool with AI-powered grammar checker, spell check, and writing correction. Check Tamil grammar online free, fix spelling errors, and improve Tamil writing instantly. Best Tamil AI writing assistant - no download needed!',
-    keywords: 'prooftamil, prooftamil.com, tamil editor, tamil typing, tanglish to tamil, phonetic tamil typing, tamil typing tool, tamil editor online, tamil proofreading tool, tamil proofreader online, tamil grammar checker, tamil grammar corrector, tamil spell checker, tamil spell check online, tamil writing assistant, tamil writing correction tool, tamil AI grammar checker, tamil grammar correction online, correct tamil grammar, fix tamil spelling, check tamil grammar free, tamil proofreading free',
+    description: 'ProofTamil (prooftamil.com) - Free Tamil proofreading tool with AI-powered grammar checker, spell check, and writing correction. Check Tamil grammar online free, fix spelling errors, and improve Tamil writing instantly. Best Tamil AI writing assistant - no download needed! தமிழ் இலக்கண சரிபார்ப்பு இலவசம்.',
+    keywords: 'prooftamil, prooftamil.com, proof tamil, proof tamil.com, tamil editor, tamil typing, tanglish to tamil, phonetic tamil typing, tamil typing tool, tamil editor online, tamil proofreading tool, tamil proofreader online, tamil grammar checker, tamil grammar corrector, tamil spell checker, tamil spell check online, tamil writing assistant, tamil writing correction tool, tamil AI grammar checker, tamil grammar correction online, correct tamil grammar, fix tamil spelling, check tamil grammar free, tamil proofreading free, free tamil editor, free tamil editor online, online tamil editor, tamil text editor, tamil writing tool free, type tamil online, write tamil online, tamil language tool, best tamil grammar checker, tamil grammar checker free online',
     canonical: BASE_URL + '/',
     ogTitle: 'ProofTamil - Free Tamil Grammar Checker & AI Proofreading Tool | prooftamil.com',
     ogDescription: 'ProofTamil (prooftamil.com) - Free Tamil grammar checker with AI proofreading. Check and correct Tamil grammar, spelling, and writing online. Instant results - no download required!',
@@ -32,12 +32,12 @@ const seoConfig = {
   },
 
   freeTamilEditor: {
-    title: 'Free Tamil Editor & Tamil Typing Tool Online (Tanglish to Tamil) | ProofTamil (prooftamil.com)',
-    description: 'ProofTamil free editor - Free Tamil editor online for Tamil typing + proofreading. Type in Tanglish (phonetic) to get Tamil, paste Tamil text, and instantly fix grammar and spelling—100% free, no download.',
-    keywords: 'tamil typing, tamil typing tool, tanglish to tamil, phonetic tamil typing, tamil editor, free tamil editor, free tamil editing, tamil editor online free, tamil editing online, tamil proofreading free, tamil grammar check free, tamil spell check free, tamil sentence correction, tamil writing correction, tamil grammar corrector, tamil proofread online, edit tamil text online, tamil text editor',
+    title: 'Free Tamil Editor Online - Tamil Typing & Proofreading Tool | ProofTamil (prooftamil.com)',
+    description: 'Free Tamil editor online — type in Tanglish (phonetic English) to get Tamil instantly, or paste existing Tamil text for AI grammar and spell check. 100% free, no download, no sign-up required. Best free online Tamil text editor at prooftamil.com.',
+    keywords: 'free tamil editor, free tamil editor online, online tamil editor, tamil editor online free, tamil text editor, tamil typing online, tamil writing online, type tamil online, write tamil online, tanglish to tamil, phonetic tamil typing, tamil typing tool, tamil typing without keyboard, tamil editor no download, free tamil writing tool, tamil editor for students, tamil article editor, tamil essay editor, tamil proofread online, tamil spell check free, tamil grammar check free, tamil sentence correction, tamil writing correction, free tamil language editor, tamil editing online, edit tamil text online, best free tamil editor, tamil typing keyboard online, tamil unicode editor',
     canonical: BASE_URL + '/free-tamil-editor',
-    ogTitle: 'Free Tamil Editor Online - ProofTamil',
-    ogDescription: 'Edit Tamil text online for free. AI Tamil grammar checker + spell check to improve your writing instantly.',
+    ogTitle: 'Free Tamil Editor Online - Type & Proofread Tamil | ProofTamil',
+    ogDescription: 'Free online Tamil editor — type Tanglish to get Tamil, paste text, get instant AI grammar & spelling corrections. No download, no sign-up required.',
     pageType: 'landing',
     includeStructuredData: true
   },
@@ -242,12 +242,12 @@ const seoConfig = {
   },
 
   pricing: {
-    title: 'Pricing - ProofTamil Pro Plans | Tamil Grammar Checker',
-    description: 'Upgrade to ProofTamil Pro for unlimited AI Tamil proofreading, advanced grammar checking, and priority support. Simple monthly and yearly plans.',
-    keywords: 'prooftamil pricing, tamil grammar checker pro, tamil proofreading subscription, tamil ai writer pro plan',
+    title: 'Pricing - ProofTamil Pro Plans | Unlimited Tamil AI Proofreading',
+    description: 'ProofTamil Pro plans — unlimited AI Tamil proofreading, unlimited words, all correction types (grammar, style, rewrite), and save unlimited drafts. Affordable monthly and yearly plans. Start free, upgrade anytime.',
+    keywords: 'prooftamil pricing, prooftamil pro, tamil grammar checker pro, tamil proofreading subscription, tamil ai writer pro, unlimited tamil proofreading, tamil grammar checker upgrade, tamil ai pro plan, best tamil proofreading tool price',
     canonical: BASE_URL + '/pricing',
     ogTitle: 'ProofTamil Pro Pricing - Unlimited Tamil AI Proofreading',
-    ogDescription: 'Upgrade to ProofTamil Pro for unlimited Tamil AI proofreading. Simple pricing, cancel anytime.',
+    ogDescription: 'Upgrade to ProofTamil Pro — unlimited words, unlimited AI checks per day, all correction types. Simple pricing, cancel anytime.',
     pageType: 'pricing'
   },
 
@@ -305,11 +305,21 @@ const structuredData = {
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "ProofTamil",
-    "alternateName": ["prooftamil", "prooftamil.com"],
+    "alternateName": ["prooftamil", "prooftamil.com", "Proof Tamil", "ProofTamil.com"],
     "url": BASE_URL,
-    "logo": BASE_URL + "/images/tamil-logo.svg",
-    "description": "ProofTamil (prooftamil.com) - Free Tamil proofreading and AI grammar checking platform. Best online tool for Tamil writing correction, spell check, and grammar improvement.",
-    "sameAs": [],
+    "logo": {
+      "@type": "ImageObject",
+      "url": BASE_URL + "/images/favicon-512x512.png",
+      "width": 512,
+      "height": 512
+    },
+    "description": "ProofTamil (prooftamil.com) - Free Tamil proofreading and AI grammar checking platform. Best online tool for Tamil writing correction, spell check, and grammar improvement. தமிழ் இலக்கண சரிபார்ப்பு இலவச கருவி.",
+    "foundingDate": "2024",
+    "areaServed": ["IN", "SG", "MY", "LK", "CA", "US", "GB", "AU"],
+    "knowsAbout": ["Tamil language", "Tamil grammar", "Tamil proofreading", "AI writing tools"],
+    "sameAs": [
+      "https://prooftamil.com"
+    ],
     "contactPoint": {
       "@type": "ContactPoint",
       "contactType": "customer service",
@@ -440,6 +450,38 @@ const structuredData = {
         "acceptedAnswer": {
           "@type": "Answer",
           "text": "ProofTamil fixes: Tamil grammar errors, spelling mistakes, verb conjugation errors, sandhi rule violations, subject-verb agreement issues, punctuation errors, and provides sentence rewriting suggestions."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Where can I find a free Tamil editor online?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ProofTamil offers the best free Tamil editor online at prooftamil.com/free-tamil-editor. You can type in Tanglish (phonetic English like 'vanakkam') and it auto-converts to Tamil, or paste existing Tamil text. No download or sign-up required — start typing immediately."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I type Tamil online without a Tamil keyboard?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "With ProofTamil's phonetic typing (Tanglish), you can type Tamil words using English letters on any keyboard. For example, type 'vanakkam' to get வணக்கம், 'nandri' to get நன்றி. It works on any device — no special keyboard or app download needed."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is ProofTamil useful for Tamil students and writers?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes! ProofTamil is widely used by Tamil students writing essays, journalists proofreading articles, content creators writing blogs, and anyone who wants to improve their Tamil writing. It catches grammar errors, spelling mistakes, and even suggests better phrasing."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between ProofTamil Free and Pro?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ProofTamil Free gives 200 words per analysis and 30 AI checks per day — plenty for casual writing. ProofTamil Pro (paid) unlocks unlimited words per analysis, unlimited daily checks, all correction types (grammar, style, and rewrite), and unlimited draft saves. Visit prooftamil.com/pricing for details."
         }
       }
     ]

@@ -817,6 +817,7 @@ router.get('/sitemap.xml', (req, res) => {
     { url: '/tools/ai-content-writer', priority: '0.8', changefreq: 'weekly' },
     { url: '/tools/event-name-suggester', priority: '0.75', changefreq: 'weekly' },
     { url: '/tools/email-spam-detector', priority: '0.75', changefreq: 'weekly' },
+    { url: '/pricing', priority: '0.8', changefreq: 'monthly' },
     { url: '/contact', priority: '0.7', changefreq: 'monthly' },
     { url: '/privacy', priority: '0.4', changefreq: 'yearly' },
     { url: '/terms', priority: '0.4', changefreq: 'yearly' },

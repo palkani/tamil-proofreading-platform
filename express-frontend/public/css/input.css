@@ -2,48 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Theme tokens */
+/* Theme tokens — Razorpay-inspired: dark navy + bright blue */
 :root {
-  --bg-primary: #0b061a;
-  --bg-secondary: #120b2d;
-  --bg-surface: #1a1340;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f7ff;
+  --bg-surface: #ffffff;
 
-  --accent-primary: #7c5cff;
-  --accent-secondary: #5b8cff;
-  --accent-blue: #3b82f6;
+  --accent-primary: #3395ff;   /* Razorpay bright blue */
+  --accent-secondary: #1e2d7d; /* Razorpay dark navy */
+  --accent-blue: #3395ff;
 
-  --text-primary: #ffffff;
-  --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
+  --text-primary: #0d1b50;     /* Razorpay deep navy text */
+  --text-secondary: #374151;
+  --text-muted: #6b7280;
 
-  --border-soft: rgba(255,255,255,0.08);
+  --border-soft: rgba(30, 45, 125, 0.12);
 
   --gradient-primary: linear-gradient(
     135deg,
-    #1e3a8a 0%,
-    #3b82f6 50%,
-    #1e40af 100%
+    #1e2d7d 0%,
+    #3395ff 100%
   );
-  --color-bg: #eff6ff;            /* light blue background */
+  --color-bg: #f5f7ff;            /* Very light blue-white page background */
   --color-card: #ffffff;
-  --color-text: #111827;          /* Dark text */
+  --color-text: #0d1b50;          /* Razorpay navy text */
   --color-muted: #374151;         /* Body text */
   --color-border: #e5e7eb;        /* Muted border */
-  --color-primary: #1e3a8a;       /* Primary Blue */
-  --color-primary-hover: #3b82f6; /* Accent Blue */
-  --color-primary-ghost: #dbeafe; /* Soft blue surface */
-  --color-accent: #3b82f6;        /* Blue */
-  --color-accent-light: #eff6ff;  /* Light Blue Background */
+  --color-primary: #1e2d7d;       /* Razorpay dark navy */
+  --color-primary-hover: #162065; /* Deeper navy on hover */
+  --color-primary-ghost: #eef3ff; /* Soft navy tint surface */
+  --color-accent: #3395ff;        /* Razorpay bright blue */
+  --color-accent-light: #eef3ff;  /* Light blue background */
 }
 
 @layer base {
   body {
-    background: radial-gradient(
-      circle at top right,
-      rgba(124, 92, 255, 0.15),
-      transparent 60%
-    ), var(--bg-primary);
+    background: var(--bg-primary);
     color: var(--text-primary);
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   }
 
   a {
@@ -57,34 +53,33 @@
 
 @layer components {
   .btn-primary {
-    @apply px-4 py-2 rounded-lg transition-colors font-semibold;
+    @apply px-4 py-2 rounded-lg transition-all font-semibold;
     color: #ffffff;
     background: var(--gradient-primary);
-    border: 1px solid var(--border-soft);
-    box-shadow: 0 10px 30px rgba(124, 92, 255, 0.35);
-    border-radius: 10px;
+    border: none;
+    box-shadow: 0 4px 14px rgba(51, 149, 255, 0.35);
+    border-radius: 8px;
     transform: translateZ(0);
   }
-  
+
   .btn-primary:hover {
-    background: linear-gradient(135deg, #8d6dff, #6c95ff, #d1a8ff);
-    border-color: var(--border-soft);
-    transform: scale(1.03);
-    box-shadow: 0 12px 36px rgba(124, 92, 255, 0.45);
+    background: linear-gradient(135deg, #162065 0%, #2277e0 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(51, 149, 255, 0.45);
   }
-  
+
   .btn-secondary {
-    @apply px-4 py-2 rounded-lg transition-colors font-semibold;
-    color: var(--text-secondary);
+    @apply px-4 py-2 rounded-lg transition-all font-semibold;
+    color: var(--color-primary);
     background: transparent;
-    border: 1px solid var(--border-soft);
-    border-radius: 10px;
+    border: 1.5px solid var(--color-primary);
+    border-radius: 8px;
   }
-  
+
   .btn-secondary:hover {
-    background: rgba(124, 92, 255, 0.08);
-    border-color: var(--border-soft);
-    color: #ffffff;
+    background: var(--color-primary-ghost);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
   }
   
   .input-field {
@@ -105,7 +100,7 @@
     @apply rounded-xl shadow-sm;
     background: var(--bg-surface);
     border: 1px solid var(--border-soft);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.45);
+    box-shadow: 0 4px 24px rgba(30, 45, 125, 0.08);
   }
 }
 
@@ -272,7 +267,7 @@
 
 .toolbar-select:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.25);
+  box-shadow: 0 0 0 3px rgba(51, 149, 255, 0.2);
 }
 
 .dropdown-item {
@@ -299,11 +294,11 @@
 .language-toggle-btn {
   @apply flex items-center gap-3 px-4 py-2 text-white rounded-full transition-all duration-200;
   background: var(--color-primary);
-  box-shadow: 0 2px 4px rgba(109, 40, 217, 0.3);
+  box-shadow: 0 2px 4px rgba(30, 45, 125, 0.3);
 }
 
 .language-toggle-btn:hover {
-  box-shadow: 0 4px 8px rgba(124, 58, 237, 0.35);
+  box-shadow: 0 4px 8px rgba(51, 149, 255, 0.35);
   transform: translateY(-1px);
 }
 

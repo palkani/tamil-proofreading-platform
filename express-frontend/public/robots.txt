@@ -1,6 +1,6 @@
-# ProofTamil - Tamil Grammar Checker & AI Proofreading Tool
-# https://prooftamil.com
-# Best Free Tamil Proofreading Tool Online
+# ProofTamil - Free Tamil Grammar Checker & AI Proofreading Tool
+# https://prooftamil.com | prooftamil.com
+# Free Tamil editor, Tamil grammar checker, Tamil spell check, Tanglish to Tamil
 
 User-agent: *
 Allow: /
@@ -9,16 +9,22 @@ Allow: /
 Allow: /
 Allow: /free-tamil-editor
 Allow: /how-to-use
+Allow: /pricing
 Allow: /contact
 Allow: /privacy
 Allow: /terms
 Allow: /login
 Allow: /register
+Allow: /blog
+Allow: /blog/
+Allow: /tools/
 Allow: /tools/ocr
+Allow: /tools/handwriting-ocr
 Allow: /tools/converter
 Allow: /tools/ai-content-writer
 Allow: /tools/event-name-suggester
-Allow: /blog
+Allow: /tools/email-spam-detector
+Allow: /sitemap.xml
 
 # Disallow private/authenticated pages from indexing
 Disallow: /dashboard
@@ -28,6 +34,9 @@ Disallow: /archive
 Disallow: /analytics
 Disallow: /api/
 Disallow: /admin/
+Disallow: /my-blogs
+Disallow: /affiliate/
+Disallow: /billing/
 
 # Sitemap location
 Sitemap: https://prooftamil.com/sitemap.xml
@@ -38,6 +47,10 @@ Crawl-delay: 1
 # Google specific - no delay for faster indexing
 User-agent: Googlebot
 Allow: /
+Allow: /pricing
+Allow: /free-tamil-editor
+Allow: /blog/
+Allow: /tools/
 Crawl-delay: 0
 
 # Bing specific
@@ -54,3 +67,10 @@ Crawl-delay: 1
 User-agent: Yandex
 Allow: /
 Crawl-delay: 1
+
+# CommonCrawl (used by AI training datasets - can opt out here if desired)
+User-agent: CCBot
+Allow: /blog
+Allow: /how-to-use
+Disallow: /api/
+Crawl-delay: 10

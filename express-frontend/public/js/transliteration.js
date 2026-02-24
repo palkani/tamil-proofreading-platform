@@ -655,46 +655,58 @@ const commonWordMap = {
  */
 function transliterateToTamil(englishText) {
   const lower = englishText.toLowerCase();
-  
+
   // Check common word mappings first
   if (commonWordMap[lower]) {
     return commonWordMap[lower];
   }
-  
-  // Simple character-by-character transliteration
+
+  // Character-by-character transliteration with consonant-context tracking.
+  // When a vowel immediately follows a consonant, use the vowel SIGN (matra)
+  // rather than the standalone vowel letter — e.g. "uyi" → "உயி" (not "உயஇ").
   let result = '';
   let i = 0;
-  
+  let lastWasConsonant = false;
+
   while (i < lower.length) {
     let matched = false;
-    
+
     // Try to match longer sequences first (2-3 chars)
     for (let len = 3; len >= 1; len--) {
       const substr = lower.substring(i, i + len);
-      
+
       // Check for consonant combinations
       if (tamilConsonants[substr]) {
         result += tamilConsonants[substr];
+        lastWasConsonant = true;
         i += len;
         matched = true;
         break;
       }
-      
+
       // Check for vowels
       if (tamilVowels[substr]) {
-        result += tamilVowels[substr];
+        if (lastWasConsonant) {
+          // After a consonant: use the vowel sign (matra) so the syllable is
+          // formed correctly — "கி" not "கஇ", "உயி" not "உயஇ".
+          const sign = tamilVowelSigns[substr];
+          result += (sign !== undefined) ? sign : tamilVowels[substr];
+        } else {
+          result += tamilVowels[substr];
+        }
+        lastWasConsonant = false;
         i += len;
         matched = true;
         break;
       }
     }
-    
+
     if (!matched) {
-      // No match, skip this character
+      lastWasConsonant = false;
       i++;
     }
   }
-  
+
   return result || englishText;
 }
 
