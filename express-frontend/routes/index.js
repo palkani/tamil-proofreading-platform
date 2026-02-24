@@ -746,9 +746,9 @@ router.get('/affiliate/dashboard', requireAuth, (req, res) => {
   });
 });
 
-// Archive removed: redirect to Drafts
+// Archive/Trash: redirect to Drafts Trash tab
 router.get('/archive', (req, res) => {
-  return res.redirect(302, '/drafts');
+  return res.redirect(302, '/drafts#trash');
 });
 
 // Drafts page - MUST be protected (never show drafts when logged out / expired)

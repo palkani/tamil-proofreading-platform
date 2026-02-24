@@ -1,17 +1,20 @@
 /**
  * Document Import — Tamil Proofreading Platform
- * Supports .txt (plain text) and .docx (Word document) files.
+ * Supports .txt, .docx (Word), and .pdf files.
  *
  * .txt  → FileReader.readAsText(), inserts as paragraphs
  * .docx → mammoth.js (CDN, loaded on demand) converts to HTML
+ * .pdf  → PDF.js (CDN, loaded on demand) extracts text page by page
  *
  * Works with TipTap editor (workspace) and contenteditable (home editor).
  */
 (function () {
   'use strict';
 
-  const MAMMOTH_CDN = 'https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js';
-  const MAX_FILE_MB  = 10;
+  const MAMMOTH_CDN    = 'https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js';
+  const PDFJS_CDN      = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  const PDFJS_WORKER   = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const MAX_FILE_MB    = 20;
   const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 
   // ── Editor helpers ────────────────────────────────────────────────────────
@@ -75,6 +78,22 @@
     });
   }
 
+  // ── PDF.js lazy loader ────────────────────────────────────────────────────
+  function loadPdfJs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = PDFJS_CDN;
+      script.onload = () => {
+        if (!window.pdfjsLib) { reject(new Error('PDF.js loaded but pdfjsLib not found')); return; }
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+        resolve(window.pdfjsLib);
+      };
+      script.onerror = () => reject(new Error('Failed to load PDF.js from CDN'));
+      document.head.appendChild(script);
+    });
+  }
+
   // ── File processing ───────────────────────────────────────────────────────
   async function processFile(file) {
     if (!file) return;
@@ -117,7 +136,40 @@
       return;
     }
 
-    showToast('Unsupported file type. Please use .txt or .docx', 'error');
+    if (ext === 'pdf') {
+      showToast('Extracting text from PDF…', 'info');
+      try {
+        const pdfjsLib   = await loadPdfJs();
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf         = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const numPages    = pdf.numPages;
+        const pageParts   = [];
+        for (let i = 1; i <= numPages; i++) {
+          const page    = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          // items with str content; join with space, preserving line breaks via hasEOL
+          const pageText = content.items
+            .map(item => (item.str || '') + (item.hasEOL ? '\n' : ''))
+            .join('')
+            .trim();
+          if (pageText) pageParts.push(pageText);
+        }
+        const fullText = pageParts.join('\n\n');
+        if (!fullText.trim()) {
+          showToast('No selectable text found in this PDF (may be a scanned image). Try a text-based PDF.', 'error');
+          return;
+        }
+        const html = plainTextToHtml(fullText);
+        insertHtmlIntoEditor(html);
+        showToast(`✓ "${file.name}" imported (${numPages} page${numPages !== 1 ? 's' : ''}, ${fullText.length.toLocaleString()} chars)`, 'success');
+      } catch (err) {
+        console.error('[DocImport] PDF error:', err);
+        showToast('Failed to import PDF: ' + err.message, 'error');
+      }
+      return;
+    }
+
+    showToast('Unsupported file type. Please use .pdf, .txt, or .docx', 'error');
   }
 
   // ── Toast notification ────────────────────────────────────────────────────
@@ -184,7 +236,7 @@
         if (!files || files.length === 0) return;
         const file = files[0];
         const ext = (file.name.split('.').pop() || '').toLowerCase();
-        if (ext === 'txt' || ext === 'docx') {
+        if (ext === 'txt' || ext === 'docx' || ext === 'pdf') {
           e.preventDefault();
           processFile(file);
         }
@@ -200,7 +252,7 @@
       input = document.createElement('input');
       input.type = 'file';
       input.id   = 'doc-import-file-input';
-      input.accept = '.txt,.docx';
+      input.accept = '.pdf,.txt,.docx';
       input.style.display = 'none';
       input.addEventListener('change', async e => {
         await processFile(e.target.files[0]);

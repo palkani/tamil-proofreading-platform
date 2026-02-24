@@ -203,6 +203,6 @@ func (h *Handlers) WhoAmI(c *gin.Context) {
 }
 
 func (h *Handlers) cleanupArchivedSubmissions() error {
-	cutoff := time.Now().Add(-45 * 24 * time.Hour)
+	cutoff := time.Now().Add(-7 * 24 * time.Hour)
 	return h.db.Where("archived = ? AND archived_at < ?", true, cutoff).Delete(&models.Submission{}).Error
 }

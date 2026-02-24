@@ -135,8 +135,14 @@
               AI Content
             </span>
           </button>
+          <button type="button" id="tab-trash" role="tab" aria-selected="false" aria-controls="trash-panel" class="drafts-tab rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              Trash
+            </span>
+          </button>
         </div>
-        <div class="flex-shrink-0">
+        <div class="flex-shrink-0" id="drafts-primary-cta-wrap">
           <a href="/workspace" id="drafts-primary-cta" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-white shadow-md hover:shadow-lg transition-all duration-200 bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
             <span id="drafts-primary-cta-text">Create New Draft</span>
@@ -219,6 +225,28 @@
             </a>
           </div>
           <div id="ai-content-list" class="hidden space-y-4">
+            <!-- Cards rendered by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Trash panel (proofreading drafts moved to trash; kept 7 days) -->
+      <div id="trash-panel" role="tabpanel" class="hidden" aria-hidden="true">
+        <div class="bg-white shadow-lg rounded-2xl border border-gray-200 p-6">
+          <h2 class="text-lg font-semibold mb-1 text-gray-900">Trash</h2>
+          <p class="text-sm text-gray-500 mb-4">Drafts stay here for 7 days before permanent deletion.</p>
+          <div id="trash-loading" class="text-center py-12">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+            <p class="mt-4 text-gray-600">Loading trash...</p>
+          </div>
+          <div id="trash-empty" class="hidden text-center py-12 text-gray-500">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 flex items-center justify-center">
+              <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </div>
+            <p class="text-lg font-medium text-gray-700">Trash is empty</p>
+            <p class="text-sm mt-2 text-gray-500">Drafts you move to trash will appear here</p>
+          </div>
+          <div id="trash-list" class="hidden space-y-4">
             <!-- Cards rendered by JS -->
           </div>
         </div>
@@ -379,52 +407,66 @@
     const aiContentList = document.getElementById('ai-content-list');
     const draftsPrimaryCta = document.getElementById('drafts-primary-cta');
     const draftsPrimaryCtaText = document.getElementById('drafts-primary-cta-text');
+    const tabTrash = document.getElementById('tab-trash');
+    const trashPanel = document.getElementById('trash-panel');
+    const trashLoading = document.getElementById('trash-loading');
+    const trashEmpty = document.getElementById('trash-empty');
+    const trashList = document.getElementById('trash-list');
+    const draftsPrimaryCtaWrap = document.getElementById('drafts-primary-cta-wrap');
 
     function switchToTab(panel) {
       const isProofreading = panel === 'proofreading';
-      if (tabProofreading) {
-        tabProofreading.setAttribute('aria-selected', isProofreading);
-        tabProofreading.classList.toggle('bg-white', isProofreading);
-        tabProofreading.classList.toggle('text-primary-700', isProofreading);
-        tabProofreading.classList.toggle('shadow-sm', isProofreading);
-        tabProofreading.classList.toggle('border', isProofreading);
-        tabProofreading.classList.toggle('border-gray-200/80', isProofreading);
-        tabProofreading.classList.toggle('text-gray-600', !isProofreading);
-      }
-      if (tabAiContent) {
-        tabAiContent.setAttribute('aria-selected', !isProofreading);
-        tabAiContent.classList.toggle('bg-white', !isProofreading);
-        tabAiContent.classList.toggle('text-primary-700', !isProofreading);
-        tabAiContent.classList.toggle('shadow-sm', !isProofreading);
-        tabAiContent.classList.toggle('border', !isProofreading);
-        tabAiContent.classList.toggle('border-gray-200/80', !isProofreading);
-        tabAiContent.classList.toggle('text-gray-600', isProofreading);
-      }
+      const isAiContent = panel === 'ai-content';
+      const isTrash = panel === 'trash';
+      [tabProofreading, tabAiContent, tabTrash].forEach(function(tab, i) {
+        if (!tab) return;
+        var active = (i === 0 && isProofreading) || (i === 1 && isAiContent) || (i === 2 && isTrash);
+        tab.setAttribute('aria-selected', active);
+        tab.classList.toggle('bg-white', active);
+        tab.classList.toggle('text-primary-700', active);
+        tab.classList.toggle('shadow-sm', active);
+        tab.classList.toggle('border', active);
+        tab.classList.toggle('border-gray-200/80', active);
+        tab.classList.toggle('text-gray-600', !active);
+      });
       if (proofreadingPanel) {
         proofreadingPanel.classList.toggle('hidden', !isProofreading);
         proofreadingPanel.setAttribute('aria-hidden', !isProofreading);
       }
       if (aiContentPanel) {
-        aiContentPanel.classList.toggle('hidden', isProofreading);
-        aiContentPanel.setAttribute('aria-hidden', isProofreading);
+        aiContentPanel.classList.toggle('hidden', !isAiContent);
+        aiContentPanel.setAttribute('aria-hidden', !isAiContent);
+      }
+      if (trashPanel) {
+        trashPanel.classList.toggle('hidden', !isTrash);
+        trashPanel.setAttribute('aria-hidden', !isTrash);
       }
       if (draftsPrimaryCta && draftsPrimaryCtaText) {
-        if (isProofreading) {
-          draftsPrimaryCta.href = '/workspace';
-          draftsPrimaryCtaText.textContent = 'Create New Draft';
+        if (isTrash) {
+          draftsPrimaryCtaWrap && draftsPrimaryCtaWrap.classList.add('hidden');
         } else {
-          draftsPrimaryCta.href = '/tools/ai-content-writer';
-          draftsPrimaryCtaText.textContent = 'Create with AI';
+          draftsPrimaryCtaWrap && draftsPrimaryCtaWrap.classList.remove('hidden');
+          if (isProofreading) {
+            draftsPrimaryCta.href = '/workspace';
+            draftsPrimaryCtaText.textContent = 'Create New Draft';
+          } else {
+            draftsPrimaryCta.href = '/tools/ai-content-writer';
+            draftsPrimaryCtaText.textContent = 'Create with AI';
+          }
         }
       }
-      if (!isProofreading && aiContentList) loadAIContentDrafts();
-      try { window.history.replaceState(null, '', window.location.pathname + (isProofreading ? '' : '#ai-content')); } catch (e) {}
+      if (isAiContent && aiContentList) loadAIContentDrafts();
+      if (isTrash && trashList) loadTrash();
+      var hash = isProofreading ? '' : (isTrash ? '#trash' : '#ai-content');
+      try { window.history.replaceState(null, '', window.location.pathname + hash); } catch (e) {}
     }
 
     if (tabProofreading) tabProofreading.addEventListener('click', function() { switchToTab('proofreading'); });
     if (tabAiContent) tabAiContent.addEventListener('click', function() { switchToTab('ai-content'); });
+    if (tabTrash) tabTrash.addEventListener('click', function() { switchToTab('trash'); });
     var initialHash = (window.location.hash || '').toLowerCase();
     if (initialHash === '#ai-content') switchToTab('ai-content');
+    else if (initialHash === '#trash') switchToTab('trash');
 
     async function loadAIContentDrafts() {
       if (!aiContentLoading || !aiContentEmpty || !aiContentList) return;
@@ -495,6 +537,90 @@
         aiContentEmpty.querySelector('p.text-lg').textContent = 'Error loading AI drafts';
       }
     }
+
+    async function loadTrash() {
+      if (!trashLoading || !trashEmpty || !trashList) return;
+      trashLoading.classList.remove('hidden');
+      trashEmpty.classList.add('hidden');
+      trashList.classList.add('hidden');
+      trashList.innerHTML = '';
+      var headers = { 'Accept': 'application/json' };
+      try { var token = localStorage.getItem('access_token'); if (token) headers['Authorization'] = 'Bearer ' + token; } catch (e) {}
+      try {
+        var res = (window.authUtils && window.authUtils.apiFetch)
+          ? await window.authUtils.apiFetch('/api/v1/submissions/archived', { method: 'GET', credentials: 'include', headers: headers })
+          : await fetch('/api/v1/submissions/archived', { credentials: 'include', headers: headers });
+        if (res.status === 401) {
+          window.location.href = '/login?redirect=' + encodeURIComponent('/drafts#trash');
+          return;
+        }
+        if (!res.ok) {
+          trashLoading.classList.add('hidden');
+          trashEmpty.classList.remove('hidden');
+          trashEmpty.querySelector('p.text-lg').textContent = 'Could not load trash';
+          return;
+        }
+        var data = await res.json().catch(function() { return {}; });
+        var submissions = (data && data.submissions) ? data.submissions : [];
+        trashLoading.classList.add('hidden');
+        if (submissions.length === 0) {
+          trashEmpty.classList.remove('hidden');
+          return;
+        }
+        function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        function preview(t, n) { if (!t) return ''; t = String(t).replace(/\s+/g, ' ').trim(); return t.length <= n ? t : t.slice(0, n) + '\u2026'; }
+        function fmtDate(iso) { if (!iso) return '\u2014'; try { var d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { dateStyle: 'short' }); } catch (e) { return iso; } }
+        submissions.forEach(function(s) {
+          var card = document.createElement('div');
+          card.className = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-xl border border-gray-200 bg-gray-50/50';
+          card.setAttribute('data-trash-id', s.id);
+          card.innerHTML = '<div class="min-w-0 flex-1">' +
+            '<h3 class="font-semibold text-gray-900 truncate">' + esc(s.title || 'Untitled') + '</h3>' +
+            '<p class="text-sm text-gray-500 mt-0.5 line-clamp-2">' + esc(preview(s.original_text, 120)) + '</p>' +
+            '<p class="text-xs text-gray-400 mt-2">Moved to trash ' + fmtDate(s.archived_at) + ' \u00b7 Deleted in 7 days</p>' +
+            '</div>' +
+            '<div class="flex items-center gap-2 flex-shrink-0">' +
+            '<button type="button" class="trash-restore px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors" data-id="' + esc(String(s.id)) + '">Restore</button>' +
+            '<button type="button" class="trash-delete-permanent px-4 py-2 rounded-lg border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 transition-colors" data-id="' + esc(String(s.id)) + '" data-title="' + esc(s.title || 'Untitled') + '">Delete permanently</button>' +
+            '</div>';
+          trashList.appendChild(card);
+        });
+        trashList.querySelectorAll('.trash-restore').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var id = btn.getAttribute('data-id');
+            if (!id) return;
+            btn.disabled = true;
+            var h = { 'Accept': 'application/json' };
+            try { var t = localStorage.getItem('access_token'); if (t) h['Authorization'] = 'Bearer ' + t; } catch (e) {}
+            fetch('/api/v1/submissions/' + id + '/unarchive', { method: 'PUT', credentials: 'include', headers: h })
+              .then(function(r) {
+                if (r.ok) {
+                  var card = trashList.querySelector('[data-trash-id="' + id + '"]');
+                  if (card) card.remove();
+                  if (trashList.children.length === 0) { trashList.classList.add('hidden'); trashEmpty.classList.remove('hidden'); }
+                  showNotification('Draft restored', 'success');
+                } else btn.disabled = false;
+              })
+              .catch(function() { btn.disabled = false; });
+          });
+        });
+        trashList.querySelectorAll('.trash-delete-permanent').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var id = btn.getAttribute('data-id');
+            var title = btn.getAttribute('data-title');
+            if (!id) return;
+            window.__deleteFromTrash = true;
+            confirmDeleteDraft(id, title);
+          });
+        });
+        trashList.classList.remove('hidden');
+      } catch (e) {
+        trashLoading.classList.add('hidden');
+        trashEmpty.classList.remove('hidden');
+        trashEmpty.querySelector('p.text-lg').textContent = 'Error loading trash';
+      }
+    }
+    window.loadTrash = loadTrash;
 
     // Helper function to clear invalid tokens and redirect to login
     // IMPORTANT: Only redirect if we're actually on the drafts page, not homepage
@@ -1357,10 +1483,10 @@
       console.log('[DRAFTS] Create New Draft button handler attached');
     }
     
-    // Also handle any other workspace links on the page
+    // Handle other workspace links (skip drafts-primary-cta so "Create with AI" uses its current href and navigates to /tools/ai-content-writer when AI Content tab is active)
     const workspaceLinks = document.querySelectorAll('a[href="/workspace"]');
     workspaceLinks.forEach(link => {
-      if (link.id !== 'create-new-draft-btn') {
+      if (link.id !== 'create-new-draft-btn' && link.id !== 'drafts-primary-cta') {
         link.addEventListener('click', function(e) {
           e.preventDefault();
           console.log('[DRAFTS] Workspace link clicked, navigating to /workspace');
@@ -1386,12 +1512,22 @@ function confirmDeleteDraft(draftId, draftTitle) {
   console.log('[DRAFTS] Showing delete confirmation for draft:', draftId, draftTitle);
   pendingDeleteId = draftId;
   document.getElementById('delete-draft-title').textContent = draftTitle;
+  var fromTrash = window.__deleteFromTrash;
+  var modalTitle = document.getElementById('modal-title');
+  var confirmBtn = document.getElementById('confirm-delete-btn');
+  if (modalTitle) modalTitle.textContent = fromTrash ? 'Delete permanently' : 'Delete Draft';
+  if (confirmBtn) confirmBtn.textContent = fromTrash ? 'Delete permanently' : 'Delete';
   document.getElementById('delete-modal').classList.remove('hidden');
 }
 
 function closeDeleteModal() {
   document.getElementById('delete-modal').classList.add('hidden');
   pendingDeleteId = null;
+  window.__deleteFromTrash = false;
+  var modalTitle = document.getElementById('modal-title');
+  var confirmBtn = document.getElementById('confirm-delete-btn');
+  if (modalTitle) modalTitle.textContent = 'Delete Draft';
+  if (confirmBtn) confirmBtn.textContent = 'Delete';
 }
 
 async function executeDraftDelete() {
@@ -1431,22 +1567,20 @@ async function executeDraftDelete() {
     console.log('[DRAFTS] Delete response status:', response.status);
     
     if (response.ok) {
-      // Remove the row from the table
-      const row = document.getElementById(`draft-row-${draftId}`);
-      if (row) {
-        row.remove();
+      if (window.__deleteFromTrash) {
+        window.__deleteFromTrash = false;
+        if (typeof window.loadTrash === 'function') window.loadTrash();
+        showNotification('Draft deleted permanently', 'success');
+      } else {
+        const row = document.getElementById(`draft-row-${draftId}`);
+        if (row) row.remove();
+        const bodyEl = document.getElementById('drafts-body');
+        if (bodyEl && bodyEl.children.length === 0) {
+          document.getElementById('drafts-table').classList.add('hidden');
+          document.getElementById('empty-state').classList.remove('hidden');
+        }
+        showNotification('Draft deleted successfully', 'success');
       }
-      
-      // Check if table is now empty
-      const bodyEl = document.getElementById('drafts-body');
-      if (bodyEl && bodyEl.children.length === 0) {
-        document.getElementById('drafts-table').classList.add('hidden');
-        document.getElementById('empty-state').classList.remove('hidden');
-      }
-      
-      // Show success notification
-      showNotification('Draft deleted successfully', 'success');
-      
       console.log('[DRAFTS] Draft deleted successfully:', draftId);
     } else {
       const errorData = await response.json().catch(() => ({}));
@@ -1805,7 +1939,7 @@ async function menuTrash() {
   const id    = _menuDraftId;
   const title = _menuDraftTitle;
 
-  if (!confirm(`Move "${title}" to trash?\n\nIt will be kept for 45 days before permanent deletion.`)) return;
+  if (!confirm(`Move "${title}" to trash?\n\nIt will be kept for 7 days before permanent deletion.`)) return;
 
   try {
     const res = await fetch(`/api/v1/submissions/${id}/archive`, {

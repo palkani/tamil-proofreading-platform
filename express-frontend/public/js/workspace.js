@@ -4663,6 +4663,8 @@ class WorkspaceController {
     // Skip if text is empty - clear AI suggestions
     if (!text || text.length === 0) {
       console.log('[AI] ⚠️ Text is empty - clearing AI suggestions');
+      // Reset so the same content triggers a fresh analysis after cut+paste
+      this.lastAnalyzedText = '';
       if (this.suggestionsPanel && typeof this.suggestionsPanel.clearSuggestions === 'function') {
         this.suggestionsPanel.clearSuggestions();
       }
@@ -4719,6 +4721,15 @@ class WorkspaceController {
       return;
     }
 
+    // Skip if we're already mid-analysis for this exact text.
+    // This prevents the 2-second handleEditorChange debounce from firing a second
+    // autoAnalyze while the first SSE stream is still running, which would abort
+    // the first, clear the suggestions panel, and produce a stale "Looks good" state.
+    if (this.isAnalyzing && this._analyzingText === text) {
+      console.log('[AI] ⏭️ Already analyzing same text - skipping concurrent duplicate');
+      return;
+    }
+
     console.log('[AI] ✅ Text meets requirements - proceeding with analysis');
     
     // Cancel any in-flight request
@@ -4736,6 +4747,7 @@ class WorkspaceController {
     const analysisSeq = ++this.analysisSeq;
     
     this.isAnalyzing = true;
+    this._analyzingText = text; // track current text so concurrent calls can detect it
     this.abortController = new AbortController();
     this.updateAnalysisStatus('analyzing');
     
@@ -5102,6 +5114,9 @@ class WorkspaceController {
         this.updateAnalysisStatus('no-issues');
       } else {
         this.updateAnalysisStatus('complete', dedupedGeminiSuggestions.length);
+        // Suppress the next autoAnalyze for 3 s so a late-firing handleEditorChange
+        // debounce cannot immediately clear and re-run analysis on the results we just showed.
+        this.suppressAutoAnalyzeUntil = Date.now() + 3000;
       }
       // Update quota bar after each analysis
       _updateQuotaBar();
@@ -5125,10 +5140,11 @@ class WorkspaceController {
       this.updateAnalysisStatus('error');
     } finally {
       this.isAnalyzing = false;
+      this._analyzingText = '';
       this.abortController = null;
     }
   }
-  
+
   updateAnalysisStatus(status, count = 0) {
     const summaryEl = document.getElementById('suggestions-summary');
     if (!summaryEl) return;

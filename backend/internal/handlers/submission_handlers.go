@@ -1196,7 +1196,7 @@ func (h *Handlers) DuplicateSubmission(c *gin.Context) {
 	})
 }
 
-// ArchiveSubmission marks a submission as archived for 45 days before deletion
+// ArchiveSubmission marks a submission as archived (trash); kept for 7 days before permanent deletion.
 func (h *Handlers) ArchiveSubmission(c *gin.Context) {
 	userID, err := middleware.GetUserFromContext(c)
 	if err != nil {
@@ -1243,8 +1243,41 @@ func (h *Handlers) ArchiveSubmission(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":       "archived",
 		"archived_at":  now,
-		"retention_in": 45,
+		"retention_in": 7,
 	})
+}
+
+// UnarchiveSubmission restores a submission from trash (sets archived = false).
+func (h *Handlers) UnarchiveSubmission(c *gin.Context) {
+	userID, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	submissionIDStr := c.Param("id")
+	submissionID, err := strconv.ParseUint(submissionIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid submission ID"})
+		return
+	}
+	var submission models.Submission
+	if err := h.db.Where("id = ? AND user_id = ?", submissionID, userID).First(&submission).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Submission not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to locate submission"})
+		return
+	}
+	if !submission.Archived {
+		c.JSON(http.StatusOK, gin.H{"status": "already_restored", "message": "Draft is not in trash"})
+		return
+	}
+	if err := h.db.Model(&submission).Updates(map[string]interface{}{"archived": false, "archived_at": nil}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to restore draft"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Draft restored from trash", "submission": submission})
 }
 
 // DeleteSubmission permanently deletes a submission (draft)
@@ -1338,8 +1371,8 @@ func (h *Handlers) GetArchivedSubmissions(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"submissions":    submissions,
-		"retention_days": 45,
-		"message":        "Drafts stay here for 45 days before permanent deletion.",
+		"retention_days": 7,
+		"message":        "Drafts stay here for 7 days before permanent deletion.",
 	})
 }
 
