@@ -1,4 +1,4 @@
-// v20260224 - STREAMING: Single SSE corrections request; server aborts Gemini on client disconnect
+// v20260224b - STREAMING: Single SSE corrections request; server aborts Gemini on client disconnect
 // Main Workspace Controller
 
 // PERFORMANCE: Debug logging disabled in production for faster response
@@ -6,7 +6,7 @@
 const IME_DEBUG = typeof window !== 'undefined' && window.IME_DEBUG === true;
 const imeLog = IME_DEBUG ? console.log.bind(console) : () => {};
 
-console.log('[WorkspaceJS] ✅ Loaded version v20260224 - all-occurrence highlights + apply-all');
+console.log('[WorkspaceJS] ✅ Loaded version v20260224b - inline correction popover on click');
 
 // CRITICAL: Ensure USE_TIPTAP_EDITOR is set to false at the very top
 // This prevents any initialization issues
@@ -4109,26 +4109,59 @@ class WorkspaceController {
       document.body.appendChild(tooltip);
     }
 
+    // Create the inline correction popover (one shared instance, re-positioned on each click).
+    if (!document.getElementById('correction-popover')) {
+      const pop = document.createElement('div');
+      pop.id = 'correction-popover';
+      document.body.appendChild(pop);
+    }
+
     const editor = document.getElementById('editor');
     if (!editor) return;
 
-    // Click on an underlined span → focus the matching card in the AI panel.
-    // preventDefault stops the browser from repositioning the caret (which can cause editor scroll).
+    // Click on an underlined span → show inline popover AND focus the matching card in the AI panel.
     editor.addEventListener('click', (e) => {
       const span = e.target.closest('.correction-highlight');
-      if (!span) return;
+      if (!span) {
+        this._hideCorrectionPopover();
+        return;
+      }
       e.preventDefault();
       const id = span.dataset.suggestionId;
       if (!id) return;
+
+      // Mark span as active
       editor.querySelectorAll('.correction-highlight.correction-active').forEach(s => s.classList.remove('correction-active'));
       span.classList.add('correction-active');
+
+      // Scroll AI panel to the matching card
       if (this.suggestionsPanel && typeof this.suggestionsPanel.focusSuggestion === 'function') {
         this.suggestionsPanel.focusSuggestion(id);
       }
+
+      // Show inline popover near the clicked span
+      const suggestion = this.suggestionsPanel?.suggestions?.find(s => s.id === id);
+      if (suggestion) {
+        this._showCorrectionPopover(span, suggestion);
+      }
+    });
+
+    // Close popover when clicking anywhere outside a correction span or the popover itself.
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.correction-highlight') || e.target.closest('#correction-popover')) return;
+      this._hideCorrectionPopover();
+    }, true);
+
+    // Close popover on ESC.
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this._hideCorrectionPopover();
     });
 
     // Mouse move → show / reposition tooltip on correction spans.
+    // Suppress tooltip while the click popover is visible (they'd overlap).
     editor.addEventListener('mousemove', (e) => {
+      const pop = document.getElementById('correction-popover');
+      if (pop && pop.style.display !== 'none') { this._hideTooltip(); return; }
       const span = e.target.closest('.correction-highlight');
       if (!span) { this._hideTooltip(); return; }
       const title = span.dataset.title || '';
@@ -4144,6 +4177,114 @@ class WorkspaceController {
     // Hide tooltip on scroll inside the editor container.
     const editorScroll = editor.closest('.overflow-auto');
     if (editorScroll) editorScroll.addEventListener('scroll', () => this._hideTooltip(), { passive: true });
+  }
+
+  /**
+   * Show a compact suggestion popover anchored below the given correction span.
+   * The popover has Accept / Ignore buttons that mirror the panel card actions.
+   */
+  _showCorrectionPopover(span, suggestion) {
+    const pop = document.getElementById('correction-popover');
+    if (!pop) return;
+
+    const original  = (suggestion.sourceText || '').trim();
+    const corrected = suggestion.preview && suggestion.preview.includes('→')
+      ? suggestion.preview.split('→').slice(1).join('→').trim()
+      : '';
+    const reason    = (suggestion.description || suggestion.title || '').trim();
+    const type      = (suggestion.type || 'grammar').toLowerCase();
+    const occCount  = suggestion.occurrenceCount || 1;
+    const btnLabel  = occCount > 1 ? `Accept all ${occCount}` : 'Accept';
+
+    // Build content using DOM API (safe — no innerHTML with user text)
+    const typeBadge = document.createElement('span');
+    typeBadge.className = `corr-pop-type ${type}`;
+    typeBadge.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+
+    const row = document.createElement('div');
+    row.className = 'corr-pop-row';
+    if (original) {
+      const orig = document.createElement('span');
+      orig.className = 'corr-pop-original tamil-text';
+      orig.textContent = original;
+      row.appendChild(orig);
+    }
+    if (corrected) {
+      const arrow = document.createElement('span');
+      arrow.className = 'corr-pop-arrow';
+      arrow.textContent = '→';
+      const corr = document.createElement('span');
+      corr.className = 'corr-pop-corrected tamil-text';
+      corr.textContent = corrected;
+      row.appendChild(arrow);
+      row.appendChild(corr);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'corr-pop-actions';
+
+    if (suggestion.onApply) {
+      const acceptBtn = document.createElement('button');
+      acceptBtn.className = 'corr-pop-accept';
+      acceptBtn.textContent = btnLabel;
+      acceptBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        suggestion.onApply();
+        if (this.suggestionsPanel) this.suggestionsPanel.removeSuggestion(suggestion.id);
+        this._hideCorrectionPopover();
+      });
+      actions.appendChild(acceptBtn);
+    }
+
+    const ignoreBtn = document.createElement('button');
+    ignoreBtn.className = 'corr-pop-ignore';
+    ignoreBtn.textContent = 'Ignore';
+    ignoreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (suggestion.onIgnore) suggestion.onIgnore();
+      if (this.suggestionsPanel) this.suggestionsPanel.removeSuggestion(suggestion.id);
+      this._hideCorrectionPopover();
+    });
+    actions.appendChild(ignoreBtn);
+
+    // Assemble
+    pop.innerHTML = '';
+    pop.appendChild(typeBadge);
+    pop.appendChild(row);
+    if (reason) {
+      const reasonEl = document.createElement('p');
+      reasonEl.className = 'corr-pop-reason';
+      reasonEl.textContent = reason;
+      pop.appendChild(reasonEl);
+    }
+    pop.appendChild(actions);
+
+    // Position below the span, clamped inside viewport
+    pop.style.display = 'block';
+    const spanRect = span.getBoundingClientRect();
+    const popWidth = 280;
+    let left = spanRect.left;
+    let top  = spanRect.bottom + 10;
+
+    // Clamp horizontally
+    if (left + popWidth > window.innerWidth - 12) {
+      left = Math.max(8, window.innerWidth - popWidth - 12);
+    }
+    // If below viewport, show above the span instead
+    pop.style.left = `${left}px`;
+    pop.style.top  = `${top}px`;
+    const popHeight = pop.offsetHeight || 120;
+    if (top + popHeight > window.innerHeight - 12) {
+      pop.style.top = `${Math.max(8, spanRect.top - popHeight - 10)}px`;
+    }
+  }
+
+  /** Hide the inline correction popover. */
+  _hideCorrectionPopover() {
+    const pop = document.getElementById('correction-popover');
+    if (pop) pop.style.display = 'none';
+    // Remove active highlight from all correction spans
+    document.querySelectorAll('.correction-highlight.correction-active').forEach(s => s.classList.remove('correction-active'));
   }
 
   /** Remove all `.correction-highlight` spans from the editor, unwrapping their children. */

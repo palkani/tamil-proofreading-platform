@@ -684,6 +684,111 @@
     transition: background 0.13s, border-color 0.13s;
   }
   .sugg-ignore-btn:hover { background: #f9fafb; border-color: #d1d5db; }
+
+  /* ── Inline correction popover ───────────────────────────────────────────── */
+  #correction-popover {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.08);
+    padding: 12px 14px 10px;
+    min-width: 220px;
+    max-width: 320px;
+    font-family: inherit;
+  }
+  /* Small upward-pointing caret */
+  #correction-popover::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 18px;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid #e5e7eb;
+  }
+  #correction-popover::after {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 19px;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-bottom: 7px solid #fff;
+  }
+  .corr-pop-type {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: #fee2e2;
+    color: #b91c1c;
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .corr-pop-type.spelling  { background: #ffedd5; color: #c2410c; }
+  .corr-pop-type.punctuation { background: #fee2e2; color: #b91c1c; }
+  .corr-pop-type.grammar   { background: #fee2e2; color: #b91c1c; }
+  .corr-pop-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 15px;
+  }
+  .corr-pop-original {
+    background: #fef2f2;
+    color: #991b1b;
+    padding: 2px 6px;
+    border-radius: 5px;
+    text-decoration: line-through;
+    font-weight: 600;
+  }
+  .corr-pop-arrow { color: #6b7280; font-size: 14px; }
+  .corr-pop-corrected {
+    background: #f0fdf4;
+    color: #166534;
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-weight: 700;
+  }
+  .corr-pop-reason {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+  .corr-pop-actions { display: flex; gap: 8px; }
+  .corr-pop-accept {
+    flex: 1;
+    padding: 6px 0;
+    background: #2563eb;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .corr-pop-accept:hover { background: #1d4ed8; }
+  .corr-pop-ignore {
+    flex: 1;
+    padding: 6px 0;
+    background: #fff;
+    color: #374151;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .corr-pop-ignore:hover { background: #f9fafb; }
 </style>
 
 <div id="workspace-auth-banner" class="hidden bg-yellow-50 border-b border-yellow-200 text-yellow-800 px-4 py-3 flex items-center justify-between">
