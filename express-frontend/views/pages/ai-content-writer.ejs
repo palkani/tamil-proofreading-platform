@@ -7,6 +7,13 @@
 
 <div class="ai-content-writer" data-user-logged-in="<%= user && user.id ? 'true' : 'false' %>">
   <div class="writer-container">
+    <!-- Back to Drafts (visible on all screens) -->
+    <div class="mb-4">
+      <a href="/drafts#ai-content" class="inline-flex items-center gap-2 text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        Back to My Drafts
+      </a>
+    </div>
     <!-- Header -->
     <div class="writer-header">
       <div class="header-icon">✍️</div>
