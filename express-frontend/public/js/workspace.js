@@ -4455,6 +4455,20 @@ class WorkspaceController {
         }
       }
       
+      // Count how many times each (type, original, corrected) appears in the RAW corrections
+      // array before dedup. Backend sends one entry per chunk occurrence so the same error
+      // word in 5 chunks = 5 entries → occurrenceCount 5 on the deduplicated card.
+      const _occMap = Object.create(null);
+      for (const r of corrections) {
+        const _o = (r.original || r.originalText || '').normalize('NFC').trim();
+        const _c = (r.corrected || r.correction || '').normalize('NFC').trim();
+        const _t = (r.type || r.Type || 'grammar').toString().toLowerCase().trim();
+        if (_o && _c && _o !== _c) {
+          const _k = `${_t}|${_o}|${_c}`;
+          _occMap[_k] = (_occMap[_k] || 0) + 1;
+        }
+      }
+
       const geminiSuggestions = corrections
         // Filter out invalid suggestions (must have valid original !== corrected)
         .filter((result, index) => {
@@ -4554,11 +4568,16 @@ class WorkspaceController {
           const stableKey = `${normalizeComparable(result.type || result.Type || 'grammar').toLowerCase()}|${normalizeComparable(original)}|${normalizeComparable(corrected)}`;
           const stableId = `gemini-${hashString(stableKey)}`;
 
+          // Count how many raw correction entries share this (type, original, corrected) key.
+          const _countKey = `${(result.type || result.Type || 'grammar').toString().toLowerCase().trim()}|${original.normalize('NFC').trim()}|${corrected.normalize('NFC').trim()}`;
+          const occurrenceCount = _occMap[_countKey] || 1;
+
           return {
             id: stableId,
             title: reason || 'Grammar Suggestion',
             description: reason,
             type: result.type || result.Type || 'grammar',
+            occurrenceCount,
             preview: original && corrected ? `${original} → ${corrected}` : corrected || original || '',
             sourceText: original,
             onApply: original && corrected ? () => {

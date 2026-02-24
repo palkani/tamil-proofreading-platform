@@ -408,9 +408,13 @@ class SuggestionsPanel {
     const typeLabel   = this.getTypeLabel(suggestion.type);
     const reason      = (suggestion.description || '').trim();
     const hasApply    = !!suggestion.onApply;
+    const occCount    = suggestion.occurrenceCount || 1;
+    const countBadge  = occCount > 1
+      ? `<span class="sugg-occurrence-badge">${occCount}×</span>`
+      : '';
 
     card.innerHTML = `
-      <span class="sugg-type-badge ${badgeClass}">${escapeHtml(typeLabel)}</span>
+      <span class="sugg-type-badge ${badgeClass}">${escapeHtml(typeLabel)}</span>${countBadge}
 
       ${originalText ? `
         <span class="sugg-field-label">Original:</span>
@@ -428,7 +432,7 @@ class SuggestionsPanel {
       ` : ''}
 
       <div class="sugg-actions">
-        ${hasApply ? `<button class="sugg-accept-btn">Accept</button>` : ''}
+        ${hasApply ? `<button class="sugg-accept-btn">${occCount > 1 ? `Accept all ${occCount}` : 'Accept'}</button>` : ''}
         <button class="sugg-ignore-btn">Ignore</button>
       </div>
     `;
