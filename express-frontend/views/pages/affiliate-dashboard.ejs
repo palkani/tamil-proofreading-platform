@@ -165,9 +165,12 @@
     document.getElementById('aff-loading').classList.add('hidden');
     document.getElementById('aff-dashboard').classList.remove('hidden');
 
-    var code = data.affiliate_code || data.AffiliateCode || '';
-    var rate = data.commission_rate || data.CommissionRate || 25;
-    var link = BASE + '/?ref=' + encodeURIComponent(code);
+    // Backend returns { affiliate: {...}, referral_link: "..." }
+    var aff = data.affiliate || data;
+    var code = aff.affiliate_code || aff.AffiliateCode || '';
+    var rate = aff.commission_rate != null ? (aff.commission_rate * 100).toFixed(0) : 25;
+    // Use backend-provided referral_link if available, else build it
+    var link = data.referral_link || (BASE + '/?ref=' + encodeURIComponent(code));
 
     document.getElementById('referral-link-input').value = link;
     document.getElementById('affiliate-code-badge').textContent = code;
@@ -179,12 +182,16 @@
       .then(function(res) { return res.ok ? res.json() : null; })
       .then(function(data) {
         if (!data) return;
-        document.getElementById('stat-referrals').textContent = data.total_referrals || data.TotalReferrals || 0;
-        document.getElementById('stat-active').textContent = data.active_referrals || data.ActiveReferrals || 0;
-        var total = data.total_earnings || data.TotalEarnings || 0;
-        var pending = data.pending_payout || data.PendingPayout || 0;
-        document.getElementById('stat-total-earnings').textContent = formatCurrency(total, data.currency || 'INR');
-        document.getElementById('stat-pending').textContent = formatCurrency(pending, data.currency || 'INR');
+        // Backend returns { affiliate, stats: { total_signups, active_referrals, paid_users, total_commission }, referral_link }
+        var stats = data.stats || data;
+        document.getElementById('stat-referrals').textContent = stats.total_signups || stats.total_referrals || 0;
+        document.getElementById('stat-active').textContent = stats.active_referrals || stats.paid_users || 0;
+        // Total earnings from affiliate object
+        var aff = data.affiliate || {};
+        var total = aff.total_earnings || 0;
+        var paid = aff.paid_earnings || 0;
+        document.getElementById('stat-total-earnings').textContent = formatCurrency(total, 'INR');
+        document.getElementById('stat-pending').textContent = formatCurrency(total - paid, 'INR');
       })
       .catch(function() {});
   }
@@ -195,7 +202,8 @@
       .then(function(res) { return res.ok ? res.json() : null; })
       .then(function(data) {
         document.getElementById('earnings-loading').classList.add('hidden');
-        var rows = (data && (data.earnings || data.Earnings)) || [];
+        // Backend returns { total_earnings, paid_earnings, monthly_breakdown: [...] }
+        var rows = (data && (data.monthly_breakdown || data.earnings || data.Earnings)) || [];
         if (!rows.length) {
           document.getElementById('earnings-empty').classList.remove('hidden');
           return;

@@ -90,26 +90,107 @@
       <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
         <h3 class="text-lg font-medium text-gray-900 mb-4">Create New Affiliate</h3>
         <div class="space-y-4">
+
+          <!-- Step 1: email search -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">User ID</label>
-            <input type="number" id="create-user-id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500" placeholder="Enter user ID">
-            <p class="mt-1 text-xs text-gray-500">The ProofTamil user ID to make an affiliate</p>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Find user by email</label>
+            <div class="flex gap-2">
+              <input
+                type="email"
+                id="create-email-search"
+                class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500 text-sm"
+                placeholder="user@example.com"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();lookupUser();}"
+              >
+              <button
+                type="button"
+                onclick="lookupUser()"
+                id="lookup-btn"
+                class="px-4 py-2 bg-gray-800 text-white text-sm font-semibold rounded-lg hover:bg-gray-700 whitespace-nowrap"
+              >
+                Find
+              </button>
+            </div>
+            <p class="mt-1 text-xs text-gray-500">Search by the user's registered email address</p>
           </div>
-          <div>
+
+          <!-- Step 2: user confirmation card (hidden until found) -->
+          <div id="user-found-card" class="hidden rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-green-800 font-bold text-sm" id="user-avatar">?</div>
+              <div>
+                <div id="user-found-name" class="font-semibold text-gray-900 text-sm"></div>
+                <div id="user-found-email" class="text-xs text-gray-500"></div>
+              </div>
+              <span class="ml-auto text-xs text-green-700 font-medium">Found ✓</span>
+            </div>
+            <!-- hidden field carries user ID -->
+            <input type="hidden" id="create-user-id" value="">
+          </div>
+
+          <!-- Not found error -->
+          <div id="user-not-found" class="hidden rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            No user found with that email. Ask them to sign up first.
+          </div>
+
+          <!-- Step 3: commission rate (shown after user found) -->
+          <div id="commission-row" class="hidden">
             <label class="block text-sm font-medium text-gray-700 mb-1">Commission Rate (%)</label>
-            <input type="number" id="create-commission-rate" value="25" min="1" max="100" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500">
-            <p class="mt-1 text-xs text-gray-500">Default is 25%</p>
+            <input type="number" id="create-commission-rate" value="25" min="1" max="100"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500 text-sm">
+            <p class="mt-1 text-xs text-gray-500">Default is 25%. The affiliate earns this % on each successful referral payment.</p>
           </div>
+
         </div>
       </div>
       <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-        <button type="button" onclick="createAffiliate()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 sm:ml-3 sm:w-auto sm:text-sm">
-          Create Affiliate
+        <button type="button" onclick="createAffiliate()" id="create-btn"
+          class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled>
+          Create Affiliate &amp; Generate Link
         </button>
-        <button type="button" onclick="closeCreateModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+        <button type="button" onclick="closeCreateModal()"
+          class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
           Cancel
         </button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Referral Link Result Modal (shown after successful create) -->
+<div id="link-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+  <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75" onclick="closeLinkModal()"></div>
+    <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+    <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+          <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-900">Affiliate Created!</h3>
+          <p class="text-xs text-gray-500">Share this referral link with the affiliate</p>
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Referral Link</label>
+        <div class="flex gap-2">
+          <input id="link-modal-url" type="text" readonly
+            class="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm font-mono text-gray-800">
+          <button onclick="copyModalLink()" class="px-3 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700 whitespace-nowrap">
+            Copy
+          </button>
+        </div>
+      </div>
+      <div class="mb-4 bg-blue-50 rounded-lg px-4 py-3 text-sm text-blue-800">
+        Anyone who visits this link and signs up will be tracked as a referral for this affiliate. They don't need to sign up immediately — the link is valid for 30 days via cookie.
+      </div>
+      <button onclick="closeLinkModal()" class="w-full py-2 rounded-lg bg-gray-800 text-white font-semibold hover:bg-gray-700">
+        Done
+      </button>
     </div>
   </div>
 </div>
@@ -233,11 +314,84 @@ async function loadAffiliates() {
 }
 
 function openCreateModal() {
+  // Reset form state
+  document.getElementById('create-email-search').value = '';
+  document.getElementById('create-user-id').value = '';
+  document.getElementById('create-commission-rate').value = '25';
+  document.getElementById('user-found-card').classList.add('hidden');
+  document.getElementById('user-not-found').classList.add('hidden');
+  document.getElementById('commission-row').classList.add('hidden');
+  document.getElementById('create-btn').disabled = true;
   document.getElementById('create-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('create-email-search').focus(), 100);
 }
 
 function closeCreateModal() {
   document.getElementById('create-modal').classList.add('hidden');
+}
+
+function closeLinkModal() {
+  document.getElementById('link-modal').classList.add('hidden');
+}
+
+function copyModalLink() {
+  const input = document.getElementById('link-modal-url');
+  navigator.clipboard.writeText(input.value).then(() => {
+    showNotification('Referral link copied!', 'success');
+  }).catch(() => {
+    input.select();
+    document.execCommand('copy');
+    showNotification('Link copied!', 'success');
+  });
+}
+
+async function lookupUser() {
+  const email = document.getElementById('create-email-search').value.trim();
+  if (!email) return;
+
+  const btn = document.getElementById('lookup-btn');
+  btn.textContent = 'Searching…';
+  btn.disabled = true;
+
+  // Reset previous results
+  document.getElementById('user-found-card').classList.add('hidden');
+  document.getElementById('user-not-found').classList.add('hidden');
+  document.getElementById('commission-row').classList.add('hidden');
+  document.getElementById('create-btn').disabled = true;
+  document.getElementById('create-user-id').value = '';
+
+  try {
+    const token = localStorage.getItem('access_token');
+    const headers = { 'Accept': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`/api/v1/admin/users?email=${encodeURIComponent(email)}&limit=5`, {
+      credentials: 'include',
+      headers
+    });
+    const data = await res.json();
+    const users = data.users || [];
+
+    if (users.length === 0) {
+      document.getElementById('user-not-found').classList.remove('hidden');
+    } else {
+      const u = users[0]; // take first (best) match
+      document.getElementById('create-user-id').value = u.id;
+      document.getElementById('user-found-name').textContent = u.name || u.email;
+      document.getElementById('user-found-email').textContent = u.email;
+      document.getElementById('user-avatar').textContent = (u.name || u.email || '?')[0].toUpperCase();
+      document.getElementById('user-found-card').classList.remove('hidden');
+      document.getElementById('commission-row').classList.remove('hidden');
+      document.getElementById('create-btn').disabled = false;
+    }
+  } catch (err) {
+    console.error('[AFFILIATES] Lookup error:', err);
+    document.getElementById('user-not-found').textContent = 'Lookup failed. Please try again.';
+    document.getElementById('user-not-found').classList.remove('hidden');
+  } finally {
+    btn.textContent = 'Find';
+    btn.disabled = false;
+  }
 }
 
 async function createAffiliate() {
@@ -245,13 +399,17 @@ async function createAffiliate() {
   const commissionRate = document.getElementById('create-commission-rate').value;
 
   if (!userId) {
-    alert('Please enter a user ID');
+    alert('Please find a user first using the email search above.');
     return;
   }
 
+  const btn = document.getElementById('create-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+
   try {
     const token = localStorage.getItem('access_token');
-    const headers = { 
+    const headers = {
       'Accept': 'application/json',
       'Content-Type': 'application/json'
     };
@@ -271,14 +429,21 @@ async function createAffiliate() {
 
     if (response.ok) {
       closeCreateModal();
-      showNotification('Affiliate created successfully!', 'success');
+      // Show the referral link in a result modal
+      const link = data.referral_link || `https://prooftamil.com/?ref=${data.affiliate?.affiliate_code || ''}`;
+      document.getElementById('link-modal-url').value = link;
+      document.getElementById('link-modal').classList.remove('hidden');
       loadAffiliates();
     } else {
       alert(data.error || 'Failed to create affiliate');
+      btn.disabled = false;
+      btn.textContent = 'Create Affiliate & Generate Link';
     }
   } catch (error) {
     console.error('[AFFILIATES] Create error:', error);
     alert('Failed to create affiliate');
+    btn.disabled = false;
+    btn.textContent = 'Create Affiliate & Generate Link';
   }
 }
 
@@ -347,7 +512,7 @@ async function regenerateCode(affiliateId) {
 }
 
 function copyCode(code) {
-  const link = `https://prooftamil.com/signup?ref=${code}`;
+  const link = `https://prooftamil.com/?ref=${code}`;
   navigator.clipboard.writeText(link).then(() => {
     showNotification('Referral link copied!', 'success');
   }).catch(() => {
@@ -372,9 +537,12 @@ function showNotification(message, type) {
 // Load affiliates on page load
 document.addEventListener('DOMContentLoaded', loadAffiliates);
 
-// Close modal with Escape key
+// Close modals with Escape key
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeCreateModal();
+  if (e.key === 'Escape') {
+    closeCreateModal();
+    closeLinkModal();
+  }
 });
 </script>
 

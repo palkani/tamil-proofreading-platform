@@ -79,11 +79,21 @@
           </div>
 
           <form id="register-form" class="space-y-5">
-            <!-- Hidden field: affiliate referral code from ref_code cookie -->
+            <!-- Hidden field: affiliate referral code from URL ?ref= param or ref_code cookie -->
             <input type="hidden" name="affiliate_code" id="affiliate_code_field">
             <script>
               (function() {
                 try {
+                  // Priority 1: ?ref= URL param (direct signup link e.g. prooftamil.com/?ref=ABC12345)
+                  var urlRef = new URLSearchParams(window.location.search).get('ref');
+                  if (urlRef) {
+                    var clean = urlRef.replace(/[^A-Za-z0-9]/g, '').slice(0, 20);
+                    document.getElementById('affiliate_code_field').value = clean;
+                    // Also persist as cookie so they're tracked even if they navigate away
+                    document.cookie = 'ref_code=' + encodeURIComponent(clean) + '; max-age=' + (30*24*60*60) + '; path=/; samesite=lax';
+                    return;
+                  }
+                  // Priority 2: ref_code cookie (set when they visited /?ref= on the home page)
                   var m = document.cookie.match(/(?:^|;\s*)ref_code=([^;]+)/);
                   if (m) {
                     document.getElementById('affiliate_code_field').value = decodeURIComponent(m[1]).slice(0, 20);

@@ -548,6 +548,19 @@ router.get('/register', (req, res) => {
     console.log('[AUTH] user already authenticated, redirecting to', target);
     return res.redirect(target);
   }
+
+  // Set ref_code cookie server-side when ?ref= is in URL (handles direct register links)
+  if (req.query.ref) {
+    const refCode = String(req.query.ref).replace(/[^A-Za-z0-9]/g, '').slice(0, 20);
+    if (refCode) {
+      res.cookie('ref_code', refCode, {
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        httpOnly: false,
+        sameSite: 'lax'
+      });
+    }
+  }
+
   const seo = getSeoData('register');
   res.render('pages/register', {
     title: seo.title,
@@ -558,6 +571,12 @@ router.get('/register', (req, res) => {
     redirectTo: req.query.redirect || '/drafts',
     demoMode: isDemoModeEnabled(),
   });
+});
+
+// /signup is an alias for /register — preserves ?ref= for affiliate tracking
+router.get('/signup', (req, res) => {
+  const qs = new URLSearchParams(req.query).toString();
+  return res.redirect(302, '/register' + (qs ? '?' + qs : ''));
 });
 
 // Note: Login and registration form submissions are handled client-side via /auth/login and /auth/register

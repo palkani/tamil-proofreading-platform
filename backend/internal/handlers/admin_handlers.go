@@ -11,9 +11,11 @@ import (
 )
 
 // AdminGetUsers retrieves all users (admin only)
+// Supports optional ?email=... query param to search by email (partial, case-insensitive).
 func (h *Handlers) AdminGetUsers(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "20")
 	offsetStr := c.DefaultQuery("offset", "0")
+	emailFilter := c.Query("email")
 
 	limit, _ := strconv.Atoi(limitStr)
 	offset, _ := strconv.Atoi(offsetStr)
@@ -21,13 +23,28 @@ func (h *Handlers) AdminGetUsers(c *gin.Context) {
 	var users []models.User
 	var total int64
 
-	h.db.Model(&models.User{}).Count(&total)
-	h.db.Limit(limit).Offset(offset).Find(&users)
+	query := h.db.Model(&models.User{})
+	if emailFilter != "" {
+		query = query.Where("LOWER(email) LIKE LOWER(?)", "%"+emailFilter+"%")
+	}
+	query.Count(&total)
+	query.Limit(limit).Offset(offset).Find(&users)
+
+	// Return only safe fields when doing email lookup (never expose password hashes)
+	type SafeUser struct {
+		ID    uint   `json:"id"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+	safe := make([]SafeUser, len(users))
+	for i, u := range users {
+		safe[i] = SafeUser{ID: u.ID, Email: u.Email, Name: u.Name}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"users": users,
-		"total": total,
-		"limit": limit,
+		"users":  safe,
+		"total":  total,
+		"limit":  limit,
 		"offset": offset,
 	})
 }

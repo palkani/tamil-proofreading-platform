@@ -46,7 +46,7 @@ func (h *Handlers) AdminCreateAffiliate(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"success":   true,
 		"affiliate": aff,
-		"referral_link": "https://prooftamil.com/signup?ref=" + aff.AffiliateCode,
+		"referral_link": "https://prooftamil.com/?ref=" + aff.AffiliateCode,
 	})
 }
 
@@ -76,7 +76,7 @@ func (h *Handlers) AdminListAffiliates(c *gin.Context) {
 		enriched[i] = AffiliateWithStats{
 			Affiliate:    aff,
 			Stats:        stats,
-			ReferralLink: "https://prooftamil.com/signup?ref=" + aff.AffiliateCode,
+			ReferralLink: "https://prooftamil.com/?ref=" + aff.AffiliateCode,
 		}
 	}
 
@@ -162,7 +162,7 @@ func (h *Handlers) AdminRegenerateAffiliateCode(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success":       true,
 		"new_code":      aff.AffiliateCode,
-		"referral_link": "https://prooftamil.com/signup?ref=" + aff.AffiliateCode,
+		"referral_link": "https://prooftamil.com/?ref=" + aff.AffiliateCode,
 	})
 }
 
@@ -192,7 +192,7 @@ func (h *Handlers) AffiliateGetMe(c *gin.Context) {
 		"success":       true,
 		"is_affiliate":  true,
 		"affiliate":     aff,
-		"referral_link": "https://prooftamil.com/signup?ref=" + aff.AffiliateCode,
+		"referral_link": "https://prooftamil.com/?ref=" + aff.AffiliateCode,
 	})
 }
 
@@ -226,7 +226,7 @@ func (h *Handlers) AffiliateGetStats(c *gin.Context) {
 		"success":       true,
 		"affiliate":     aff,
 		"stats":         stats,
-		"referral_link": "https://prooftamil.com/signup?ref=" + aff.AffiliateCode,
+		"referral_link": "https://prooftamil.com/?ref=" + aff.AffiliateCode,
 	})
 }
 
