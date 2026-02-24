@@ -125,11 +125,42 @@
     } catch (_) { return []; }
   }
 
-  /** Local exact matches first (commonWordMap hits), backend fills remaining slots */
+  /**
+   * Score-aware merge: backend rank is used to re-order local results.
+   * The backend (language-model powered) knows which word is most relevant —
+   * if it ranks a word higher than the local heuristic did, we honour that.
+   * Words only in local are kept; words only in backend fill remaining slots.
+   */
   function mergeSuggestions(local, backend) {
+    // Build a backend score map: position 0 = best (highest score)
+    const backendRank = new Map();
+    backend.forEach((w, i) => {
+      const k = (w || '').normalize?.('NFC') || w;
+      if (k && !backendRank.has(k)) backendRank.set(k, i); // lower i = better rank
+    });
+
+    // Assign a combined score to each local word:
+    //   - If the backend also ranked it, use backend rank as primary sort key
+    //   - Otherwise fall back to local position
+    const scored = local.map((w, localIdx) => {
+      const k = (w || '').normalize?.('NFC') || w;
+      const bRank = backendRank.has(k) ? backendRank.get(k) : 999;
+      // Lower value = better. Backend-confirmed words get priority via bRank * 100,
+      // local-only words get a high penalty so they stay below backend-confirmed words.
+      const sort = bRank < 999 ? bRank * 100 + localIdx : 10000 + localIdx;
+      return { w, k, sort };
+    });
+    scored.sort((a, b) => a.sort - b.sort);
+
     const seen = new Set();
     const out = [];
-    for (const w of [...local, ...backend]) {
+    // 1. Emit sorted local words
+    for (const { w, k } of scored) {
+      if (k && !seen.has(k)) { seen.add(k); out.push(w); }
+      if (out.length >= MAX_SHOW) break;
+    }
+    // 2. Fill remaining slots with backend-only words
+    for (const w of backend) {
       const k = (w || '').normalize?.('NFC') || w;
       if (k && !seen.has(k)) { seen.add(k); out.push(w); }
       if (out.length >= MAX_SHOW) break;

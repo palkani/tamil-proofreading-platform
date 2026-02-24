@@ -851,50 +851,54 @@ function getTamilSuggestionsFromEnglish(englishInput, tamilWords) {
     addSuggestion(commonWordMap[lower], 100);
   }
   
-  // 2. HIGH PRIORITY: Partial matches in common word map (starts with)
-  Object.keys(commonWordMap).forEach(key => {
-    if (key.startsWith(lower) && key !== lower) {
-      addSuggestion(commonWordMap[key], 90);
-    }
-  });
-  
-  // 3. MEDIUM PRIORITY: Contains match in common word map
-  Object.keys(commonWordMap).forEach(key => {
-    if (key.includes(lower) && !key.startsWith(lower)) {
-      addSuggestion(commonWordMap[key], 80);
-    }
-  });
-  
-  // 4. PHONETIC VARIANTS: Generate multiple Tamil variations (Google Input Tools style)
-  const phoneticVariants = generateTamilVariants(lower);
-  phoneticVariants.forEach(variant => {
-    addSuggestion(variant, 85);
-  });
-  
-  // 5. Try single transliteration for phonetic matching
+  // 2. DIRECT TRANSLITERATION of the exact input — highest phonetic relevance.
+  // Placed before prefix/variant lookups so it always wins over longer words that
+  // merely *start with* the same English token (e.g. "uyir" → "உயிர்" should rank
+  // above "uyirchatham" → "உயிர்ச்சதம்").
   const transliterated = transliterateToTamil(lower);
-  // Use passed-in tamilWords, or fall back to window.tamilDictionary, or empty array
   const wordList = Array.isArray(tamilWords) ? tamilWords
     : (typeof window !== 'undefined' && Array.isArray(window.tamilDictionary) ? window.tamilDictionary : []);
 
-  // Find Tamil words that start with the transliterated text
   if (transliterated && transliterated !== lower) {
-    addSuggestion(transliterated, 75);
+    addSuggestion(transliterated, 96); // 2nd only to exact commonWordMap hit (100)
+  }
 
+  // 3. PHONETIC VARIANTS: Generate multiple Tamil variations (Google Input Tools style)
+  const phoneticVariants = generateTamilVariants(lower);
+  phoneticVariants.forEach(variant => {
+    addSuggestion(variant, 88);
+  });
+
+  // 4. Prefix matches in common word map — keys longer than the input (lower relevance than direct match)
+  Object.keys(commonWordMap).forEach(key => {
+    if (key.startsWith(lower) && key !== lower) {
+      addSuggestion(commonWordMap[key], 78);
+    }
+  });
+
+  // 5. Contains match in common word map
+  Object.keys(commonWordMap).forEach(key => {
+    if (key.includes(lower) && !key.startsWith(lower)) {
+      addSuggestion(commonWordMap[key], 68);
+    }
+  });
+
+  // 6. Dictionary words that start with the direct transliteration
+  if (transliterated && transliterated !== lower) {
     wordList.forEach(word => {
-      if (word.startsWith(transliterated)) {
-        addSuggestion(word, 70);
+      if (word.startsWith(transliterated) && word !== transliterated) {
+        addSuggestion(word, 62);
       }
     });
   }
 
-  // 6. Partial transliteration (first 2-3 chars)
+  // 7. Partial transliteration (first 2-3 chars) — prefix fallback
   if (lower.length >= 2) {
     const partialTranslit = transliterateToTamil(lower.substring(0, Math.min(3, lower.length)));
     if (partialTranslit && partialTranslit !== lower.substring(0, Math.min(3, lower.length))) {
       wordList.forEach(word => {
         if (word.startsWith(partialTranslit)) {
-          addSuggestion(word, 60);
+          addSuggestion(word, 55);
         }
       });
     }
