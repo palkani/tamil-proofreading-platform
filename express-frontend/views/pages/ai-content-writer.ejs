@@ -5,7 +5,7 @@
 <!-- Navigation -->
 <%- include('../partials/nav', { active: 'tools', user: user || null }) %>
 
-<div class="ai-content-writer">
+<div class="ai-content-writer" data-user-logged-in="<%= user && user.id ? 'true' : 'false' %>">
   <div class="writer-container">
     <!-- Header -->
     <div class="writer-header">
@@ -238,6 +238,22 @@
       <div id="result-content"></div>
 
       <div id="result-metadata" class="metadata"></div>
+
+      <!-- Save to My Drafts (logged-in users): save generated content as draft like Workspace drafts -->
+      <div id="save-draft-tools" class="save-draft-tools" style="display: none;">
+        <div class="publish-card" style="margin-bottom: 1rem;">
+          <div class="publish-card-header">
+            <h3 class="publish-card-title">Save to My Drafts</h3>
+            <p class="publish-card-subtitle">Save this content as a draft. It will appear in My Drafts and you can open it in Workspace to proofread or edit.</p>
+          </div>
+          <div class="publish-actions">
+            <button id="save-to-draft-btn" class="btn btn-generate" type="button">
+              💾 Save to My Drafts
+            </button>
+          </div>
+          <div id="save-draft-status" class="publish-status" style="display:none;"></div>
+        </div>
+      </div>
 
       <!-- Publish tools (shown only for Generated Content) -->
       <div id="publish-tools" class="publish-tools" style="display: none;">

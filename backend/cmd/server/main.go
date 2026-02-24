@@ -296,6 +296,7 @@ func main() {
 			protected.GET("/me", h.GetCurrentUser)
 
 			// Submissions (draft list, get/update/delete) - submit is above with optional auth
+			protected.POST("/submissions", h.CreateSubmission)   // Save AI Content Writer (or any) content as draft
 			protected.GET("/submissions", h.GetSubmissions)
 			protected.GET("/submissions/:id", h.GetSubmission)
 			protected.PATCH("/submissions/:id", h.UpdateSubmission)

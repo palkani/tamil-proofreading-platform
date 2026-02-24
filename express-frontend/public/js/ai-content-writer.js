@@ -321,8 +321,17 @@
         publishTools.style.display = 'block';
         initPublishAndSocial(data);
       }
+      // Show "Save to My Drafts" for logged-in users (same content as Workspace drafts)
+      const saveDraftTools = document.getElementById('save-draft-tools');
+      const isLoggedIn = document.querySelector('.ai-content-writer')?.getAttribute('data-user-logged-in') === 'true';
+      if (saveDraftTools) {
+        saveDraftTools.style.display = isLoggedIn ? 'block' : 'none';
+        if (isLoggedIn) initSaveToDraft(data);
+      }
     } else if (type === 'improve' && data.improved) {
       if (publishTools) publishTools.style.display = 'none';
+      const saveDraftTools = document.getElementById('save-draft-tools');
+      if (saveDraftTools) saveDraftTools.style.display = 'none';
       html += `
         <div class="content-block">
           <h3 class="content-block-title">Original</h3>
@@ -335,6 +344,8 @@
       `;
     } else if (type === 'translate' && data.translated) {
       if (publishTools) publishTools.style.display = 'none';
+      const saveDraftTools = document.getElementById('save-draft-tools');
+      if (saveDraftTools) saveDraftTools.style.display = 'none';
       html += `
         <div class="content-block">
           <h3 class="content-block-title">Original (${escapeHtml(data.from_language)})</h3>
@@ -432,6 +443,81 @@
     } catch (_e) {
       return null;
     }
+  }
+
+  function getAuthHeaders() {
+    const h = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+    const token = getAccessToken();
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    return h;
+  }
+
+  function initSaveToDraft(data) {
+    const btn = document.getElementById('save-to-draft-btn');
+    const statusEl = document.getElementById('save-draft-status');
+    if (!btn || !statusEl || btn.dataset.bound) return;
+
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', async function() {
+      if (!currentResult || !currentResult.content) {
+        setStatus(statusEl, 'No content to save.', 'error');
+        return;
+      }
+
+      const title = (currentResult.content.title || '').trim() || 'Untitled draft';
+      const content = (currentResult.content.content || '').trim();
+      if (!content) {
+        setStatus(statusEl, 'Content is empty.', 'error');
+        return;
+      }
+
+      const originalText = title === 'Untitled draft' ? content : (title + '\n\n' + content);
+      btn.disabled = true;
+      setStatus(statusEl, 'Saving...', null);
+
+      try {
+        const res = await fetch('/api/v1/submissions', {
+          method: 'POST',
+          credentials: 'include',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            title: title,
+            original_text: originalText,
+            original_html: ''
+          })
+        });
+
+        const json = await res.json().catch(function() { return {}; });
+
+        if (res.status === 401) {
+          const redirect = encodeURIComponent(window.location.pathname || '/tools/ai-content-writer');
+          setStatusHtml(statusEl, 'Please <a href="/login?redirect=' + redirect + '" class="text-primary-700 font-semibold underline">log in</a> to save drafts.', 'error');
+          btn.disabled = false;
+          return;
+        }
+
+        if (!res.ok) {
+          setStatus(statusEl, json.error || 'Failed to save draft', 'error');
+          btn.disabled = false;
+          return;
+        }
+
+        const submission = json.submission;
+        const draftId = submission && submission.id;
+        const openUrl = draftId ? '/workspace?draftId=' + encodeURIComponent(draftId) : '/drafts';
+        setStatusHtml(
+          statusEl,
+          '<span class="font-semibold">Saved to My Drafts.</span> ' +
+          '<a href="' + openUrl + '" class="text-primary-700 font-semibold underline">Open in Workspace</a> · ' +
+          '<a href="/drafts" class="text-primary-700 font-semibold underline">My Drafts</a>',
+          'success'
+        );
+        btn.disabled = false;
+      } catch (e) {
+        setStatus(statusEl, e.message || 'Failed to save draft', 'error');
+        btn.disabled = false;
+      }
+    });
   }
 
   async function safeJsonResponse(resp) {
