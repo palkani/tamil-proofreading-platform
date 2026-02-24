@@ -13,10 +13,20 @@ router.get('/', (req, res) => {
   }
 
   const seo = getSeoData('workspace');
-  res.render('pages/workspace', { 
+
+  // Detect country from CDN/proxy headers for region-specific payment routing
+  const countryCode = (
+    req.headers['cf-ipcountry'] ||
+    req.headers['x-vercel-ip-country'] ||
+    'US'
+  ).toUpperCase().slice(0, 2);
+
+  res.render('pages/workspace', {
     title: seo.title,
     seo: seo,
-    user: req.user || null
+    user: req.user || null,
+    countryCode,
+    razorpayKeyId: req.app.locals.razorpayKeyId || '',
   });
 });
 

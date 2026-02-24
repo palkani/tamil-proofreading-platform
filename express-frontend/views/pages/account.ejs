@@ -41,6 +41,61 @@
 
       <div id="success-message" class="hidden rounded-2xl border border-primary-500/20 bg-blue-50 px-4 py-3 text-sm text-primary-700"></div>
     </section>
+
+    <% if (locals.paymentsEnabled) { %>
+    <section id="plan-section" class="mt-8 rounded-3xl border border-gray-200 bg-white shadow-xl p-8">
+      <h2 class="text-lg font-bold text-gray-900 mb-4">Your Plan</h2>
+      <div id="plan-loading" class="text-sm text-gray-400">Loading plan info…</div>
+      <div id="plan-info" class="hidden">
+        <div class="flex items-center gap-3 mb-4">
+          <span id="plan-badge" class="px-3 py-1 rounded-full text-sm font-semibold"></span>
+          <span id="plan-expires" class="text-xs text-gray-400"></span>
+        </div>
+        <div id="plan-free-cta" class="hidden">
+          <p class="text-sm text-gray-600 mb-3">Upgrade to Pro for unlimited Tamil AI proofreading — no word limits, no daily caps.</p>
+          <a href="/pricing" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">
+            Upgrade to Pro
+          </a>
+        </div>
+        <div id="plan-pro-features" class="hidden text-sm text-gray-600 space-y-1">
+          <p>✓ Unlimited words per analysis</p>
+          <p>✓ Unlimited AI checks per day</p>
+          <p>✓ All correction types (grammar, style, rewrite)</p>
+          <p>✓ Save unlimited drafts</p>
+        </div>
+      </div>
+    </section>
+
+    <script>
+    (function() {
+      fetch('/api/v1/me', { credentials: 'include' })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          var user = data && data.user;
+          var plan = (user && user.subscription) || 'free';
+          document.getElementById('plan-loading').classList.add('hidden');
+          document.getElementById('plan-info').classList.remove('hidden');
+          var badge = document.getElementById('plan-badge');
+          if (plan === 'free' || !plan) {
+            badge.textContent = 'Free Plan';
+            badge.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-700';
+            document.getElementById('plan-free-cta').classList.remove('hidden');
+          } else {
+            badge.textContent = plan.charAt(0).toUpperCase() + plan.slice(1) + ' Plan';
+            badge.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-700';
+            document.getElementById('plan-pro-features').classList.remove('hidden');
+            if (user.subscription_end) {
+              var d = new Date(user.subscription_end);
+              document.getElementById('plan-expires').textContent = 'Renews ' + d.toLocaleDateString();
+            }
+          }
+        })
+        .catch(function() {
+          document.getElementById('plan-loading').textContent = 'Could not load plan info.';
+        });
+    })();
+    </script>
+    <% } %>
   </main>
 </div>
 

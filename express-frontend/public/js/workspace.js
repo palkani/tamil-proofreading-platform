@@ -35,6 +35,198 @@ try {
 const MIN_SUBMIT_WORDS = 5;
 
 // ============================================
+// FREE TIER LIMITS
+// ============================================
+const FREE_TIER_MAX_WORDS  = 200;  // max words per analysis for free/anonymous users
+const ANON_DAILY_LIMIT     = 10;   // AI checks/day before signing in
+const FREE_USER_DAILY_LIMIT = 30;  // AI checks/day for signed-in free-plan users
+
+// Resolved from window globals set by workspace.ejs (USER_LOGGED_IN, USER_EMAIL, USER_PLAN)
+// USER_PLAN is updated client-side after fetching /api/v1/me
+let _freeTierUserPlan = 'free';
+
+function _isProUser() {
+  const plan = (window.USER_PLAN || _freeTierUserPlan || '').toLowerCase();
+  return plan === 'pro' || plan === 'enterprise' || plan === 'basic';
+}
+
+function _isLoggedIn() {
+  return window.USER_LOGGED_IN === true;
+}
+
+// Fetch the signed-in user's subscription plan from the backend (once on page load)
+(function _fetchUserPlan() {
+  if (!window.USER_LOGGED_IN) return;
+  fetch('/api/v1/me', { credentials: 'include' })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (data && data.user && data.user.subscription) {
+        _freeTierUserPlan = data.user.subscription;
+        window.USER_PLAN  = data.user.subscription;
+        // Show/hide word limit indicator based on resolved plan
+        _updateWordLimitUI();
+      }
+    })
+    .catch(function() {});
+})();
+
+// ── Suggestion counter (localStorage-backed, resets at midnight) ──
+
+function _getSuggestionKey() {
+  if (_isLoggedIn() && window.USER_EMAIL) return 'pt_sug_free_' + window.USER_EMAIL;
+  return 'pt_sug_anon';
+}
+
+function _getDailyCount() {
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const raw = localStorage.getItem(_getSuggestionKey());
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d.date === today) return d.count || 0;
+    }
+  } catch (_e) {}
+  return 0;
+}
+
+function _incrementDailyCount() {
+  const today = new Date().toISOString().slice(0, 10);
+  const newCount = _getDailyCount() + 1;
+  try {
+    localStorage.setItem(_getSuggestionKey(), JSON.stringify({ date: today, count: newCount }));
+  } catch (_e) {}
+  return newCount;
+}
+
+function _getDailyLimit() {
+  return _isLoggedIn() ? FREE_USER_DAILY_LIMIT : ANON_DAILY_LIMIT;
+}
+
+function _getSuggestionsRemaining() {
+  return Math.max(0, _getDailyLimit() - _getDailyCount());
+}
+
+// ── Word count badge limit indicator ──
+function _updateWordLimitUI() {
+  const limitEl = document.getElementById('word-count-limit');
+  if (!limitEl) return;
+  if (_isProUser()) {
+    limitEl.classList.add('hidden');
+  } else {
+    limitEl.classList.remove('hidden');
+  }
+}
+
+// ── Quota bar in AI panel ──
+function _updateQuotaBar() {
+  const bar = document.getElementById('suggestion-quota-bar');
+  const text = document.getElementById('suggestion-quota-text');
+  const upgradeLink = document.getElementById('suggestion-upgrade-link');
+  if (!bar || !text) return;
+  if (_isProUser()) { bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+  const remaining = _getSuggestionsRemaining();
+  const limit = _getDailyLimit();
+  const canOpenModal = window.PAYMENTS_ENABLED && typeof window.openUpgradeModal === 'function';
+  if (remaining <= 0) {
+    text.textContent = 'Daily limit reached (0/' + limit + ' left)';
+    text.className = 'text-xs text-red-500';
+    if (upgradeLink) {
+      upgradeLink.classList.remove('hidden');
+      if (canOpenModal) {
+        upgradeLink.href = '#';
+        upgradeLink.onclick = function(e) { e.preventDefault(); window.openUpgradeModal('PRO_MONTHLY'); };
+      } else {
+        upgradeLink.href = '/pricing';
+        upgradeLink.onclick = null;
+      }
+    }
+  } else if (remaining <= 3) {
+    text.textContent = remaining + ' AI checks left today';
+    text.className = 'text-xs text-amber-500';
+    if (upgradeLink) {
+      upgradeLink.classList.remove('hidden');
+      if (canOpenModal) {
+        upgradeLink.href = '#';
+        upgradeLink.onclick = function(e) { e.preventDefault(); window.openUpgradeModal('PRO_MONTHLY'); };
+      } else {
+        upgradeLink.href = '/pricing';
+        upgradeLink.onclick = null;
+      }
+    }
+  } else {
+    text.textContent = remaining + ' AI checks left today';
+    text.className = 'text-xs text-gray-400';
+    if (upgradeLink) upgradeLink.classList.add('hidden');
+  }
+}
+
+// Show a word-limit exceeded card in the suggestions panel
+function _showWordLimitCard(wordCount) {
+  const container = document.getElementById('suggestions-container');
+  if (!container) return;
+  const canOpenModal = window.PAYMENTS_ENABLED && typeof window.openUpgradeModal === 'function';
+  const upgradeHtml = _isLoggedIn()
+    ? (canOpenModal
+        ? '<button onclick="window.openUpgradeModal(\'PRO_MONTHLY\')" class="inline-block mt-3 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg font-semibold hover:bg-indigo-700 transition cursor-pointer">Upgrade to Pro</button>'
+        : (window.PAYMENTS_ENABLED ? '<a href="/pricing" class="inline-block mt-3 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg font-semibold hover:bg-indigo-700 transition">View Plans</a>' : ''))
+    : '<a href="/register" class="inline-block mt-3 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg font-semibold hover:bg-indigo-700 transition">Create free account</a>'
+    + '<p class="mt-2 text-xs text-gray-400">Sign in to get 20 more checks/day</p>';
+  container.innerHTML =
+    '<div class="text-center py-8 px-4">' +
+    '<div class="w-12 h-12 mx-auto mb-3 rounded-full bg-amber-100 flex items-center justify-center">' +
+    '<svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>' +
+    '</svg></div>' +
+    '<h3 class="font-semibold text-gray-900 mb-1">200-word limit reached</h3>' +
+    '<p class="text-sm text-gray-500">Free plan supports up to 200 words per analysis. Your text has <strong>' + wordCount + ' words</strong>.</p>' +
+    upgradeHtml +
+    '</div>';
+}
+
+// Show a daily-limit exceeded card
+function _showDailyLimitCard() {
+  const container = document.getElementById('suggestions-container');
+  if (!container) return;
+  const limit = _getDailyLimit();
+  const canOpenModal = window.PAYMENTS_ENABLED && typeof window.openUpgradeModal === 'function';
+  const upgradeHtml = _isLoggedIn()
+    ? (canOpenModal
+        ? '<button onclick="window.openUpgradeModal(\'PRO_MONTHLY\')" class="inline-block mt-3 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg font-semibold hover:bg-indigo-700 transition cursor-pointer">Upgrade to Pro — unlimited checks</button>'
+        : (window.PAYMENTS_ENABLED ? '<a href="/pricing" class="inline-block mt-3 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg font-semibold hover:bg-indigo-700 transition">View Plans</a>' : ''))
+    : '<a href="/register" class="inline-block mt-3 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg font-semibold hover:bg-indigo-700 transition">Sign up free — get 30 checks/day</a>'
+    + '<p class="mt-2 text-xs text-gray-400">Already have an account? <a href="/login" class="text-indigo-600 underline">Log in</a></p>';
+  container.innerHTML =
+    '<div class="text-center py-8 px-4">' +
+    '<div class="w-12 h-12 mx-auto mb-3 rounded-full bg-red-100 flex items-center justify-center">' +
+    '<svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>' +
+    '</svg></div>' +
+    '<h3 class="font-semibold text-gray-900 mb-1">Daily limit reached</h3>' +
+    '<p class="text-sm text-gray-500 mb-1">You\'ve used all <strong>' + limit + ' AI checks</strong> for today.</p>' +
+    '<p class="text-xs text-gray-400 mb-3">Resets at midnight. Pro plan gives you unlimited checks.</p>' +
+    upgradeHtml +
+    '</div>';
+}
+
+// Filter corrections to grammar/spelling/punctuation types only (for free users)
+const FREE_TIER_CORRECTION_TYPES = new Set(['grammar', 'spelling', 'punctuation', 'typo']);
+function _applyFreeTierFilter(corrections) {
+  if (_isProUser()) return corrections;
+  return corrections.filter(function(c) {
+    const t = (c.type || c.Type || '').toLowerCase();
+    return !t || FREE_TIER_CORRECTION_TYPES.has(t);
+  });
+}
+
+// Run word-limit UI update once DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  _updateWordLimitUI();
+  _updateQuotaBar();
+});
+// END FREE TIER LIMITS
+
+// ============================================
 // APPLY REPLACEMENT UTILITY
 // ============================================
 
@@ -4037,6 +4229,21 @@ class WorkspaceController {
       });
 
       if (!response.ok) {
+        // Handle free-tier word limit exceeded (422)
+        if (response.status === 422) {
+          try {
+            const errBody = await response.json();
+            if (errBody && errBody.error === 'word_limit_exceeded') {
+              throw Object.assign(new Error('word_limit_exceeded'), {
+                wordCount: errBody.word_count,
+                wordLimit: errBody.word_limit,
+                freeTierError: true,
+              });
+            }
+          } catch (jsonErr) {
+            if (jsonErr.freeTierError) throw jsonErr;
+          }
+        }
         console.warn('[AI/Stream] Server returned', response.status, '— falling through');
         return allCorrections;
       }
@@ -4489,12 +4696,29 @@ class WorkspaceController {
       return;
     }
     
+    // ── Free tier: enforce 200-word limit ──
+    if (!_isProUser() && wordCount > FREE_TIER_MAX_WORDS) {
+      console.log('[FreeTier] ⛔ Word count exceeds free tier limit:', wordCount, '>', FREE_TIER_MAX_WORDS);
+      this.updateAnalysisStatus('');
+      _showWordLimitCard(wordCount);
+      return;
+    }
+
+    // ── Free tier: enforce daily suggestion count ──
+    if (!_isProUser() && _getSuggestionsRemaining() <= 0) {
+      console.log('[FreeTier] ⛔ Daily suggestion limit reached');
+      this.updateAnalysisStatus('');
+      _showDailyLimitCard();
+      _updateQuotaBar();
+      return;
+    }
+
     // Skip if text hasn't changed since last analysis
     if (text === this.lastAnalyzedText) {
       console.log('[AI] ⏭️ Text unchanged since last analysis - skipping');
       return;
     }
-    
+
     console.log('[AI] ✅ Text meets requirements - proceeding with analysis');
     
     // Cancel any in-flight request
@@ -4523,6 +4747,12 @@ class WorkspaceController {
       const streamedCorrections = await this._streamCorrectionsSSE(text, analysisSeq);
       data = { corrections: streamedCorrections };
       this.lastAnalyzedText = text;
+
+      // Free tier: increment daily usage counter after a successful analysis
+      if (!_isProUser()) {
+        _incrementDailyCount();
+        _updateQuotaBar();
+      }
 
       // Debug: Log the API response
       console.log('[AI Debug] API Response:', JSON.stringify(data, null, 2));
@@ -4561,12 +4791,20 @@ class WorkspaceController {
         data.result?.suggestions ||
         data.suggestions ||
         [];
-      console.log('[AI Debug] Extracted corrections:', corrections.length, 'items');
-      console.log('[AI Debug] Raw corrections data:', JSON.stringify(corrections, null, 2));
+      // Free tier: filter to grammar/spelling/punctuation corrections only
+      const filteredCorrections = _applyFreeTierFilter(corrections);
+      if (!_isProUser() && filteredCorrections.length < corrections.length) {
+        console.log('[FreeTier] Filtered', corrections.length - filteredCorrections.length, 'non-grammar corrections');
+      }
+      // Reassign so downstream code uses filtered results
+      const effectiveCorrections = filteredCorrections;
+
+      console.log('[AI Debug] Extracted corrections:', effectiveCorrections.length, 'items');
+      console.log('[AI Debug] Raw corrections data:', JSON.stringify(effectiveCorrections, null, 2));
       console.log('[AI Debug] Full API response data:', JSON.stringify(data, null, 2));
-      
+
       // Log each correction's type to verify they're from API
-      corrections.forEach((corr, idx) => {
+      effectiveCorrections.forEach((corr, idx) => {
         console.log(`[AI Debug] Correction ${idx + 1}:`, {
           type: corr.type || corr.Type || 'unknown',
           original: corr.original || corr.originalText || 'N/A',
@@ -4600,7 +4838,7 @@ class WorkspaceController {
       // array before dedup. Backend sends one entry per chunk occurrence so the same error
       // word in 5 chunks = 5 entries → occurrenceCount 5 on the deduplicated card.
       const _occMap = Object.create(null);
-      for (const r of corrections) {
+      for (const r of effectiveCorrections) {
         const _o = (r.original || r.originalText || '').normalize('NFC').trim();
         const _c = (r.corrected || r.correction || '').normalize('NFC').trim();
         const _t = (r.type || r.Type || 'grammar').toString().toLowerCase().trim();
@@ -4610,7 +4848,7 @@ class WorkspaceController {
         }
       }
 
-      const geminiSuggestions = corrections
+      const geminiSuggestions = effectiveCorrections
         // Filter out invalid suggestions (must have valid original !== corrected)
         .filter((result, index) => {
           const original =
@@ -4759,8 +4997,8 @@ class WorkspaceController {
 
       // If everything got filtered out but backend sent items, show a best-effort rendering
       // so users can still see what the API returned (even if it looks like a "no-op" after normalization).
-      if (geminiSuggestions.length === 0 && Array.isArray(corrections) && corrections.length > 0) {
-        const fallback = corrections.map((result, idx) => {
+      if (geminiSuggestions.length === 0 && Array.isArray(effectiveCorrections) && effectiveCorrections.length > 0) {
+        const fallback = effectiveCorrections.map((result, idx) => {
           const original =
             result.original ||
             result.originalText ||
@@ -4865,6 +5103,8 @@ class WorkspaceController {
       } else {
         this.updateAnalysisStatus('complete', dedupedGeminiSuggestions.length);
       }
+      // Update quota bar after each analysis
+      _updateQuotaBar();
     } catch (error) {
       if (error.name === 'AbortError') {
         // Request was cancelled, this is normal
@@ -4873,6 +5113,12 @@ class WorkspaceController {
       if (error.message === 'login_required' || error.message === 'unauthorized') {
         this.updateAnalysisStatus('');
         this.showNotification('Please log in to continue.', 'warning');
+        return;
+      }
+      // Free tier: word limit exceeded from backend
+      if (error.freeTierError && error.message === 'word_limit_exceeded') {
+        this.updateAnalysisStatus('');
+        _showWordLimitCard(error.wordCount || countWords(text));
         return;
       }
       console.error('Auto-analysis error:', error);
@@ -4994,6 +5240,30 @@ class WorkspaceController {
     const wordCountEl = document.getElementById('word-count');
     if (wordCountEl) {
       wordCountEl.textContent = count;
+    }
+    // Free tier: show / hide word limit indicator and color the badge
+    const limitEl = document.getElementById('word-count-limit');
+    const badge = document.getElementById('editor-word-count-badge');
+    if (!_isProUser()) {
+      if (limitEl) limitEl.classList.remove('hidden');
+      if (badge) {
+        if (count > FREE_TIER_MAX_WORDS) {
+          badge.classList.remove('border-gray-200', 'text-gray-500', 'border-amber-300', 'text-amber-700');
+          badge.classList.add('border-red-300', 'text-red-600');
+        } else if (count > FREE_TIER_MAX_WORDS * 0.85) {
+          badge.classList.remove('border-gray-200', 'text-gray-500', 'border-red-300', 'text-red-600');
+          badge.classList.add('border-amber-300', 'text-amber-700');
+        } else {
+          badge.classList.remove('border-red-300', 'text-red-600', 'border-amber-300', 'text-amber-700');
+          badge.classList.add('border-gray-200', 'text-gray-500');
+        }
+      }
+    } else {
+      if (limitEl) limitEl.classList.add('hidden');
+      if (badge) {
+        badge.classList.remove('border-red-300', 'text-red-600', 'border-amber-300', 'text-amber-700');
+        badge.classList.add('border-gray-200', 'text-gray-500');
+      }
     }
   }
 

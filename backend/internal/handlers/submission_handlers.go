@@ -353,6 +353,31 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No valid words found in text"})
 			return
 		}
+
+		// Free tier word limit: 200 words for anonymous or free-plan users.
+		// Pro/Basic/Enterprise users get the full limit.
+		const freeTierWordLimit = 200
+		inlineUserID, inlineAuthErr := middleware.GetUserFromContext(c)
+		isFreeTierUser := true // default to free/anonymous
+		if inlineAuthErr == nil && inlineUserID > 0 {
+			var inlineUser models.User
+			if dbErr := h.db.Select("subscription").First(&inlineUser, inlineUserID).Error; dbErr == nil {
+				switch inlineUser.Subscription {
+				case models.PlanBasic, models.PlanPro, models.PlanEnterprise:
+					isFreeTierUser = false
+				}
+			}
+		}
+		if isFreeTierUser && wordCount > freeTierWordLimit {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{
+				"error":      "word_limit_exceeded",
+				"message":    "Free plan is limited to 200 words per analysis. Upgrade to Pro for unlimited words.",
+				"word_limit": freeTierWordLimit,
+				"word_count": wordCount,
+			})
+			return
+		}
+
 		// Fast path: no Tamil characters → skip AI
 		if !tamilCharRegex.MatchString(req.Text) {
 			c.Header("Cache-Control", "no-store, max-age=0")
@@ -448,6 +473,28 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	if wordCount == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No valid words found in text"})
 		return
+	}
+
+	// Free tier word limit: 200 words per submission for free-plan users.
+	// Admin bypass and paid plans are exempt.
+	{
+		var planUser models.User
+		if dbErr := h.db.Select("subscription", "email", "role").First(&planUser, userID).Error; dbErr == nil {
+			isFree := planUser.Subscription == models.PlanFree || planUser.Subscription == ""
+			isAdminEmail := planUser.Role == models.RoleAdmin ||
+				strings.EqualFold(planUser.Email, "palkani.r@gmail.com") ||
+				strings.EqualFold(planUser.Email, "prooftamil@gmail.com") ||
+				strings.EqualFold(planUser.Email, "banu.palkani@gmail.com")
+			if isFree && !isAdminEmail && wordCount > 200 {
+				c.JSON(http.StatusUnprocessableEntity, gin.H{
+					"error":      "word_limit_exceeded",
+					"message":    "Free plan is limited to 200 words per analysis. Upgrade to Pro for unlimited words.",
+					"word_limit": 200,
+					"word_count": wordCount,
+				})
+				return
+			}
+		}
 	}
 
 	// Daily Gemini token usage limit.

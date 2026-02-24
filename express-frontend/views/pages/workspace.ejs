@@ -1211,7 +1211,7 @@
 
         <!-- Word count badge — always visible at bottom-right of the editor area, never scrolls away -->
         <div id="editor-word-count-badge" class="absolute bottom-4 right-6 px-3 py-1.5 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 text-sm text-gray-500 shadow-sm pointer-events-none z-10">
-          <span id="word-count">0</span> words • <span id="accepted-count">0</span> accepted
+          <span id="word-count">0</span><span id="word-count-limit" class="hidden"> / 200</span> words • <span id="accepted-count">0</span> accepted
         </div>
       </div>
     </div>
@@ -1229,6 +1229,11 @@
         <p id="suggestions-summary" class="text-sm text-gray-500">
           No suggestions yet
         </p>
+        <!-- Free tier: daily suggestion counter (hidden for pro users) -->
+        <div id="suggestion-quota-bar" class="hidden mt-2 flex items-center justify-between gap-2">
+          <span id="suggestion-quota-text" class="text-xs text-gray-400"></span>
+          <a href="/pricing" id="suggestion-upgrade-link" class="hidden text-xs text-primary-600 font-semibold hover:underline pointer-events-auto">Upgrade</a>
+        </div>
       </div>
 
       <!-- Correction Navigator (shown when a correction span is clicked) -->
@@ -1257,6 +1262,174 @@
   </footer>
 </div>
 
+<!-- =========================================================
+     Upgrade to Pro Modal (shown when free tier limits are hit)
+     ========================================================= -->
+<% if (locals.paymentsEnabled) { %>
+<div id="upgrade-modal" class="fixed inset-0 z-[200] hidden flex items-center justify-center">
+  <!-- Backdrop -->
+  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="window.closeUpgradeModal && window.closeUpgradeModal()"></div>
+  <!-- Card -->
+  <div class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+    <!-- Gradient header -->
+    <div class="bg-gradient-to-r from-indigo-700 to-blue-500 px-6 py-5 text-white">
+      <h2 class="text-xl font-bold">Upgrade to Pro</h2>
+      <p class="text-sm text-white/80 mt-0.5">Unlimited Tamil AI proofreading</p>
+      <button onclick="window.closeUpgradeModal && window.closeUpgradeModal()" class="absolute top-4 right-4 text-white/70 hover:text-white text-xl leading-none" aria-label="Close">✕</button>
+    </div>
+    <!-- Already pro state -->
+    <div id="upgrade-modal-already-pro" class="hidden p-6 text-center">
+      <p class="text-3xl mb-2">🎉</p>
+      <p class="font-semibold text-gray-900">You're already on Pro!</p>
+      <p class="text-sm text-gray-500 mt-1">Enjoy unlimited checks and all correction types.</p>
+      <button onclick="window.closeUpgradeModal && window.closeUpgradeModal()" class="mt-4 px-5 py-2 rounded-full bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">Close</button>
+    </div>
+    <!-- Loading state -->
+    <div id="upgrade-modal-loading" class="p-8 text-center text-sm text-gray-400">Loading prices…</div>
+    <!-- Plan cards -->
+    <div id="upgrade-modal-plans" class="hidden p-6 space-y-3">
+      <!-- Monthly -->
+      <div class="border border-gray-200 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p class="font-semibold text-gray-900 text-sm">Pro Monthly</p>
+          <p id="modal-monthly-price" class="text-lg font-bold text-indigo-700 mt-0.5">—</p>
+        </div>
+        <button id="checkout-btn-PRO_MONTHLY"
+                onclick="window.startCheckout && window.startCheckout('PRO_MONTHLY', window.COUNTRY_CODE || 'US')"
+                class="px-4 py-2 rounded-full bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition disabled:opacity-50">
+          Get Pro
+        </button>
+      </div>
+      <!-- Yearly (highlighted) -->
+      <div class="border-2 border-indigo-500 rounded-xl p-4 flex items-center justify-between bg-indigo-50">
+        <div>
+          <div class="flex items-center gap-2 mb-0.5">
+            <p class="font-semibold text-gray-900 text-sm">Pro Yearly</p>
+            <span id="modal-yearly-savings" class="hidden px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded-full"></span>
+          </div>
+          <p id="modal-yearly-price" class="text-lg font-bold text-indigo-700">—</p>
+        </div>
+        <button id="checkout-btn-PRO_YEARLY"
+                onclick="window.startCheckout && window.startCheckout('PRO_YEARLY', window.COUNTRY_CODE || 'US')"
+                class="px-4 py-2 rounded-full bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition disabled:opacity-50">
+          Best value
+        </button>
+      </div>
+      <!-- Feature list -->
+      <ul class="text-xs text-gray-500 space-y-1 pt-1 pl-1">
+        <li>✓ Unlimited words per analysis</li>
+        <li>✓ Unlimited AI checks per day</li>
+        <li>✓ All correction types (grammar, style, rewrite)</li>
+        <li>✓ Save unlimited drafts</li>
+      </ul>
+    </div>
+    <!-- Error state -->
+    <div id="upgrade-modal-error" class="hidden p-6 text-center text-sm text-red-500">
+      Unable to load prices. <a href="/pricing" class="underline">View pricing page</a>.
+    </div>
+    <!-- Footer: payment method badge -->
+    <div id="upgrade-modal-payment-badge" class="px-6 pb-4 text-xs text-gray-400 text-center"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var _upgradePricesLoaded = false;
+
+  window.openUpgradeModal = async function(planCode) {
+    if (!window.USER_LOGGED_IN) {
+      window.location.href = '/register?intent=upgrade';
+      return;
+    }
+    var modal = document.getElementById('upgrade-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    // If already Pro, show congrats and skip price loading
+    if (window._isProUser && window._isProUser()) {
+      var alreadyPro = document.getElementById('upgrade-modal-already-pro');
+      var loading    = document.getElementById('upgrade-modal-loading');
+      if (alreadyPro) alreadyPro.classList.remove('hidden');
+      if (loading)    loading.classList.add('hidden');
+      return;
+    }
+
+    if (!_upgradePricesLoaded) {
+      await _loadUpgradePrices();
+    }
+  };
+
+  async function _loadUpgradePrices() {
+    var cc      = window.COUNTRY_CODE || 'US';
+    var loading = document.getElementById('upgrade-modal-loading');
+    var plans   = document.getElementById('upgrade-modal-plans');
+    var error   = document.getElementById('upgrade-modal-error');
+    try {
+      var results = await Promise.all([
+        fetch('/api/v1/billing/pricing?plan_code=PRO_MONTHLY&country_code=' + cc, { credentials: 'include' }),
+        fetch('/api/v1/billing/pricing?plan_code=PRO_YEARLY&country_code='  + cc, { credentials: 'include' }),
+      ]);
+      var mData = await results[0].json();
+      var yData = await results[1].json();
+      var mPricing = mData.pricing || mData;
+      var yPricing = yData.pricing || yData;
+
+      var mPriceEl = document.getElementById('modal-monthly-price');
+      var yPriceEl = document.getElementById('modal-yearly-price');
+      var savingsEl = document.getElementById('modal-yearly-savings');
+      var badgeEl   = document.getElementById('upgrade-modal-payment-badge');
+
+      if (mPriceEl) mPriceEl.textContent = (mPricing.display_price || '—') + ' / month';
+      if (yPriceEl) yPriceEl.textContent = (yPricing.display_price || '—') + ' / year';
+      if (savingsEl && yPricing.savings_pct) {
+        savingsEl.textContent = 'Save ' + yPricing.savings_pct + '%';
+        savingsEl.classList.remove('hidden');
+      }
+      if (badgeEl) {
+        badgeEl.textContent = cc === 'IN'
+          ? 'Payments via Razorpay · Secure · INR'
+          : 'Payments via Stripe · Secure · ' + (mPricing.currency || 'USD');
+      }
+
+      if (loading) loading.classList.add('hidden');
+      if (plans)   plans.classList.remove('hidden');
+      _upgradePricesLoaded = true;
+    } catch (_e) {
+      if (loading) loading.classList.add('hidden');
+      if (error)   error.classList.remove('hidden');
+    }
+  }
+
+  window.closeUpgradeModal = function() {
+    var modal = document.getElementById('upgrade-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  };
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') window.closeUpgradeModal && window.closeUpgradeModal();
+  });
+})();
+</script>
+<% } %>
+
+<!-- Free tier limits and user state exposed to browser -->
+<script>
+  // User session info (decoded from JWT cookie server-side; subscription fetched client-side from /api/v1/me)
+  window.USER_LOGGED_IN = <%= user ? 'true' : 'false' %>;
+  window.USER_EMAIL     = '<%= user && user.email ? user.email.replace(/'/g, "\\'") : "" %>';
+  // USER_PLAN is resolved client-side after fetching /api/v1/me so we start with a safe default
+  window.USER_PLAN      = 'free';
+  // Payment / country globals (server-detected; used by upgrade modal and payment.js)
+  window.COUNTRY_CODE    = '<%= countryCode || "US" %>';
+  window.RAZORPAY_KEY_ID = '<%= razorpayKeyId || "" %>';
+  window.PAYMENTS_ENABLED = <%= locals.paymentsEnabled ? 'true' : 'false' %>;
+</script>
+<% if (locals.paymentsEnabled && countryCode === 'IN') { %>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<% } %>
 <!-- Expose transliterator base URL to browser (multi-region) -->
 <script>
   // Multi-region runner URLs for low latency
@@ -1283,6 +1456,9 @@
 <script src="/js/tamilUtils.js?v=20251127b"></script>
 <script src="/js/editor.js?v=20251127b"></script>
 <script src="/js/suggestions.js?v=20251127b"></script>
+<% if (locals.paymentsEnabled) { %>
+<script src="/js/payment.js?v=20260224a"></script>
+<% } %>
 <script src="/js/workspace.js?v=20251229b&_ts=<%= new Date().getTime() %>&_cb=<%= Math.random().toString(36).slice(2) %>"></script>
 <script src="/js/oauth-callback.js"></script>
 <script src="/js/voice-typing.js?v=20260222b"></script>
