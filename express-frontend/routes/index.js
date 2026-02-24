@@ -152,6 +152,17 @@ router.get('/tools/ai-content-writer', (req, res) => {
   });
 });
 
+// AI Content Writer drafts list - requires login
+router.get('/tools/ai-content-writer/drafts', requireAuth, (req, res) => {
+  const user = getCurrentUser(req) || null;
+  const seo = getSeoData('aiContentWriterTool') || getSeoData('home');
+  res.render('pages/ai-content-drafts', {
+    title: 'My AI Content drafts | ProofTamil',
+    seo: seo,
+    user: user
+  });
+});
+
 // Event Name Suggester Tool page - accessible to everyone
 router.get('/tools/event-name-suggester', (req, res) => {
   const user = getCurrentUser(req);

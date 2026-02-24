@@ -1,4 +1,4 @@
-// v20260222 - STREAMING: Single SSE corrections request; server aborts Gemini on client disconnect
+// v20260224 - STREAMING: Single SSE corrections request; server aborts Gemini on client disconnect
 // Main Workspace Controller
 
 // PERFORMANCE: Debug logging disabled in production for faster response
@@ -6,7 +6,7 @@
 const IME_DEBUG = typeof window !== 'undefined' && window.IME_DEBUG === true;
 const imeLog = IME_DEBUG ? console.log.bind(console) : () => {};
 
-console.log('[WorkspaceJS] ✅ Loaded version v20260222 - streaming corrections');
+console.log('[WorkspaceJS] ✅ Loaded version v20260224 - all-occurrence highlights + apply-all');
 
 // CRITICAL: Ensure USE_TIPTAP_EDITOR is set to false at the very top
 // This prevents any initialization issues
@@ -4162,7 +4162,7 @@ class WorkspaceController {
   }
 
   /**
-   * Wrap the first occurrence of each suggestion's sourceText in a styled span.
+   * Wrap ALL occurrences of each suggestion's sourceText in styled spans.
    * Clears any previous highlights first.
    */
   _highlightCorrectionsInEditor(suggestions) {
@@ -4176,10 +4176,48 @@ class WorkspaceController {
       const searchText = (s.sourceText || s.originalText || '').trim();
       if (searchText.length < 2) continue;
       const typeClass = this._getCorrectionTypeClass(s.type);
-      const wrapped = this._wrapFirstMatch(editor, searchText, s.id, typeClass, s.title || '', s.description || '');
-      if (wrapped) count++;
+      const wrapped = this._wrapAllMatches(editor, searchText, s.id, typeClass, s.title || '', s.description || '');
+      if (wrapped > 0) count++;
     }
     console.log('[Highlight] Highlighted', count, '/', suggestions.length, 'corrections in editor');
+  }
+
+  /**
+   * Walk the editor DOM and wrap EVERY occurrence of searchText in a correction span.
+   * Returns the total number of spans created.
+   */
+  _wrapAllMatches(container, searchText, suggestionId, typeClass, title, description) {
+    let count = 0;
+    const wrap = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        // Skip text already inside a correction span.
+        if (node.parentNode && node.parentNode.classList && node.parentNode.classList.contains('correction-highlight')) return;
+        let remaining = node;
+        let idx = remaining.textContent.indexOf(searchText);
+        while (idx !== -1) {
+          // Split: [before...match][after...]
+          // remaining.splitText(idx) splits remaining into [before] and returns [match+after].
+          const matchAndAfter = remaining.splitText(idx);
+          // matchAndAfter.splitText(searchText.length) splits into [match] and returns [after].
+          const after = matchAndAfter.splitText(searchText.length);
+          const span = document.createElement('span');
+          span.className = `correction-highlight ${typeClass}`;
+          span.dataset.suggestionId = suggestionId;
+          span.dataset.title = title;
+          span.dataset.description = description;
+          span.textContent = matchAndAfter.textContent;
+          matchAndAfter.parentNode.replaceChild(span, matchAndAfter);
+          count++;
+          remaining = after;
+          idx = remaining.textContent.indexOf(searchText);
+        }
+      } else if (node.nodeType === Node.ELEMENT_NODE && !node.classList.contains('correction-highlight')) {
+        // Clone childNodes list first — wrapping mutates the live NodeList.
+        Array.from(node.childNodes).forEach(wrap);
+      }
+    };
+    wrap(container);
+    return count;
   }
 
   /** Map suggestion type string to a CSS class. */
@@ -4525,15 +4563,21 @@ class WorkspaceController {
             sourceText: original,
             onApply: original && corrected ? () => {
               const currentText = this.getEditorText();
-              const startIdx =
-                result.start_index ??
-                result.startIndex ??
-                result.StartIndex ??
-                null;
-              const { text: newText, changed } = applyReplacement(currentText, original, corrected, startIdx);
-              
+              // Replace ALL occurrences of `original` with `corrected` throughout the text.
+              // Since the panel deduplicates by (type, original, corrected), one card
+              // represents every instance of the same error — so applying it must fix them all.
+              let pos = 0;
+              let result2 = '';
+              let changed = false;
+              while (true) {
+                const idx = currentText.indexOf(original, pos);
+                if (idx === -1) { result2 += currentText.slice(pos); break; }
+                result2 += currentText.slice(pos, idx) + corrected;
+                pos = idx + original.length;
+                changed = true;
+              }
               if (changed) {
-                // Safely update editor text
+                const newText = result2;
                 if (this.editor && typeof this.editor.setText === 'function') {
                   this.editor.setText(newText);
                 } else if (this.editorElement) {
@@ -4541,17 +4585,9 @@ class WorkspaceController {
                 } else {
                   console.error('[APPLY] No editor method available');
                 }
-                
-                // Auto-save draft after applying suggestion (never lose changes)
-                // Use a short delay to batch multiple rapid applies
-                if (this._applySaveTimeout) {
-                  clearTimeout(this._applySaveTimeout);
-                }
+                if (this._applySaveTimeout) clearTimeout(this._applySaveTimeout);
                 this._applySaveTimeout = setTimeout(() => {
-                  if (typeof this.autosave === 'function') {
-                    console.log('[APPLY] Auto-saving draft after suggestion applied');
-                    this.autosave();
-                  }
+                  if (typeof this.autosave === 'function') this.autosave();
                 }, 500);
               }
             } : null,

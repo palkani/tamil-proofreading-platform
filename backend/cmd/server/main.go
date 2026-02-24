@@ -150,6 +150,7 @@ func main() {
 		if err := db.AutoMigrate(
 			&models.User{},
 			&models.DraftGroup{},
+			&models.AIContentDraft{},
 			&models.TamilWord{},
 			&models.Submission{},
 			&models.Usage{},
@@ -296,7 +297,6 @@ func main() {
 			protected.GET("/me", h.GetCurrentUser)
 
 			// Submissions (draft list, get/update/delete) - submit is above with optional auth
-			protected.POST("/submissions", h.CreateSubmission)   // Save AI Content Writer (or any) content as draft
 			protected.GET("/submissions", h.GetSubmissions)
 			protected.GET("/submissions/:id", h.GetSubmission)
 			protected.PATCH("/submissions/:id", h.UpdateSubmission)
@@ -310,6 +310,13 @@ func main() {
 			protected.POST("/draft-groups", h.CreateDraftGroup)
 			protected.PATCH("/draft-groups/:id", h.UpdateDraftGroup)
 			protected.DELETE("/draft-groups/:id", h.DeleteDraftGroup)
+
+			// AI Content Writer drafts (separate from proofreading submissions)
+			protected.POST("/ai-content-drafts", h.CreateAIContentDraft)
+			protected.GET("/ai-content-drafts", h.GetAIContentDrafts)
+			protected.GET("/ai-content-drafts/:id", h.GetAIContentDraft)
+			protected.PATCH("/ai-content-drafts/:id", h.UpdateAIContentDraft)
+			protected.DELETE("/ai-content-drafts/:id", h.DeleteAIContentDraft)
 
 			// Tamil word management
 			protected.POST("/tamil-words", h.AddTamilWord)

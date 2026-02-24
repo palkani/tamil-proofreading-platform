@@ -1,0 +1,190 @@
+<%- include('../partials/header') %>
+
+<div class="min-h-screen bg-gray-50">
+  <%- include('../partials/nav', { active: 'drafts', user: user }) %>
+
+  <div class="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div class="mb-6">
+      <a href="/tools/ai-content-writer" class="text-primary-600 hover:text-primary-700 text-sm font-medium inline-flex items-center gap-1">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        Back to AI Content Writer
+      </a>
+    </div>
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-3xl font-bold text-gray-900 uppercase tracking-wide">
+        My AI Content drafts
+      </h2>
+    </div>
+
+    <div id="loading" class="text-center py-12 bg-white rounded-xl border border-gray-200">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+      <p class="mt-4 text-gray-600">Loading...</p>
+    </div>
+
+    <div id="drafts-list" class="space-y-4 hidden">
+      <!-- Cards rendered by JS -->
+    </div>
+
+    <div id="empty-state" class="hidden text-center py-12 bg-white rounded-xl border border-gray-200">
+      <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+      </svg>
+      <p class="text-lg font-medium text-gray-700">No AI content drafts yet</p>
+      <p class="text-sm mt-2 text-gray-500">Generate content in the AI Content Writer and save it here</p>
+      <a href="/tools/ai-content-writer" class="mt-4 inline-block px-4 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700">
+        Open AI Content Writer
+      </a>
+    </div>
+
+    <div id="error-state" class="hidden text-center py-8 bg-red-50 rounded-xl border border-red-200">
+      <p class="text-red-700 font-medium" id="error-message"></p>
+      <button type="button" id="retry-btn" class="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700">Retry</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+  if (window.location.pathname !== '/tools/ai-content-writer/drafts') return;
+
+  function getAuthHeaders() {
+    const h = { 'Accept': 'application/json' };
+    var token = localStorage.getItem('access_token');
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    return h;
+  }
+
+  function apiFetch(url, opts) {
+    opts = opts || {};
+    opts.credentials = 'include';
+    opts.headers = opts.headers || getAuthHeaders();
+    if (window.authUtils && window.authUtils.apiFetch)
+      return window.authUtils.apiFetch(url, opts);
+    return fetch(url, opts);
+  }
+
+  function formatDate(iso) {
+    if (!iso) return '—';
+    try {
+      var d = new Date(iso);
+      return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { dateStyle: 'short' }) + ' ' + d.toLocaleTimeString(undefined, { timeStyle: 'short' });
+    } catch (e) { return iso; }
+  }
+
+  function preview(text, maxLen) {
+    if (!text) return '';
+    text = text.replace(/\s+/g, ' ').trim();
+    return text.length <= maxLen ? text : text.slice(0, maxLen) + '…';
+  }
+
+  function escapeHtml(s) {
+    if (!s) return '';
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  var listEl = document.getElementById('drafts-list');
+  var loadingEl = document.getElementById('loading');
+  var emptyEl = document.getElementById('empty-state');
+  var errorEl = document.getElementById('error-state');
+  var errorMsg = document.getElementById('error-message');
+  var retryBtn = document.getElementById('retry-btn');
+
+  function showLoading() {
+    loadingEl.classList.remove('hidden');
+    listEl.classList.add('hidden');
+    emptyEl.classList.add('hidden');
+    errorEl.classList.add('hidden');
+  }
+  function showList() {
+    loadingEl.classList.add('hidden');
+    listEl.classList.remove('hidden');
+    emptyEl.classList.add('hidden');
+    errorEl.classList.add('hidden');
+  }
+  function showEmpty() {
+    loadingEl.classList.add('hidden');
+    listEl.classList.add('hidden');
+    emptyEl.classList.remove('hidden');
+    errorEl.classList.add('hidden');
+  }
+  function showError(msg) {
+    loadingEl.classList.add('hidden');
+    listEl.classList.add('hidden');
+    emptyEl.classList.add('hidden');
+    errorEl.classList.remove('hidden');
+    errorMsg.textContent = msg || 'Failed to load drafts';
+  }
+
+  function renderDrafts(drafts) {
+    listEl.innerHTML = '';
+    drafts.forEach(function(d) {
+      var card = document.createElement('div');
+      card.className = 'bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow';
+      card.innerHTML =
+        '<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">' +
+          '<div class="min-w-0 flex-1">' +
+            '<h3 class="font-semibold text-gray-900 truncate">' + escapeHtml(d.title || 'Untitled') + '</h3>' +
+            '<p class="text-sm text-gray-500 mt-0.5 line-clamp-2">' + escapeHtml(preview(d.content, 160)) + '</p>' +
+            '<p class="text-xs text-gray-400 mt-2">' + (d.word_count ? d.word_count + ' words' : '') + ' · ' + formatDate(d.updated_at) + '</p>' +
+          '</div>' +
+          '<div class="flex items-center gap-2 flex-shrink-0">' +
+            '<a href="/tools/ai-content-writer?draftId=' + encodeURIComponent(d.id) + '" class="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700">Open</a>' +
+            '<button type="button" class="delete-draft px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50" data-id="' + escapeHtml(String(d.id)) + '" data-title="' + escapeHtml(d.title || 'Untitled') + '">Delete</button>' +
+          '</div>' +
+        '</div>';
+      listEl.appendChild(card);
+    });
+    listEl.querySelectorAll('.delete-draft').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var id = btn.getAttribute('data-id');
+        var title = btn.getAttribute('data-title');
+        if (!id || !confirm('Delete “‘ + title + '”? This action cannot be undone.')) return;
+        btn.disabled = true;
+        apiFetch('/api/v1/ai-content-drafts/' + id, { method: 'DELETE' })
+          .then(function(r) {
+            if (r.status === 204 || r.status === 200) {
+              fetchDrafts();
+            } else {
+              return r.json().then(function(j) { throw new Error(j.error || 'Delete failed'); });
+            }
+          })
+          .catch(function(e) {
+            alert(e.message || 'Failed to delete');
+            btn.disabled = false;
+          });
+      });
+    });
+  }
+
+  function fetchDrafts() {
+    showLoading();
+    apiFetch('/api/v1/ai-content-drafts?limit=100')
+      .then(function(res) {
+        if (res.status === 401) {
+          window.location.href = '/login?redirect=' + encodeURIComponent('/tools/ai-content-writer/drafts');
+          return;
+        }
+        if (!res.ok) {
+          return res.json().then(function(j) { throw new Error(j.error || 'Failed to load'); });
+        }
+        return res.json();
+      })
+      .then(function(data) {
+        var drafts = (data && data.drafts) ? data.drafts : [];
+        if (drafts.length === 0) showEmpty();
+        else { renderDrafts(drafts); showList(); }
+      })
+      .catch(function(e) {
+        showError(e.message || 'Failed to load drafts');
+      });
+  }
+
+  if (retryBtn) retryBtn.addEventListener('click', fetchDrafts);
+  fetchDrafts();
+})();
+</script>
+
+<%- include('../partials/footer') %>

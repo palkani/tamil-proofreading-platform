@@ -15,6 +15,7 @@
     initImprove();
     initTranslate();
     initCopyDownload();
+    loadDraftFromUrl();
   });
 
   function initTabs() {
@@ -464,26 +465,30 @@
         return;
       }
 
-      const title = (currentResult.content.title || '').trim() || 'Untitled draft';
+      const title = (currentResult.content.title || '').trim() || 'Untitled';
       const content = (currentResult.content.content || '').trim();
       if (!content) {
         setStatus(statusEl, 'Content is empty.', 'error');
         return;
       }
 
-      const originalText = title === 'Untitled draft' ? content : (title + '\n\n' + content);
       btn.disabled = true;
       setStatus(statusEl, 'Saving...', null);
 
       try {
-        const res = await fetch('/api/v1/submissions', {
+        const res = await fetch('/api/v1/ai-content-drafts', {
           method: 'POST',
           credentials: 'include',
           headers: getAuthHeaders(),
           body: JSON.stringify({
             title: title,
-            original_text: originalText,
-            original_html: ''
+            content: content,
+            prompt: (document.getElementById('prompt-input') || {}).value || '',
+            content_type: (document.getElementById('content-type-select') || {}).value || '',
+            language: (document.getElementById('language-select') || {}).value || '',
+            tone: (document.getElementById('tone-select') || {}).value || '',
+            meta_description: (currentResult.content.meta_description || '').trim(),
+            keywords: (currentResult.content.keywords || '').trim()
           })
         });
 
@@ -502,14 +507,13 @@
           return;
         }
 
-        const submission = json.submission;
-        const draftId = submission && submission.id;
-        const openUrl = draftId ? '/workspace?draftId=' + encodeURIComponent(draftId) : '/drafts';
+        const draft = json.draft;
+        const draftId = draft && draft.id;
+        const listUrl = '/tools/ai-content-writer/drafts';
         setStatusHtml(
           statusEl,
-          '<span class="font-semibold">Saved to My Drafts.</span> ' +
-          '<a href="' + openUrl + '" class="text-primary-700 font-semibold underline">Open in Workspace</a> · ' +
-          '<a href="/drafts" class="text-primary-700 font-semibold underline">My Drafts</a>',
+          '<span class="font-semibold">Saved.</span> ' +
+          '<a href="' + listUrl + '" class="text-primary-700 font-semibold underline">View my AI Content drafts</a>',
           'success'
         );
         btn.disabled = false;
@@ -764,6 +768,52 @@
 
     if (downloadBtn) {
       downloadBtn.addEventListener('click', handleDownload);
+    }
+  }
+
+  async function loadDraftFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const draftId = params.get('draftId');
+    if (!draftId) return;
+    const headers = getAuthHeaders();
+    try {
+      const res = await fetch('/api/v1/ai-content-drafts/' + encodeURIComponent(draftId), {
+        method: 'GET',
+        credentials: 'include',
+        headers: headers
+      });
+      if (res.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname + '?draftId=' + draftId);
+        return;
+      }
+      if (!res.ok) {
+        const j = await res.json().catch(function() { return {}; });
+        showError(j.error || 'Failed to load draft');
+        return;
+      }
+      const j = await res.json();
+      const d = j.draft;
+      if (!d || !d.content) {
+        showError('Draft not found');
+        return;
+      }
+      currentResult = {
+        content: {
+          title: d.title || '',
+          content: d.content,
+          meta_description: d.meta_description || '',
+          keywords: d.keywords || ''
+        },
+        metadata: {
+          word_count: d.word_count,
+          language: d.language || '',
+          content_type: d.content_type || ''
+        }
+      };
+      switchTab('generate');
+      showResult('generate', currentResult);
+    } catch (e) {
+      showError(e.message || 'Failed to load draft');
     }
   }
 
