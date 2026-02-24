@@ -106,25 +106,46 @@
 </div>
 
 <div class="min-h-screen bg-gray-50">
-  <!-- Header Navigation -->
   <%- include('../partials/nav', { active: 'drafts', user: user }) %>
 
   <div class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
     <div class="px-4 py-6 sm:px-0">
-      <div class="flex justify-between items-center mb-6">
-        <h2 class="text-3xl font-bold text-gray-900 uppercase tracking-wide">
+      <!-- Hero: title + subtitle -->
+      <div class="mb-8">
+        <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
           My Drafts
-        </h2>
-        <a href="/workspace" class="btn-primary flex items-center gap-2" id="create-new-draft-btn">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-          </svg>
-          Create New Draft
-        </a>
+        </h1>
+        <p class="mt-1.5 text-gray-600 text-base sm:text-lg">
+          Proofreading & AI-generated content in one place
+        </p>
       </div>
 
-      <div class="flex flex-col lg:flex-row gap-6">
-        <!-- Groups sidebar -->
+      <!-- Tab bar + primary CTA -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div class="inline-flex rounded-xl bg-gray-100 p-1 shadow-inner" role="tablist" aria-label="Draft type">
+          <button type="button" id="tab-proofreading" role="tab" aria-selected="true" aria-controls="proofreading-panel" class="drafts-tab rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 bg-white text-primary-700 shadow-sm border border-gray-200/80">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              Proofreading
+            </span>
+          </button>
+          <button type="button" id="tab-ai-content" role="tab" aria-selected="false" aria-controls="ai-content-panel" class="drafts-tab rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+              AI Content
+            </span>
+          </button>
+        </div>
+        <div class="flex-shrink-0">
+          <a href="/workspace" id="drafts-primary-cta" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-white shadow-md hover:shadow-lg transition-all duration-200 bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span id="drafts-primary-cta-text">Create New Draft</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Proofreading panel -->
+      <div id="proofreading-panel" role="tabpanel" class="flex flex-col lg:flex-row gap-6">
         <div id="groups-sidebar" class="lg:w-56 flex-shrink-0 hidden">
           <div class="bg-white shadow rounded-xl border border-gray-200 p-4 sticky top-4">
             <div class="flex items-center justify-between mb-3">
@@ -145,41 +166,61 @@
           </div>
         </div>
 
-        <div class="flex-1 min-w-0 bg-white shadow-lg rounded-xl border border-gray-200 p-6">
-        <h3 class="text-lg font-semibold mb-4 text-gray-900">Saved Drafts</h3>
-        
-        <div id="loading" class="text-center py-12">
-          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-          <p class="mt-4 text-gray-600">Loading drafts...</p>
+        <div class="flex-1 min-w-0 bg-white shadow-lg rounded-2xl border border-gray-200 p-6">
+          <h2 class="text-lg font-semibold mb-4 text-gray-900">Proofreading drafts</h2>
+          <div id="loading" class="text-center py-12">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+            <p class="mt-4 text-gray-600">Loading drafts...</p>
+          </div>
+          <div id="drafts-table" class="overflow-x-auto hidden">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Title</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Preview</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Words</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Status</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Created</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="drafts-body" class="bg-white divide-y divide-gray-100">
+              </tbody>
+            </table>
+          </div>
+          <div id="empty-state" class="hidden text-center py-12 text-gray-500">
+            <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <p class="text-lg font-medium">No proofreading drafts yet</p>
+            <p class="text-sm mt-2">Paste text in the Workspace to check grammar and spelling</p>
+            <a href="/workspace" class="mt-4 inline-block btn-primary">Create First Draft</a>
+          </div>
         </div>
+      </div>
 
-        <div id="drafts-table" class="overflow-x-auto hidden">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Title</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Preview</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Words</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Created At</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="drafts-body" class="bg-white divide-y divide-gray-100">
-            </tbody>
-          </table>
-        </div>
-
-        <div id="empty-state" class="hidden text-center py-12 text-gray-500">
-          <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-          </svg>
-          <p class="text-lg font-medium">No drafts found</p>
-          <p class="text-sm mt-2">Start writing in the workspace to see your drafts here</p>
-          <a href="/workspace" class="mt-4 inline-block btn-primary">
-            Create First Draft
-          </a>
-        </div>
+      <!-- AI Content panel -->
+      <div id="ai-content-panel" role="tabpanel" class="hidden" aria-hidden="true">
+        <div class="bg-white shadow-lg rounded-2xl border border-gray-200 p-6">
+          <h2 class="text-lg font-semibold mb-4 text-gray-900">AI Content drafts</h2>
+          <div id="ai-content-loading" class="text-center py-12">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+            <p class="mt-4 text-gray-600">Loading AI drafts...</p>
+          </div>
+          <div id="ai-content-empty" class="hidden text-center py-12 text-gray-500">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center">
+              <svg class="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            </div>
+            <p class="text-lg font-medium text-gray-700">No AI content drafts yet</p>
+            <p class="text-sm mt-2 text-gray-500">Generate blogs and articles with the AI Content Writer, then save them here</p>
+            <a href="/tools/ai-content-writer" class="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-700 shadow-md transition-all">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              Create with AI
+            </a>
+          </div>
+          <div id="ai-content-list" class="hidden space-y-4">
+            <!-- Cards rendered by JS -->
+          </div>
         </div>
       </div>
     </div>
@@ -329,6 +370,131 @@
     const tableEl = document.getElementById('drafts-table');
     const bodyEl = document.getElementById('drafts-body');
     const emptyEl = document.getElementById('empty-state');
+    const tabProofreading = document.getElementById('tab-proofreading');
+    const tabAiContent = document.getElementById('tab-ai-content');
+    const proofreadingPanel = document.getElementById('proofreading-panel');
+    const aiContentPanel = document.getElementById('ai-content-panel');
+    const aiContentLoading = document.getElementById('ai-content-loading');
+    const aiContentEmpty = document.getElementById('ai-content-empty');
+    const aiContentList = document.getElementById('ai-content-list');
+    const draftsPrimaryCta = document.getElementById('drafts-primary-cta');
+    const draftsPrimaryCtaText = document.getElementById('drafts-primary-cta-text');
+
+    function switchToTab(panel) {
+      const isProofreading = panel === 'proofreading';
+      if (tabProofreading) {
+        tabProofreading.setAttribute('aria-selected', isProofreading);
+        tabProofreading.classList.toggle('bg-white', isProofreading);
+        tabProofreading.classList.toggle('text-primary-700', isProofreading);
+        tabProofreading.classList.toggle('shadow-sm', isProofreading);
+        tabProofreading.classList.toggle('border', isProofreading);
+        tabProofreading.classList.toggle('border-gray-200/80', isProofreading);
+        tabProofreading.classList.toggle('text-gray-600', !isProofreading);
+      }
+      if (tabAiContent) {
+        tabAiContent.setAttribute('aria-selected', !isProofreading);
+        tabAiContent.classList.toggle('bg-white', !isProofreading);
+        tabAiContent.classList.toggle('text-primary-700', !isProofreading);
+        tabAiContent.classList.toggle('shadow-sm', !isProofreading);
+        tabAiContent.classList.toggle('border', !isProofreading);
+        tabAiContent.classList.toggle('border-gray-200/80', !isProofreading);
+        tabAiContent.classList.toggle('text-gray-600', isProofreading);
+      }
+      if (proofreadingPanel) {
+        proofreadingPanel.classList.toggle('hidden', !isProofreading);
+        proofreadingPanel.setAttribute('aria-hidden', !isProofreading);
+      }
+      if (aiContentPanel) {
+        aiContentPanel.classList.toggle('hidden', isProofreading);
+        aiContentPanel.setAttribute('aria-hidden', isProofreading);
+      }
+      if (draftsPrimaryCta && draftsPrimaryCtaText) {
+        if (isProofreading) {
+          draftsPrimaryCta.href = '/workspace';
+          draftsPrimaryCtaText.textContent = 'Create New Draft';
+        } else {
+          draftsPrimaryCta.href = '/tools/ai-content-writer';
+          draftsPrimaryCtaText.textContent = 'Create with AI';
+        }
+      }
+      if (!isProofreading && aiContentList) loadAIContentDrafts();
+      try { window.history.replaceState(null, '', window.location.pathname + (isProofreading ? '' : '#ai-content')); } catch (e) {}
+    }
+
+    if (tabProofreading) tabProofreading.addEventListener('click', function() { switchToTab('proofreading'); });
+    if (tabAiContent) tabAiContent.addEventListener('click', function() { switchToTab('ai-content'); });
+    var initialHash = (window.location.hash || '').toLowerCase();
+    if (initialHash === '#ai-content') switchToTab('ai-content');
+
+    async function loadAIContentDrafts() {
+      if (!aiContentLoading || !aiContentEmpty || !aiContentList) return;
+      aiContentLoading.classList.remove('hidden');
+      aiContentEmpty.classList.add('hidden');
+      aiContentList.classList.add('hidden');
+      aiContentList.innerHTML = '';
+      var headers = { 'Accept': 'application/json' };
+      try {
+        var token = localStorage.getItem('access_token');
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+      } catch (e) {}
+      try {
+        var res = window.authUtils && window.authUtils.apiFetch
+          ? await window.authUtils.apiFetch('/api/v1/ai-content-drafts?limit=100', { method: 'GET', credentials: 'include', headers: headers })
+          : await fetch('/api/v1/ai-content-drafts?limit=100', { credentials: 'include', headers: headers });
+        if (res.status === 401) {
+          window.location.href = '/login?redirect=' + encodeURIComponent('/drafts#ai-content');
+          return;
+        }
+        if (!res.ok) {
+          aiContentLoading.classList.add('hidden');
+          aiContentEmpty.classList.remove('hidden');
+          aiContentEmpty.querySelector('p.text-lg').textContent = 'Could not load AI drafts';
+          return;
+        }
+        var data = await res.json().catch(function() { return {}; });
+        var drafts = (data && data.drafts) ? data.drafts : [];
+        aiContentLoading.classList.add('hidden');
+        if (drafts.length === 0) {
+          aiContentEmpty.classList.remove('hidden');
+          return;
+        }
+        function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        function preview(t, n) { if (!t) return ''; t = t.replace(/\s+/g, ' ').trim(); return t.length <= n ? t : t.slice(0, n) + '\u2026'; }
+        function fmtDate(iso) { if (!iso) return '\u2014'; try { var d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { dateStyle: 'short' }) + ' ' + d.toLocaleTimeString(undefined, { timeStyle: 'short' }); } catch (e) { return iso; } }
+        drafts.forEach(function(d) {
+          var card = document.createElement('div');
+          card.className = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 hover:border-primary-200 transition-all duration-200';
+          card.innerHTML = '<div class="min-w-0 flex-1">' +
+            '<h3 class="font-semibold text-gray-900 truncate">' + esc(d.title || 'Untitled') + '</h3>' +
+            '<p class="text-sm text-gray-500 mt-0.5 line-clamp-2">' + esc(preview(d.content, 160)) + '</p>' +
+            '<p class="text-xs text-gray-400 mt-2">' + (d.word_count ? d.word_count + ' words' : '') + ' \u00b7 ' + fmtDate(d.updated_at) + '</p>' +
+            '</div>' +
+            '<div class="flex items-center gap-2 flex-shrink-0">' +
+            '<a href="/tools/ai-content-writer?draftId=' + encodeURIComponent(d.id) + '" class="px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 shadow-sm transition-colors">Open</a>' +
+            '<button type="button" class="ai-draft-delete px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-red-50 hover:border-red-200 hover:text-red-700 transition-colors" data-id="' + esc(String(d.id)) + '" data-title="' + esc(d.title || 'Untitled') + '">Delete</button>' +
+            '</div>';
+          aiContentList.appendChild(card);
+        });
+        aiContentList.querySelectorAll('.ai-draft-delete').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var id = btn.getAttribute('data-id');
+            var title = btn.getAttribute('data-title');
+            if (!id || !confirm('Delete this AI draft? This cannot be undone.')) return;
+            btn.disabled = true;
+            var h = { 'Accept': 'application/json' };
+            try { var t = localStorage.getItem('access_token'); if (t) h['Authorization'] = 'Bearer ' + t; } catch (e) {}
+            fetch('/api/v1/ai-content-drafts/' + id, { method: 'DELETE', credentials: 'include', headers: h })
+              .then(function(r) { if (r.status === 204 || r.status === 200) loadAIContentDrafts(); else btn.disabled = false; })
+              .catch(function() { btn.disabled = false; });
+          });
+        });
+        aiContentList.classList.remove('hidden');
+      } catch (e) {
+        aiContentLoading.classList.add('hidden');
+        aiContentEmpty.classList.remove('hidden');
+        aiContentEmpty.querySelector('p.text-lg').textContent = 'Error loading AI drafts';
+      }
+    }
 
     // Helper function to clear invalid tokens and redirect to login
     // IMPORTANT: Only redirect if we're actually on the drafts page, not homepage
@@ -460,8 +626,8 @@
     }
     }
 
-    // Helper function to fetch submissions with retry on 401
-    async function fetchSubmissionsWithRetry() {
+    // Single attempt to fetch submissions (401 refresh handled inside; 503 retry handled by wrapper).
+    async function fetchSubmissionsOnce() {
       // Get access token from localStorage
       let token = localStorage.getItem('access_token');
     console.log('[DRAFTS] Token in localStorage:', token ? 'Present' : 'Missing', token ? token.substring(0, 20) + '...' : '');
@@ -816,22 +982,42 @@
     }
     
     if (!response.ok) {
-      // Try to get error message from response
       let errorMessage = `HTTP ${response.status}`;
       try {
         const errorData = await response.clone().json();
-        if (errorData.error) {
-          errorMessage = errorData.error;
-        }
+        if (errorData.error) errorMessage = errorData.error;
+        else if (response.status === 503 && (errorData.status === 'starting' || errorData.status === 'unavailable'))
+          errorMessage = 'Service is starting up. Please try again in a moment.';
         console.error('[DRAFTS] Error response data:', errorData);
       } catch (e) {
-        // If JSON parsing fails, use status text
-        errorMessage = response.statusText || `HTTP ${response.status}`;
+        if (response.status === 503) errorMessage = 'Service is starting up. Please try again in a moment.';
+        else errorMessage = response.statusText || `HTTP ${response.status}`;
       }
       throw new Error(errorMessage);
     }
-    
     return response;
+  }
+
+  async function fetchSubmissionsWithRetry() {
+    const maxAttempts = 3;
+    const retryDelayMs = 2500;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (attempt > 1) {
+        console.log('[DRAFTS] Backend 503 (starting), retry ' + attempt + '/' + maxAttempts + ' in ' + retryDelayMs + 'ms');
+        await new Promise(function(r) { setTimeout(r, retryDelayMs); });
+      }
+      try {
+        var res = await fetchSubmissionsOnce();
+        if (res === null) return null;
+        return res;
+      } catch (e) {
+        var msg = (e && e.message) || String(e);
+        var is503 = msg.indexOf('503') !== -1 || msg.indexOf('starting') !== -1 || msg.indexOf('try again') !== -1;
+        if (is503 && attempt < maxAttempts) continue;
+        throw e;
+      }
+    }
+    throw new Error('Service is starting up. Please try again in a moment.');
   }
 
     try {
@@ -1123,8 +1309,11 @@
     if (isAuthError) {
       emptyEl.innerHTML = '<svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg><p class="text-lg font-medium">Authentication Required</p><p class="text-sm mt-2">Please log in to view your drafts.</p><a href="/login" class="mt-4 inline-block btn-primary">Log In</a>';
     } else {
-      const safeErrorMessage = errorMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      emptyEl.innerHTML = '<svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><p class="text-lg font-medium">Error loading drafts</p><p class="text-sm mt-2">' + safeErrorMessage + '</p><a href="/workspace" class="mt-4 inline-block btn-primary">Create New Draft</a>';
+      var is503 = errorMessage.indexOf('503') !== -1 || errorMessage.indexOf('starting') !== -1 || errorMessage.indexOf('try again') !== -1;
+      var friendlyMsg = is503 ? 'Service is starting up. Please try again in a moment.' : errorMessage;
+      var safeErrorMessage = friendlyMsg.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      var retryBtn = is503 ? '<button type="button" onclick="window.location.reload()" class="mt-4 inline-block px-5 py-2.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-700 shadow-md transition-all">Retry</button>' : '';
+      emptyEl.innerHTML = '<svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><p class="text-lg font-medium">Error loading drafts</p><p class="text-sm mt-2">' + safeErrorMessage + '</p><div class="mt-4 flex flex-wrap justify-center gap-3">' + retryBtn + '<a href="/workspace" class="inline-block px-5 py-2.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-700 shadow-md transition-all">Create New Draft</a></div>';
     }
   }
 })().catch(error => {
