@@ -79,6 +79,18 @@
           </div>
 
           <form id="register-form" class="space-y-5">
+            <!-- Hidden field: affiliate referral code from ref_code cookie -->
+            <input type="hidden" name="affiliate_code" id="affiliate_code_field">
+            <script>
+              (function() {
+                try {
+                  var m = document.cookie.match(/(?:^|;\s*)ref_code=([^;]+)/);
+                  if (m) {
+                    document.getElementById('affiliate_code_field').value = decodeURIComponent(m[1]).slice(0, 20);
+                  }
+                } catch(e) {}
+              })();
+            </script>
             <div class="space-y-2">
               <label for="name" class="text-sm font-semibold">Full name</label>
               <input id="name" name="name" type="text" required class="input-field" placeholder="e.g. Kavya Raman" />

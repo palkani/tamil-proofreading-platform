@@ -1,0 +1,233 @@
+<%- include('../partials/header', { seo: seo, title: title, googleClientId: typeof googleClientId !== 'undefined' ? googleClientId : '' }) %>
+<%- include('../partials/nav', { user: user, active: 'pricing' }) %>
+
+<% if (paymentsEnabled && countryCode === 'IN') { %>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<% } %>
+
+<div class="min-h-screen bg-gray-50 py-16 px-4">
+  <div class="max-w-5xl mx-auto">
+
+    <% if (!paymentsEnabled) { %>
+    <!-- Coming Soon state -->
+    <div class="text-center py-24">
+      <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary-100 mb-6">
+        <svg class="w-10 h-10 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <h1 class="text-4xl font-bold text-gray-900 mb-4">Pricing Coming Soon</h1>
+      <p class="text-lg text-gray-600 max-w-xl mx-auto mb-8">
+        We're putting the finishing touches on our Pro plans. Join our mailing list to be notified when they launch.
+      </p>
+      <a href="/contact" class="inline-flex items-center px-6 py-3 rounded-full bg-primary-600 text-white font-semibold hover:bg-primary-700 transition">
+        Get notified
+      </a>
+      <p class="mt-6 text-sm text-gray-500">
+        In the meantime, ProofTamil is <strong>completely free</strong> to use.
+        <a href="/" class="text-primary-600 underline ml-1">Try it now →</a>
+      </p>
+    </div>
+
+    <% } else { %>
+    <!-- Pricing header -->
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-bold text-gray-900 mb-4">Simple, honest pricing</h1>
+      <p class="text-lg text-gray-600 max-w-xl mx-auto">
+        Start free. Upgrade when you need unlimited AI proofreading.
+      </p>
+      <% if (countryCode === 'IN') { %>
+      <span class="mt-3 inline-block text-xs font-semibold bg-orange-100 text-orange-800 px-3 py-1 rounded-full">
+        🇮🇳 Prices shown in INR for India
+      </span>
+      <% } else { %>
+      <span class="mt-3 inline-block text-xs font-semibold bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+        Prices shown in USD
+      </span>
+      <% } %>
+    </div>
+
+    <% if (error) { %>
+    <div class="text-center py-10 text-gray-500">
+      <p>Unable to load pricing right now. Please try again later or <a href="/contact" class="text-primary-600 underline">contact us</a>.</p>
+    </div>
+    <% } else { %>
+
+    <!-- Plan cards -->
+    <div class="grid md:grid-cols-3 gap-8 items-stretch">
+
+      <!-- Free Plan -->
+      <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 flex flex-col">
+        <div class="mb-6">
+          <span class="text-xs font-bold uppercase tracking-wider text-gray-500">Free</span>
+          <div class="mt-2 flex items-end gap-1">
+            <span class="text-4xl font-bold text-gray-900">₹0</span>
+            <span class="text-gray-500 mb-1">/ month</span>
+          </div>
+        </div>
+        <ul class="space-y-3 text-sm text-gray-600 flex-1 mb-8">
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Tamil proofreading (limited checks/day)
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Tamil transliteration &amp; autocomplete
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Draft saving &amp; history
+          </li>
+          <li class="flex items-start gap-2 text-gray-400">
+            <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            Unlimited AI corrections
+          </li>
+          <li class="flex items-start gap-2 text-gray-400">
+            <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            Priority support
+          </li>
+        </ul>
+        <a href="/" class="block text-center px-5 py-3 rounded-full border border-gray-300 text-gray-700 font-semibold hover:border-gray-400 transition">
+          Get started free
+        </a>
+      </div>
+
+      <!-- Pro Monthly -->
+      <div class="bg-white rounded-2xl border-2 border-primary-600 shadow-xl p-8 flex flex-col relative">
+        <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span class="bg-primary-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Most Popular</span>
+        </div>
+        <div class="mb-6">
+          <span class="text-xs font-bold uppercase tracking-wider text-primary-600">Pro Monthly</span>
+          <div class="mt-2 flex items-end gap-1">
+            <% if (monthly && monthly.display_price) { %>
+            <span class="text-4xl font-bold text-gray-900"><%= monthly.currency === 'INR' ? '₹' : '$' %><%= monthly.display_price %></span>
+            <% } else { %>
+            <span class="text-4xl font-bold text-gray-900">—</span>
+            <% } %>
+            <span class="text-gray-500 mb-1">/ month</span>
+          </div>
+        </div>
+        <ul class="space-y-3 text-sm text-gray-600 flex-1 mb-8">
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <strong>Unlimited</strong> AI Tamil corrections
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Advanced grammar &amp; style analysis
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            All Free plan features
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Priority email support
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Cancel anytime
+          </li>
+        </ul>
+        <button
+          id="checkout-btn-PRO_MONTHLY"
+          onclick="startCheckout('PRO_MONTHLY', '<%= countryCode %>')"
+          class="block w-full text-center px-5 py-3 rounded-full bg-primary-600 text-white font-semibold hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Get Pro Monthly
+        </button>
+      </div>
+
+      <!-- Pro Yearly -->
+      <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 flex flex-col">
+        <div class="mb-6">
+          <span class="text-xs font-bold uppercase tracking-wider text-gray-500">Pro Yearly</span>
+          <% if (yearly && yearly.display_price) { %>
+          <div class="mt-2 flex items-end gap-1">
+            <span class="text-4xl font-bold text-gray-900"><%= yearly.currency === 'INR' ? '₹' : '$' %><%= yearly.display_price %></span>
+            <span class="text-gray-500 mb-1">/ year</span>
+          </div>
+          <% if (monthly && monthly.display_price && yearly && yearly.display_price) { %>
+          <p class="text-xs text-green-600 font-semibold mt-1">
+            Save ~17% vs monthly
+          </p>
+          <% } %>
+          <% } else { %>
+          <div class="mt-2 flex items-end gap-1">
+            <span class="text-4xl font-bold text-gray-900">—</span>
+            <span class="text-gray-500 mb-1">/ year</span>
+          </div>
+          <% } %>
+        </div>
+        <ul class="space-y-3 text-sm text-gray-600 flex-1 mb-8">
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Everything in Pro Monthly
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Best value — 2 months free
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Single annual payment
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Priority email support
+          </li>
+        </ul>
+        <button
+          id="checkout-btn-PRO_YEARLY"
+          onclick="startCheckout('PRO_YEARLY', '<%= countryCode %>')"
+          class="block w-full text-center px-5 py-3 rounded-full border-2 border-primary-600 text-primary-700 font-semibold hover:bg-primary-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Get Pro Yearly
+        </button>
+      </div>
+
+    </div><!-- /plan cards -->
+
+    <!-- FAQ -->
+    <div class="mt-16 max-w-2xl mx-auto">
+      <h2 class="text-2xl font-bold text-gray-900 mb-8 text-center">Frequently asked questions</h2>
+      <div class="space-y-6">
+        <div>
+          <h3 class="font-semibold text-gray-900">Can I cancel anytime?</h3>
+          <p class="mt-1 text-sm text-gray-600">Yes. Cancel from your account page at any time. You'll keep Pro access until the end of your billing period.</p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-900">Which payment methods are accepted?</h3>
+          <% if (countryCode === 'IN') { %>
+          <p class="mt-1 text-sm text-gray-600">UPI, Credit/Debit cards, Netbanking, and Wallets via Razorpay.</p>
+          <% } else { %>
+          <p class="mt-1 text-sm text-gray-600">Credit / Debit cards, Apple Pay, and Google Pay via Stripe.</p>
+          <% } %>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-900">Is my data secure?</h3>
+          <p class="mt-1 text-sm text-gray-600">Yes. Payments are processed by <%= countryCode === 'IN' ? 'Razorpay' : 'Stripe' %>, a PCI-DSS Level 1 certified payment processor. We never store your card details.</p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-900">What happens to my drafts if I downgrade?</h3>
+          <p class="mt-1 text-sm text-gray-600">Your drafts are always saved. If you downgrade to Free, you keep access to all your existing drafts but daily AI checks revert to the free limit.</p>
+        </div>
+      </div>
+    </div>
+
+    <% } %> <!-- end !error -->
+    <% } %> <!-- end paymentsEnabled -->
+
+  </div>
+</div>
+
+<% if (paymentsEnabled) { %>
+<script>
+  window.RAZORPAY_KEY_ID = '<%= razorpayKeyId %>';
+  window.USER_EMAIL = '<%= user && user.email ? user.email.replace(/'/g, "\\'") : "" %>';
+</script>
+<script src="/js/payment.js"></script>
+<% } %>
+
+<%- include('../partials/footer') %>

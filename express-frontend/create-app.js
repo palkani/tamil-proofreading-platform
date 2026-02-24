@@ -64,6 +64,11 @@ function ensureAppReady() {
 function createApp() {
   const app = express();
 
+  // Payment feature flag — set PAYMENTS_ENABLED=true in .env to enable payment UI
+  app.locals.paymentsEnabled = process.env.PAYMENTS_ENABLED === 'true';
+  // Razorpay public key ID (safe to expose in frontend templates)
+  app.locals.razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';
+
   app.set('trust proxy', true);
   app.set('view engine', 'ejs');
   app.set('views', path.join(__dirname, 'views'));

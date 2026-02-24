@@ -9,6 +9,11 @@
           </a>
         </div>
         <div class="hidden sm:ml-8 sm:flex sm:space-x-4">
+          <% if (locals.paymentsEnabled) { %>
+            <a href="/pricing" class="<%= active === 'pricing' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
+              Pricing
+            </a>
+          <% } %>
           <% if (user && user.email) { %>
             <a href="/drafts" id="my-drafts-link" class="<%= active === 'drafts' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-600 hover:text-primary-600' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
               My Drafts

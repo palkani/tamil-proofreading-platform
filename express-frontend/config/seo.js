@@ -241,6 +241,40 @@ const seoConfig = {
     noIndex: true
   },
 
+  pricing: {
+    title: 'Pricing - ProofTamil Pro Plans | Tamil Grammar Checker',
+    description: 'Upgrade to ProofTamil Pro for unlimited AI Tamil proofreading, advanced grammar checking, and priority support. Simple monthly and yearly plans.',
+    keywords: 'prooftamil pricing, tamil grammar checker pro, tamil proofreading subscription, tamil ai writer pro plan',
+    canonical: BASE_URL + '/pricing',
+    ogTitle: 'ProofTamil Pro Pricing - Unlimited Tamil AI Proofreading',
+    ogDescription: 'Upgrade to ProofTamil Pro for unlimited Tamil AI proofreading. Simple pricing, cancel anytime.',
+    pageType: 'pricing'
+  },
+
+  billingSuccess: {
+    title: 'Payment Successful - ProofTamil Pro',
+    description: 'Your ProofTamil Pro subscription is now active. Enjoy unlimited Tamil AI proofreading.',
+    canonical: BASE_URL + '/billing/success',
+    pageType: 'billing',
+    noIndex: true
+  },
+
+  billingCancel: {
+    title: 'Checkout Cancelled - ProofTamil',
+    description: 'Checkout cancelled. Your free plan is still active. Return to pricing to try again.',
+    canonical: BASE_URL + '/billing/cancel',
+    pageType: 'billing',
+    noIndex: true
+  },
+
+  affiliate: {
+    title: 'Affiliate Dashboard - ProofTamil',
+    description: 'Manage your ProofTamil affiliate account. View referrals, earnings, and your unique referral link.',
+    canonical: BASE_URL + '/affiliate/dashboard',
+    pageType: 'affiliate',
+    noIndex: true
+  },
+
   notFound: {
     title: 'Page Not Found - ProofTamil Tamil Grammar Checker',
     description: 'Page not found. Return to ProofTamil home to use our free Tamil grammar checker and proofreading tool.',

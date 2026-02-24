@@ -82,10 +82,19 @@ router.get('/', (req, res) => {
       user: req.user ? req.user.email : 'none'
     });
   }
-  
+
+  // Store affiliate referral code in a 30-day cookie
+  if (req.query.ref) {
+    res.cookie('ref_code', String(req.query.ref).slice(0, 20), {
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      httpOnly: false,
+      sameSite: 'lax'
+    });
+  }
+
   const user = getCurrentUser(req);
   const seo = getSeoData('home');
-  res.render('pages/home', { 
+  res.render('pages/home', {
     title: seo.title,
     seo: seo,
     user: user
@@ -617,6 +626,104 @@ router.get('/admin/affiliates', (req, res) => {
   res.render('pages/admin-affiliates', { 
     title: 'Affiliate Management - ProofTamil',
     user: user
+  });
+});
+
+// Pricing page — gated by PAYMENTS_ENABLED env var
+router.get('/pricing', async (req, res) => {
+  const paymentsEnabled = req.app.locals.paymentsEnabled;
+  const user = getCurrentUser(req);
+  const seo = getSeoData('pricing');
+
+  if (!paymentsEnabled) {
+    return res.render('pages/pricing', {
+      title: seo.title,
+      seo,
+      user,
+      paymentsEnabled: false,
+      monthly: null,
+      yearly: null,
+      countryCode: 'US',
+      razorpayKeyId: '',
+      error: false
+    });
+  }
+
+  // Geo-detect country from CDN/proxy headers
+  const countryCode = (
+    req.headers['cf-ipcountry'] ||
+    req.headers['x-vercel-ip-country'] ||
+    'US'
+  ).toUpperCase().slice(0, 2);
+
+  try {
+    const backendUrl = (process.env.BACKEND_URL_PRIMARY || process.env.BACKEND_URL || 'http://localhost:8080').replace(/\/$/, '');
+    const [monthlyRes, yearlyRes] = await Promise.all([
+      axiosWithPool.get(`${backendUrl}/api/v1/billing/pricing?plan_code=PRO_MONTHLY&country_code=${countryCode}`, { validateStatus: () => true }),
+      axiosWithPool.get(`${backendUrl}/api/v1/billing/pricing?plan_code=PRO_YEARLY&country_code=${countryCode}`, { validateStatus: () => true })
+    ]);
+    const monthly = (monthlyRes.status === 200) ? monthlyRes.data : null;
+    const yearly = (yearlyRes.status === 200) ? yearlyRes.data : null;
+    res.render('pages/pricing', {
+      title: seo.title,
+      seo,
+      user,
+      paymentsEnabled: true,
+      countryCode,
+      razorpayKeyId: req.app.locals.razorpayKeyId,
+      monthly,
+      yearly,
+      error: (!monthly && !yearly)
+    });
+  } catch (_err) {
+    console.error('[PRICING] Failed to fetch pricing:', _err.message);
+    res.render('pages/pricing', {
+      title: seo.title,
+      seo,
+      user,
+      paymentsEnabled: true,
+      monthly: null,
+      yearly: null,
+      countryCode,
+      razorpayKeyId: req.app.locals.razorpayKeyId,
+      error: true
+    });
+  }
+});
+
+// Billing success page — Stripe / Razorpay redirect here after payment
+router.get('/billing/success', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('billingSuccess');
+  res.render('pages/billing-success', {
+    title: seo.title,
+    seo,
+    user,
+    sessionId: String(req.query.session_id || '').slice(0, 200)
+  });
+});
+
+// Billing cancel page — user cancelled checkout
+router.get('/billing/cancel', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('billingCancel');
+  res.render('pages/billing-cancel', {
+    title: seo.title,
+    seo,
+    user,
+    paymentsEnabled: req.app.locals.paymentsEnabled
+  });
+});
+
+// Affiliate dashboard — auth required
+router.get('/affiliate/dashboard', requireAuth, (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('affiliate');
+  res.render('pages/affiliate-dashboard', {
+    title: seo.title,
+    seo,
+    user,
+    paymentsEnabled: req.app.locals.paymentsEnabled
   });
 });
 

@@ -1,0 +1,61 @@
+<%- include('../partials/header', { seo: seo, title: title, googleClientId: typeof googleClientId !== 'undefined' ? googleClientId : '' }) %>
+<%- include('../partials/nav', { user: user, active: '' }) %>
+
+<div class="min-h-screen bg-gray-50 flex items-center justify-center py-16 px-4">
+  <div class="max-w-lg w-full text-center">
+
+    <!-- Icon -->
+    <div class="flex justify-center mb-6">
+      <div class="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center">
+        <svg class="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </div>
+    </div>
+
+    <h1 class="text-3xl font-bold text-gray-900 mb-3">Checkout Cancelled</h1>
+    <p class="text-lg text-gray-600 mb-2">
+      No worries — you haven't been charged.
+    </p>
+    <p class="text-sm text-gray-500 mb-8">
+      Your free plan is still active. You can upgrade anytime from the pricing page.
+    </p>
+
+    <!-- Free plan reminder -->
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 text-left mb-8">
+      <h2 class="font-semibold text-gray-900 mb-3">Your free plan includes</h2>
+      <ul class="space-y-2 text-sm text-gray-600">
+        <li class="flex items-start gap-3">
+          <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Tamil transliteration &amp; autocomplete
+        </li>
+        <li class="flex items-start gap-3">
+          <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Daily AI proofreading (limited checks)
+        </li>
+        <li class="flex items-start gap-3">
+          <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Draft saving &amp; history
+        </li>
+      </ul>
+    </div>
+
+    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+      <% if (paymentsEnabled) { %>
+      <a href="/pricing" class="px-6 py-3 rounded-full bg-primary-600 text-white font-semibold hover:bg-primary-700 transition">
+        View pricing again
+      </a>
+      <% } %>
+      <a href="/workspace" class="px-6 py-3 rounded-full border border-gray-300 text-gray-700 font-semibold hover:border-gray-400 transition">
+        Continue with Free
+      </a>
+    </div>
+
+    <p class="mt-6 text-sm text-gray-500">
+      Have questions? <a href="/contact" class="text-primary-600 underline">Contact us</a>
+    </p>
+
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

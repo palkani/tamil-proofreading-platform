@@ -1,0 +1,57 @@
+<%- include('../partials/header', { seo: seo, title: title, googleClientId: typeof googleClientId !== 'undefined' ? googleClientId : '' }) %>
+<%- include('../partials/nav', { user: user, active: '' }) %>
+
+<div class="min-h-screen bg-gray-50 flex items-center justify-center py-16 px-4">
+  <div class="max-w-lg w-full text-center">
+
+    <!-- Success icon -->
+    <div class="flex justify-center mb-6">
+      <div class="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+        <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+      </div>
+    </div>
+
+    <h1 class="text-3xl font-bold text-gray-900 mb-3">Payment Successful!</h1>
+    <p class="text-lg text-gray-600 mb-2">
+      Welcome to <strong>ProofTamil Pro</strong>. Your subscription is now active.
+    </p>
+    <p class="text-sm text-gray-500 mb-8">
+      Subscription activation may take a few seconds. Refresh the page if features haven't updated yet.
+    </p>
+
+    <!-- What's next -->
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 text-left mb-8">
+      <h2 class="font-semibold text-gray-900 mb-4">What you get with Pro</h2>
+      <ul class="space-y-3 text-sm text-gray-600">
+        <li class="flex items-start gap-3">
+          <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Unlimited AI Tamil grammar &amp; style corrections
+        </li>
+        <li class="flex items-start gap-3">
+          <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Advanced proofreading across long documents
+        </li>
+        <li class="flex items-start gap-3">
+          <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Priority email support
+        </li>
+      </ul>
+    </div>
+
+    <a href="/workspace" class="inline-flex items-center px-8 py-3 rounded-full bg-primary-600 text-white font-semibold hover:bg-primary-700 transition shadow-lg">
+      Open Workspace
+      <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+      </svg>
+    </a>
+
+    <p class="mt-6 text-sm text-gray-500">
+      Questions? <a href="/contact" class="text-primary-600 underline">Contact us</a>
+    </p>
+
+  </div>
+</div>
+
+<%- include('../partials/footer') %>
