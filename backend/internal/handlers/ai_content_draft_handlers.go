@@ -53,7 +53,10 @@ func (h *Handlers) CreateAIContentDraft(c *gin.Context) {
 		title = title[:255]
 	}
 
-	wordCount := h.nlpService.CountWords(content)
+	wordCount := 1
+	if h.nlpService != nil {
+		wordCount = h.nlpService.CountWords(content)
+	}
 	if wordCount <= 0 {
 		wordCount = 1
 	}
@@ -73,7 +76,12 @@ func (h *Handlers) CreateAIContentDraft(c *gin.Context) {
 
 	if err := h.db.Create(draft).Error; err != nil {
 		log.Printf("[AI_CONTENT_DRAFT] Create failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save draft"})
+		// Return actual DB error so client/logs can diagnose (e.g. missing table)
+		errMsg := err.Error()
+		if len(errMsg) > 200 {
+			errMsg = errMsg[:200] + "..."
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save draft", "details": errMsg})
 		return
 	}
 

@@ -3246,7 +3246,7 @@ router.post('/v1/contact', async (req, res) => {
     });
 
     await transporter.sendMail({
-      from: '"ProofTamil" <noreply@prooftamil.com>',
+      from: '"ProofTamil" <prooftamil@gmail.com>',
       to: 'prooftamil@gmail.com',
       replyTo: email,
       subject: `[Contact] ${subject}`,

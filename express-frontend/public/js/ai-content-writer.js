@@ -502,7 +502,9 @@
         }
 
         if (!res.ok) {
-          setStatus(statusEl, json.error || 'Failed to save draft', 'error');
+          var errMsg = json.error || 'Failed to save draft';
+          if (json.details) errMsg += ' (' + json.details + ')';
+          setStatus(statusEl, errMsg, 'error');
           btn.disabled = false;
           return;
         }
