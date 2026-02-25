@@ -51,6 +51,46 @@
   }
 }
 
+/* Navigation bar — typography and theme colors */
+.site-nav {
+  letter-spacing: 0.01em;
+}
+.site-nav .nav-link {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-muted);
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+.site-nav .nav-link:hover {
+  color: var(--color-accent);
+}
+.site-nav .nav-link.active {
+  color: var(--color-primary);
+  font-weight: 600;
+  background-color: var(--color-primary-ghost);
+}
+.site-nav .nav-link-right {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-primary);
+}
+.site-nav .nav-link-right:hover {
+  color: var(--color-accent);
+}
+.site-nav .nav-email {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-muted);
+}
+.site-nav .nav-icon-btn {
+  color: var(--color-primary);
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+.site-nav .nav-icon-btn:hover {
+  color: var(--color-accent);
+  background-color: var(--color-primary-ghost);
+}
+
 @layer components {
   .btn-primary {
     @apply px-4 py-2 rounded-lg transition-all font-semibold;
