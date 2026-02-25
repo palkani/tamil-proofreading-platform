@@ -1,11 +1,11 @@
 <nav class="site-nav bg-white border-b border-gray-100 shadow-sm">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="flex justify-between items-center h-16 sm:h-20">
+    <div class="flex justify-between items-center min-h-[72px] sm:min-h-[88px] py-3 sm:py-4">
       <!-- Logo & Main Nav -->
       <div class="flex items-center">
         <div class="flex-shrink-0 flex items-center">
           <a href="/" class="flex items-center gap-2" aria-label="ProofTamil Home">
-            <img src="/images/proof-tamil-logo.png" alt="Proofதமிழ் - Tamil proofreading" class="h-10 w-auto sm:h-12 md:h-14 drop-shadow-sm" style="min-height: 40px;">
+            <img src="/images/proof-tamil-logo.png" alt="Proofதமிழ் - Tamil proofreading" class="h-14 w-auto sm:h-16 md:h-20 lg:h-24 drop-shadow-md" style="min-height: 56px; max-height: 96px;">
           </a>
         </div>
         <div class="hidden sm:ml-10 sm:flex sm:items-center sm:gap-1">
@@ -89,7 +89,8 @@
   </div>
 </nav>
 
-<!-- Promo stripe: scrolling feature highlights -->
+<% if (!user || !user.email) { %>
+<!-- Promo stripe: scrolling feature highlights (shown only when not logged in) -->
 <div class="promo-stripe" role="region" aria-label="ProofTamil features">
   <div class="promo-stripe-inner">
     <div class="promo-stripe-track">
@@ -107,6 +108,7 @@
     </div>
   </div>
 </div>
+<% } %>
 
 <style>
 .promo-stripe {
