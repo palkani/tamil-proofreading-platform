@@ -219,10 +219,10 @@
   <section class="relative bg-gradient-to-b from-[#EBF4FB] via-white to-white py-20 md:py-32">
     <div class="max-w-7xl mx-auto px-6 text-center">
       <div class="space-y-8">
-        <!-- Main Heading -->
-        <h1 class="text-4xl md:text-6xl font-extrabold leading-tight" style="color: #1A2B68;">
-          <span>Improve Your Tamil Writing with AI-</span><span style="color: #2979FF;">Powered Proofreading</span>
-          <span class="block mt-3 text-2xl md:text-4xl" style="color: #1A2B68;">All-in-one Tamil Writing Assistant</span>
+        <!-- Main Heading: dark blue (#21397D) + vibrant blue (#3370E8), AI-Powered Proofreading on one line -->
+        <h1 class="text-4xl md:text-6xl font-extrabold leading-tight">
+          <span style="color: #21397D;">Improve Your Tamil Writing with </span><span style="color: #3370E8;">AI-Powered Proofreading</span>
+          <span class="block mt-3 text-2xl md:text-4xl" style="color: #21397D;">All-in-one Tamil Writing Assistant</span>
         </h1>
         
         <p class="text-lg md:text-xl max-w-3xl mx-auto leading-relaxed" style="color: #4A4A4A;">
@@ -231,7 +231,7 @@
         
         <!-- Language Badge -->
         <div class="inline-block">
-          <span class="px-6 py-2 rounded-full font-semibold text-sm inline-flex items-center justify-center" style="background-color: #EBF4FB; color: #1A2B68;">
+          <span class="px-6 py-2 rounded-full font-semibold text-sm inline-flex items-center justify-center" style="background-color: #EBF4FB; color: #21397D;">
             <img src="/images/proof-tamil-logo.png" alt="Proofதமிழ்" class="w-6 h-6 object-contain" width="24" height="24" decoding="async" />
           </span>
         </div>
@@ -239,14 +239,14 @@
         <!-- CTA Buttons -->
         <div class="flex flex-col sm:flex-row gap-4 justify-center items-center pt-6">
           <% if (user) { %>
-            <a href="/workspace" class="px-8 py-4 text-white rounded-full font-semibold text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5" style="background: linear-gradient(135deg, #1A2B68 0%, #2979FF 100%);">
+            <a href="/workspace" class="px-8 py-4 text-white rounded-full font-semibold text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5" style="background: linear-gradient(135deg, #21397D 0%, #3370E8 100%);">
               Open Workspace
             </a>
-            <a href="/drafts" class="px-8 py-4 bg-white border-2 border-gray-300 text-primary-600 rounded-full font-semibold text-lg hover:border-primary-600 hover:bg-primary-50 transition-all">
+            <a href="/drafts" class="px-8 py-4 bg-white border-2 border-gray-300 rounded-full font-semibold text-lg hover:bg-primary-50 transition-all" style="color: #21397D; border-color: #21397D;">
               View My Drafts
             </a>
           <% } else { %>
-            <a href="/register" class="px-8 py-4 text-white rounded-full font-semibold text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5" style="background: linear-gradient(135deg, #1A2B68 0%, #2979FF 100%);">
+            <a href="/register" class="px-8 py-4 text-white rounded-full font-semibold text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5" style="background: linear-gradient(135deg, #21397D 0%, #3370E8 100%);">
               Start Tamil Writing — Free Account
             </a>
           <% } %>
@@ -1182,7 +1182,7 @@
   </section>
 
   <!-- Final CTA Section -->
-  <section class="py-20 text-white" style="background: linear-gradient(135deg, #1A2B68 0%, #2979FF 100%);">
+  <section class="py-20 text-white" style="background: linear-gradient(135deg, #21397D 0%, #3370E8 100%);">
     <div class="max-w-4xl mx-auto px-6 text-center">
       <h2 class="text-4xl md:text-5xl font-extrabold mb-6">
         Ready to write perfect Tamil?
@@ -1191,11 +1191,11 @@
         Join thousands of Tamil writers who trust ProofTamil for flawless writing.
       </p>
       <% if (user) { %>
-        <a href="/workspace" class="inline-block px-8 py-4 bg-white text-primary-600 rounded-full font-bold text-lg hover:bg-gray-100 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5">
+        <a href="/workspace" class="inline-block px-8 py-4 bg-white rounded-full font-bold text-lg hover:bg-gray-100 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5" style="color: #21397D;">
           Open Workspace
         </a>
       <% } else { %>
-        <a href="/register" class="inline-block px-8 py-4 bg-white text-primary-600 rounded-full font-bold text-lg hover:bg-gray-100 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5">
+        <a href="/register" class="inline-block px-8 py-4 bg-white rounded-full font-bold text-lg hover:bg-gray-100 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5" style="color: #21397D;">
           Try ProofTamil Free
         </a>
       <% } %>

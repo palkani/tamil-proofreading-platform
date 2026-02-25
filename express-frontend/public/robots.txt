@@ -38,13 +38,10 @@ Disallow: /my-blogs
 Disallow: /affiliate/
 Disallow: /billing/
 
-# Sitemap location
+# Sitemap location (submit in Google Search Console > Sitemaps)
 Sitemap: https://prooftamil.com/sitemap.xml
 
-# Crawl delay (be gentle with the server)
-Crawl-delay: 1
-
-# Google specific - no delay for faster indexing
+# Google - no crawl delay for faster indexing
 User-agent: Googlebot
 Allow: /
 Allow: /pricing
@@ -53,20 +50,23 @@ Allow: /blog/
 Allow: /tools/
 Crawl-delay: 0
 
-# Bing specific
+# Bing - no delay so Bing can index and surface your site faster
 User-agent: Bingbot
 Allow: /
-Crawl-delay: 1
+Allow: /pricing
+Allow: /free-tamil-editor
+Allow: /blog/
+Allow: /tools/
+Crawl-delay: 0
 
-# DuckDuckGo
+# DuckDuckGo / Yandex - no delay (improves discovery)
 User-agent: DuckDuckBot
 Allow: /
-Crawl-delay: 1
+Crawl-delay: 0
 
-# Yandex
 User-agent: Yandex
 Allow: /
-Crawl-delay: 1
+Crawl-delay: 0
 
 # CommonCrawl (used by AI training datasets - can opt out here if desired)
 User-agent: CCBot
