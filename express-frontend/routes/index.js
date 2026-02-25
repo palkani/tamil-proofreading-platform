@@ -375,7 +375,7 @@ router.get('/blog/:slug', async (req, res) => {
       "datePublished": publishedIso || undefined,
       "dateModified": modifiedIso || undefined,
       "author": { "@type": "Organization", "name": "ProofTamil" },
-      "publisher": { "@type": "Organization", "name": "ProofTamil", "logo": { "@type": "ImageObject", "url": "https://prooftamil.com/images/tamil-logo.svg" } },
+      "publisher": { "@type": "Organization", "name": "ProofTamil", "logo": { "@type": "ImageObject", "url": "https://prooftamil.com/images/proof-tamil-logo.png" } },
     };
 
     const seo = {

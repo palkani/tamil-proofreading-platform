@@ -234,23 +234,27 @@ async function loadAnalytics(days = 30) {
     document.getElementById('loading-state').classList.add('hidden');
     document.getElementById('analytics-content').classList.remove('hidden');
     
+    const summary = data.summary || {};
+    const dailyVisits = data.daily_visits || [];
+    const dailyActivities = data.daily_activities || [];
+    
     // Update summary cards
-    document.getElementById('total-visits').textContent = data.summary.total_visits.toLocaleString();
-    document.getElementById('new-users').textContent = data.summary.new_users.toLocaleString();
-    document.getElementById('active-users-today').textContent = data.summary.active_users_today.toLocaleString();
+    document.getElementById('total-visits').textContent = (summary.total_visits ?? 0).toLocaleString();
+    document.getElementById('new-users').textContent = (summary.new_users ?? 0).toLocaleString();
+    document.getElementById('active-users-today').textContent = (summary.active_users_today ?? 0).toLocaleString();
     
     // Calculate unique visitors from daily stats
-    const uniqueVisitors = data.daily_visits.reduce((sum, day) => sum + day.unique_visitors, 0);
+    const uniqueVisitors = dailyVisits.reduce((sum, day) => sum + (day.unique_visitors ?? 0), 0);
     document.getElementById('unique-visitors').textContent = uniqueVisitors.toLocaleString();
     
     // Render charts
-    renderVisitsChart(data.daily_visits);
-    renderActivitiesChart(data.daily_activities);
+    renderVisitsChart(dailyVisits);
+    renderActivitiesChart(dailyActivities);
     
     // Render tables
-    renderTopPages(data.top_pages);
-    renderRecentVisits(data.recent_visits);
-    renderRecentActivities(data.recent_activities);
+    renderTopPages(data.top_pages || []);
+    renderRecentVisits(data.recent_visits || []);
+    renderRecentActivities(data.recent_activities || []);
     
   } catch (error) {
     console.error('Error loading analytics:', error);
@@ -274,14 +278,14 @@ function renderVisitsChart(dailyVisits) {
       datasets: [{
         label: 'Total Visits',
         data: dailyVisits.map(d => d.total_visits),
-        borderColor: '#1e3a8a',
+        borderColor: '#1A2B68',
         backgroundColor: 'rgba(234, 88, 12, 0.1)',
         tension: 0.4,
         fill: true
       }, {
         label: 'Unique Visitors',
         data: dailyVisits.map(d => d.unique_visitors),
-        borderColor: '#3b82f6',
+        borderColor: '#2979FF',
         backgroundColor: 'rgba(249, 115, 22, 0.1)',
         tension: 0.4,
         fill: true
@@ -323,11 +327,11 @@ function renderActivitiesChart(dailyActivities) {
       }, {
         label: 'AI Requests',
         data: dailyActivities.map(d => d.ai_requests),
-        backgroundColor: '#1e3a8a'
+        backgroundColor: '#1A2B68'
       }, {
         label: 'Drafts Created',
         data: dailyActivities.map(d => d.drafts_created),
-        backgroundColor: '#3b82f6'
+        backgroundColor: '#2979FF'
       }]
     },
     options: {
@@ -374,7 +378,7 @@ function renderRecentVisits(visits) {
   tbody.innerHTML = visits.slice(0, 20).map(visit => `
     <tr class="border-b border-gray-100 hover:bg-gray-50">
       <td class="py-3 px-4">${new Date(visit.occurred_at).toLocaleString()}</td>
-      <td class="py-3 px-4">${visit.User ? visit.User.email : 'Anonymous'}</td>
+      <td class="py-3 px-4">${(visit.user && visit.user.email) ? visit.user.email : 'Anonymous'}</td>
       <td class="py-3 px-4">${visit.route}</td>
       <td class="py-3 px-4">${visit.device_type || 'Unknown'}</td>
     </tr>
@@ -411,7 +415,7 @@ function renderRecentActivities(activities) {
     return `
       <tr class="border-b border-gray-100 hover:bg-gray-50">
         <td class="py-3 px-4">${new Date(activity.occurred_at).toLocaleString()}</td>
-        <td class="py-3 px-4">${activity.User ? activity.User.email : 'Unknown'}</td>
+        <td class="py-3 px-4">${(activity.user && activity.user.email) ? activity.user.email : 'Unknown'}</td>
         <td class="py-3 px-4">${eventIcon}</td>
         <td class="py-3 px-4 text-xs text-gray-600">${metadata}</td>
       </tr>

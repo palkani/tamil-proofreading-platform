@@ -2,37 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Theme tokens — Razorpay-inspired: dark navy + bright blue */
+/* Theme tokens — Deep navy headings, vibrant blue accent, soft gray body */
 :root {
   --bg-primary: #ffffff;
-  --bg-secondary: #f5f7ff;
+  --bg-secondary: #EBF4FB;   /* Very light blue (gradient start) */
   --bg-surface: #ffffff;
 
-  --accent-primary: #3395ff;   /* Razorpay bright blue */
-  --accent-secondary: #1e2d7d; /* Razorpay dark navy */
-  --accent-blue: #3395ff;
+  --accent-primary: #2979FF;   /* Vibrant medium blue */
+  --accent-secondary: #1A2B68; /* Deep navy */
+  --accent-blue: #2979FF;
 
-  --text-primary: #0d1b50;     /* Razorpay deep navy text */
-  --text-secondary: #374151;
+  --text-primary: #1A2B68;     /* Deep navy (headings) */
+  --text-secondary: #4A4A4A;   /* Soft dark gray (body) */
   --text-muted: #6b7280;
 
-  --border-soft: rgba(30, 45, 125, 0.12);
+  --border-soft: rgba(26, 43, 104, 0.12);
 
   --gradient-primary: linear-gradient(
     135deg,
-    #1e2d7d 0%,
-    #3395ff 100%
+    #1A2B68 0%,
+    #2979FF 100%
   );
-  --color-bg: #f5f7ff;            /* Very light blue-white page background */
+  --color-bg: #EBF4FB;            /* Very light blue page background */
   --color-card: #ffffff;
-  --color-text: #0d1b50;          /* Razorpay navy text */
-  --color-muted: #374151;         /* Body text */
-  --color-border: #e5e7eb;        /* Muted border */
-  --color-primary: #1e2d7d;       /* Razorpay dark navy */
-  --color-primary-hover: #162065; /* Deeper navy on hover */
-  --color-primary-ghost: #eef3ff; /* Soft navy tint surface */
-  --color-accent: #3395ff;        /* Razorpay bright blue */
-  --color-accent-light: #eef3ff;  /* Light blue background */
+  --color-text: #1A2B68;           /* Deep navy text */
+  --color-muted: #4A4A4A;          /* Body text (soft dark gray) */
+  --color-border: #e5e7eb;         /* Muted border */
+  --color-primary: #1A2B68;        /* Deep navy */
+  --color-primary-hover: #152558;   /* Deeper navy on hover */
+  --color-primary-ghost: #EBF4FB;   /* Soft blue tint surface */
+  --color-accent: #2979FF;         /* Vibrant medium blue */
+  --color-accent-light: #EBF4FB;    /* Light blue background */
 }
 
 @layer base {
@@ -57,15 +57,15 @@
     color: #ffffff;
     background: var(--gradient-primary);
     border: none;
-    box-shadow: 0 4px 14px rgba(51, 149, 255, 0.35);
+    box-shadow: 0 4px 14px rgba(41, 121, 255, 0.35);
     border-radius: 8px;
     transform: translateZ(0);
   }
 
   .btn-primary:hover {
-    background: linear-gradient(135deg, #162065 0%, #2277e0 100%);
+    background: linear-gradient(135deg, #152558 0%, #1a6ae6 100%);
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(51, 149, 255, 0.45);
+    box-shadow: 0 6px 20px rgba(41, 121, 255, 0.45);
   }
 
   .btn-secondary {
@@ -92,7 +92,7 @@
   
   .input-field:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.25); /* Soft blue glow */
+    box-shadow: 0 0 0 3px rgba(26, 43, 104, 0.25);
     background-color: #fff;
   }
   
@@ -100,7 +100,7 @@
     @apply rounded-xl shadow-sm;
     background: var(--bg-surface);
     border: 1px solid var(--border-soft);
-    box-shadow: 0 4px 24px rgba(30, 45, 125, 0.08);
+    box-shadow: 0 4px 24px rgba(26, 43, 104, 0.08);
   }
 }
 
@@ -116,7 +116,7 @@
 
 /* Blog post content styling */
 .prooftamil-blog {
-  color: #1f2937; /* gray-800 */
+  color: #4A4A4A;
 }
 
 .prooftamil-blog header .kicker {
@@ -124,14 +124,14 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #1e3a8a; /* blue-800 */
+  color: #1A2B68;
   margin-bottom: 0.5rem;
 }
 
 .prooftamil-blog header h1 {
   font-size: 1.875rem;
   font-weight: 800;
-  color: #111827; /* gray-900 */
+  color: #1A2B68;
   line-height: 1.2;
   margin-bottom: 0.75rem;
 }
@@ -144,21 +144,21 @@
 
 .prooftamil-blog header .excerpt {
   font-size: 1rem;
-  color: #374151; /* gray-700 */
+  color: #4A4A4A;
   line-height: 1.7;
   margin-bottom: 1.5rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid #e5e7eb; /* gray-200 */
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .prooftamil-blog .content {
-  color: #1f2937; /* gray-800 */
+  color: #4A4A4A;
 }
 
 .prooftamil-blog .content p {
   margin-bottom: 1rem;
   line-height: 1.8;
-  color: #1f2937; /* gray-800 */
+  color: #4A4A4A;
   font-size: 1.0625rem;
 }
 
@@ -179,7 +179,7 @@
   outline: none;
   background: #ffffff;
   border: 1px solid var(--border-soft);
-  color: #111827;
+  color: #4A4A4A;
 }
 
 /* Ensure any contenteditable editor surface stays white with dark text */
@@ -196,11 +196,10 @@
 /* Suggestion card styles */
 .suggestion-card {
   @apply border rounded-2xl p-4 transition-all;
-  /* Dark premium card, but MUST keep text readable */
-  background: #0b1430;
+  background: #0a122e;
   border-color: rgba(255, 255, 255, 0.12);
-  color: #e2e8f0; /* slate-200 */
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.35);
+  color: #e2e8f0;
+  box-shadow: 0 20px 40px rgba(26, 43, 104, 0.35);
 }
 
 .suggestion-card:hover {
@@ -294,11 +293,11 @@
 .language-toggle-btn {
   @apply flex items-center gap-3 px-4 py-2 text-white rounded-full transition-all duration-200;
   background: var(--color-primary);
-  box-shadow: 0 2px 4px rgba(30, 45, 125, 0.3);
+  box-shadow: 0 2px 4px rgba(26, 43, 104, 0.3);
 }
 
 .language-toggle-btn:hover {
-  box-shadow: 0 4px 8px rgba(51, 149, 255, 0.35);
+  box-shadow: 0 4px 8px rgba(41, 121, 255, 0.35);
   transform: translateY(-1px);
 }
 

@@ -3253,7 +3253,7 @@ router.post('/v1/contact', async (req, res) => {
       text: `From: ${email}\nSubject: ${subject}\n\n${message}`,
       html: `
         <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1f2937;">
-          <div style="background:#1e3a8a;padding:20px 24px;border-radius:8px 8px 0 0;">
+          <div style="background:#1A2B68;padding:20px 24px;border-radius:8px 8px 0 0;">
             <h2 style="color:#fff;margin:0;font-size:18px;">New Contact Form Message</h2>
           </div>
           <div style="background:#f9fafb;padding:20px 24px;border:1px solid #e5e7eb;border-top:none;">

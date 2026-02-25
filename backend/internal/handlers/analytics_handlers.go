@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"tamil-proofreading-platform/backend/internal/models"
@@ -63,8 +64,8 @@ func (h *Handlers) GetAnalyticsDashboard(c *gin.Context) {
 	// Get date range from query params (default: last 30 days)
 	days := 30
 	if daysParam := c.Query("days"); daysParam != "" {
-		if d, err := time.ParseDuration(daysParam + "h"); err == nil {
-			days = int(d.Hours() / 24)
+		if d, err := strconv.Atoi(daysParam); err == nil && d > 0 {
+			days = d
 		}
 	}
 

@@ -82,12 +82,12 @@
       currency: data.currency || 'INR',
       name: 'ProofTamil',
       description: data.plan_name || 'Pro Subscription',
-      image: '/images/tamil-logo.svg',
+      image: '/images/proof-tamil-logo.png',
       prefill: {
         email: window.USER_EMAIL || ''
       },
       theme: {
-        color: '#1e3a8a'
+        color: '#1A2B68'
       },
       modal: {
         ondismiss: function () {

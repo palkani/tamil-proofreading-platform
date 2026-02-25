@@ -5,7 +5,7 @@
       <div class="flex">
         <div class="flex-shrink-0 flex items-center">
           <a href="/" class="flex items-center gap-2" aria-label="ProofTamil Home">
-            <img src="/images/tamil-logo.svg" alt="ProofTamil Logo" class="h-12 w-auto md:h-14 lg:h-16 drop-shadow-md" style="min-height: 48px;">
+            <img src="/images/proof-tamil-logo.png" alt="Proofதமிழ் - Tamil proofreading" class="h-12 w-auto md:h-14 lg:h-16 drop-shadow-md" style="min-height: 48px;">
           </a>
         </div>
         <div class="hidden sm:ml-8 sm:flex sm:space-x-4">
@@ -51,7 +51,7 @@
           <% if (locals.paymentsEnabled) { %>
           <a href="/pricing"
              class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold text-white shadow-md transition-all hover:scale-105"
-             style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);">
+             style="background: linear-gradient(135deg, #1A2B68 0%, #2979FF 100%);">
             <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
             </svg>
@@ -80,7 +80,7 @@
           <a href="/login" class="rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-primary-600 hover:border-primary-600 hover:bg-primary-50 transition-all duration-200">
             Sign In
           </a>
-          <a href="/register" class="rounded-full bg-primary-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-600/30 hover:shadow-xl hover:scale-105 transition-all duration-200" style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #1e40af 100%);">
+          <a href="/register" class="rounded-full bg-primary-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-600/30 hover:shadow-xl hover:scale-105 transition-all duration-200" style="background: linear-gradient(135deg, #1A2B68 0%, #2979FF 100%);">
             Sign Up
           </a>
         <% } %>
@@ -88,6 +88,69 @@
     </div>
   </div>
 </nav>
+
+<!-- Promo stripe: scrolling feature highlights -->
+<div class="promo-stripe" role="region" aria-label="ProofTamil features">
+  <div class="promo-stripe-inner">
+    <div class="promo-stripe-track">
+      <span class="promo-stripe-item">🎤 Voice to Tamil — Speak it, we type it. Convert speech to Tamil text instantly.</span>
+      <span class="promo-stripe-sep" aria-hidden="true">•</span>
+      <span class="promo-stripe-item">✨ AI Content Generator — Create blogs, essays & articles in Tamil & English. Powered by AI.</span>
+      <span class="promo-stripe-sep" aria-hidden="true">•</span>
+      <span class="promo-stripe-item">✓ Proofreading — Polish your Tamil. Grammar, spelling & style—all in one place.</span>
+      <span class="promo-stripe-sep" aria-hidden="true">•</span>
+      <span class="promo-stripe-item">🎤 Voice to Tamil — Speak it, we type it. Convert speech to Tamil text instantly.</span>
+      <span class="promo-stripe-sep" aria-hidden="true">•</span>
+      <span class="promo-stripe-item">✨ AI Content Generator — Create blogs, essays & articles in Tamil & English. Powered by AI.</span>
+      <span class="promo-stripe-sep" aria-hidden="true">•</span>
+      <span class="promo-stripe-item">✓ Proofreading — Polish your Tamil. Grammar, spelling & style—all in one place.</span>
+    </div>
+  </div>
+</div>
+
+<style>
+.promo-stripe {
+  background: linear-gradient(90deg, #1A2B68 0%, #152558 25%, #2979FF 50%, #152558 75%, #1A2B68 100%);
+  background-size: 200% 100%;
+  color: #fff;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 2px 8px rgba(26, 43, 104, 0.2);
+}
+.promo-stripe-inner {
+  padding: 0.5rem 0;
+  overflow: hidden;
+}
+.promo-stripe-track {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  width: max-content;
+  animation: promo-stripe-scroll 45s linear infinite;
+}
+.promo-stripe-track:hover {
+  animation-play-state: paused;
+}
+.promo-stripe-item {
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+.promo-stripe-sep {
+  color: rgba(255,255,255,0.5);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+@keyframes promo-stripe-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .promo-stripe-track { animation: none; }
+}
+</style>
 
 <script>
   // Flag to prevent multiple logout confirmations

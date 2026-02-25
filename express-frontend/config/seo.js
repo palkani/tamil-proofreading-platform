@@ -334,7 +334,7 @@ const structuredData = {
     "name": "ProofTamil",
     "alternateName": ["prooftamil", "prooftamil.com"],
     "url": BASE_URL,
-    "logo": BASE_URL + "/images/tamil-logo.svg",
+    "logo": BASE_URL + "/images/proof-tamil-logo.png",
     "description": "ProofTamil - The leading free Tamil grammar checker and AI proofreading tool. Visit prooftamil.com for instant Tamil writing correction.",
     "slogan": "Free Tamil Grammar Checker & AI Proofreading Tool"
   },
@@ -371,7 +371,7 @@ const structuredData = {
       "Real-time Grammar Suggestions",
       "Free Tamil Writing Tool"
     ],
-    "screenshot": BASE_URL + "/images/tamil-logo.svg",
+    "screenshot": BASE_URL + "/images/proof-tamil-logo.png",
     "softwareVersion": "2.0",
     "aggregateRating": {
       "@type": "AggregateRating",

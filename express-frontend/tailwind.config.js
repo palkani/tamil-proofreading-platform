@@ -8,29 +8,30 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          50:  '#eef3ff',
-          100: '#dce6ff',
-          200: '#b3caff',
-          300: '#7aa6ff',
-          400: '#4d88ff',
-          500: '#3395ff', // Razorpay accent blue
-          600: '#1e2d7d', // Razorpay dark navy (primary brand)
-          700: '#162065', // Deeper navy (hover)
-          800: '#0d1b50', // Darkest navy
-          900: '#080f30',
+          50:  '#EBF4FB',
+          100: '#d6e9f7',
+          200: '#b3d4f0',
+          300: '#7ab8e6',
+          400: '#4d9bdc',
+          500: '#2979FF',  // Vibrant medium blue (accent)
+          600: '#1A2B68',  // Deep navy (primary headings)
+          700: '#152558',
+          800: '#0f1a42',
+          900: '#0a122e',
         },
         accent: {
-          50:  '#eef3ff',
-          100: '#dce6ff',
-          200: '#b3caff',
-          300: '#7aa6ff',
-          400: '#4d88ff',
-          500: '#3395ff', // Razorpay accent blue
-          600: '#1e2d7d',
-          700: '#162065',
-          800: '#0d1b50',
-          900: '#080f30',
+          50:  '#EBF4FB',
+          100: '#d6e9f7',
+          200: '#b3d4f0',
+          300: '#7ab8e6',
+          400: '#4d9bdc',
+          500: '#2979FF',
+          600: '#1A2B68',
+          700: '#152558',
+          800: '#0f1a42',
+          900: '#0a122e',
         },
+        body: '#4A4A4A',
       },
     },
   },
