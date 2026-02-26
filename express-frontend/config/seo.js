@@ -18,7 +18,8 @@ const seoConfig = {
     canonical: BASE_URL + '/workspace',
     ogTitle: 'Tamil Writing Workspace - AI Grammar & Spelling Checker',
     ogDescription: 'Write Tamil with AI assistance. Real-time grammar checking, spelling correction, and smart suggestions.',
-    pageType: 'workspace'
+    pageType: 'workspace',
+    noIndex: true
   },
 
   howToUse: {

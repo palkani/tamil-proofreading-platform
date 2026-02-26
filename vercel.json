@@ -1,4 +1,11 @@
 {
-  "rootDirectory": "express-frontend"
+  "rootDirectory": "express-frontend",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.prooftamil.com" }],
+      "destination": "https://prooftamil.com/:path*",
+      "permanent": true
+    }
+  ]
 }
-

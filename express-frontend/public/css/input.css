@@ -91,9 +91,14 @@
   background-color: var(--color-primary-ghost);
 }
 
-/* Logo link: no box, no shadow, blends with header */
+/* Logo: white background; dark/black pixels lightened so logo works on white nav */
+.site-nav .nav-logo-wrap {
+  background: #ffffff;
+  padding: 2px;
+  border-radius: 4px;
+}
 .site-nav .nav-logo-link {
-  background: transparent !important;
+  background: #ffffff !important;
   border: none !important;
   box-shadow: none !important;
   padding: 0;
@@ -102,10 +107,10 @@
   outline: 2px solid var(--color-accent);
   outline-offset: 4px;
 }
-.site-nav .nav-logo-link img {
+.site-nav .nav-logo-img {
   display: block;
   box-shadow: none;
-  filter: none;
+  background: #ffffff;
 }
 
 @layer components {

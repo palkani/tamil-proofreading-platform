@@ -45,7 +45,27 @@ Your **6.1% CTR** is decent; small gains here multiply quickly.
 
 ---
 
-## 4. Indexing & Coverage
+## 4. URLs “Not indexed” (http/www/workspace)
+
+**Why some URLs show as “not indexed”:**
+
+- **http://www.prooftamil.com/, http://prooftamil.com/, https://www.prooftamil.com/home** — These are duplicate/non-canonical URLs. The site’s canonical is **https://prooftamil.com** (no www). Google may crawl them but consolidate to the canonical and not index the duplicates.
+- **/workspace** — This is an app page (login required). It is **intentionally** not indexed: `robots.txt` disallows it and the page has `noindex, nofollow`. You do not need `/workspace` in search results.
+
+**What we fixed in code:**
+
+- **Vercel redirects** (`vercel.json`): All requests to **www.prooftamil.com** are permanently redirected to **https://prooftamil.com** (same path). After deploy, `https://www.prooftamil.com/` and `https://www.prooftamil.com/home` will 301 to `https://prooftamil.com/` and `https://prooftamil.com/home`; the app then redirects `/home` to `/`.
+- **Workspace:** `noIndex: true` added in SEO config so the workspace page sends `noindex, nofollow` (in addition to `robots.txt` Disallow).
+
+**What you should do in Search Console:**
+
+1. Submit the **canonical** homepage: **https://prooftamil.com/** (URL Inspection → Request indexing).
+2. Optionally request indexing for **https://prooftamil.com/free-tamil-editor** and **https://prooftamil.com/how-to-use**.
+3. Ignore “not indexed” for **http**, **www**, and **/workspace** — redirects and noindex are intentional.
+
+---
+
+## 5. Indexing & Coverage
 
 - **GSC → Indexing → Pages:** See if "Crawled - currently not indexed" or "Discovered - currently not indexed" is high. If yes, ensure those URLs are linked from the sitemap and from at least one important page (home, blog index, or tool index).
 - **Request indexing** for your top 5–10 URLs (home, `/free-tamil-editor`, `/how-to-use`, main tools) via **URL Inspection → Request indexing** (use sparingly).
@@ -53,7 +73,7 @@ Your **6.1% CTR** is decent; small gains here multiply quickly.
 
 ---
 
-## 5. Content & Internal Linking
+## 6. Content & Internal Linking
 
 - **Homepage:** Keep one clear `<h1>` (e.g. "Improve Your Tamil Writing with AI-Powered Proofreading") and 2–3 short paragraphs. Link to `/free-tamil-editor`, `/how-to-use`, and 2–3 tools.
 - **Blog:** Each post should link to at least one product page (e.g. "Try our free Tamil grammar checker") and optionally to another related post.
@@ -61,7 +81,7 @@ Your **6.1% CTR** is decent; small gains here multiply quickly.
 
 ---
 
-## 6. Quick Wins Already Done in Codebase
+## 7. Quick Wins Already Done in Codebase
 
 - **robots.txt:** Crawl-delay removed for Googlebot; Bingbot allowed to crawl without delay so indexing isn’t slowed.
 - **Sitemap:** Includes static pages + blog posts (cached). Ensure backend blog API returns published posts so sitemap stays complete.
@@ -69,7 +89,7 @@ Your **6.1% CTR** is decent; small gains here multiply quickly.
 
 ---
 
-## 7. What to Monitor in Search Console
+## 8. What to Monitor in Search Console
 
 - **Performance → Queries:** Grow impressions for 2–3 target keywords (e.g. "tamil grammar checker", "tamil proofreading free").
 - **Performance → Pages:** Double down on pages that get impressions but low clicks — improve title/description first.
