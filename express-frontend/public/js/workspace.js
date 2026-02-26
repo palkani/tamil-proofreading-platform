@@ -1529,58 +1529,55 @@ class WorkspaceController {
       // Store reference to controller for use in paste handler
       const controller = this;
       
-      const pasteHandler = function(e) {
-        console.log('[WorkspaceJS] 📋 Paste event detected on editor');
-        console.log('[WorkspaceJS] 📋 Paste event details:', {
-          type: e.type,
-          target: e.target?.id || e.target?.tagName,
-          clipboardData: !!e.clipboardData
-        });
-        
-        // Get pasted text from clipboard
-        const pastedText = (e.clipboardData || window.clipboardData || e.originalEvent?.clipboardData)?.getData('text/plain') || 
+      const pasteHandler = async function(e) {
+        const pastedText = (e.clipboardData || window.clipboardData || e.originalEvent?.clipboardData)?.getData('text/plain') ||
                           (e.clipboardData || window.clipboardData)?.getData('text') || '';
-        
-        console.log('[WorkspaceJS] 📋 Pasted text from clipboard:', pastedText.substring(0, 100));
-        console.log('[WorkspaceJS] 📋 Pasted text length:', pastedText.length);
-        
-        if (!pastedText || pastedText.trim().length === 0) {
-          console.warn('[WorkspaceJS] 📋 ⚠️ No text in clipboard - allowing default paste');
+        if (!pastedText || pastedText.trim().length === 0) return;
+
+        // Tamil icon ON (aria-checked="true") = Tamil mode; OFF = English mode
+        const tamilToggle = document.getElementById('voice-lang-toggle');
+        const isTamilMode = tamilToggle ? tamilToggle.getAttribute('aria-checked') === 'true' : true;
+        const englishRatio = (pastedText.match(/[a-zA-Z]/g) || []).length / pastedText.length;
+        const isMostlyEnglish = englishRatio > 0.5;
+
+        // When Tamil icon OFF + English paste → translate to Tamil before inserting
+        if (!isTamilMode && isMostlyEnglish) {
+          e.preventDefault();
+          e.stopPropagation();
+          try {
+            const response = await controller.apiFetch('/api/gemini/translate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: pastedText.trim() }),
+            });
+            const data = await response.json();
+            const translated = data?.translated_text || data?.translated || pastedText;
+            if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
+              tiptapWorkspaceEditor.chain().focus().insertContent(translated).run();
+            } else {
+              document.execCommand('insertText', false, translated);
+            }
+            controller.queuePasteAnalyze('legacy:paste');
+          } catch (err) {
+            console.warn('[WorkspaceJS] Paste translate failed:', err);
+            document.execCommand('insertText', false, pastedText);
+            controller.queuePasteAnalyze('legacy:paste');
+          }
           return;
         }
-        
-        // Check if pasted text contains Tamil characters
-        const hasTamil = /[\u0B80-\u0BFF]/.test(pastedText);
-        const wordCount = pastedText.trim().split(/\s+/).filter(w => w.length > 0).length;
-        
-        console.log('[WorkspaceJS] 📋 Paste analysis:', {
-          hasTamil,
-          wordCount,
-          textLength: pastedText.trim().length,
-          pastedTextPreview: pastedText.substring(0, 50)
-        });
-        
-        // Don't prevent default - let the browser handle paste normally
-        
-        // Consolidate to a single paste-triggered analysis.
+
         controller.queuePasteAnalyze('legacy:paste');
       };
       
-      // Add paste event listener (don't use preventDefault - let browser handle it)
-      editorElement.addEventListener('paste', pasteHandler, false);
-      
-      // Also add paste listener in capture phase for better detection
-      editorElement.addEventListener('paste', pasteHandler, true);
-      
-      // Also add to document for better capture (some browsers don't bubble paste events properly)
+      // Capture-phase handler: intercept paste when Tamil OFF + English (translate before insert)
+      const isInWorkspaceEditor = (el) => el && (el === editorElement || el.closest?.('#editor') || el.closest?.('#tiptap-workspace-editor') || el.closest?.('.ProseMirror'));
       document.addEventListener('paste', function(e) {
-        // Only handle if the paste is in our editor
         const target = e.target;
-        if (target && (target === editorElement || (target.closest && target.closest('#editor')))) {
-          console.log('[WorkspaceJS] 📋 Paste event captured at document level');
-          pasteHandler(e);
-        }
+        if (!isInWorkspaceEditor(target)) return;
+        pasteHandler(e);
       }, true);
+
+      editorElement.addEventListener('paste', pasteHandler, false);
 
       // Backup paste handler: runs even if primary handlers fail (e.g. editor init failed). Detects Tamil and triggers analysis after 500ms.
       document.addEventListener('paste', function(e) {

@@ -1304,42 +1304,58 @@ class HomeEditor {
     }
   }
   
-  handlePaste(e) {
+  async handlePaste(e) {
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
-    
-    // Check if text contains mostly English characters
-    const englishRatio = (text.match(/[a-zA-Z]/g) || []).length / text.length;
-    
+    if (!text || !text.trim()) return;
+
+    // Tamil icon ON (aria-checked="true") = Tamil mode; OFF = English mode
+    const tamilToggle = document.getElementById('voice-lang-toggle');
+    const isTamilMode = tamilToggle ? tamilToggle.getAttribute('aria-checked') === 'true' : true;
+    const englishRatio = text.length > 0 ? (text.match(/[a-zA-Z]/g) || []).length / text.length : 0;
+    const isMostlyEnglish = englishRatio > 0.5;
+
     let processedText = text;
-    if (englishRatio > 0.5) {
-      // Convert English to Tamil
-      processedText = this.convertEnglishToTamil(text);
+    if (isMostlyEnglish) {
+      if (!isTamilMode) {
+        // Tamil icon OFF: user pasted English → translate to Tamil via API
+        try {
+          const response = await apiFetch('/api/gemini/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text.trim() }),
+          }, false);
+          const data = await response.json();
+          const translated = data?.translated_text || data?.translated || '';
+          if (translated) processedText = translated;
+          else processedText = text;
+        } catch (err) {
+          console.warn('[HomeEditor] Paste translate failed:', err);
+          processedText = text;
+        }
+      } else {
+        // Tamil icon ON: transliterate (Thanglish → Tamil)
+        processedText = this.convertEnglishToTamil(text);
+      }
     }
-    
+
     // Enforce word limit
     const currentText = this.getPlainText();
     const currentWords = this.countWords(currentText);
     const remainingWords = this.maxWords - currentWords;
     const textWords = this.countWords(processedText);
-    
+
     if (textWords > remainingWords) {
-      // Truncate to fit remaining words
       const wordsArray = processedText.split(/\s+/);
       const textToInsert = wordsArray.slice(0, remainingWords).join(' ');
       document.execCommand('insertText', false, textToInsert);
     } else {
       document.execCommand('insertText', false, processedText);
     }
-    
+
     this.updateWordCount();
-    // Paste should trigger analysis immediately (no "lost" debounce on delete → paste flows)
-    // Also reset lastAnalyzedText so re-pasting different content always triggers a request.
     this.lastAnalyzedText = '';
-    // Prevent double-submit: paste triggers an input event which also schedules analysis.
-    // We suppress the debounced path briefly and run exactly once on next tick.
     this._suppressScheduledAnalysisUntil = Date.now() + 1200;
-    // Run on next tick so the DOM insertText has applied.
     setTimeout(() => this.autoAnalyze(), 0);
   }
   
