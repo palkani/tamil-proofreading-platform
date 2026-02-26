@@ -121,6 +121,9 @@ func (s *EmailService) sendSMTP(to, subject, htmlBody string, replyTo string) er
 	log.Printf("[EMAIL] Sending SMTP email (provider=sendgrid host=%s port=%d from=%s to=%s subject=%q)", s.smtpHost, s.smtpPort, s.fromEmail, to, subject)
 	if err := smtp.SendMail(addr, auth, s.fromEmail, []string{to}, []byte(msg.String())); err != nil {
 		log.Printf("[EMAIL] SMTP send failed: %v", err)
+		if strings.Contains(err.Error(), "verified Sender Identity") || strings.Contains(err.Error(), "550") {
+			log.Printf("[EMAIL] Hint: Set EMAIL_FROM_ADDRESS to a verified sender in SendGrid (Settings → Sender Authentication). See https://sendgrid.com/docs/for-developers/sending-email/sender-identity/")
+		}
 		return err
 	}
 	log.Printf("[EMAIL] SMTP email sent successfully to: %s", to)

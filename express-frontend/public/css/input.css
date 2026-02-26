@@ -91,6 +91,23 @@
   background-color: var(--color-primary-ghost);
 }
 
+/* Logo link: no box, no shadow, blends with header */
+.site-nav .nav-logo-link {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0;
+}
+.site-nav .nav-logo-link:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+}
+.site-nav .nav-logo-link img {
+  display: block;
+  box-shadow: none;
+  filter: none;
+}
+
 @layer components {
   .btn-primary {
     @apply px-4 py-2 rounded-lg transition-all font-semibold;
