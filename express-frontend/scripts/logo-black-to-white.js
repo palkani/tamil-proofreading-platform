@@ -9,7 +9,7 @@ const fs = require('fs');
 const sharp = require('sharp');
 
 const IMAGE_PATH = path.join(__dirname, '..', 'public', 'images', 'proof-tamil-logo.png');
-const BLACK_THRESHOLD = 45; // Pixels with R,G,B all <= this become white
+const BLACK_THRESHOLD = 80; // Pixels with R,G,B all <= this become white (higher = more aggressive)
 
 async function main() {
   if (!fs.existsSync(IMAGE_PATH)) {
