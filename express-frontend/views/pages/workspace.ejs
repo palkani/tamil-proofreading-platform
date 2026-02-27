@@ -1170,8 +1170,8 @@
           <div class="toolbar-divider"></div>
 
           <!-- Language toggle: oval pill "தமிழ்" (Tamil on = purple, knob right; English = grey, knob left) -->
-          <button type="button" id="voice-lang-toggle" class="voice-lang-toggle" role="switch" aria-checked="true" title="Tamil / English voice input"
-                  onclick="if(window.voiceTyping){ var on=this.getAttribute('aria-checked')==='true'; window.voiceTyping.setLanguage(on?'en-US':'ta-IN'); }">
+          <button type="button" id="voice-lang-toggle" class="voice-lang-toggle" role="switch" aria-checked="true" title="Tamil / English — when English, pasted text is auto-translated to Tamil"
+                  onclick="var t=this; var isTamil=t.getAttribute('aria-checked')==='true'; t.setAttribute('aria-checked',isTamil?'false':'true'); t.querySelector('.voice-lang-toggle-label').textContent=isTamil?'English':'தமிழ்'; if(window.voiceTyping)window.voiceTyping.setLanguage(isTamil?'en-US':'ta-IN');">
             <span class="voice-lang-toggle-label">தமிழ்</span>
             <span class="voice-lang-toggle-knob"></span>
           </button>

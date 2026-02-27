@@ -1419,6 +1419,46 @@ class WorkspaceController {
         this.queuePasteAnalyze('tiptap:paste');
       });
 
+      // Document-level paste handler for TipTap: insert English immediately, translate in background
+      const controller = this;
+      document.addEventListener('paste', async function pasteTranslateHandler(e) {
+        const target = e.target;
+        if (!target || !(target.closest?.('#tiptap-workspace-editor') || target.closest?.('.ProseMirror'))) return;
+        const pastedText = (e.clipboardData || window.clipboardData)?.getData('text/plain') || '';
+        if (!pastedText || !pastedText.trim()) return;
+        const tamilToggle = document.getElementById('voice-lang-toggle');
+        const isTamilMode = tamilToggle ? tamilToggle.getAttribute('aria-checked') === 'true' : true;
+        const englishRatio = (pastedText.match(/[a-zA-Z]/g) || []).length / pastedText.length;
+        if (!isTamilMode && englishRatio > 0.5) {
+          e.preventDefault();
+          e.stopPropagation(); // Prevent TipTap from also inserting
+          if (typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
+            tiptapWorkspaceEditor.chain().focus().insertContent(pastedText).run();
+          }
+          controller.queuePasteAnalyze('tiptap:paste');
+          try {
+            const response = await controller.apiFetch('/api/gemini/translate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: pastedText.trim() }),
+            });
+            const data = await response.json();
+            const translated = data?.translated_text || data?.translated || '';
+            if (translated && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
+              const currentText = tiptapWorkspaceEditor.getText() || '';
+              const newText = currentText.replace(pastedText, translated);
+              if (newText !== currentText) {
+                const escaped = newText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                tiptapWorkspaceEditor.commands.setContent('<p>' + escaped.replace(/\n/g, '</p><p>') + '</p>');
+                controller.queuePasteAnalyze('tiptap:paste');
+              }
+            }
+          } catch (err) {
+            console.warn('[WorkspaceJS] TipTap paste translate failed:', err);
+          }
+        }
+      }, true);
+
       // Ensure TipTap editor is mounted and toolbar wired.
       try {
         switchWorkspaceEditor();

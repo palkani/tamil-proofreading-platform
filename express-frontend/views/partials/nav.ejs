@@ -1,11 +1,11 @@
 <nav class="site-nav bg-white border-b border-gray-100 shadow-sm">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="flex justify-between items-center min-h-[72px] sm:min-h-[88px] py-3 sm:py-4">
+  <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+    <div class="flex justify-between items-center min-h-[56px] sm:min-h-[72px] md:min-h-[88px] py-2 sm:py-3 md:py-4 gap-2">
       <!-- Logo & Main Nav -->
-      <div class="flex items-center">
+      <div class="flex items-center min-w-0 flex-1">
         <div class="flex-shrink-0 flex items-center nav-logo-wrap">
-          <a href="/" class="nav-logo-link flex items-center gap-2 rounded-none border-0 p-0 shadow-none" aria-label="ProofTamil Home">
-            <img src="/images/tamil-logo.svg" alt="Proofதமிழ் - Tamil proofreading" class="nav-logo-img h-20 w-auto sm:h-24 md:h-28 lg:h-32 block" style="min-height: 72px; max-height: 128px;">
+          <a href="/" class="nav-logo-link flex items-center rounded-none border-0 p-0 shadow-none" aria-label="ProofTamil Home">
+            <img src="/images/tamil-logo.svg" alt="Proofதமிழ் - Tamil proofreading" class="nav-logo-img h-10 w-auto sm:h-16 md:h-20 lg:h-24 xl:h-28 block" style="min-height: 36px; max-height: 112px;">
           </a>
         </div>
         <div class="hidden sm:ml-10 sm:flex sm:items-center sm:gap-1">
@@ -39,13 +39,13 @@
       </div>
 
       <!-- User Menu / Auth Links -->
-      <div class="flex items-center gap-2 sm:gap-3">
+      <div class="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
         <% if (user && user.email) { %>
           <!-- Authenticated User Menu -->
-          <a href="/blog" class="nav-link-right <%= active === 'blog' ? 'font-semibold' : '' %> inline-flex items-center px-3 py-2 rounded-lg">
+          <a href="/blog" class="nav-link-right inline-flex <%= active === 'blog' ? 'font-semibold' : '' %> items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base">
             Blog
           </a>
-          <a href="/contact" class="nav-link-right <%= active === 'contact' ? 'font-semibold' : '' %> inline-flex items-center px-3 py-2 rounded-lg">
+          <a href="/contact" class="nav-link-right inline-flex <%= active === 'contact' ? 'font-semibold' : '' %> items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base">
             Contact
           </a>
           <% if (locals.paymentsEnabled) { %>
@@ -71,16 +71,16 @@
           </button>
         <% } else { %>
           <!-- Unauthenticated User - Show Login/Signup Links -->
-          <a href="/blog" class="nav-link-right <%= active === 'blog' ? 'font-semibold' : '' %> inline-flex items-center px-3 py-2 rounded-lg">
+          <a href="/blog" class="nav-link-right inline-flex <%= active === 'blog' ? 'font-semibold' : '' %> items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base">
             Blog
           </a>
-          <a href="/contact" class="nav-link-right <%= active === 'contact' ? 'font-semibold' : '' %> inline-flex items-center px-3 py-2 rounded-lg">
+          <a href="/contact" class="nav-link-right inline-flex <%= active === 'contact' ? 'font-semibold' : '' %> items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base">
             Contact
           </a>
-          <a href="/login" class="inline-flex items-center px-4 py-2.5 rounded-full text-sm font-semibold border-2 transition-all duration-200 nav-link-right border-primary-200 hover:border-primary-500 hover:bg-primary-50">
+          <a href="/login" class="inline-flex items-center px-3 py-2 sm:px-4 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold border-2 transition-all duration-200 nav-link-right border-primary-200 hover:border-primary-500 hover:bg-primary-50 whitespace-nowrap">
             Sign In
           </a>
-          <a href="/register" class="inline-flex items-center px-5 py-2.5 rounded-full text-sm font-semibold text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.02]" style="background: linear-gradient(135deg, #1A2B68 0%, #2979FF 100%);">
+          <a href="/register" class="inline-flex items-center px-3 py-2 sm:px-5 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.02] whitespace-nowrap" style="background: linear-gradient(135deg, #1A2B68 0%, #2979FF 100%);">
             Sign Up
           </a>
         <% } %>
@@ -151,6 +151,11 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .promo-stripe-track { animation: none; }
+}
+/* Mobile: smaller text, ensure no horizontal overflow */
+@media (max-width: 640px) {
+  .promo-stripe-item { font-size: 0.75rem; }
+  .promo-stripe-track { gap: 1rem; animation-duration: 35s; }
 }
 </style>
 

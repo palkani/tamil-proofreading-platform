@@ -1304,9 +1304,43 @@ class HomeEditor {
     }
   }
   
+  insertTextAtCursor(text) {
+    try {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) {
+        this.editor.focus();
+        const range = document.createRange();
+        range.selectNodeContents(this.editor);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      const range = sel.getRangeAt(0);
+      const anc = range.commonAncestorContainer;
+      if (!this.editor.contains(anc && anc.nodeType === Node.TEXT_NODE ? anc.parentNode : anc)) {
+        this.editor.focus();
+        const r = document.createRange();
+        r.selectNodeContents(this.editor);
+        r.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }
+      const r = sel.getRangeAt(0);
+      r.deleteContents();
+      const textNode = document.createTextNode(text);
+      r.insertNode(textNode);
+      r.setStartAfter(textNode);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    } catch {
+      document.execCommand('insertText', false, text);
+    }
+  }
+
   async handlePaste(e) {
     e.preventDefault();
-    const text = e.clipboardData.getData('text/plain');
+    const text = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
     if (!text || !text.trim()) return;
 
     // Tamil icon ON (aria-checked="true") = Tamil mode; OFF = English mode
@@ -1317,9 +1351,10 @@ class HomeEditor {
 
     let textToInsert = text;
     if (isMostlyEnglish && isTamilMode) {
-      // Tamil icon ON: transliterate (Thanglish → Tamil) before insert
+      // Tamil ON: transliterate (Thanglish → Tamil)
       textToInsert = this.convertEnglishToTamil(text);
     }
+    // Tamil OFF: insert English, translate in background (below)
 
     // Enforce word limit
     const currentText = this.getPlainText();
@@ -1332,15 +1367,16 @@ class HomeEditor {
       textToInsert = wordsArray.slice(0, remainingWords).join(' ');
     }
 
-    // Insert immediately (English or transliterated)
-    document.execCommand('insertText', false, textToInsert);
+    // Insert immediately using Selection API (more reliable than execCommand)
+    this.insertTextAtCursor(textToInsert);
 
     this.updateWordCount();
     this.lastAnalyzedText = '';
     this._suppressScheduledAnalysisUntil = Date.now() + 1200;
     setTimeout(() => this.autoAnalyze(), 0);
 
-    // Tamil icon OFF + English paste: translate in background, then replace
+    // When Tamil icon OFF + English paste: translate in background, then replace
+    // (Toggle to "English" in toolbar to enable paste-to-translate)
     if (!isTamilMode && isMostlyEnglish) {
       const pastedText = textToInsert;
       try {

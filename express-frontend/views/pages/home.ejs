@@ -202,39 +202,39 @@
 <!-- Navigation (always visible) -->
 <%- include('../partials/nav', { active: 'home', user: user || null }) %>
 
-<div class="min-h-screen bg-white">
+<div class="min-h-screen bg-white overflow-x-hidden">
   <!-- Hero Section -->
-  <section class="relative bg-gradient-to-b from-[#EBF4FB] via-white to-white py-20 md:py-32">
-    <div class="max-w-7xl mx-auto px-6 text-center">
-      <div class="space-y-8">
-        <!-- Main Heading: dark blue (#21397D) + vibrant blue (#3370E8), AI-Powered Proofreading on one line -->
-        <h1 class="text-4xl md:text-6xl font-extrabold leading-tight">
+  <section class="relative bg-gradient-to-b from-[#EBF4FB] via-white to-white py-12 sm:py-16 md:py-24 lg:py-32 pb-safe">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 text-center">
+      <div class="space-y-6 sm:space-y-8">
+        <!-- Main Heading: responsive sizes -->
+        <h1 class="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-extrabold leading-tight">
           <span style="color: #21397D;">Improve Your Tamil Writing with </span><span style="color: #3370E8;">AI-Powered Proofreading</span>
-          <span class="block mt-3 text-2xl md:text-4xl" style="color: #21397D;">All-in-one Tamil Writing Assistant</span>
+          <span class="block mt-2 sm:mt-3 text-xl sm:text-2xl md:text-3xl lg:text-4xl" style="color: #21397D;">All-in-one Tamil Writing Assistant</span>
         </h1>
         
-        <p class="text-lg md:text-xl max-w-3xl mx-auto leading-relaxed" style="color: #4A4A4A;">
+        <p class="text-base sm:text-lg md:text-xl max-w-3xl mx-auto leading-relaxed px-1" style="color: #4A4A4A;">
           Turn your thoughts into clear, natural Tamil blogs and polish your writing with smart Tamil proofreading — all in one place.
         </p>
         
         <!-- Language Badge -->
         <div class="inline-block">
-          <span class="px-6 py-2 rounded-full font-semibold text-sm inline-flex items-center justify-center" style="background-color: #EBF4FB; color: #21397D;">
-            <img src="/images/tamil-logo.svg" alt="Proofதமிழ்" class="w-6 h-6 object-contain" width="24" height="24" decoding="async" />
+          <span class="px-4 sm:px-6 py-2 rounded-full font-semibold text-xs sm:text-sm inline-flex items-center justify-center" style="background-color: #EBF4FB; color: #21397D;">
+            <img src="/images/tamil-logo.svg" alt="Proofதமிழ்" class="w-5 h-5 sm:w-6 sm:h-6 object-contain" width="24" height="24" decoding="async" />
           </span>
         </div>
         
-        <!-- CTA Buttons -->
-        <div class="flex flex-col sm:flex-row gap-4 justify-center items-center pt-6">
+        <!-- CTA Buttons: responsive padding, safe area for mobile nav -->
+        <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center pt-4 sm:pt-6 pb-8 sm:pb-0 pb-safe">
           <% if (user) { %>
-            <a href="/workspace" class="px-8 py-4 text-white rounded-full font-semibold text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5" style="background: linear-gradient(135deg, #21397D 0%, #3370E8 100%);">
+            <a href="/workspace" class="w-full sm:w-auto px-6 py-3.5 sm:px-8 sm:py-4 text-white rounded-full font-semibold text-base sm:text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-center" style="background: linear-gradient(135deg, #21397D 0%, #3370E8 100%);">
               Open Workspace
             </a>
-            <a href="/drafts" class="px-8 py-4 bg-white border-2 border-gray-300 rounded-full font-semibold text-lg hover:bg-primary-50 transition-all" style="color: #21397D; border-color: #21397D;">
+            <a href="/drafts" class="w-full sm:w-auto px-6 py-3.5 sm:px-8 sm:py-4 bg-white border-2 border-gray-300 rounded-full font-semibold text-base sm:text-lg hover:bg-primary-50 transition-all text-center" style="color: #21397D; border-color: #21397D;">
               View My Drafts
             </a>
           <% } else { %>
-            <a href="/register" class="px-8 py-4 text-white rounded-full font-semibold text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5" style="background: linear-gradient(135deg, #21397D 0%, #3370E8 100%);">
+            <a href="/register" class="w-full sm:w-auto px-6 py-3.5 sm:px-8 sm:py-4 text-white rounded-full font-semibold text-base sm:text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-center" style="background: linear-gradient(135deg, #21397D 0%, #3370E8 100%);">
               Start Tamil Writing — Free Account
             </a>
           <% } %>
@@ -437,8 +437,8 @@
 
                   <div class="toolbar-divider"></div>
 
-                  <button type="button" id="voice-lang-toggle" class="voice-lang-toggle" role="switch" aria-checked="true" title="Tamil / English voice input"
-                          onclick="if(window.voiceTyping){ var on=this.getAttribute('aria-checked')==='true'; window.voiceTyping.setLanguage(on?'en-US':'ta-IN'); }">
+                  <button type="button" id="voice-lang-toggle" class="voice-lang-toggle" role="switch" aria-checked="true" title="Tamil / English — when English, pasted text is auto-translated to Tamil"
+                          onclick="var t=this; var isTamil=t.getAttribute('aria-checked')==='true'; t.setAttribute('aria-checked',isTamil?'false':'true'); t.querySelector('.voice-lang-toggle-label').textContent=isTamil?'English':'தமிழ்'; if(window.voiceTyping)window.voiceTyping.setLanguage(isTamil?'en-US':'ta-IN');">
                     <span class="voice-lang-toggle-label">தமிழ்</span>
                     <span class="voice-lang-toggle-knob"></span>
                   </button>
