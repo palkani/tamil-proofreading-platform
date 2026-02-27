@@ -1315,48 +1315,57 @@ class HomeEditor {
     const englishRatio = text.length > 0 ? (text.match(/[a-zA-Z]/g) || []).length / text.length : 0;
     const isMostlyEnglish = englishRatio > 0.5;
 
-    let processedText = text;
-    if (isMostlyEnglish) {
-      if (!isTamilMode) {
-        // Tamil icon OFF: user pasted English → translate to Tamil via API
-        try {
-          const response = await apiFetch('/api/gemini/translate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text.trim() }),
-          }, false);
-          const data = await response.json();
-          const translated = data?.translated_text || data?.translated || '';
-          if (translated) processedText = translated;
-          else processedText = text;
-        } catch (err) {
-          console.warn('[HomeEditor] Paste translate failed:', err);
-          processedText = text;
-        }
-      } else {
-        // Tamil icon ON: transliterate (Thanglish → Tamil)
-        processedText = this.convertEnglishToTamil(text);
-      }
+    let textToInsert = text;
+    if (isMostlyEnglish && isTamilMode) {
+      // Tamil icon ON: transliterate (Thanglish → Tamil) before insert
+      textToInsert = this.convertEnglishToTamil(text);
     }
 
     // Enforce word limit
     const currentText = this.getPlainText();
     const currentWords = this.countWords(currentText);
     const remainingWords = this.maxWords - currentWords;
-    const textWords = this.countWords(processedText);
+    const textWords = this.countWords(textToInsert);
 
     if (textWords > remainingWords) {
-      const wordsArray = processedText.split(/\s+/);
-      const textToInsert = wordsArray.slice(0, remainingWords).join(' ');
-      document.execCommand('insertText', false, textToInsert);
-    } else {
-      document.execCommand('insertText', false, processedText);
+      const wordsArray = textToInsert.split(/\s+/);
+      textToInsert = wordsArray.slice(0, remainingWords).join(' ');
     }
+
+    // Insert immediately (English or transliterated)
+    document.execCommand('insertText', false, textToInsert);
 
     this.updateWordCount();
     this.lastAnalyzedText = '';
     this._suppressScheduledAnalysisUntil = Date.now() + 1200;
     setTimeout(() => this.autoAnalyze(), 0);
+
+    // Tamil icon OFF + English paste: translate in background, then replace
+    if (!isTamilMode && isMostlyEnglish) {
+      const pastedText = textToInsert;
+      try {
+        const response = await apiFetch('/api/gemini/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: pastedText }),
+        }, false);
+        const data = await response.json();
+        const translated = data?.translated_text || data?.translated || '';
+        if (translated && this.editor) {
+          const fullText = this.getPlainText();
+          const newText = fullText.replace(pastedText, translated);
+          if (newText !== fullText) {
+            this.editor.textContent = newText;
+            this.moveCursorToEnd();
+            this.updateWordCount();
+            this.lastAnalyzedText = '';
+            setTimeout(() => this.autoAnalyze(), 0);
+          }
+        }
+      } catch (err) {
+        console.warn('[HomeEditor] Paste translate failed:', err);
+      }
+    }
   }
   
   convertWordToTamil(word) {

@@ -35,14 +35,14 @@
       "short_name": "Workspace",
       "description": "Start writing Tamil with AI assistance",
       "url": "/workspace",
-      "icons": [{"src": "/images/proof-tamil-logo.png", "sizes": "any"}]
+      "icons": [{"src": "/images/tamil-logo.svg", "sizes": "any"}]
     },
     {
       "name": "How to Use",
       "short_name": "Guide",
       "description": "Learn how to use ProofTamil",
       "url": "/how-to-use",
-      "icons": [{"src": "/images/proof-tamil-logo.png", "sizes": "any"}]
+      "icons": [{"src": "/images/tamil-logo.svg", "sizes": "any"}]
     }
   ],
   "related_applications": [],

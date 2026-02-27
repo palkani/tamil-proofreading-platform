@@ -1540,10 +1540,18 @@ class WorkspaceController {
         const englishRatio = (pastedText.match(/[a-zA-Z]/g) || []).length / pastedText.length;
         const isMostlyEnglish = englishRatio > 0.5;
 
-        // When Tamil icon OFF + English paste → translate to Tamil before inserting
+        // When Tamil icon OFF + English paste: insert English immediately, then translate in background
         if (!isTamilMode && isMostlyEnglish) {
           e.preventDefault();
           e.stopPropagation();
+          // Insert English text immediately
+          if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
+            tiptapWorkspaceEditor.chain().focus().insertContent(pastedText).run();
+          } else {
+            document.execCommand('insertText', false, pastedText);
+          }
+          controller.queuePasteAnalyze('legacy:paste');
+          // Translate in background, then replace
           try {
             const response = await controller.apiFetch('/api/gemini/translate', {
               method: 'POST',
@@ -1551,17 +1559,25 @@ class WorkspaceController {
               body: JSON.stringify({ text: pastedText.trim() }),
             });
             const data = await response.json();
-            const translated = data?.translated_text || data?.translated || pastedText;
-            if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
-              tiptapWorkspaceEditor.chain().focus().insertContent(translated).run();
-            } else {
-              document.execCommand('insertText', false, translated);
+            const translated = data?.translated_text || data?.translated || '';
+            if (translated) {
+              const currentText = controller.getEditorText() || '';
+              const newText = currentText.replace(pastedText, translated);
+              if (newText !== currentText) {
+                if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
+                  const escaped = newText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                  tiptapWorkspaceEditor.commands.setContent('<p>' + escaped.replace(/\n/g, '</p><p>') + '</p>');
+                } else if (controller.editor && typeof controller.editor.setText === 'function') {
+                  controller.editor.setText(newText);
+                } else if (controller.editorElement) {
+                  controller.editorElement.textContent = newText;
+                  controller.editorElement.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                controller.queuePasteAnalyze('legacy:paste');
+              }
             }
-            controller.queuePasteAnalyze('legacy:paste');
           } catch (err) {
             console.warn('[WorkspaceJS] Paste translate failed:', err);
-            document.execCommand('insertText', false, pastedText);
-            controller.queuePasteAnalyze('legacy:paste');
           }
           return;
         }
