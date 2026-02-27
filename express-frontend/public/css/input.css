@@ -63,10 +63,14 @@
   letter-spacing: 0.01em;
 }
 .site-nav .nav-link {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-muted);
   transition: color 0.2s ease, background-color 0.2s ease;
+  white-space: nowrap;
+}
+@media (min-width: 1024px) {
+  .site-nav .nav-link { font-size: 0.9375rem; }
 }
 .site-nav .nav-link:hover {
   color: var(--color-accent);
@@ -96,6 +100,20 @@
 .site-nav .nav-icon-btn:hover {
   color: var(--color-accent);
   background-color: var(--color-primary-ghost);
+}
+
+/* Prevent nav link overlap: scroll when many items */
+.site-nav .nav-links-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.site-nav .nav-links-scroll::-webkit-scrollbar {
+  display: none;
+}
+.site-nav .nav-links-scroll .nav-link,
+.site-nav .nav-links-scroll a[href] {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Logo: white background; dark/black pixels lightened so logo works on white nav */
