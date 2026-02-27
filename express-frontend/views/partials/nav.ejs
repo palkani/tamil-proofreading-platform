@@ -90,9 +90,14 @@
 </nav>
 
 <% if (!user || !user.email) { %>
-<!-- Promo stripe: scrolling feature highlights (shown only when not logged in) -->
+<!-- Promo stripe: scrolling on desktop, static on mobile (shown only when not logged in) -->
 <div class="promo-stripe" role="region" aria-label="ProofTamil features">
-  <div class="promo-stripe-inner">
+  <!-- Mobile: static centered text (no cut-off) -->
+  <div class="promo-stripe-mobile sm:hidden py-2.5 px-4 text-center text-white text-sm font-medium">
+    🎤 Voice to Tamil • ✨ AI Content Generator • ✓ Proofreading
+  </div>
+  <!-- Desktop: scrolling animation -->
+  <div class="promo-stripe-inner hidden sm:block">
     <div class="promo-stripe-track">
       <span class="promo-stripe-item">🎤 Voice to Tamil — Speak it, we type it. Convert speech to Tamil text instantly.</span>
       <span class="promo-stripe-sep" aria-hidden="true">•</span>
