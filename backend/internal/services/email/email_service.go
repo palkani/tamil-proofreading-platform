@@ -34,6 +34,7 @@ type ResendEmailRequest struct {
 	To      []string `json:"to"`
 	Subject string   `json:"subject"`
 	HTML    string   `json:"html"`
+	ReplyTo []string `json:"reply_to,omitempty"`
 }
 
 type ResendResponse struct {
@@ -132,48 +133,49 @@ func (s *EmailService) sendSMTP(to, subject, htmlBody string, replyTo string) er
 	return nil
 }
 
+func (s *EmailService) sendViaResend(payload ResendEmailRequest) error {
+	jsonBody, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewReader(jsonBody))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+s.apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[EMAIL] Resend request error: %v", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		log.Printf("[EMAIL] Resend error response status: %d", resp.StatusCode)
+		return fmt.Errorf("email send failed with status: %d", resp.StatusCode)
+	}
+	return nil
+}
+
 func (s *EmailService) SendEmail(to, subject, htmlBody string) error {
 	if !s.IsConfigured() {
 		log.Printf("[EMAIL] Resend API not configured, skipping email to: %s", to)
 		return nil
 	}
 
-	payload := ResendEmailRequest{
+	err := s.sendViaResend(ResendEmailRequest{
 		From:    fmt.Sprintf("%s <%s>", s.fromName, s.fromEmail),
 		To:      []string{to},
 		Subject: subject,
 		HTML:    htmlBody,
-	}
-
-	jsonBody, err := json.Marshal(payload)
+	})
 	if err != nil {
 		return err
 	}
-
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewReader(jsonBody))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.apiKey)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("[EMAIL] Request error: %v", err)
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		log.Printf("[EMAIL] Error response status: %d", resp.StatusCode)
-		return fmt.Errorf("email send failed with status: %d", resp.StatusCode)
-	}
-
 	log.Printf("[EMAIL] Email sent successfully to: %s", to)
 	return nil
 }
@@ -223,7 +225,7 @@ func (s *EmailService) SendVerificationEmail(to, otp string) error {
 }
 
 // SendContactEmail sends a notification for contact-form submissions.
-// Uses SendGrid SMTP when configured; otherwise, it will no-op.
+// Tries Resend API first (reliable from any IP); falls back to SMTP.
 func (s *EmailService) SendContactEmail(fromUserEmail, subject, message string) error {
 	to := strings.TrimSpace(s.contactTo)
 	if to == "" {
@@ -240,18 +242,35 @@ func (s *EmailService) SendContactEmail(fromUserEmail, subject, message string) 
 	}
 	safeMessage := strings.TrimSpace(message)
 
-	// Use exactly what the user typed as the email subject.
-	emailSubject := safeSubject
-	// Keep the email body as the message content (with minimal wrapping).
 	htmlBody := fmt.Sprintf(
 		`<div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.6; white-space: pre-wrap;">%s</div>`,
 		html.EscapeString(safeMessage),
 	)
 
-	// Set Reply-To so you can reply directly to the user's email from Gmail.
 	replyTo := ""
 	if safeFrom != "(unknown)" {
 		replyTo = safeFrom
 	}
-	return s.sendSMTP(to, emailSubject, htmlBody, replyTo)
+
+	// Try Resend API first — works from any IP, no SMTP firewall issues.
+	if s.IsConfigured() {
+		payload := ResendEmailRequest{
+			From:    fmt.Sprintf("%s <%s>", s.fromName, s.fromEmail),
+			To:      []string{to},
+			Subject: safeSubject,
+			HTML:    htmlBody,
+		}
+		if replyTo != "" {
+			payload.ReplyTo = []string{replyTo}
+		}
+		if err := s.sendViaResend(payload); err != nil {
+			log.Printf("[EMAIL] Resend contact email failed: %v — falling back to SMTP", err)
+		} else {
+			log.Printf("[EMAIL] Contact email sent via Resend to: %s", to)
+			return nil
+		}
+	}
+
+	// Fall back to SMTP (Zoho / SendGrid).
+	return s.sendSMTP(to, safeSubject, htmlBody, replyTo)
 }

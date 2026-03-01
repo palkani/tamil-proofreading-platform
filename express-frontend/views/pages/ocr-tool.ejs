@@ -216,12 +216,12 @@
   }
 
   async function runClientSideOcr(file, lang) {
-    // We only support browser OCR for images. PDFs should use an external OCR service.
+    // Client-side Tesseract.js only supports images (not PDFs).
     if (isPdfFile(file)) {
-      throw new Error('For PDF OCR in production, please set OCR_SERVICE_URL (Cloud Run). For now, convert the PDF page to an image (JPG/PNG) and upload.');
+      throw new Error('PDF OCR is not available in offline mode. Please check your connection and try again, or convert the PDF page to a JPG/PNG image and upload that instead.');
     }
     if (!isImageFile(file)) {
-      throw new Error('Client-side OCR supports images only. Please upload JPG/PNG/TIFF/BMP/GIF, or configure OCR_SERVICE_URL for PDFs.');
+      throw new Error('Client-side OCR supports images only. Please upload JPG/PNG/TIFF/BMP/GIF.');
     }
 
     // Load Tesseract.js in the browser on-demand (keeps other pages fast)

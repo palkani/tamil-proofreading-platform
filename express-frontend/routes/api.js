@@ -1555,13 +1555,13 @@ router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
     const isProd = process.env.NODE_ENV === 'production' || isVercel;
     const hasExternalOcr = OCR_SERVICE_URL && OCR_SERVICE_URL !== 'http://localhost:5000';
 
-    // In production/serverless, direct Tesseract.js OCR can be extremely slow or hang.
-    // Prefer the external OCR service (Cloud Run) when available.
-    // If OCR_SERVICE_URL is not configured on Vercel, fall back to BACKEND_URL OCR proxy endpoints (if backend is configured).
+    // If an external OCR service URL is not set, first try the backend proxy (Cloud Run).
+    // If that also fails, fall through to the direct Tesseract.js / pdf-parse path below —
+    // pdf-parse extracts text from text-based PDFs instantly; Tesseract handles images.
     if (isProd && !hasExternalOcr) {
       try {
         const url = `${req._backendUrl}/ocr/upload`;
-        if (ENABLE_PROXY_LOGS) console.log('[OCR] Using backend OCR proxy:', url);
+        if (ENABLE_PROXY_LOGS) console.log('[OCR] Trying backend OCR proxy:', url);
 
         const formData = new FormData();
         formData.append('file', fileBuffer, { filename, contentType: mimeType });
@@ -1570,7 +1570,6 @@ router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
         const response = await axiosWithPool.post(url, formData, {
           headers: {
             ...formData.getHeaders(),
-            // Forward cookies/auth if present (some backends may gate large uploads)
             cookie: req.headers.cookie,
             authorization: req.headers.authorization,
           },
@@ -1582,11 +1581,8 @@ router.post('/ocr/upload', uploadOCR.single('file'), async (req, res) => {
 
         return res.status(response.status).send(response.data);
       } catch (e) {
-        return res.status(503).json({
-          error: 'OCR is not configured for production yet.',
-          details:
-            'On Vercel, direct OCR is not supported. Configure OCR on the backend by setting OCR_SERVICE_URL on Cloud Run (or set OCR_SERVICE_URL in Vercel to an OCR microservice). See README_OCR_SETUP.md.',
-        });
+        // Backend proxy unavailable — fall through to direct OCR (Tesseract.js / pdf-parse).
+        console.warn('[OCR] Backend proxy failed, falling back to direct OCR:', e.message);
       }
     }
     
