@@ -15,11 +15,12 @@ import (
 )
 
 type EmailService struct {
-	apiKey    string
-	fromEmail string
-	fromName  string
+	apiKey         string // Resend API key
+	sendgridApiKey string // SendGrid Web API key (v3)
+	fromEmail      string
+	fromName       string
 
-	// SMTP (SendGrid) configuration
+	// SMTP configuration (fallback)
 	smtpHost string
 	smtpPort int
 	smtpUser string
@@ -45,8 +46,6 @@ func NewEmailService() *EmailService {
 	apiKey := os.Getenv("RESEND_API_KEY")
 	fromEmail := strings.TrimSpace(os.Getenv("EMAIL_FROM_ADDRESS"))
 	if fromEmail == "" {
-		// Default to prooftamil@gmail.com — must be verified in SendGrid (Single Sender or Domain).
-		// Use noreply@prooftamil.com only after domain authentication in SendGrid.
 		fromEmail = "prooftamil@gmail.com"
 	}
 	fromName := os.Getenv("EMAIL_FROM_NAME")
@@ -54,7 +53,13 @@ func NewEmailService() *EmailService {
 		fromName = "ProofTamil"
 	}
 
-	// SendGrid SMTP defaults
+	// SendGrid Web API key — reuse the SMTP password since it's the same API key.
+	sendgridApiKey := strings.TrimSpace(os.Getenv("SENDGRID_API_KEY"))
+	if sendgridApiKey == "" {
+		sendgridApiKey = strings.TrimSpace(os.Getenv("SENDGRID_SMTP_PASSWORD"))
+	}
+
+	// SMTP fallback
 	smtpHost := strings.TrimSpace(os.Getenv("SENDGRID_SMTP_HOST"))
 	if smtpHost == "" {
 		smtpHost = "smtp.sendgrid.net"
@@ -67,7 +72,6 @@ func NewEmailService() *EmailService {
 	}
 	smtpUser := strings.TrimSpace(os.Getenv("SENDGRID_SMTP_USER"))
 	if smtpUser == "" {
-		// SendGrid recommends username "apikey" with the API key as password.
 		smtpUser = "apikey"
 	}
 	smtpPass := strings.TrimSpace(os.Getenv("SENDGRID_SMTP_PASSWORD"))
@@ -78,14 +82,15 @@ func NewEmailService() *EmailService {
 	}
 
 	return &EmailService{
-		apiKey:    apiKey,
-		fromEmail: fromEmail,
-		fromName:  fromName,
-		smtpHost:  smtpHost,
-		smtpPort:  smtpPort,
-		smtpUser:  smtpUser,
-		smtpPass:  smtpPass,
-		contactTo: contactTo,
+		apiKey:         apiKey,
+		sendgridApiKey: sendgridApiKey,
+		fromEmail:      fromEmail,
+		fromName:       fromName,
+		smtpHost:       smtpHost,
+		smtpPort:       smtpPort,
+		smtpUser:       smtpUser,
+		smtpPass:       smtpPass,
+		contactTo:      contactTo,
 	}
 }
 
@@ -108,7 +113,6 @@ func (s *EmailService) sendSMTP(to, subject, htmlBody string, replyTo string) er
 	addr := fmt.Sprintf("%s:%d", s.smtpHost, s.smtpPort)
 	auth := smtp.PlainAuth("", s.smtpUser, s.smtpPass, s.smtpHost)
 
-	// Minimal RFC 5322 message with HTML body.
 	var msg strings.Builder
 	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
@@ -121,15 +125,90 @@ func (s *EmailService) sendSMTP(to, subject, htmlBody string, replyTo string) er
 	msg.WriteString("\r\n")
 	msg.WriteString(htmlBody)
 
-	log.Printf("[EMAIL] Sending SMTP email (provider=sendgrid host=%s port=%d from=%s to=%s subject=%q)", s.smtpHost, s.smtpPort, s.fromEmail, to, subject)
+	log.Printf("[EMAIL] Sending SMTP email (host=%s port=%d from=%s to=%s subject=%q)", s.smtpHost, s.smtpPort, s.fromEmail, to, subject)
 	if err := smtp.SendMail(addr, auth, s.fromEmail, []string{to}, []byte(msg.String())); err != nil {
 		log.Printf("[EMAIL] SMTP send failed: %v", err)
 		if strings.Contains(err.Error(), "verified Sender Identity") || strings.Contains(err.Error(), "550") {
-			log.Printf("[EMAIL] Hint: Set EMAIL_FROM_ADDRESS to a verified sender in SendGrid (Settings → Sender Authentication). See https://sendgrid.com/docs/for-developers/sending-email/sender-identity/")
+			log.Printf("[EMAIL] Hint: Verify the sender %s in SendGrid (Settings → Sender Authentication).", s.fromEmail)
 		}
 		return err
 	}
 	log.Printf("[EMAIL] SMTP email sent successfully to: %s", to)
+	return nil
+}
+
+// sendViaSendGridAPI uses SendGrid's v3 Web API (HTTP, no SMTP auth issues).
+func (s *EmailService) sendViaSendGridAPI(to, subject, htmlBody, replyTo string) error {
+	if s.sendgridApiKey == "" {
+		return fmt.Errorf("SendGrid API key not configured")
+	}
+
+	type sgEmail struct {
+		Email string `json:"email"`
+		Name  string `json:"name,omitempty"`
+	}
+	type sgContent struct {
+		Type  string `json:"value"`
+		Value string `json:"value"`
+	}
+	type sgPersonalization struct {
+		To      []sgEmail `json:"to"`
+		Subject string    `json:"subject"`
+	}
+	type sgRequest struct {
+		From             sgEmail             `json:"from"`
+		Personalizations []sgPersonalization `json:"personalizations"`
+		Content          []struct {
+			Type  string `json:"type"`
+			Value string `json:"value"`
+		} `json:"content"`
+		ReplyToList []sgEmail `json:"reply_to_list,omitempty"`
+	}
+
+	payload := sgRequest{
+		From: sgEmail{Email: s.fromEmail, Name: s.fromName},
+		Personalizations: []sgPersonalization{
+			{To: []sgEmail{{Email: to}}, Subject: subject},
+		},
+		Content: []struct {
+			Type  string `json:"type"`
+			Value string `json:"value"`
+		}{
+			{Type: "text/html", Value: htmlBody},
+		},
+	}
+	if replyTo != "" {
+		payload.ReplyToList = []sgEmail{{Email: replyTo}}
+	}
+
+	jsonBody, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("POST", "https://api.sendgrid.com/v3/mail/send", bytes.NewReader(jsonBody))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+s.sendgridApiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[EMAIL] SendGrid API request error: %v", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	// SendGrid returns 202 Accepted on success.
+	if resp.StatusCode >= 400 {
+		log.Printf("[EMAIL] SendGrid API error status: %d", resp.StatusCode)
+		if resp.StatusCode == 403 {
+			log.Printf("[EMAIL] Hint: Verify sender %s in SendGrid (Settings → Sender Authentication).", s.fromEmail)
+		}
+		return fmt.Errorf("SendGrid API send failed with status: %d", resp.StatusCode)
+	}
 	return nil
 }
 
@@ -195,22 +274,22 @@ func (s *EmailService) SendVerificationEmail(to, otp string) error {
             <h1 style="color: white; margin: 0; font-size: 28px;">தமிழ்</h1>
             <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">ProofTamil</p>
         </div>
-        
+
         <div style="padding: 40px 30px;">
             <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 24px;">Verify Your Email</h2>
             <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
                 Welcome to ProofTamil! Please use the following verification code to complete your registration:
             </p>
-            
+
             <div style="background-color: #fff7ed; border: 2px solid #ea580c; border-radius: 8px; padding: 25px; text-align: center; margin: 25px 0;">
                 <span style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #ea580c;">%s</span>
             </div>
-            
+
             <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 25px 0 0 0;">
                 This code will expire in <strong>15 minutes</strong>. If you didn't request this verification, please ignore this email.
             </p>
         </div>
-        
+
         <div style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
             <p style="color: #9ca3af; font-size: 12px; margin: 0;">
                 © 2024 ProofTamil. Your AI Writing Partner for Tamil.
@@ -225,7 +304,7 @@ func (s *EmailService) SendVerificationEmail(to, otp string) error {
 }
 
 // SendContactEmail sends a notification for contact-form submissions.
-// Tries Resend API first (reliable from any IP); falls back to SMTP.
+// Priority: Resend API → SendGrid Web API → SMTP.
 func (s *EmailService) SendContactEmail(fromUserEmail, subject, message string) error {
 	to := strings.TrimSpace(s.contactTo)
 	if to == "" {
@@ -252,7 +331,7 @@ func (s *EmailService) SendContactEmail(fromUserEmail, subject, message string) 
 		replyTo = safeFrom
 	}
 
-	// Try Resend API first — works from any IP, no SMTP firewall issues.
+	// 1. Try Resend API (if configured).
 	if s.IsConfigured() {
 		payload := ResendEmailRequest{
 			From:    fmt.Sprintf("%s <%s>", s.fromName, s.fromEmail),
@@ -264,13 +343,23 @@ func (s *EmailService) SendContactEmail(fromUserEmail, subject, message string) 
 			payload.ReplyTo = []string{replyTo}
 		}
 		if err := s.sendViaResend(payload); err != nil {
-			log.Printf("[EMAIL] Resend contact email failed: %v — falling back to SMTP", err)
+			log.Printf("[EMAIL] Resend contact email failed: %v — trying SendGrid API", err)
 		} else {
 			log.Printf("[EMAIL] Contact email sent via Resend to: %s", to)
 			return nil
 		}
 	}
 
-	// Fall back to SMTP (Zoho / SendGrid).
+	// 2. Try SendGrid Web API (uses same API key as SMTP, but HTTP-based — no TLS auth issues).
+	if s.sendgridApiKey != "" {
+		if err := s.sendViaSendGridAPI(to, safeSubject, htmlBody, replyTo); err != nil {
+			log.Printf("[EMAIL] SendGrid API contact email failed: %v — falling back to SMTP", err)
+		} else {
+			log.Printf("[EMAIL] Contact email sent via SendGrid API to: %s", to)
+			return nil
+		}
+	}
+
+	// 3. Fall back to SMTP.
 	return s.sendSMTP(to, safeSubject, htmlBody, replyTo)
 }
