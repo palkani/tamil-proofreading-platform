@@ -3,6 +3,14 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build:css",
   "regions": ["bom1", "iad1"],
+  "env": {
+    "SMTP_HOST":           "smtp.zoho.in",
+    "SMTP_PORT":           "587",
+    "SMTP_USER":           "contact@prooftamil.com",
+    "EMAIL_FROM_ADDRESS":  "contact@prooftamil.com",
+    "EMAIL_FROM_NAME":     "ProofTamil",
+    "CONTACT_TO_EMAIL":    "contact@prooftamil.com"
+  },
   "headers": [
     {
       "source": "/api/v1/suggest",

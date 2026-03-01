@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', function() {
         throw new Error('All fields are required');
       }
 
-      const response = await fetch('/api/v1/contact', {
+      const response = await fetch('/api/contact', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

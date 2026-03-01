@@ -42,9 +42,11 @@ type ResendResponse struct {
 
 func NewEmailService() *EmailService {
 	apiKey := os.Getenv("RESEND_API_KEY")
-	fromEmail := os.Getenv("EMAIL_FROM_ADDRESS")
+	fromEmail := strings.TrimSpace(os.Getenv("EMAIL_FROM_ADDRESS"))
 	if fromEmail == "" {
-		fromEmail = "noreply@prooftamil.com"
+		// Default to prooftamil@gmail.com — must be verified in SendGrid (Single Sender or Domain).
+		// Use noreply@prooftamil.com only after domain authentication in SendGrid.
+		fromEmail = "prooftamil@gmail.com"
 	}
 	fromName := os.Getenv("EMAIL_FROM_NAME")
 	if fromName == "" {
@@ -225,7 +227,7 @@ func (s *EmailService) SendVerificationEmail(to, otp string) error {
 func (s *EmailService) SendContactEmail(fromUserEmail, subject, message string) error {
 	to := strings.TrimSpace(s.contactTo)
 	if to == "" {
-		to = "prooftamil@gmail.com"
+		to = "contact@prooftamil.com"
 	}
 
 	safeFrom := strings.TrimSpace(fromUserEmail)

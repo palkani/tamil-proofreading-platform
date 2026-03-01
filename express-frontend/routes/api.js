@@ -3216,8 +3216,12 @@ router.all('/v1/*', async (req, res) => {
 });
 
 // ── Contact Form ──────────────────────────────────────────────────────────────
-// POST /api/v1/contact  — sends contact message to prooftamil@gmail.com via SendGrid SMTP
-router.post('/v1/contact', async (req, res) => {
+// POST /api/contact  — sends contact notification + auto-reply
+// NOTE: Intentionally at /api/contact (not /api/v1/contact).
+//       Vercel rewrites /api/v1/* to the Go backend on Cloud Run, so using
+//       /api/contact ensures THIS Express handler runs on Vercel serverless.
+// Priority: 1) Resend API (RESEND_API_KEY)  2) Any SMTP provider (SMTP_PASSWORD)  3) console log
+router.post('/contact', async (req, res) => {
   const { email, subject, message } = req.body || {};
 
   if (!email || !subject || !message) {
@@ -3230,50 +3234,124 @@ router.post('/v1/contact', async (req, res) => {
     return res.status(400).json({ error: 'Message too long (max 5000 characters)' });
   }
 
-  // Escape HTML to prevent XSS in the email body
-  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const esc = (s) => String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const contactTo  = process.env.CONTACT_TO_EMAIL   || 'contact@prooftamil.com';
+  const fromEmail  = process.env.EMAIL_FROM_ADDRESS  || 'noreply@prooftamil.com';
+  const resendKey  = process.env.RESEND_API_KEY      || '';
+  // Generic SMTP (works with Zoho, SendGrid, Gmail, etc.)
+  // SMTP_* vars take priority; fall back to legacy SENDGRID_SMTP_* names for compatibility
+  const smtpPass   = process.env.SMTP_PASSWORD || process.env.SENDGRID_SMTP_PASSWORD || '';
+  const smtpHost   = process.env.SMTP_HOST     || process.env.SENDGRID_SMTP_HOST     || 'smtp.sendgrid.net';
+  const smtpPort   = parseInt(process.env.SMTP_PORT || process.env.SENDGRID_SMTP_PORT || '587', 10);
+  const smtpUser   = process.env.SMTP_USER     || process.env.SENDGRID_SMTP_USER     || fromEmail;
+
+  // ── Notification email (to contact@prooftamil.com) ──
+  const notifyHtml = `
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+      <div style="background:linear-gradient(135deg,#1A2B68 0%,#2979FF 100%);padding:22px 28px;">
+        <h2 style="color:#fff;margin:0;font-size:18px;font-weight:700;">📬 New Contact Form Message</h2>
+        <p style="color:rgba(255,255,255,0.8);margin:4px 0 0;font-size:13px;">prooftamil.com — Contact Form</p>
+      </div>
+      <div style="background:#f9fafb;padding:24px 28px;">
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;width:80px;">From:</td>
+              <td style="padding:6px 0;font-weight:600;color:#1A2B68;">${esc(email)}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Subject:</td>
+              <td style="padding:6px 0;font-weight:600;color:#1f2937;">${esc(subject)}</td></tr>
+        </table>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:18px;">
+          <p style="white-space:pre-wrap;margin:0;line-height:1.7;color:#374151;font-size:15px;">${esc(message)}</p>
+        </div>
+        <p style="color:#9ca3af;font-size:12px;margin-top:16px;margin-bottom:0;">
+          Hit <strong>Reply</strong> to respond directly to <strong>${esc(email)}</strong>
+        </p>
+      </div>
+    </div>`;
+
+  // ── Auto-reply email (to the sender) ──
+  const autoReplyHtml = `
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+      <div style="background:linear-gradient(135deg,#1A2B68 0%,#2979FF 100%);padding:28px;text-align:center;">
+        <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800;">ProofTamil</h1>
+        <p style="color:rgba(255,255,255,0.85);margin:6px 0 0;font-size:14px;">Free Tamil Grammar Checker &amp; AI Proofreading</p>
+      </div>
+      <div style="padding:32px 28px;">
+        <h2 style="margin:0 0 12px;color:#1A2B68;font-size:20px;">Thanks for reaching out! 👋</h2>
+        <p style="color:#374151;line-height:1.7;margin:0 0 16px;">
+          We received your message and will get back to you within <strong>24 hours</strong>.
+        </p>
+        <div style="background:#EBF4FB;border-left:4px solid #2979FF;border-radius:4px;padding:14px 18px;margin-bottom:20px;">
+          <p style="margin:0;font-size:13px;color:#1A2B68;font-weight:600;">Your message:</p>
+          <p style="margin:8px 0 0;font-size:13px;color:#374151;white-space:pre-wrap;">${esc(message.length > 300 ? message.slice(0, 300) + '…' : message)}</p>
+        </div>
+        <p style="color:#6b7280;font-size:13px;margin:0;">
+          While you wait, try our <a href="https://prooftamil.com/free-tamil-editor" style="color:#2979FF;text-decoration:none;font-weight:600;">Free Tamil Editor</a> — instant grammar &amp; spell checking.
+        </p>
+      </div>
+      <div style="background:#f9fafb;padding:18px 28px;text-align:center;border-top:1px solid #e5e7eb;">
+        <p style="margin:0;color:#9ca3af;font-size:12px;">
+          © ProofTamil · <a href="https://prooftamil.com" style="color:#6b7280;text-decoration:none;">prooftamil.com</a>
+        </p>
+      </div>
+    </div>`;
+
+  // ── Send via Resend API ──
+  async function sendViaResend(to, replyTo, emailSubject, html) {
+    const payload = {
+      from:     `ProofTamil <${fromEmail}>`,
+      to:       [to],
+      subject:  emailSubject,
+      html,
+      ...(replyTo ? { reply_to: replyTo } : {}),
+    };
+    const r = await fetch('https://api.resend.com/emails', {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      throw new Error(`Resend ${r.status}: ${txt}`);
+    }
+  }
+
+  // ── Send via SMTP (nodemailer — works with Zoho, SendGrid, Gmail SMTP, etc.) ──
+  async function sendViaSMTP(to, replyTo, emailSubject, html) {
+    const nodemailer = require('nodemailer');
+    const t = nodemailer.createTransport({
+      host:   smtpHost,
+      port:   smtpPort,
+      secure: smtpPort === 465, // SSL for port 465, STARTTLS for 587
+      auth:   { user: smtpUser, pass: smtpPass },
+    });
+    await t.sendMail({ from: `"ProofTamil" <${fromEmail}>`, to, replyTo, subject: emailSubject, html });
+  }
 
   try {
-    const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.sendgrid.net',
-      port: 587,
-      secure: false,
-      auth: {
-        user: 'apikey',
-        pass: process.env.SENDGRID_SMTP_PASSWORD,
-      },
-    });
+    if (resendKey) {
+      // Send via Resend API (preferred)
+      await sendViaResend(contactTo, email, `[Contact] ${subject}`, notifyHtml);
+      // Auto-reply to sender (best-effort — don't fail the whole request if it errors)
+      sendViaResend(email, null, `We received your message — ProofTamil`, autoReplyHtml)
+        .catch(e => console.warn('[Contact] Auto-reply failed:', e.message));
+    } else if (smtpPass) {
+      // Fallback: SMTP (Zoho / SendGrid / Gmail / etc.)
+      console.log(`[Contact] Sending via SMTP host=${smtpHost} user=${smtpUser}`);
+      await sendViaSMTP(contactTo, email, `[Contact] ${subject}`, notifyHtml);
+      sendViaSMTP(email, null, `We received your message — ProofTamil`, autoReplyHtml)
+        .catch(e => console.warn('[Contact] Auto-reply (SMTP) failed:', e.message));
+    } else {
+      // Dev/unconfigured: log to console so messages aren't silently lost
+      console.warn('[Contact] ⚠️  No email service configured. Set RESEND_API_KEY or SMTP_PASSWORD (Zoho/SendGrid/Gmail).');
+      console.log(`[Contact] From: ${email} | Subject: ${subject}\n${message}`);
+    }
 
-    await transporter.sendMail({
-      from: '"ProofTamil" <prooftamil@gmail.com>',
-      to: 'prooftamil@gmail.com',
-      replyTo: email,
-      subject: `[Contact] ${subject}`,
-      text: `From: ${email}\nSubject: ${subject}\n\n${message}`,
-      html: `
-        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1f2937;">
-          <div style="background:#1A2B68;padding:20px 24px;border-radius:8px 8px 0 0;">
-            <h2 style="color:#fff;margin:0;font-size:18px;">New Contact Form Message</h2>
-          </div>
-          <div style="background:#f9fafb;padding:20px 24px;border:1px solid #e5e7eb;border-top:none;">
-            <p style="margin:0 0 6px;"><strong>From:</strong> ${esc(email)}</p>
-            <p style="margin:0 0 16px;"><strong>Subject:</strong> ${esc(subject)}</p>
-            <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:16px;">
-              <p style="white-space:pre-wrap;margin:0;line-height:1.6;">${esc(message)}</p>
-            </div>
-            <p style="color:#6b7280;font-size:12px;margin-top:16px;">
-              Reply directly to this email to respond to <strong>${esc(email)}</strong>
-            </p>
-          </div>
-        </div>
-      `,
-    });
-
-    console.log(`[Contact] Message sent from ${email} — "${subject}"`);
+    console.log(`[Contact] Message received from ${email} — "${subject}"`);
     return res.json({ success: true });
   } catch (error) {
-    console.error('[Contact] SendGrid error:', error.message);
+    console.error('[Contact] Email send error:', error.message);
     return res.status(500).json({ error: 'Failed to send message. Please try again later.' });
   }
 });
