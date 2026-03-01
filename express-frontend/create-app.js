@@ -111,6 +111,8 @@ function createApp() {
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
         if (PRODUCTION_ORIGINS.includes(origin)) return callback(null, true);
+        // Allow all Vercel preview deployments (*.vercel.app)
+        if (origin.endsWith('.vercel.app')) return callback(null, true);
         if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) return callback(null, true);
         return callback(new Error('Not allowed by CORS'));
       },
