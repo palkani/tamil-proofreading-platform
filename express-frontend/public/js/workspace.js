@@ -4959,13 +4959,13 @@ class WorkspaceController {
         })
         .map((result, index) => {
           // Map backend fields to frontend expected format
-          const original =
+          let original =
             result.original ||
             result.originalText ||
             result.original_text ||
             result.Original ||
             '';
-          const corrected =
+          let corrected =
             result.corrected ||
             result.correction ||
             result.correctionText ||
@@ -4973,6 +4973,15 @@ class WorkspaceController {
             result.Correction ||
             result.Corrected ||
             '';
+          // Strip stray Unicode artifacts that AI models sometimes embed in Tamil text
+          // (arrows U+2190–U+27BF, math/symbol blocks, zero-width chars, specials block)
+          const _stripAIArtifacts = (s) => String(s || '').normalize('NFC')
+            .replace(/[\u200B-\u200D\uFEFF\u200E\u200F]/g, '')
+            .replace(/[\u2190-\u27BF]/g, '')
+            .replace(/[\uFFF0-\uFFFF]/g, '')
+            .trim();
+          original  = _stripAIArtifacts(original);
+          corrected = _stripAIArtifacts(corrected);
           const reason = result.reason || result.description || result.title || result.Reason || '';
           
           console.log('[AI Debug] Mapping suggestion from API:', { 

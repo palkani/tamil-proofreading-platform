@@ -349,22 +349,22 @@ class SuggestionsPanel {
 
   getTypeLabel(type) {
     const labels = {
-      grammar: 'Grammar',
-      style: 'Style',
-      clarity: 'Clarity',
-      spelling: 'Spelling',
-      punctuation: 'Punctuation',
-      'word choice': 'Word Choice',
-      'incomplete word': 'Incomplete Word',
-      'sandhi': 'Sandhi (Punarchi)',
-      'missing space': 'Missing Space',
-      'phonetic': 'Phonetic', // வல்லினம் மிகுதல் / ஒலியியல் பிழை
-      'case': 'Case', // வேற்றுமை உருபு பிழை
-      'space': 'Space', // இடைவெளி பிழை
-      suggestion: 'Suggestions',
-      alternative: 'Alternative Phrasings'
+      grammar:           'இலக்கணம்',       // Grammar
+      style:             'நடை',            // Style
+      clarity:           'தெளிவு',          // Clarity
+      spelling:          'எழுத்துப்பிழை',   // Spelling
+      punctuation:       'நிறுத்தற்குறி',   // Punctuation
+      'word choice':     'சொல் தேர்வு',    // Word Choice
+      'incomplete word': 'முழுமையற்ற சொல்', // Incomplete Word
+      'sandhi':          'புணர்ச்சி',        // Sandhi
+      'missing space':   'இடைவெளி குறைபாடு', // Missing Space
+      'phonetic':        'ஒலியியல்',        // Phonetic
+      'case':            'வேற்றுமை',        // Case
+      'space':           'இடைவெளி',        // Space
+      suggestion:        'பரிந்துரை',        // Suggestions
+      alternative:       'மாற்று வழிகள்'    // Alternative Phrasings
     };
-    return labels[type?.toLowerCase()] || (type ? type.charAt(0).toUpperCase() + type.slice(1).toLowerCase() : 'Suggestions');
+    return labels[type?.toLowerCase()] || (type ? type.charAt(0).toUpperCase() + type.slice(1).toLowerCase() : 'பரிந்துரை');
   }
 
   /** Returns a CSS class name for the type badge based on suggestion type. */
