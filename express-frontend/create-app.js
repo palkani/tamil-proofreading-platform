@@ -78,6 +78,9 @@ function createApp() {
     .map((o) => o.trim())
     .filter(Boolean);
 
+  // Always allow the canonical production domain regardless of FRONTEND_URL config.
+  const PRODUCTION_ORIGINS = ['https://prooftamil.com', 'https://www.prooftamil.com'];
+
   // Wait for secrets before serving most routes; skip OAuth callbacks and
   // workspace so they are never blocked by an initialisation delay.
   const ensureReadyMiddleware = (req, res, next) => {
@@ -106,8 +109,9 @@ function createApp() {
   app.use(
     cors({
       origin: (origin, callback) => {
-        if (!origin || allowedOrigins.length === 0) return callback(null, true);
-        if (allowedOrigins.includes(origin)) return callback(null, true);
+        if (!origin) return callback(null, true);
+        if (PRODUCTION_ORIGINS.includes(origin)) return callback(null, true);
+        if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) return callback(null, true);
         return callback(new Error('Not allowed by CORS'));
       },
       credentials: true,
