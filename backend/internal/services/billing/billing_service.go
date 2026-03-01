@@ -40,16 +40,18 @@ func NewBillingService(db *gorm.DB, pricingService *PricingService, stripeAdapte
 
 // CheckoutRequest represents a request to start checkout
 type CheckoutRequest struct {
-	PlanCode    string `json:"plan_code" binding:"required"`
-	SuccessURL  string `json:"success_url,omitempty"`
-	CancelURL   string `json:"cancel_url,omitempty"`
-	CountryCode string `json:"country_code,omitempty"` // Optional override
+	PlanCode     string `json:"plan_code" binding:"required"`
+	SuccessURL   string `json:"success_url,omitempty"`
+	CancelURL    string `json:"cancel_url,omitempty"`
+	CountryCode  string `json:"country_code,omitempty"`  // Optional override
+	EmbeddedMode bool   `json:"embedded_mode,omitempty"` // true → Stripe embedded checkout
 }
 
 // CheckoutResponse represents the response from checkout initiation
 type CheckoutResponse struct {
 	Provider        string                   `json:"provider"`
-	CheckoutURL     string                   `json:"checkout_url,omitempty"`     // For Stripe
+	CheckoutURL     string                   `json:"checkout_url,omitempty"`     // For Stripe redirect
+	ClientSecret    string                   `json:"client_secret,omitempty"`    // For Stripe embedded checkout
 	RazorpayPayload *RazorpayCheckoutPayload `json:"razorpay_payload,omitempty"` // For Razorpay
 	Quote           *models.PricingQuote     `json:"quote"`
 }
@@ -107,12 +109,15 @@ func (s *BillingService) CreateCheckoutSession(userID uint, req CheckoutRequest)
 		response.RazorpayPayload = s.razorpayAdapter.BuildCheckoutPayload(&user, quote, order, plan, callbackURL)
 	} else {
 		// Use Stripe
-		session, err := s.stripeAdapter.CreateCheckoutSession(&user, quote, plan)
+		session, err := s.stripeAdapter.CreateCheckoutSession(&user, quote, plan, req.EmbeddedMode)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create stripe session: %w", err)
 		}
-		
-		response.CheckoutURL = session.URL
+		if req.EmbeddedMode {
+			response.ClientSecret = session.ClientSecret
+		} else {
+			response.CheckoutURL = session.URL
+		}
 	}
 	
 	log.Printf("[BILLING] Created checkout for user %d: provider=%s plan=%s country=%s",

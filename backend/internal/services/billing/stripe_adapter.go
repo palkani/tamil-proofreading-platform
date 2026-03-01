@@ -72,13 +72,14 @@ func (a *StripeAdapter) GetOrCreateCustomer(user *models.User) (string, error) {
 	return c.ID, nil
 }
 
-// CreateCheckoutSession creates a Stripe Checkout session for subscription
-func (a *StripeAdapter) CreateCheckoutSession(user *models.User, quote *models.PricingQuote, plan *models.Plan) (*stripe.CheckoutSession, error) {
+// CreateCheckoutSession creates a Stripe Checkout session for subscription.
+// When embedded=true it uses UIMode "embedded" and returns a client_secret instead of a URL.
+func (a *StripeAdapter) CreateCheckoutSession(user *models.User, quote *models.PricingQuote, plan *models.Plan, embedded bool) (*stripe.CheckoutSession, error) {
 	customerID, err := a.GetOrCreateCustomer(user)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Build line item with price data
 	priceData := &stripe.CheckoutSessionLineItemPriceDataParams{
 		Currency: stripe.String(quote.Currency),
@@ -91,7 +92,7 @@ func (a *StripeAdapter) CreateCheckoutSession(user *models.User, quote *models.P
 			Interval: stripe.String(plan.BillingInterval),
 		},
 	}
-	
+
 	// Build checkout session params
 	params := &stripe.CheckoutSessionParams{
 		Customer: stripe.String(customerID),
@@ -102,8 +103,6 @@ func (a *StripeAdapter) CreateCheckoutSession(user *models.User, quote *models.P
 				Quantity:  stripe.Int64(1),
 			},
 		},
-		SuccessURL: stripe.String(a.successURL + "?session_id={CHECKOUT_SESSION_ID}"),
-		CancelURL:  stripe.String(a.cancelURL),
 		SubscriptionData: &stripe.CheckoutSessionSubscriptionDataParams{
 			Metadata: map[string]string{
 				"user_id":             strconv.FormatUint(uint64(user.ID), 10),
@@ -127,7 +126,16 @@ func (a *StripeAdapter) CreateCheckoutSession(user *models.User, quote *models.P
 	if plan.TrialDays > 0 {
 		params.SubscriptionData.TrialPeriodDays = stripe.Int64(int64(plan.TrialDays))
 	}
-	
+
+	// Embedded checkout: return client_secret; standard: redirect via URL
+	if embedded {
+		params.UIMode    = stripe.String("embedded")
+		params.ReturnURL = stripe.String(a.successURL + "?session_id={CHECKOUT_SESSION_ID}")
+	} else {
+		params.SuccessURL = stripe.String(a.successURL + "?session_id={CHECKOUT_SESSION_ID}")
+		params.CancelURL  = stripe.String(a.cancelURL)
+	}
+
 	sess, err := session.New(params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create checkout session: %w", err)

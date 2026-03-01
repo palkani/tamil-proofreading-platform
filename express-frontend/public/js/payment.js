@@ -24,12 +24,33 @@
       btn.textContent = 'Processing…';
     }
 
+    // For non-India users, use a direct Stripe Payment Link if configured —
+    // no backend call needed, just redirect straight to Stripe.
+    if ((countryCode || '').toUpperCase() !== 'IN') {
+      var directLink =
+        planCode === 'PRO_MONTHLY' ? (window.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '') :
+        planCode === 'PRO_YEARLY'  ? (window.STRIPE_PAYMENT_LINK_PRO_YEARLY  || '') :
+        '';
+      if (directLink) {
+        window.location.href = directLink;
+        return;
+      }
+    }
+
     try {
+      // Use embedded checkout when Stripe.js + publishable key are available and user is not in India
+      var useEmbedded = (countryCode || '').toUpperCase() !== 'IN' &&
+                        window.STRIPE_PK && typeof Stripe !== 'undefined';
+
       var res = await fetch('/api/v1/billing/checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ plan_code: planCode, country_code: countryCode })
+        body: JSON.stringify({
+          plan_code: planCode,
+          country_code: countryCode,
+          embedded_mode: !!useEmbedded
+        })
       });
 
       var data = await res.json();
@@ -39,16 +60,17 @@
         throw new Error(msg);
       }
 
-      if (data.checkout_url) {
-        // Stripe — redirect to hosted checkout
+      if (data.client_secret && useEmbedded) {
+        // Stripe Embedded Checkout — render inside page modal
+        if (btn) { btn.disabled = false; btn.textContent = origText; }
+        openStripeEmbeddedCheckout(data.client_secret);
+      } else if (data.checkout_url) {
+        // Stripe redirect to hosted checkout page
         window.location.href = data.checkout_url;
       } else if (data.razorpay_order_id) {
-        // Razorpay — open modal (restores button if user closes modal)
+        // Razorpay — open inline modal
         openRazorpayModal(data, function () {
-          if (btn) {
-            btn.disabled = false;
-            btn.textContent = origText;
-          }
+          if (btn) { btn.disabled = false; btn.textContent = origText; }
         });
       } else {
         throw new Error('Unknown checkout response. Please contact support.');
@@ -133,6 +155,67 @@
       console.error('[payment.js] Razorpay open error:', err);
       alert('Failed to open payment modal. Please try again.');
       if (onDismiss) onDismiss();
+    }
+  }
+
+  /**
+   * Opens the Stripe Embedded Checkout in the on-page modal.
+   * Requires Stripe.js loaded and window.STRIPE_PK set.
+   */
+  var _stripeCheckoutInstance = null;
+
+  async function openStripeEmbeddedCheckout(clientSecret) {
+    var modal     = document.getElementById('stripe-checkout-modal');
+    var container = document.getElementById('stripe-checkout-container');
+    var loading   = document.getElementById('stripe-checkout-loading');
+    var errorEl   = document.getElementById('stripe-checkout-error');
+    var closeBtn  = document.getElementById('stripe-checkout-close');
+    var backdrop  = document.getElementById('stripe-checkout-backdrop');
+
+    if (!modal || !container) {
+      console.error('[payment.js] Stripe checkout modal elements not found');
+      return;
+    }
+
+    // Reset state
+    if (_stripeCheckoutInstance) {
+      try { _stripeCheckoutInstance.destroy(); } catch (_e) {}
+      _stripeCheckoutInstance = null;
+    }
+    container.innerHTML = '';
+    loading.classList.remove('hidden');
+    errorEl.classList.add('hidden');
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+
+    function closeModal() {
+      modal.classList.add('hidden');
+      modal.style.display = '';
+      if (_stripeCheckoutInstance) {
+        try { _stripeCheckoutInstance.destroy(); } catch (_e) {}
+        _stripeCheckoutInstance = null;
+      }
+      container.innerHTML = '';
+    }
+
+    closeBtn && closeBtn.addEventListener('click', closeModal, { once: true });
+    backdrop && backdrop.addEventListener('click', closeModal, { once: true });
+    document.addEventListener('keydown', function escHandler(e) {
+      if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', escHandler); }
+    });
+
+    try {
+      var stripe   = Stripe(window.STRIPE_PK);
+      var checkout = await stripe.initEmbeddedCheckout({
+        fetchClientSecret: function () { return Promise.resolve(clientSecret); }
+      });
+      _stripeCheckoutInstance = checkout;
+      loading.classList.add('hidden');
+      checkout.mount('#stripe-checkout-container');
+    } catch (err) {
+      console.error('[payment.js] Stripe embedded checkout error:', err);
+      loading.classList.add('hidden');
+      errorEl.classList.remove('hidden');
     }
   }
 })();

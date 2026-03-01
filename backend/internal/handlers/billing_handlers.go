@@ -60,10 +60,28 @@ func (h *BillingHandlers) CreateCheckoutSession(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	// Flatten the response so the frontend can read fields at the top level
+	// (e.g. data.checkout_url, data.client_secret, data.razorpay_order_id)
+	respMap := gin.H{
 		"success":  true,
-		"checkout": response,
-	})
+		"provider": response.Provider,
+		"quote":    response.Quote,
+	}
+	if response.CheckoutURL != "" {
+		respMap["checkout_url"] = response.CheckoutURL
+	}
+	if response.ClientSecret != "" {
+		respMap["client_secret"] = response.ClientSecret
+	}
+	if response.RazorpayPayload != nil {
+		p := response.RazorpayPayload
+		respMap["razorpay_order_id"] = p.OrderID
+		respMap["razorpay_key_id"]   = p.KeyID
+		respMap["amount"]            = p.Amount
+		respMap["currency"]          = p.Currency
+		respMap["plan_name"]         = p.Description
+	}
+	c.JSON(http.StatusOK, respMap)
 }
 
 // GetBillingStatus returns the user's current billing status
