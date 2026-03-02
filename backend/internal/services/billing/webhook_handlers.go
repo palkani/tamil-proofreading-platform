@@ -88,15 +88,34 @@ func (s *WebhookService) handleStripeCheckoutCompleted(event *stripe.Event) erro
 	if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
 		return err
 	}
-	
+
 	// Only handle subscription checkouts
 	if session.Mode != stripe.CheckoutSessionModeSubscription {
 		return nil
 	}
-	
+
 	log.Printf("[WEBHOOK] Checkout completed: session=%s customer=%s subscription=%s",
 		session.ID, session.Customer.ID, session.Subscription.ID)
-	
+
+	// Activate Pro immediately on checkout completion using user_id from session metadata.
+	// This is the fastest path — invoice.payment_succeeded also activates Pro as a backup.
+	userIDStr, ok := session.Metadata["user_id"]
+	if !ok {
+		log.Printf("[WEBHOOK] Warning: checkout.session.completed missing user_id metadata, session=%s", session.ID)
+		return nil
+	}
+	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[WEBHOOK] Warning: invalid user_id in checkout metadata: %s", userIDStr)
+		return nil
+	}
+
+	if err := s.billingService.UpdateUserPremiumStatus(uint(userID), true); err != nil {
+		log.Printf("[WEBHOOK] Warning: failed to activate Pro for user %d: %v", userID, err)
+	} else {
+		log.Printf("[WEBHOOK] Pro activated for user %d via checkout.session.completed", userID)
+	}
+
 	return nil
 }
 
@@ -149,10 +168,17 @@ func (s *WebhookService) handleStripeSubscriptionCreated(event *stripe.Event) er
 	if err := s.billingService.LockBillingCountry(uint(userID), countryCode); err != nil {
 		log.Printf("[WEBHOOK] Warning: failed to lock billing country: %v", err)
 	}
-	
+
+	// Activate Pro if subscription is active (no trial — payment required upfront)
+	if sub.Status == models.BillingSubStatusActive {
+		if err := s.billingService.UpdateUserPremiumStatus(uint(userID), true); err != nil {
+			log.Printf("[WEBHOOK] Warning: failed to activate Pro on subscription create: %v", err)
+		}
+	}
+
 	log.Printf("[WEBHOOK] Stripe subscription created: user=%d sub=%s status=%s",
 		userID, stripeSub.ID, stripeSub.Status)
-	
+
 	return nil
 }
 

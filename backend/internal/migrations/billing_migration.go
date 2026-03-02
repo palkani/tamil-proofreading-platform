@@ -154,7 +154,7 @@ func seedBillingData(db *gorm.DB) {
 			IndiaMultiplier: 0.75, // 25% discount for India
 			BillingInterval: "month",
 			Active:          true,
-			TrialDays:       7,
+			TrialDays:       0,
 			Features:        `["unlimited_proofreading", "ai_suggestions", "export_pdf", "priority_support"]`,
 		}
 		if err := db.Create(plan).Error; err != nil {
@@ -176,7 +176,7 @@ func seedBillingData(db *gorm.DB) {
 			IndiaMultiplier: 0.75,
 			BillingInterval: "year",
 			Active:          true,
-			TrialDays:       7,
+			TrialDays:       0,
 			Features:        `["unlimited_proofreading", "ai_suggestions", "export_pdf", "priority_support", "early_access"]`,
 		}
 		if err := db.Create(plan).Error; err != nil {
@@ -184,6 +184,13 @@ func seedBillingData(db *gorm.DB) {
 		} else {
 			log.Println("[MIGRATIONS] Seeded PRO_YEARLY plan")
 		}
+	}
+
+	// Disable trial for existing plans (no 7-day trial on payment)
+	if err := db.Model(&models.Plan{}).Where("code IN ?", []string{"PRO_MONTHLY", "PRO_YEARLY"}).Update("trial_days", 0).Error; err != nil {
+		log.Printf("[MIGRATIONS] Warning: Failed to update plan trial_days: %v", err)
+	} else {
+		log.Println("[MIGRATIONS] Set trial_days=0 for PRO_MONTHLY and PRO_YEARLY")
 	}
 
 	// Seed default feature flag

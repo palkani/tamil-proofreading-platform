@@ -122,11 +122,6 @@ func (a *StripeAdapter) CreateCheckoutSession(user *models.User, quote *models.P
 		},
 	}
 	
-	// Add trial if configured
-	if plan.TrialDays > 0 {
-		params.SubscriptionData.TrialPeriodDays = stripe.Int64(int64(plan.TrialDays))
-	}
-
 	// Embedded checkout: return client_secret; standard: redirect via URL
 	if embedded {
 		params.UIMode    = stripe.String("embedded")
