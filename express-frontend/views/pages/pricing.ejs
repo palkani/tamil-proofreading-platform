@@ -47,13 +47,6 @@
       <% } %>
     </div>
 
-    <% if (typeof pricingFromCache !== 'undefined' && pricingFromCache) { %>
-    <div class="text-center mb-6">
-      <p class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 inline-block">
-        Showing estimated prices. <a href="/pricing" class="font-medium underline">Refresh</a> for latest, or <a href="/contact" class="font-medium underline">contact us</a>.
-      </p>
-    </div>
-    <% } %>
 
     <!-- Plan cards - Clean layout highlighting ProofTamil features -->
     <div class="grid md:grid-cols-2 gap-8 items-stretch max-w-4xl mx-auto">
@@ -71,28 +64,28 @@
             <span class="text-4xl font-bold text-gray-900"><%= countryCode === 'IN' ? '₹' : '$' %>0</span>
             <span class="text-gray-500 mb-1">/ month</span>
           </div>
-          <p class="mt-2 text-sm text-gray-500">For a great start to better Tamil writing.</p>
+          <p class="mt-2 text-sm text-gray-500">Try ProofTamil — no credit card needed.</p>
         </div>
         <ul class="space-y-3 text-sm text-gray-600 flex-1 mb-8">
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Up to 200 words per input
+            Proofread up to 200 Tamil words at a time
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Limited 30 AI suggestions a day (10 free + 20 after signing in)
+            30 AI checks per day after signing in
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Fix basic grammar errors
+            Spot basic இலக்கணப் பிழைகள் (grammar mistakes)
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            English to Tamil typing support
+            Type Tamil using English letters (Tanglish)
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Tamil transliteration &amp; autocomplete
+            Smart Tamil word suggestions as you type
           </li>
         </ul>
         <a href="<%= user && user.email ? '/' : '/register' %>" class="block w-full text-center px-5 py-3.5 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-800 transition">
@@ -120,52 +113,48 @@
             <% } %>
             <span class="text-gray-500 mb-1">/ month</span>
           </div>
-          <p class="mt-2 text-sm text-gray-500">For professionals and creators who demand perfection.</p>
+          <p class="mt-2 text-sm text-gray-500">For Tamil writers, bloggers and content creators.</p>
         </div>
         <ul class="space-y-3 text-sm text-gray-600 flex-1 mb-8">
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Write without word limits
+            Proofread entire articles — no word cap, ever
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Smart Transliteration (Tanglish)
+            Unlimited AI checks — no daily cap
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Tamil Voice Typing (Unlimited)
+            Deep இலக்கணம், நடை &amp; எழுத்துப்பிழை fixes
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Tamil Handwriting to Text (OCR)
+            AI rewrites weak sentences in natural Tamil
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Document import (.docx, .txt, .pdf)
+            Speak Tamil aloud — AI types it for you
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Document export (TXT, DOCX, PDF)
+            Scan handwritten Tamil &amp; digitise it (OCR)
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Advanced grammar, style, and clarity suggestions
+            Import .docx, .txt, .pdf — edit in Tamil
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Context-aware spelling corrections
+            Export finished work as TXT, DOCX or PDF
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Full sentence rewrite suggestions
+            Tone switch — formal, conversational or literary
           </li>
           <li class="flex items-start gap-2">
             <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Tone &amp; style suggestions (Formal, Casual, etc.)
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Save and sync all your documents
+            All drafts saved &amp; synced across your devices
           </li>
         </ul>
         <button
