@@ -22,6 +22,93 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+// seedBillingDataIfNeeded seeds plans and FX rates when RUN_MIGRATIONS=false.
+// It is idempotent — it only inserts rows that don't yet exist.
+func seedBillingDataIfNeeded(db *gorm.DB) {
+	// Seed PRO_MONTHLY plan
+	var count int64
+	db.Model(&models.Plan{}).Where("code = ?", "PRO_MONTHLY").Count(&count)
+	if count == 0 {
+		plan := models.Plan{
+			Code:            "PRO_MONTHLY",
+			Name:            "ProofTamil Pro (Monthly)",
+			Description:     "Unlimited proofreading with AI-powered suggestions",
+			BaseCurrency:    "USD",
+			BasePriceUSD:    1200,
+			IndiaMultiplier: 0.75,
+			BillingInterval: "month",
+			Active:          true,
+			TrialDays:       0,
+			Features:        `["unlimited_proofreading","ai_suggestions","export_pdf","priority_support"]`,
+		}
+		if err := db.Create(&plan).Error; err != nil {
+			log.Printf("[SEED] Warning: Failed to seed PRO_MONTHLY: %v", err)
+		} else {
+			log.Println("[SEED] Seeded PRO_MONTHLY plan")
+		}
+	}
+
+	// Seed PRO_YEARLY plan
+	db.Model(&models.Plan{}).Where("code = ?", "PRO_YEARLY").Count(&count)
+	if count == 0 {
+		plan := models.Plan{
+			Code:            "PRO_YEARLY",
+			Name:            "ProofTamil Pro (Yearly)",
+			Description:     "Unlimited proofreading — save 20%",
+			BaseCurrency:    "USD",
+			BasePriceUSD:    11520,
+			IndiaMultiplier: 0.75,
+			BillingInterval: "year",
+			Active:          true,
+			TrialDays:       0,
+			Features:        `["unlimited_proofreading","ai_suggestions","export_pdf","priority_support","early_access"]`,
+		}
+		if err := db.Create(&plan).Error; err != nil {
+			log.Printf("[SEED] Warning: Failed to seed PRO_YEARLY: %v", err)
+		} else {
+			log.Println("[SEED] Seeded PRO_YEARLY plan")
+		}
+	}
+
+	// Ensure trial_days=0 for any existing plans
+	db.Model(&models.Plan{}).Where("code IN ?", []string{"PRO_MONTHLY", "PRO_YEARLY"}).Update("trial_days", 0)
+
+	// Seed premium_enabled feature flag
+	db.Model(&models.FeatureFlag{}).Where("key = ?", "premium_enabled").Count(&count)
+	if count == 0 {
+		flag := models.FeatureFlag{
+			Key:            "premium_enabled",
+			Enabled:        true,
+			Description:    "Global toggle for premium features",
+			UpdatedByAdmin: 1,
+			Reason:         "Initial setup",
+		}
+		if err := db.Create(&flag).Error; err != nil {
+			log.Printf("[SEED] Warning: Failed to seed premium_enabled flag: %v", err)
+		} else {
+			log.Println("[SEED] Seeded premium_enabled feature flag")
+		}
+	}
+
+	// Seed today's USD/INR FX rate if missing
+	today := time.Now().Truncate(24 * time.Hour)
+	db.Model(&models.FXRate{}).Where("base_currency = ? AND quote_currency = ? AND as_of_date = ?", "USD", "INR", today).Count(&count)
+	if count == 0 {
+		fxRate := models.FXRate{
+			BaseCurrency:  "USD",
+			QuoteCurrency: "INR",
+			Rate:          84.0,
+			AsOfDate:      today,
+			Source:        "seed",
+		}
+		if err := db.Create(&fxRate).Error; err != nil {
+			log.Printf("[SEED] Warning: Failed to seed USD/INR FX rate: %v", err)
+		} else {
+			log.Println("[SEED] Seeded USD/INR FX rate (84.0)")
+		}
+	}
+}
+
 // initBillingHandlers initializes all billing-related services and handlers
 func initBillingHandlers(db *gorm.DB, cfg *config.Config) *handlers.BillingHandlers {
 	// Get billing configuration from environment
@@ -198,6 +285,10 @@ func main() {
 	
 	// Initialize billing services
 	billingHandlers := initBillingHandlers(db, cfg)
+
+	// Ensure billing seed data exists even when RUN_MIGRATIONS=false.
+	// seedBillingDataIfNeeded is idempotent: it only inserts missing rows.
+	go seedBillingDataIfNeeded(db)
 
 	// Initialize Gin router
 	r := gin.New()

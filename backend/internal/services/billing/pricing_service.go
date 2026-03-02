@@ -18,10 +18,12 @@ import (
 const (
 	// India country code
 	IndiaCountryCode = "IN"
-	// Default FX rate validity (use rate from last 24 hours)
-	FXRateMaxAgeDays = 1
+	// Default FX rate validity — use rate from last 7 days (fallback auto-seeds if expired)
+	FXRateMaxAgeDays = 7
 	// Quote validity duration
 	QuoteValidityMinutes = 30
+	// Fallback USD/INR rate used when DB has no recent rate
+	fallbackINRRate = 84.0
 )
 
 var (
@@ -117,10 +119,16 @@ func (s *PricingService) CalculatePricing(planCode, countryCode string) (*models
 		quote.IsIndiaPrice = true
 		quote.DiscountPercent = int((1 - plan.IndiaMultiplier) * 100)
 		
-		// Convert to INR
+		// Convert to INR — fall back to hardcoded rate if DB has no recent entry
 		fxRate, err := s.GetLatestFXRate("INR")
 		if err != nil {
-			return nil, fmt.Errorf("failed to get INR FX rate: %w", err)
+			if errors.Is(err, ErrFXRateNotFound) || errors.Is(err, ErrFXRateExpired) {
+				log.Printf("[PRICING] No recent INR FX rate in DB, seeding fallback %.2f", fallbackINRRate)
+				_ = s.SaveFXRate("USD", "INR", fallbackINRRate, "fallback")
+				fxRate = &models.FXRate{Rate: fallbackINRRate, AsOfDate: time.Now().Truncate(24 * time.Hour)}
+			} else {
+				return nil, fmt.Errorf("failed to get INR FX rate: %w", err)
+			}
 		}
 		
 		// Convert: indiaUSDCents / 100 * fxRate * 100 = indiaUSDCents * fxRate
