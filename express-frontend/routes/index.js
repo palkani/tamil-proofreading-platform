@@ -682,14 +682,45 @@ router.get('/pricing', async (req, res) => {
     'US'
   ).toUpperCase().slice(0, 2);
 
+  // Normalize pricing from API response and add display_price
+  const normalizePricing = (data) => {
+    const p = data?.pricing || data;
+    if (!p || p.final_price_cents == null) return null;
+    const cents = p.final_price_cents;
+    const currency = p.currency || 'USD';
+    const displayPrice = currency === 'INR'
+      ? String(Math.round(cents / 100))
+      : (cents / 100).toFixed(2);
+    return { ...p, display_price: displayPrice, currency };
+  };
+
+  // Fallback pricing when API fails (based on plan defaults)
+  const fallbackPricing = (countryCode) => {
+    const isIndia = countryCode === 'IN';
+    return {
+      monthly: isIndia
+        ? { display_price: '499', currency: 'INR' }
+        : { display_price: '12.00', currency: 'USD' },
+      yearly: isIndia
+        ? { display_price: '4999', currency: 'INR' }
+        : { display_price: '115.20', currency: 'USD' }
+    };
+  };
+
   try {
     const backendUrl = (process.env.BACKEND_URL_PRIMARY || process.env.BACKEND_URL || 'http://localhost:8080').replace(/\/$/, '');
     const [monthlyRes, yearlyRes] = await Promise.all([
       axiosWithPool.get(`${backendUrl}/api/v1/billing/pricing?plan_code=PRO_MONTHLY&country_code=${countryCode}`, { validateStatus: () => true }),
       axiosWithPool.get(`${backendUrl}/api/v1/billing/pricing?plan_code=PRO_YEARLY&country_code=${countryCode}`, { validateStatus: () => true })
     ]);
-    const monthly = (monthlyRes.status === 200) ? monthlyRes.data : null;
-    const yearly = (yearlyRes.status === 200) ? yearlyRes.data : null;
+    let monthly = normalizePricing(monthlyRes.status === 200 ? monthlyRes.data : null);
+    let yearly = normalizePricing(yearlyRes.status === 200 ? yearlyRes.data : null);
+    const apiFailed = !monthly && !yearly;
+    if (apiFailed) {
+      const fallback = fallbackPricing(countryCode);
+      monthly = fallback.monthly;
+      yearly = fallback.yearly;
+    }
     res.render('pages/pricing', {
       title: seo.title,
       seo,
@@ -702,23 +733,26 @@ router.get('/pricing', async (req, res) => {
       stripePublishableKey,
       monthly,
       yearly,
-      error: (!monthly && !yearly)
+      error: false,
+      pricingFromCache: apiFailed
     });
   } catch (_err) {
     console.error('[PRICING] Failed to fetch pricing:', _err.message);
+    const fallback = fallbackPricing(countryCode);
     res.render('pages/pricing', {
       title: seo.title,
       seo,
       user,
       paymentsEnabled: true,
-      monthly: null,
-      yearly: null,
+      monthly: fallback.monthly,
+      yearly: fallback.yearly,
       countryCode,
       razorpayKeyId: req.app.locals.razorpayKeyId,
       stripePaymentLinkMonthly,
       stripePaymentLinkYearly,
       stripePublishableKey,
-      error: true
+      error: false,
+      pricingFromCache: true
     });
   }
 });

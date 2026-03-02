@@ -24,23 +24,23 @@
       btn.textContent = 'Processing…';
     }
 
-    // For non-India users, use a direct Stripe Payment Link if configured —
-    // no backend call needed, just redirect straight to Stripe.
-    if ((countryCode || '').toUpperCase() !== 'IN') {
-      var directLink =
-        planCode === 'PRO_MONTHLY' ? (window.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '') :
-        planCode === 'PRO_YEARLY'  ? (window.STRIPE_PAYMENT_LINK_PRO_YEARLY  || '') :
-        '';
-      if (directLink) {
-        window.location.href = directLink;
-        return;
-      }
-    }
-
     try {
-      // Use embedded checkout when Stripe.js + publishable key are available and user is not in India
-      var useEmbedded = (countryCode || '').toUpperCase() !== 'IN' &&
-                        window.STRIPE_PK && typeof Stripe !== 'undefined';
+      var _isIndia = (countryCode || '').toUpperCase() === 'IN';
+
+      // Prefer embedded checkout when Stripe.js + publishable key are available (non-India).
+      // Only fall back to a Payment Link redirect when embedded checkout is not available.
+      var useEmbedded = !_isIndia && window.STRIPE_PK && typeof Stripe !== 'undefined';
+
+      if (!useEmbedded && !_isIndia) {
+        var directLink =
+          planCode === 'PRO_MONTHLY' ? (window.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '') :
+          planCode === 'PRO_YEARLY'  ? (window.STRIPE_PAYMENT_LINK_PRO_YEARLY  || '') :
+          '';
+        if (directLink) {
+          window.location.href = directLink;
+          return;
+        }
+      }
 
       var res = await fetch('/api/v1/billing/checkout-session', {
         method: 'POST',

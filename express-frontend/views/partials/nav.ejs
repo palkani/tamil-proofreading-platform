@@ -9,11 +9,6 @@
           </a>
         </div>
         <div class="hidden sm:flex sm:items-center sm:gap-1 sm:ml-4 md:ml-6 lg:ml-10 min-w-0 overflow-x-auto nav-links-scroll">
-          <% if (locals.paymentsEnabled) { %>
-            <a href="/pricing" class="nav-link <%= active === 'pricing' ? 'active' : '' %> inline-flex items-center gap-1 px-2 py-1.5 md:px-3 md:py-2 rounded-lg">
-              Pricing
-            </a>
-          <% } %>
           <% if (user && user.email) { %>
             <a href="/drafts" id="my-drafts-link" class="nav-link <%= active === 'drafts' ? 'active' : '' %> inline-flex items-center gap-1 px-2 py-1.5 md:px-3 md:py-2 rounded-lg">
               My Drafts
@@ -45,6 +40,11 @@
           <a href="/blog" class="nav-link-right inline-flex <%= active === 'blog' ? 'font-semibold' : '' %> items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap">
             Blog
           </a>
+          <% if (locals.paymentsEnabled) { %>
+          <a href="/pricing" class="nav-link-right inline-flex <%= active === 'pricing' ? 'font-semibold' : '' %> items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap">
+            Pricing
+          </a>
+          <% } %>
           <a href="/contact" class="nav-link-right inline-flex <%= active === 'contact' ? 'font-semibold' : '' %> items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap">
             Contact
           </a>
@@ -75,6 +75,11 @@
           <a href="/blog" class="nav-link-right inline-flex <%= active === 'blog' ? 'font-semibold' : '' %> items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap">
             Blog
           </a>
+          <% if (locals.paymentsEnabled) { %>
+          <a href="/pricing" class="nav-link-right inline-flex <%= active === 'pricing' ? 'font-semibold' : '' %> items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap">
+            Pricing
+          </a>
+          <% } %>
           <a href="/contact" class="nav-link-right inline-flex <%= active === 'contact' ? 'font-semibold' : '' %> items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap">
             Contact
           </a>

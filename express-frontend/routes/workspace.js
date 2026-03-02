@@ -27,6 +27,7 @@ router.get('/', (req, res) => {
     user: req.user || null,
     countryCode,
     razorpayKeyId: req.app.locals.razorpayKeyId || '',
+    stripePublishableKey: req.app.locals.stripePublishableKey || '',
   });
 });
 
