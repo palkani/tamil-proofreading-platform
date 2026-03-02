@@ -597,9 +597,18 @@ router.get('/dashboard', (req, res) => {
 // Account page - client-side auth only
 router.get('/account', (req, res) => {
   const seo = getSeoData('account');
-  res.render('pages/account', { 
+  res.render('pages/account', {
     title: seo.title,
     seo: seo,
+    user: req.user
+  });
+});
+
+// Subscription page - shows plan status or upgrade CTA
+router.get('/subscription', (req, res) => {
+  res.render('pages/subscription', {
+    title: 'Pro Access — ProofTamil',
+    seo: { title: 'Pro Access — ProofTamil', description: 'Manage your ProofTamil Pro access.' },
     user: req.user
   });
 });

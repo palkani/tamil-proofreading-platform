@@ -21,6 +21,11 @@
             <a href="/workspace" id="nav-workspace-link" class="nav-link <%= active === 'workspace' ? 'active' : '' %> inline-flex items-center gap-1 px-2 py-1.5 md:px-3 md:py-2 rounded-lg">
               Workspace
             </a>
+            <% if (locals.paymentsEnabled) { %>
+            <a href="/subscription" class="nav-link <%= active === 'subscription' ? 'active' : '' %> inline-flex items-center gap-1 px-2 py-1.5 md:px-3 md:py-2 rounded-lg">
+              Pro Access
+            </a>
+            <% } %>
             <% if (user.role === 'admin' || ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com'].includes(String(user.email || '').toLowerCase())) { %>
             <a href="/analytics" class="nav-link <%= active === 'analytics' ? 'active' : '' %> inline-flex items-center gap-1 px-2 py-1.5 md:px-3 md:py-2 rounded-lg">
               <span aria-hidden="true">📊</span> Analytics
