@@ -17,6 +17,12 @@
    * @param {string} countryCode  e.g. 'IN' | 'US'
    */
   window.startCheckout = async function startCheckout(planCode, countryCode) {
+    // Require login before attempting checkout — API returns 401 for unauthenticated users
+    if (!window.USER_LOGGED_IN && !window.USER_EMAIL) {
+      window.location.href = '/login?redirect=/pricing';
+      return;
+    }
+
     var btn = document.getElementById('checkout-btn-' + planCode);
     var origText = btn ? btn.textContent : '';
     if (btn) {
