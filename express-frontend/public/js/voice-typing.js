@@ -118,31 +118,83 @@
       return;
     }
 
-    // Restore saved cursor position before inserting
-    restoreRange(el);
+    console.log('[VoiceTyping] insertText called, text length:', text.length, 'editor id:', el.id);
 
-    // Try execCommand (works in Chrome contenteditable, undo-safe)
-    const ok = document.execCommand('insertText', false, text);
-    if (!ok) {
-      // DOM fallback
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount) {
-        const range = sel.getRangeAt(0);
-        range.deleteContents();
-        const node = document.createTextNode(text);
-        range.insertNode(node);
-        range.setStartAfter(node);
-        range.setEndAfter(node);
-        sel.removeAllRanges();
-        sel.addRange(range);
+    // ── Strategy 1: execCommand (undo-safe, respects cursor position) ────────
+    restoreRange(el);
+    let inserted = false;
+    try {
+      const ok = document.execCommand('insertText', false, text);
+      if (ok) {
+        console.log('[VoiceTyping] execCommand insertText succeeded');
+        inserted = true;
+      }
+    } catch (_) {}
+
+    // ── Strategy 2: DOM range insertion ──────────────────────────────────────
+    if (!inserted) {
+      try {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          const ancestor = range.commonAncestorContainer;
+          if (el === ancestor || el.contains(ancestor)) {
+            range.deleteContents();
+            const node = document.createTextNode(text);
+            range.insertNode(node);
+            range.setStartAfter(node);
+            range.setEndAfter(node);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            console.log('[VoiceTyping] DOM range insertion succeeded');
+            inserted = true;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // ── Strategy 3: WorkspaceController API (uses TamilEditor.insertTextAtCursor) ──
+    if (!inserted) {
+      try {
+        const wc = window.workspaceController;
+        if (wc && wc.editor && typeof wc.editor.insertTextAtCursor === 'function') {
+          el.focus();
+          // Place cursor at end so TamilEditor has something to work with
+          const sel = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          range.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          wc.editor.insertTextAtCursor(text);
+          console.log('[VoiceTyping] WorkspaceController.editor.insertTextAtCursor succeeded');
+          inserted = true;
+        }
+      } catch (_) {}
+    }
+
+    // ── Strategy 4: Direct append — guaranteed to work regardless of focus ──
+    if (!inserted) {
+      console.warn('[VoiceTyping] All cursor-aware methods failed — appending directly to editor');
+      try {
+        // Append to last paragraph if possible, else to editor root
+        let target = el;
+        const lastChild = el.lastChild;
+        if (lastChild && lastChild.nodeType === Node.ELEMENT_NODE &&
+            /^(P|DIV|SPAN|LI)$/.test(lastChild.nodeName)) {
+          target = lastChild;
+        }
+        target.appendChild(document.createTextNode(text));
+        inserted = true;
+      } catch (e) {
+        console.error('[VoiceTyping] Direct append failed:', e);
       }
     }
 
-    // Save updated range after insertion
-    saveRange();
-
-    // Fire input event so word-count / draft-save listeners update
-    el.dispatchEvent(new Event('input', { bubbles: true }));
+    if (inserted) {
+      saveRange();
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
   }
 
   // ── Interim banner ────────────────────────────────────────────────────────
@@ -228,6 +280,7 @@
         _interimFlushTimer = setTimeout(() => {
           _interimFlushTimer = null;
           if (_interimBuffer) {
+            console.log('[VoiceTyping] Timer flush: inserting interim buffer:', _interimBuffer.slice(0, 40));
             insertText(_interimBuffer + ' ');
             _interimBuffer = '';
             hideInterim();
