@@ -258,10 +258,12 @@
     };
 
     r.onresult = event => {
+      console.log('[VoiceTyping] onresult fired, resultIndex:', event.resultIndex, 'results.length:', event.results.length);
       let finalText = '';
       let interimText = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const t = event.results[i][0].transcript;
+        console.log('[VoiceTyping] result[' + i + '] isFinal:', event.results[i].isFinal, 'text:', t.slice(0, 30));
         if (event.results[i].isFinal) finalText += t;
         else interimText += t;
       }
@@ -290,6 +292,7 @@
     };
 
     r.onspeechend = () => {
+      console.log('[VoiceTyping] onspeechend fired, buffer:', _interimBuffer.slice(0, 30));
       // Insert the buffered interim text if the API never sent isFinal:true.
       // Also cancel the timer — we're flushing right now.
       clearTimeout(_interimFlushTimer); _interimFlushTimer = null;
