@@ -218,7 +218,7 @@
   async function runClientSideOcr(file, lang) {
     // Client-side Tesseract.js only supports images (not PDFs).
     if (isPdfFile(file)) {
-      throw new Error('PDF OCR is not available in offline mode. Please check your connection and try again, or convert the PDF page to a JPG/PNG image and upload that instead.');
+      throw new Error('PDF files are not supported for in-browser OCR. Please convert the PDF page to a JPG or PNG image and upload that instead.');
     }
     if (!isImageFile(file)) {
       throw new Error('Client-side OCR supports images only. Please upload JPG/PNG/TIFF/BMP/GIF.');
@@ -349,8 +349,18 @@
         try { return JSON.parse(raw); } catch { return { error: 'OCR failed', details: raw?.slice(0, 300) || 'Invalid response' }; }
       })();
       
-      // If server OCR is not configured on Vercel, fall back to client-side OCR (images only)
+      // If server OCR is not configured, fall back to client-side OCR (images only; PDFs not supported)
       if (shouldFallbackToClientOcr(response, data)) {
+        if (isPdfFile(selectedFile)) {
+          // Tesseract.js cannot process PDFs — show a clear, actionable message
+          loading.classList.add('hidden');
+          errorText.textContent = 'PDF text extraction requires the OCR server, which is not set up yet. ' +
+            'Please convert each PDF page to a JPG or PNG image and upload that instead. ' +
+            'You can take a screenshot, use Preview (Mac) → Export as PNG, or an online PDF-to-image converter.';
+          error.classList.remove('hidden');
+          processBtn.disabled = false;
+          return;
+        }
         try {
           const lang = (langSelect && langSelect.value) ? langSelect.value : 'eng+tam';
           const out = await runClientSideOcr(selectedFile, lang);
