@@ -36,6 +36,7 @@
   let _banner = null;       // interim text banner element
   let _savedRange = null;   // saved cursor range for contenteditable
   let _interimBuffer = '';  // last interim transcript (inserted on onspeechend if no final)
+  let _interimFlushTimer = null; // timer to flush interim buffer after silence (ta-IN onspeechend unreliable)
 
   // ── Editor helpers ────────────────────────────────────────────────────────
   function getTipTap() {
@@ -214,19 +215,31 @@
       }
       if (finalText) {
         _interimBuffer = '';
+        clearTimeout(_interimFlushTimer); _interimFlushTimer = null;
         insertText(finalText + ' ');
         hideInterim();
       } else if (interimText) {
         // Keep interim buffered — Tamil recognition often never marks isFinal.
-        // We insert on onspeechend so the text always lands in the editor.
+        // Flush via onspeechend OR via timer after 1.5 s of silence (ta-IN quirk:
+        // onspeechend is unreliable in Chrome continuous mode for Tamil).
         _interimBuffer = interimText;
         showInterim('🎤 ' + interimText);
+        clearTimeout(_interimFlushTimer);
+        _interimFlushTimer = setTimeout(() => {
+          _interimFlushTimer = null;
+          if (_interimBuffer) {
+            insertText(_interimBuffer + ' ');
+            _interimBuffer = '';
+            hideInterim();
+          }
+        }, 1500);
       }
     };
 
     r.onspeechend = () => {
       // Insert the buffered interim text if the API never sent isFinal:true.
-      // This is the most common failure mode for ta-IN continuous recognition.
+      // Also cancel the timer — we're flushing right now.
+      clearTimeout(_interimFlushTimer); _interimFlushTimer = null;
       if (_interimBuffer) {
         insertText(_interimBuffer + ' ');
         _interimBuffer = '';
@@ -294,6 +307,7 @@
   function stopListening() {
     isListening = false;
     _interimBuffer = '';
+    clearTimeout(_interimFlushTimer); _interimFlushTimer = null;
     setActive(false);
     hideInterim();
     if (_rec) {
