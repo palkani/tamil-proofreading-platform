@@ -94,22 +94,32 @@ func (s *BillingService) CreateCheckoutSession(userID uint, req CheckoutRequest)
 		Quote:    quote,
 	}
 	
-	if s.pricingService.IsIndiaUser(countryCode) {
+	if s.pricingService.IsIndiaUser(countryCode) && s.razorpayAdapter.IsConfigured() {
 		// Use Razorpay
 		order, err := s.razorpayAdapter.CreateOrder(&user, quote)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create razorpay order: %w", err)
 		}
-		
+
 		callbackURL := req.SuccessURL
 		if callbackURL == "" {
 			callbackURL = "https://prooftamil.com/billing/success"
 		}
-		
+
 		response.RazorpayPayload = s.razorpayAdapter.BuildCheckoutPayload(&user, quote, order, plan, callbackURL)
 	} else {
-		// Use Stripe
-		session, err := s.stripeAdapter.CreateCheckoutSession(&user, quote, plan, req.EmbeddedMode)
+		// Use Stripe (also the fallback for India when Razorpay is not configured)
+		// Stripe requires USD for recurring subscriptions, so recalculate quote in USD if needed
+		stripeQuote := quote
+		if quote.Currency != "USD" {
+			usdQuote, err := s.pricingService.CalculatePricing(req.PlanCode, "US")
+			if err == nil {
+				stripeQuote = usdQuote
+				response.Quote = usdQuote
+			}
+			log.Printf("[BILLING] Razorpay not configured — falling back to Stripe (USD) for India user %d", userID)
+		}
+		session, err := s.stripeAdapter.CreateCheckoutSession(&user, stripeQuote, plan, req.EmbeddedMode)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create stripe session: %w", err)
 		}
@@ -118,6 +128,7 @@ func (s *BillingService) CreateCheckoutSession(userID uint, req CheckoutRequest)
 		} else {
 			response.CheckoutURL = session.URL
 		}
+		response.Provider = string(models.PaymentProviderStripe)
 	}
 	
 	log.Printf("[BILLING] Created checkout for user %d: provider=%s plan=%s country=%s",

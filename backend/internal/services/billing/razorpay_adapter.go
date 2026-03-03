@@ -99,6 +99,11 @@ type RazorpayCustomer struct {
 	Notes   map[string]string `json:"notes,omitempty"`
 }
 
+// IsConfigured returns true when Razorpay credentials are set.
+func (a *RazorpayAdapter) IsConfigured() bool {
+	return a.keyID != "" && a.keySecret != ""
+}
+
 // NewRazorpayAdapter creates a new Razorpay adapter
 func NewRazorpayAdapter(db *gorm.DB, keyID, keySecret, webhookSecret string) *RazorpayAdapter {
 	return &RazorpayAdapter{
