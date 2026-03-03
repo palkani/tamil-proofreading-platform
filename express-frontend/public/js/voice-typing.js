@@ -35,6 +35,7 @@
   let _rec = null;          // current SpeechRecognition instance
   let _banner = null;       // interim text banner element
   let _savedRange = null;   // saved cursor range for contenteditable
+  let _interimBuffer = '';  // last interim transcript (inserted on onspeechend if no final)
 
   // ── Editor helpers ────────────────────────────────────────────────────────
   function getTipTap() {
@@ -212,14 +213,26 @@
         else interimText += t;
       }
       if (finalText) {
+        _interimBuffer = '';
         insertText(finalText + ' ');
         hideInterim();
       } else if (interimText) {
+        // Keep interim buffered — Tamil recognition often never marks isFinal.
+        // We insert on onspeechend so the text always lands in the editor.
+        _interimBuffer = interimText;
         showInterim('🎤 ' + interimText);
       }
     };
 
-    r.onspeechend = () => hideInterim();
+    r.onspeechend = () => {
+      // Insert the buffered interim text if the API never sent isFinal:true.
+      // This is the most common failure mode for ta-IN continuous recognition.
+      if (_interimBuffer) {
+        insertText(_interimBuffer + ' ');
+        _interimBuffer = '';
+      }
+      hideInterim();
+    };
 
     r.onerror = event => {
       console.warn('[VoiceTyping] Error:', event.error);
@@ -280,6 +293,7 @@
 
   function stopListening() {
     isListening = false;
+    _interimBuffer = '';
     setActive(false);
     hideInterim();
     if (_rec) {

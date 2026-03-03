@@ -2,13 +2,13 @@
   <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
     <div class="flex justify-between items-center min-h-[56px] sm:min-h-[72px] md:min-h-[88px] py-2 sm:py-3 md:py-4 gap-2 sm:gap-4">
       <!-- Logo & Main Nav -->
-      <div class="flex items-center min-w-0 flex-1 overflow-hidden">
+      <div class="flex items-center min-w-0 flex-1">
         <div class="flex-shrink-0 flex items-center nav-logo-wrap">
           <a href="/" class="nav-logo-link flex items-center rounded-none border-0 p-0 shadow-none" aria-label="ProofTamil Home">
             <img src="/images/tamil-logo.svg" alt="Proofதமிழ் - Tamil proofreading" class="nav-logo-img h-10 w-auto sm:h-14 md:h-16 lg:h-20 xl:h-24 block" style="min-height: 36px; max-height: 96px;">
           </a>
         </div>
-        <div class="hidden sm:flex sm:items-center sm:gap-1 sm:ml-4 md:ml-6 lg:ml-10 min-w-0 overflow-x-auto nav-links-scroll">
+        <div class="hidden sm:flex sm:items-center sm:gap-1 sm:ml-4 md:ml-6 lg:ml-10 min-w-0 flex-1 overflow-x-auto nav-links-scroll">
           <% if (user && user.email) { %>
             <a href="/drafts" id="my-drafts-link" class="nav-link <%= active === 'drafts' ? 'active' : '' %> inline-flex items-center gap-1 px-2 py-1.5 md:px-3 md:py-2 rounded-lg">
               My Drafts
