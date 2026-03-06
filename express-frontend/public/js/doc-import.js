@@ -31,16 +31,34 @@
   }
 
   function plainTextToHtml(text) {
-    return text
-      .split('\n')
-      .map(line => {
-        const safe = line
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
-        return safe.trim() ? `<p>${safe}</p>` : '<p><br></p>';
-      })
-      .join('');
+    // Treat adjacent non-empty lines as the same paragraph (join with space).
+    // Only a blank line signals an actual paragraph break.
+    // This prevents PDF/TXT hard line-breaks from creating dozens of short lines
+    // with empty space on the right side of the editor.
+    const paragraphs = [];
+    let current = [];
+
+    text.split('\n').forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed) {
+        current.push(trimmed);
+      } else {
+        if (current.length) {
+          paragraphs.push(current.join(' '));
+          current = [];
+        }
+      }
+    });
+    if (current.length) paragraphs.push(current.join(' '));
+    if (!paragraphs.length) return '<p><br></p>';
+
+    return paragraphs.map(p => {
+      const safe = p
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      return `<p>${safe}</p>`;
+    }).join('');
   }
 
   function insertHtmlIntoEditor(html) {
