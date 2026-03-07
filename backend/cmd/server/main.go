@@ -386,6 +386,7 @@ func main() {
 		{
 			// User profile
 			protected.GET("/me", h.GetCurrentUser)
+			protected.POST("/auth/change-password", h.ChangePassword)
 
 			// Submissions (draft list, get/update/delete) - submit is above with optional auth
 			protected.GET("/submissions", h.GetSubmissions)

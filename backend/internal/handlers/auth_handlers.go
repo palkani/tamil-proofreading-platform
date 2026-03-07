@@ -1014,3 +1014,70 @@ func (h *Handlers) ResetPassword(c *gin.Context) {
                 "message": "Password has been reset successfully.",
         })
 }
+
+// ChangePasswordRequest is the request body for changing a password while logged in
+type ChangePasswordRequest struct {
+        CurrentPassword string `json:"current_password" binding:"required"`
+        NewPassword     string `json:"new_password"     binding:"required"`
+}
+
+// ChangePassword allows an authenticated user to change their own password
+func (h *Handlers) ChangePassword(c *gin.Context) {
+        userID, err := middleware.GetUserFromContext(c)
+        if err != nil {
+                c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+                return
+        }
+
+        var req ChangePasswordRequest
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "current_password and new_password are required"})
+                return
+        }
+
+        user, err := h.authService.GetUserByID(userID)
+        if err != nil {
+                c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+                return
+        }
+
+        // OAuth-only accounts have no password hash — cannot use this endpoint
+        if user.PasswordHash == "" {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Your account uses social login and does not have a password. Use 'Forgot password' to set one."})
+                return
+        }
+
+        // Verify current password
+        if !h.authService.CheckPassword(req.CurrentPassword, user.PasswordHash) {
+                auditlog.Warn(c, "auth_change_password_wrong_current", nil)
+                c.JSON(http.StatusUnauthorized, gin.H{"error": "Current password is incorrect"})
+                return
+        }
+
+        // Validate new password strength
+        strength := auth.ValidatePasswordStrength(req.NewPassword)
+        if !strength.IsValid {
+                c.JSON(http.StatusBadRequest, gin.H{"error": strength.Errors[0]})
+                return
+        }
+
+        // Hash and save new password
+        newHash, err := h.authService.HashPassword(req.NewPassword)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process new password"})
+                return
+        }
+
+        user.PasswordHash = newHash
+        if err := h.authService.UpdateUser(user); err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
+                return
+        }
+
+        auditlog.Info(c, "auth_change_password_success", nil)
+
+        c.JSON(http.StatusOK, gin.H{
+                "success": true,
+                "message": "Password changed successfully.",
+        })
+}
