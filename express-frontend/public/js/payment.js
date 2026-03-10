@@ -17,6 +17,14 @@
    * @param {string} planCode   e.g. 'PRO_MONTHLY' | 'PRO_YEARLY'
    * @param {string} countryCode  e.g. 'IN' | 'US'
    */
+  /** Returns headers with Content-Type + Authorization (Bearer token from localStorage). */
+  function _authHeaders() {
+    var token = localStorage.getItem('access_token') || '';
+    var h = { 'Content-Type': 'application/json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    return h;
+  }
+
   window.startCheckout = async function startCheckout(planCode, countryCode) {
     // Require login before attempting checkout — API returns 401 for unauthenticated users
     if (!window.USER_LOGGED_IN && !window.USER_EMAIL) {
@@ -53,7 +61,7 @@
 
       var res = await fetch('/api/v1/billing/checkout-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: _authHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           plan_code: planCode,
@@ -135,7 +143,7 @@
         try {
           var vRes = await fetch('/api/v1/billing/verify-razorpay', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: _authHeaders(),
             credentials: 'include',
             body: JSON.stringify({
               razorpay_order_id: response.razorpay_order_id,
