@@ -3,6 +3,21 @@
 let registeredEmail = '';
 let resendTimeout = null;
 
+// Resolve the post-auth redirect target once at load time.
+// Mirrors the same safe-redirect logic used in login.js.
+var _registerRedirectTarget = (function () {
+  var params = new URLSearchParams(window.location.search);
+  var raw = params.get('redirect') || '/drafts';
+  if (!raw || raw.startsWith('//') || !raw.startsWith('/')) return '/drafts';
+  try {
+    var u = new URL(raw, window.location.origin);
+    u.searchParams.delete('access_token');
+    return u.pathname + (u.search ? u.search : '');
+  } catch (_e) {
+    return '/drafts';
+  }
+})();
+
 // Password strength validation
 function validatePasswordStrength(password) {
   const result = {
@@ -138,19 +153,18 @@ document.getElementById('register-form')?.addEventListener('submit', async (e) =
     // Registration successful - user is immediately logged in
     // Use centralized auth utility if available
     if (window.authUtils && window.authUtils.handleAuthSuccess) {
-      window.authUtils.handleAuthSuccess(data.access_token, '/drafts');
+      window.authUtils.handleAuthSuccess(data.access_token, _registerRedirectTarget);
     } else {
       // Fallback if auth-utils not loaded
       localStorage.removeItem('access_token');
       document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-      
+
       if (data.access_token) {
         localStorage.setItem('access_token', data.access_token);
         document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
       }
-      
-      // Redirect to drafts page
-      window.location.href = '/drafts';
+
+      window.location.href = _registerRedirectTarget;
     }
   } catch (error) {
     const errorMessage = error?.message || 'An unexpected error occurred';
@@ -246,10 +260,9 @@ document.getElementById('verification-form')?.addEventListener('submit', async (
     
     successDiv.textContent = 'Email verified successfully! Redirecting...';
     successDiv.classList.remove('hidden');
-    
-    // Redirect to drafts after a brief delay
+
     setTimeout(() => {
-      window.location.href = '/drafts';
+      window.location.href = _registerRedirectTarget;
     }, 1500);
   } catch (error) {
     errorDiv.textContent = error.message;

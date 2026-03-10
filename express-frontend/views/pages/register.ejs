@@ -157,8 +157,8 @@
           </form>
 
           <div class="text-sm text-gray-700">
-            Already have an account? 
-            <a href="/login" class="font-semibold text-gray-900 underline decoration-gray-400 underline-offset-4">Sign in</a>
+            Already have an account?
+            <a href="/login?redirect=<%= encodeURIComponent(redirectTo || '/drafts') %>" class="font-semibold text-gray-900 underline decoration-gray-400 underline-offset-4">Sign in</a>
             <br/>
             <a href="/" class="text-gray-500 hover:text-gray-900 mt-2 inline-block">← Back to home</a>
           </div>

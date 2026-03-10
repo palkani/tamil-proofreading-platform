@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -56,6 +57,7 @@ func (h *BillingHandlers) CreateCheckoutSession(c *gin.Context) {
 
 	response, err := h.billingService.CreateCheckoutSession(userID, req)
 	if err != nil {
+		log.Printf("[BILLING] CreateCheckoutSession failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create checkout session", "details": err.Error()})
 		return
 	}

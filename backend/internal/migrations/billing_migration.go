@@ -148,16 +148,17 @@ func seedBillingData(db *gorm.DB) {
 	db.Model(&models.Plan{}).Where("code = ?", "PRO_MONTHLY").Count(&count)
 	if count == 0 {
 		plan := &models.Plan{
-			Code:            "PRO_MONTHLY",
-			Name:            "ProofTamil Pro (Monthly)",
-			Description:     "Unlimited proofreading with AI-powered suggestions",
-			BaseCurrency:    "USD",
-			BasePriceUSD:    1200, // $12.00
-			IndiaMultiplier: 0.75, // 25% discount for India
-			BillingInterval: "month",
-			Active:          true,
-			TrialDays:       0,
-			Features:        `["unlimited_proofreading", "ai_suggestions", "export_pdf", "priority_support"]`,
+			Code:                    "PRO_MONTHLY",
+			Name:                    "ProofTamil Pro (Monthly)",
+			Description:             "Unlimited proofreading with AI-powered suggestions",
+			BaseCurrency:            "USD",
+			BasePriceUSD:            1200,  // $12.00
+			IndiaMultiplier:         0.75,  // 25% discount for India
+			IndiaFixedPriceINRCents: 59900, // ₹599.00 fixed India price
+			BillingInterval:         "month",
+			Active:                  true,
+			TrialDays:               0,
+			Features:                `["unlimited_proofreading", "ai_suggestions", "export_pdf", "priority_support"]`,
 		}
 		if err := db.Create(plan).Error; err != nil {
 			log.Printf("[MIGRATIONS] Warning: Failed to seed PRO_MONTHLY plan: %v", err)
@@ -170,21 +171,39 @@ func seedBillingData(db *gorm.DB) {
 	db.Model(&models.Plan{}).Where("code = ?", "PRO_YEARLY").Count(&count)
 	if count == 0 {
 		plan := &models.Plan{
-			Code:            "PRO_YEARLY",
-			Name:            "ProofTamil Pro (Yearly)",
-			Description:     "Unlimited proofreading with AI-powered suggestions - save 20%",
-			BaseCurrency:    "USD",
-			BasePriceUSD:    11520, // $115.20 (12 * 12 * 0.8)
-			IndiaMultiplier: 0.75,
-			BillingInterval: "year",
-			Active:          true,
-			TrialDays:       0,
-			Features:        `["unlimited_proofreading", "ai_suggestions", "export_pdf", "priority_support", "early_access"]`,
+			Code:                    "PRO_YEARLY",
+			Name:                    "ProofTamil Pro (Yearly)",
+			Description:             "Unlimited proofreading with AI-powered suggestions - save 20%",
+			BaseCurrency:            "USD",
+			BasePriceUSD:            11520,  // $115.20 (12 * 12 * 0.8)
+			IndiaMultiplier:         0.75,
+			IndiaFixedPriceINRCents: 574900, // ₹5749.00 fixed India price (~20% off ₹599×12)
+			BillingInterval:         "year",
+			Active:                  true,
+			TrialDays:               0,
+			Features:                `["unlimited_proofreading", "ai_suggestions", "export_pdf", "priority_support", "early_access"]`,
 		}
 		if err := db.Create(plan).Error; err != nil {
 			log.Printf("[MIGRATIONS] Warning: Failed to seed PRO_YEARLY plan: %v", err)
 		} else {
 			log.Println("[MIGRATIONS] Seeded PRO_YEARLY plan")
+		}
+	}
+
+	// Update fixed India prices on existing plans (idempotent — runs every deploy)
+	type fixedPriceUpdate struct {
+		code  string
+		price int
+	}
+	for _, u := range []fixedPriceUpdate{
+		{"PRO_MONTHLY", 59900},
+		{"PRO_YEARLY", 574900},
+	} {
+		if err := db.Model(&models.Plan{}).Where("code = ?", u.code).
+			Update("india_fixed_price_inr_cents", u.price).Error; err != nil {
+			log.Printf("[MIGRATIONS] Warning: Failed to set india_fixed_price_inr_cents for %s: %v", u.code, err)
+		} else {
+			log.Printf("[MIGRATIONS] Set india_fixed_price_inr_cents=%d for %s", u.price, u.code)
 		}
 	}
 

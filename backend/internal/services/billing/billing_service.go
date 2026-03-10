@@ -107,9 +107,11 @@ func (s *BillingService) CreateCheckoutSession(userID uint, req CheckoutRequest)
 		log.Printf("[BILLING] Dodo checkout created: user=%d plan=%s country=%s sub=%s",
 			userID, req.PlanCode, countryCode, dodoResp.SubscriptionID)
 	} else if s.pricingService.IsIndiaUser(countryCode) && s.razorpayAdapter.IsConfigured() {
-		// --- Razorpay fallback for India ---
+		// --- Razorpay for India ---
+		log.Printf("[BILLING] Creating Razorpay order for user %d amount=%d %s", userID, quote.FinalPriceCents, quote.Currency)
 		order, err := s.razorpayAdapter.CreateOrder(&user, quote)
 		if err != nil {
+			log.Printf("[BILLING] Razorpay CreateOrder failed: %v", err)
 			return nil, fmt.Errorf("failed to create razorpay order: %w", err)
 		}
 

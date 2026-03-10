@@ -225,6 +225,27 @@
 <script src="https://js.stripe.com/v3/"></script>
 <% } %>
 <script src="/js/payment.js"></script>
+<script>
+  // Auto-trigger checkout when the user arrives after login/signup from a "Go Pro" click.
+  // payment.js redirects unauthenticated users to /login?redirect=/pricing?auto_checkout=PLAN_CODE
+  // After auth, the user lands here with ?auto_checkout=PRO_MONTHLY (or PRO_YEARLY).
+  (function () {
+    var params = new URLSearchParams(window.location.search);
+    var planCode = params.get('auto_checkout');
+    if (!planCode || !window.USER_LOGGED_IN) return;
+    // Clean the URL so a page refresh doesn't re-trigger checkout
+    var cleanUrl = window.location.pathname;
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', cleanUrl);
+    }
+    // Slight delay to let payment.js fully initialise before calling startCheckout
+    setTimeout(function () {
+      if (typeof startCheckout === 'function') {
+        startCheckout(planCode, '<%= countryCode %>');
+      }
+    }, 200);
+  })();
+</script>
 <% } %>
 
 <%- include('../partials/footer') %>

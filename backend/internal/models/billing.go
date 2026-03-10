@@ -59,8 +59,9 @@ type Plan struct {
 	Name            string         `gorm:"size:100;not null" json:"name"`
 	Description     string         `gorm:"type:text" json:"description,omitempty"`
 	BaseCurrency    string         `gorm:"size:3;not null;default:'USD'" json:"base_currency"`
-	BasePriceUSD    int            `gorm:"not null" json:"base_price_usd_cents"` // Price in cents (e.g., 1200 = $12.00)
-	IndiaMultiplier float64        `gorm:"type:decimal(5,4);not null;default:0.75" json:"india_multiplier"`
+	BasePriceUSD             int     `gorm:"not null" json:"base_price_usd_cents"`                       // Price in cents (e.g., 1200 = $12.00)
+	IndiaMultiplier          float64 `gorm:"type:decimal(5,4);not null;default:0.75" json:"india_multiplier"`
+	IndiaFixedPriceINRCents  int     `gorm:"default:0" json:"india_fixed_price_inr_cents,omitempty"`     // When > 0, overrides USD×multiplier×FX calc (e.g., 59900 = ₹599.00)
 	BillingInterval string         `gorm:"size:20;not null;default:'month'" json:"billing_interval"` // month, year
 	Active          bool           `gorm:"not null;default:true" json:"active"`
 	TrialDays       int            `gorm:"default:0" json:"trial_days"`

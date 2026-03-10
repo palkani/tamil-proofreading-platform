@@ -113,31 +113,40 @@ func (s *PricingService) CalculatePricing(planCode, countryCode string) (*models
 	}
 	
 	if s.IsIndiaUser(countryCode) {
-		// Apply India discount
-		indiaUSDCents := int(math.Round(float64(plan.BasePriceUSD) * plan.IndiaMultiplier))
-		quote.FinalPriceUSDCents = indiaUSDCents
 		quote.IsIndiaPrice = true
-		quote.DiscountPercent = int((1 - plan.IndiaMultiplier) * 100)
-		
-		// Convert to INR — fall back to hardcoded rate if DB has no recent entry
-		fxRate, err := s.GetLatestFXRate("INR")
-		if err != nil {
-			if errors.Is(err, ErrFXRateNotFound) || errors.Is(err, ErrFXRateExpired) {
-				log.Printf("[PRICING] No recent INR FX rate in DB, seeding fallback %.2f", fallbackINRRate)
-				_ = s.SaveFXRate("USD", "INR", fallbackINRRate, "fallback")
-				fxRate = &models.FXRate{Rate: fallbackINRRate, AsOfDate: time.Now().Truncate(24 * time.Hour)}
-			} else {
-				return nil, fmt.Errorf("failed to get INR FX rate: %w", err)
-			}
-		}
-		
-		// Convert: indiaUSDCents / 100 * fxRate * 100 = indiaUSDCents * fxRate
-		// Round to nearest paisa (1 INR = 100 paise)
-		inrCents := int(math.Round(float64(indiaUSDCents) * fxRate.Rate))
-		quote.FinalPriceCents = inrCents
 		quote.Currency = "INR"
-		quote.FXRate = fxRate.Rate
-		quote.FXRateAsOfDate = fxRate.AsOfDate.Format("2006-01-02")
+
+		if plan.IndiaFixedPriceINRCents > 0 {
+			// Fixed INR price set on the plan — bypass FX rate calculation entirely.
+			// This ensures the displayed price exactly matches the Dodo/Razorpay product price.
+			quote.FinalPriceCents = plan.IndiaFixedPriceINRCents
+			quote.FinalPriceUSDCents = plan.BasePriceUSD // keep USD base for reference
+			quote.DiscountPercent = int((1 - plan.IndiaMultiplier) * 100)
+		} else {
+			// Apply India discount and convert USD → INR via FX rate
+			indiaUSDCents := int(math.Round(float64(plan.BasePriceUSD) * plan.IndiaMultiplier))
+			quote.FinalPriceUSDCents = indiaUSDCents
+			quote.DiscountPercent = int((1 - plan.IndiaMultiplier) * 100)
+
+			// Convert to INR — fall back to hardcoded rate if DB has no recent entry
+			fxRate, err := s.GetLatestFXRate("INR")
+			if err != nil {
+				if errors.Is(err, ErrFXRateNotFound) || errors.Is(err, ErrFXRateExpired) {
+					log.Printf("[PRICING] No recent INR FX rate in DB, seeding fallback %.2f", fallbackINRRate)
+					_ = s.SaveFXRate("USD", "INR", fallbackINRRate, "fallback")
+					fxRate = &models.FXRate{Rate: fallbackINRRate, AsOfDate: time.Now().Truncate(24 * time.Hour)}
+				} else {
+					return nil, fmt.Errorf("failed to get INR FX rate: %w", err)
+				}
+			}
+
+			// Convert: indiaUSDCents / 100 * fxRate * 100 = indiaUSDCents * fxRate
+			// Round to nearest paisa (1 INR = 100 paise)
+			inrCents := int(math.Round(float64(indiaUSDCents) * fxRate.Rate))
+			quote.FinalPriceCents = inrCents
+			quote.FXRate = fxRate.Rate
+			quote.FXRateAsOfDate = fxRate.AsOfDate.Format("2006-01-02")
+		}
 	} else {
 		// Non-India: charge full USD price
 		quote.FinalPriceUSDCents = plan.BasePriceUSD

@@ -20,7 +20,9 @@
   window.startCheckout = async function startCheckout(planCode, countryCode) {
     // Require login before attempting checkout — API returns 401 for unauthenticated users
     if (!window.USER_LOGGED_IN && !window.USER_EMAIL) {
-      window.location.href = '/login?redirect=/pricing';
+      // Pass the plan code so the pricing page auto-triggers checkout after login/signup
+      var afterAuthUrl = '/pricing?auto_checkout=' + encodeURIComponent(planCode);
+      window.location.href = '/login?redirect=' + encodeURIComponent(afterAuthUrl);
       return;
     }
 
@@ -60,10 +62,15 @@
         })
       });
 
-      var data = await res.json();
+      var data = await res.json().catch(function () { return {}; });
 
       if (!res.ok) {
         var msg = (data && data.error) ? data.error : 'Checkout failed. Please try again.';
+        var details = (data && data.details) ? data.details : '';
+        if (details) {
+          console.error('[payment.js] Checkout failed:', msg, '—', details);
+          msg = msg + (details ? ': ' + details : '');
+        }
         throw new Error(msg);
       }
 
