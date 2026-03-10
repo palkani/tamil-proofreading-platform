@@ -165,6 +165,7 @@ type DodoCheckoutResponse struct {
 // dodoSubscriptionCreateRequest is the payload sent to POST /subscriptions.
 type dodoSubscriptionCreateRequest struct {
 	ProductID string              `json:"product_id"`
+	Quantity  int                 `json:"quantity"`
 	Customer  dodoCustomerPayload `json:"customer"`
 	Metadata  map[string]string   `json:"metadata,omitempty"`
 	ReturnURL string              `json:"return_url"`
@@ -213,6 +214,7 @@ func (a *DodoAdapter) CreateSubscriptionCheckout(user *models.User, planCode, co
 
 	reqBody := dodoSubscriptionCreateRequest{
 		ProductID: productID,
+		Quantity:  1,
 		Customer:  customer,
 		Metadata: map[string]string{
 			"user_id":      fmt.Sprintf("%d", user.ID),
