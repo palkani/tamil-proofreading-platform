@@ -111,14 +111,21 @@ func seedBillingDataIfNeeded(db *gorm.DB) {
 
 // initBillingHandlers initializes all billing-related services and handlers
 func initBillingHandlers(db *gorm.DB, cfg *config.Config) *handlers.BillingHandlers {
-	// Get billing configuration from environment
+	// Legacy gateway credentials (kept as fallback)
 	stripeAPIKey := os.Getenv("STRIPE_SECRET_KEY")
 	stripeWebhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
 	razorpayKeyID := os.Getenv("RAZORPAY_KEY_ID")
 	razorpayKeySecret := os.Getenv("RAZORPAY_KEY_SECRET")
 	razorpayWebhookSecret := os.Getenv("RAZORPAY_WEBHOOK_SECRET")
 	quoteSecret := os.Getenv("BILLING_QUOTE_SECRET")
-	
+
+	// DodoPayments credentials
+	dodoAPIKey := os.Getenv("DODO_PAYMENTS_API_KEY")
+	dodoWebhookSecret := os.Getenv("DODO_PAYMENTS_WEBHOOK_SECRET")
+	dodoEnvironment := os.Getenv("DODO_ENVIRONMENT") // "production" or "test"
+	dodoProductIndia := os.Getenv("DODO_PRODUCT_ID_INDIA")
+	dodoProductGlobal := os.Getenv("DODO_PRODUCT_ID_GLOBAL")
+
 	successURL := os.Getenv("BILLING_SUCCESS_URL")
 	if successURL == "" {
 		successURL = "https://prooftamil.com/billing/success"
@@ -127,16 +134,24 @@ func initBillingHandlers(db *gorm.DB, cfg *config.Config) *handlers.BillingHandl
 	if cancelURL == "" {
 		cancelURL = "https://prooftamil.com/billing/cancel"
 	}
-	
-	// Initialize services
+
+	// Initialize adapters
 	pricingService := billing.NewPricingService(db, quoteSecret)
 	stripeAdapter := billing.NewStripeAdapter(db, stripeAPIKey, stripeWebhookSecret, successURL, cancelURL)
 	razorpayAdapter := billing.NewRazorpayAdapter(db, razorpayKeyID, razorpayKeySecret, razorpayWebhookSecret)
-	billingService := billing.NewBillingService(db, pricingService, stripeAdapter, razorpayAdapter)
-	webhookService := billing.NewWebhookService(billingService, stripeAdapter, razorpayAdapter)
-	
+	dodoAdapter := billing.NewDodoAdapter(dodoAPIKey, dodoWebhookSecret, dodoEnvironment,
+		dodoProductIndia, dodoProductGlobal, successURL, cancelURL)
+
+	billingService := billing.NewBillingService(db, pricingService, stripeAdapter, razorpayAdapter, dodoAdapter)
+	webhookService := billing.NewWebhookService(billingService, stripeAdapter, razorpayAdapter, dodoAdapter)
+
+	if dodoAdapter.IsConfigured() {
+		log.Println("[BILLING] DodoPayments: active (primary gateway)")
+	} else {
+		log.Println("[BILLING] DodoPayments: not configured — using Stripe/Razorpay fallback")
+	}
 	log.Println("[BILLING] Services initialized")
-	
+
 	return handlers.NewBillingHandlers(billingService, webhookService, pricingService)
 }
 
@@ -477,9 +492,13 @@ func main() {
 			billingRoutes.GET("/me", middleware.AuthMiddleware(cfg.JWTSecret), billingHandlers.GetBillingStatus)
 			billingRoutes.POST("/cancel", middleware.AuthMiddleware(cfg.JWTSecret), billingHandlers.CancelSubscription)
 			billingRoutes.POST("/verify-razorpay", middleware.AuthMiddleware(cfg.JWTSecret), billingHandlers.VerifyRazorpayPayment)
+
+			// DodoPayments webhook — matches the URL configured in the Dodo dashboard:
+			// https://prooftamil.com/api/v1/billing/webhook
+			billingRoutes.POST("/webhook", billingHandlers.DodoWebhook)
 		}
-		
-		// Webhook routes (no auth - signature verified in handler)
+
+		// Legacy webhook routes (kept for Stripe/Razorpay compatibility)
 		webhooks := v1.Group("/webhooks")
 		{
 			webhooks.POST("/stripe", billingHandlers.StripeWebhook)

@@ -17,14 +17,16 @@ type WebhookService struct {
 	billingService  *BillingService
 	stripeAdapter   *StripeAdapter
 	razorpayAdapter *RazorpayAdapter
+	dodoAdapter     *DodoAdapter
 }
 
 // NewWebhookService creates a new webhook service
-func NewWebhookService(billingService *BillingService, stripeAdapter *StripeAdapter, razorpayAdapter *RazorpayAdapter) *WebhookService {
+func NewWebhookService(billingService *BillingService, stripeAdapter *StripeAdapter, razorpayAdapter *RazorpayAdapter, dodoAdapter *DodoAdapter) *WebhookService {
 	return &WebhookService{
 		billingService:  billingService,
 		stripeAdapter:   stripeAdapter,
 		razorpayAdapter: razorpayAdapter,
+		dodoAdapter:     dodoAdapter,
 	}
 }
 
@@ -479,4 +481,316 @@ func (s *WebhookService) handleRazorpaySubscriptionHalted(webhookPayload Razorpa
 func (s *WebhookService) handleRazorpayPaymentCaptured(webhookPayload RazorpayWebhookPayload) error {
 	log.Printf("[WEBHOOK] Razorpay payment captured")
 	return nil
+}
+
+// ===========================================================================
+// DodoPayments Webhook Handlers
+// ===========================================================================
+
+// HandleDodoWebhook verifies the signature and dispatches Dodo webhook events.
+// webhookID, timestamp, signatureHeader come from the Standard Webhooks headers.
+func (s *WebhookService) HandleDodoWebhook(payload []byte, webhookID, timestamp, signatureHeader string) error {
+	// 1. Verify HMAC-SHA256 signature (Standard Webhooks spec)
+	if err := s.dodoAdapter.VerifyWebhookSignature(payload, webhookID, timestamp, signatureHeader); err != nil {
+		log.Printf("[WEBHOOK/DODO] Signature verification failed: %v", err)
+		return err
+	}
+
+	// 2. Parse envelope
+	var event DodoWebhookEvent
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return errors.New("dodo webhook: cannot parse event envelope")
+	}
+
+	// 3. Idempotency — use webhook-id as the unique event identifier
+	paymentEvent, err := s.billingService.RecordPaymentEvent(
+		models.PaymentProviderDodo,
+		webhookID,
+		event.Type,
+		payload,
+	)
+	if err != nil {
+		if errors.Is(err, ErrEventAlreadyProcessed) {
+			log.Printf("[WEBHOOK/DODO] Event %s already processed, skipping", webhookID)
+			return nil
+		}
+		return err
+	}
+
+	// 4. Dispatch
+	var processErr error
+	switch event.Type {
+	case "subscription.active":
+		processErr = s.handleDodoSubscriptionActive(event)
+	case "subscription.renewed":
+		processErr = s.handleDodoSubscriptionRenewed(event)
+	case "subscription.cancelled":
+		processErr = s.handleDodoSubscriptionCancelled(event)
+	case "subscription.expired":
+		processErr = s.handleDodoSubscriptionExpired(event)
+	case "subscription.on_hold", "subscription.failed":
+		processErr = s.handleDodoSubscriptionFailed(event)
+	case "payment.succeeded":
+		processErr = s.handleDodoPaymentSucceeded(event)
+	case "payment.failed":
+		processErr = s.handleDodoPaymentFailed(event)
+	default:
+		log.Printf("[WEBHOOK/DODO] Unhandled event type: %s", event.Type)
+	}
+
+	// 5. Mark processed / failed
+	s.billingService.MarkEventProcessed(paymentEvent.ID, processErr)
+
+	if processErr != nil {
+		log.Printf("[WEBHOOK/DODO] Event %s (%s) failed: %v", webhookID, event.Type, processErr)
+	} else {
+		log.Printf("[WEBHOOK/DODO] Event %s (%s) processed successfully", webhookID, event.Type)
+	}
+	return processErr
+}
+
+func (s *WebhookService) handleDodoSubscriptionActive(event DodoWebhookEvent) error {
+	var data DodoSubscriptionEventData
+	if err := json.Unmarshal(event.Data, &data); err != nil {
+		return err
+	}
+
+	userID, planCode, countryCode, err := extractDodoMetadata(data.Metadata)
+	if err != nil {
+		return err
+	}
+
+	periodStart, periodEnd := parseDodoPeriod(data.CurrentPeriodStart, data.CurrentPeriodEnd)
+
+	sub := &models.Subscription{
+		UserID:                 userID,
+		PlanCode:               planCode,
+		Provider:               models.PaymentProviderDodo,
+		ProviderCustomerID:     data.CustomerID,
+		ProviderSubscriptionID: data.SubscriptionID,
+		Status:                 s.dodoAdapter.MapSubscriptionStatus(data.Status),
+		CountryCode:            countryCode,
+		CurrentPeriodStart:     periodStart,
+		CurrentPeriodEnd:       periodEnd,
+	}
+
+	if err := s.billingService.CreateOrUpdateSubscription(sub); err != nil {
+		return err
+	}
+
+	// Lock billing country on first subscription
+	if err := s.billingService.LockBillingCountry(userID, countryCode); err != nil {
+		log.Printf("[WEBHOOK/DODO] Warning: failed to lock billing country: %v", err)
+	}
+
+	// Store Dodo customer ID on user record
+	if err := s.billingService.UpdateUserDodoCustomerID(userID, data.CustomerID); err != nil {
+		log.Printf("[WEBHOOK/DODO] Warning: failed to store dodo customer id: %v", err)
+	}
+
+	if err := s.billingService.UpdateUserPremiumStatus(userID, true); err != nil {
+		log.Printf("[WEBHOOK/DODO] Warning: failed to activate Pro for user %d: %v", userID, err)
+	} else {
+		log.Printf("[WEBHOOK/DODO] Pro activated: user=%d sub=%s", userID, data.SubscriptionID)
+	}
+	return nil
+}
+
+func (s *WebhookService) handleDodoSubscriptionRenewed(event DodoWebhookEvent) error {
+	var data DodoSubscriptionEventData
+	if err := json.Unmarshal(event.Data, &data); err != nil {
+		return err
+	}
+
+	sub, err := s.billingService.GetSubscriptionByProviderID(data.SubscriptionID)
+	if err != nil {
+		if errors.Is(err, ErrSubscriptionNotFound) {
+			// Treat as a new activation
+			return s.handleDodoSubscriptionActive(event)
+		}
+		return err
+	}
+
+	periodStart, periodEnd := parseDodoPeriod(data.CurrentPeriodStart, data.CurrentPeriodEnd)
+	sub.Status = s.dodoAdapter.MapSubscriptionStatus(data.Status)
+	sub.CurrentPeriodStart = periodStart
+	sub.CurrentPeriodEnd = periodEnd
+
+	if err := s.billingService.CreateOrUpdateSubscription(sub); err != nil {
+		return err
+	}
+
+	// Keep user premium (renewal = still active)
+	if err := s.billingService.UpdateUserPremiumStatus(sub.UserID, true); err != nil {
+		log.Printf("[WEBHOOK/DODO] Warning: failed to keep Pro on renewal for user %d: %v", sub.UserID, err)
+	}
+
+	log.Printf("[WEBHOOK/DODO] Subscription renewed: sub=%s user=%d", data.SubscriptionID, sub.UserID)
+	return nil
+}
+
+func (s *WebhookService) handleDodoSubscriptionCancelled(event DodoWebhookEvent) error {
+	var data DodoSubscriptionEventData
+	if err := json.Unmarshal(event.Data, &data); err != nil {
+		return err
+	}
+
+	sub, err := s.billingService.GetSubscriptionByProviderID(data.SubscriptionID)
+	if err != nil {
+		if errors.Is(err, ErrSubscriptionNotFound) {
+			return nil // Already gone
+		}
+		return err
+	}
+
+	now := time.Now()
+	sub.Status = models.BillingSubStatusCanceled
+	sub.CanceledAt = &now
+
+	if err := s.billingService.CreateOrUpdateSubscription(sub); err != nil {
+		return err
+	}
+	if err := s.billingService.UpdateUserPremiumStatus(sub.UserID, false); err != nil {
+		log.Printf("[WEBHOOK/DODO] Warning: failed to revoke Pro for user %d: %v", sub.UserID, err)
+	}
+
+	log.Printf("[WEBHOOK/DODO] Subscription cancelled: sub=%s user=%d", data.SubscriptionID, sub.UserID)
+	return nil
+}
+
+func (s *WebhookService) handleDodoSubscriptionExpired(event DodoWebhookEvent) error {
+	var data DodoSubscriptionEventData
+	if err := json.Unmarshal(event.Data, &data); err != nil {
+		return err
+	}
+
+	sub, err := s.billingService.GetSubscriptionByProviderID(data.SubscriptionID)
+	if err != nil {
+		if errors.Is(err, ErrSubscriptionNotFound) {
+			return nil
+		}
+		return err
+	}
+
+	sub.Status = models.BillingSubStatusExpired
+	if err := s.billingService.CreateOrUpdateSubscription(sub); err != nil {
+		return err
+	}
+	if err := s.billingService.UpdateUserPremiumStatus(sub.UserID, false); err != nil {
+		log.Printf("[WEBHOOK/DODO] Warning: failed to revoke Pro on expiry for user %d: %v", sub.UserID, err)
+	}
+
+	log.Printf("[WEBHOOK/DODO] Subscription expired: sub=%s user=%d", data.SubscriptionID, sub.UserID)
+	return nil
+}
+
+func (s *WebhookService) handleDodoSubscriptionFailed(event DodoWebhookEvent) error {
+	var data DodoSubscriptionEventData
+	if err := json.Unmarshal(event.Data, &data); err != nil {
+		return err
+	}
+
+	sub, err := s.billingService.GetSubscriptionByProviderID(data.SubscriptionID)
+	if err != nil {
+		if errors.Is(err, ErrSubscriptionNotFound) {
+			return nil
+		}
+		return err
+	}
+
+	sub.Status = models.BillingSubStatusPastDue
+	if err := s.billingService.CreateOrUpdateSubscription(sub); err != nil {
+		return err
+	}
+
+	log.Printf("[WEBHOOK/DODO] Subscription payment failed/on_hold: sub=%s user=%d", data.SubscriptionID, sub.UserID)
+	return nil
+}
+
+func (s *WebhookService) handleDodoPaymentSucceeded(event DodoWebhookEvent) error {
+	var data DodoPaymentEventData
+	if err := json.Unmarshal(event.Data, &data); err != nil {
+		return err
+	}
+
+	// If the payment is linked to a subscription, ensure the invoice is recorded.
+	if data.SubscriptionID == "" {
+		log.Printf("[WEBHOOK/DODO] payment.succeeded with no subscription_id — skipping invoice (payment_id=%s)", data.PaymentID)
+		return nil
+	}
+
+	sub, err := s.billingService.GetSubscriptionByProviderID(data.SubscriptionID)
+	if err != nil {
+		// Subscription may arrive slightly after payment event; don't fail hard.
+		log.Printf("[WEBHOOK/DODO] Warning: payment.succeeded subscription not found: %s", data.SubscriptionID)
+		return nil
+	}
+
+	now := time.Now()
+	invoice := &models.Invoice{
+		UserID:            sub.UserID,
+		SubscriptionID:    &sub.ID,
+		Provider:          models.PaymentProviderDodo,
+		ProviderInvoiceID: data.PaymentID,
+		AmountCents:       data.AmountTotal,
+		Currency:          data.Currency,
+		Status:            models.InvoiceStatusPaid,
+		PaidAt:            &now,
+	}
+	if err := s.billingService.CreateInvoice(invoice); err != nil {
+		log.Printf("[WEBHOOK/DODO] Warning: failed to create invoice: %v", err)
+	}
+
+	// Backup activation path (subscription.active should have fired first).
+	if err := s.billingService.UpdateUserPremiumStatus(sub.UserID, true); err != nil {
+		log.Printf("[WEBHOOK/DODO] Warning: failed to ensure Pro on payment.succeeded: %v", err)
+	}
+
+	log.Printf("[WEBHOOK/DODO] Payment succeeded: payment_id=%s sub=%s user=%d amount=%d %s",
+		data.PaymentID, data.SubscriptionID, sub.UserID, data.AmountTotal, data.Currency)
+	return nil
+}
+
+func (s *WebhookService) handleDodoPaymentFailed(event DodoWebhookEvent) error {
+	var data DodoPaymentEventData
+	if err := json.Unmarshal(event.Data, &data); err != nil {
+		return err
+	}
+	log.Printf("[WEBHOOK/DODO] Payment failed: payment_id=%s sub=%s", data.PaymentID, data.SubscriptionID)
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+func extractDodoMetadata(meta map[string]string) (userID uint, planCode, countryCode string, err error) {
+	userIDStr, ok := meta["user_id"]
+	if !ok {
+		return 0, "", "", errors.New("dodo webhook: missing user_id in metadata")
+	}
+	id, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		return 0, "", "", errors.New("dodo webhook: invalid user_id in metadata")
+	}
+	return uint(id), meta["plan_code"], meta["country_code"], nil
+}
+
+func parseDodoPeriod(startStr, endStr string) (*time.Time, *time.Time) {
+	parse := func(s string) *time.Time {
+		if s == "" {
+			return nil
+		}
+		// Try RFC3339, then Unix seconds
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			return &t
+		}
+		var secs int64
+		if _, err := strconv.ParseInt(s, 10, 64); err == nil {
+			t := time.Unix(secs, 0)
+			return &t
+		}
+		return nil
+	}
+	return parse(startStr), parse(endStr)
 }

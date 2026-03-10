@@ -96,6 +96,7 @@ func migrateUserBillingColumns(db *gorm.DB) error {
 		{"billing_country_locked", "billing_country_locked"},
 		{"stripe_customer_id", "stripe_customer_id"},
 		{"razorpay_customer_id", "razorpay_customer_id"},
+		{"dodo_customer_id", "dodo_customer_id"},
 		{"premium_override", "premium_override"},
 		{"premium_override_reason", "premium_override_reason"},
 		{"premium_override_by_admin", "premium_override_by_admin"},
@@ -129,6 +130,7 @@ func createBillingIndexes(db *gorm.DB) {
 		`CREATE INDEX IF NOT EXISTS idx_billing_audit_target ON billing_audit_logs (target_user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_stripe_customer ON users (stripe_customer_id) WHERE stripe_customer_id IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_users_razorpay_customer ON users (razorpay_customer_id) WHERE razorpay_customer_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_users_dodo_customer ON users (dodo_customer_id) WHERE dodo_customer_id IS NOT NULL`,
 	}
 
 	for _, idx := range indexes {

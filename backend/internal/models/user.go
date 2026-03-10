@@ -43,6 +43,7 @@ type User struct {
         BillingCountryLocked    bool       `gorm:"default:false" json:"billing_country_locked"`       // Lock after first payment
         StripeCustomerID        *string    `gorm:"size:100;index" json:"stripe_customer_id,omitempty"`
         RazorpayCustomerID      *string    `gorm:"size:100;index" json:"razorpay_customer_id,omitempty"`
+        DodoCustomerID          *string    `gorm:"size:100;index" json:"dodo_customer_id,omitempty"`
         
         // Premium override (admin-controlled)
         PremiumOverride         bool       `gorm:"default:false" json:"premium_override"`

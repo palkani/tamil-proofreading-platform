@@ -26,15 +26,17 @@ type BillingService struct {
 	pricingService  *PricingService
 	stripeAdapter   *StripeAdapter
 	razorpayAdapter *RazorpayAdapter
+	dodoAdapter     *DodoAdapter
 }
 
 // NewBillingService creates a new billing service
-func NewBillingService(db *gorm.DB, pricingService *PricingService, stripeAdapter *StripeAdapter, razorpayAdapter *RazorpayAdapter) *BillingService {
+func NewBillingService(db *gorm.DB, pricingService *PricingService, stripeAdapter *StripeAdapter, razorpayAdapter *RazorpayAdapter, dodoAdapter *DodoAdapter) *BillingService {
 	return &BillingService{
 		db:              db,
 		pricingService:  pricingService,
 		stripeAdapter:   stripeAdapter,
 		razorpayAdapter: razorpayAdapter,
+		dodoAdapter:     dodoAdapter,
 	}
 }
 
@@ -93,9 +95,19 @@ func (s *BillingService) CreateCheckoutSession(userID uint, req CheckoutRequest)
 		Provider: quote.Provider,
 		Quote:    quote,
 	}
-	
-	if s.pricingService.IsIndiaUser(countryCode) && s.razorpayAdapter.IsConfigured() {
-		// Use Razorpay
+
+	// --- DodoPayments (preferred when configured) ---
+	if s.dodoAdapter.IsConfigured() {
+		dodoResp, err := s.dodoAdapter.CreateSubscriptionCheckout(&user, req.PlanCode, countryCode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create dodo checkout: %w", err)
+		}
+		response.CheckoutURL = dodoResp.CheckoutURL
+		response.Provider = string(models.PaymentProviderDodo)
+		log.Printf("[BILLING] Dodo checkout created: user=%d plan=%s country=%s sub=%s",
+			userID, req.PlanCode, countryCode, dodoResp.SubscriptionID)
+	} else if s.pricingService.IsIndiaUser(countryCode) && s.razorpayAdapter.IsConfigured() {
+		// --- Razorpay fallback for India ---
 		order, err := s.razorpayAdapter.CreateOrder(&user, quote)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create razorpay order: %w", err)
@@ -108,8 +120,7 @@ func (s *BillingService) CreateCheckoutSession(userID uint, req CheckoutRequest)
 
 		response.RazorpayPayload = s.razorpayAdapter.BuildCheckoutPayload(&user, quote, order, plan, callbackURL)
 	} else {
-		// Use Stripe (also the fallback for India when Razorpay is not configured)
-		// Stripe requires USD for recurring subscriptions, so recalculate quote in USD if needed
+		// --- Stripe fallback for global ---
 		stripeQuote := quote
 		if quote.Currency != "USD" {
 			usdQuote, err := s.pricingService.CalculatePricing(req.PlanCode, "US")
@@ -294,6 +305,13 @@ func (s *BillingService) UpdateUserPremiumStatus(userID uint, isPremium bool) er
 		UpdateColumn("token_version", gorm.Expr("token_version + 1")).Error
 }
 
+// UpdateUserDodoCustomerID stores the Dodo customer ID on the user record.
+func (s *BillingService) UpdateUserDodoCustomerID(userID uint, dodoCustomerID string) error {
+	return s.db.Model(&models.User{}).
+		Where("id = ? AND (dodo_customer_id IS NULL OR dodo_customer_id = '')", userID).
+		Update("dodo_customer_id", dodoCustomerID).Error
+}
+
 // LockBillingCountry locks a user's billing country after first payment
 func (s *BillingService) LockBillingCountry(userID uint, countryCode string) error {
 	return s.db.Model(&models.User{}).
@@ -425,6 +443,10 @@ func (s *BillingService) CancelSubscription(userID uint, immediate bool) error {
 		}
 	case models.PaymentProviderRazorpay:
 		if err := s.razorpayAdapter.CancelSubscription(subscription.ProviderSubscriptionID, !immediate); err != nil {
+			return err
+		}
+	case models.PaymentProviderDodo:
+		if err := s.dodoAdapter.CancelSubscription(subscription.ProviderSubscriptionID); err != nil {
 			return err
 		}
 	}

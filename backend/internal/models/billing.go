@@ -14,6 +14,7 @@ type PaymentProvider string
 const (
 	PaymentProviderStripe   PaymentProvider = "stripe"
 	PaymentProviderRazorpay PaymentProvider = "razorpay"
+	PaymentProviderDodo     PaymentProvider = "dodo"
 )
 
 // BillingSubscriptionStatus represents the state of a billing subscription

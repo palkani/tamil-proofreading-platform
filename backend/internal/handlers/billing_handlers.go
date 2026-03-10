@@ -196,6 +196,32 @@ func (h *BillingHandlers) StripeWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"received": true})
 }
 
+// DodoWebhook handles DodoPayments webhooks (Standard Webhooks spec).
+// POST /billing/webhook
+func (h *BillingHandlers) DodoWebhook(c *gin.Context) {
+	payload, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
+		return
+	}
+
+	webhookID := c.GetHeader("webhook-id")
+	timestamp := c.GetHeader("webhook-timestamp")
+	signature := c.GetHeader("webhook-signature")
+
+	if webhookID == "" || timestamp == "" || signature == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing Standard Webhooks headers"})
+		return
+	}
+
+	if err := h.webhookService.HandleDodoWebhook(payload, webhookID, timestamp, signature); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"received": true})
+}
+
 // RazorpayWebhook handles Razorpay webhooks
 // POST /webhooks/razorpay
 func (h *BillingHandlers) RazorpayWebhook(c *gin.Context) {

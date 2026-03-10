@@ -2,8 +2,9 @@
  * payment.js — Client-side payment integration for ProofTamil
  *
  * Handles:
- *  - Stripe Checkout (international): redirects to Stripe-hosted checkout page
- *  - Razorpay Checkout (India): opens Razorpay payment modal inline
+ *  - DodoPayments Checkout (primary): redirects to Dodo-hosted checkout page
+ *  - Stripe Checkout (fallback, international): redirects to Stripe-hosted checkout page
+ *  - Razorpay Checkout (fallback, India): opens Razorpay payment modal inline
  *
  * Called from pricing.ejs via startCheckout(planCode, countryCode)
  */
