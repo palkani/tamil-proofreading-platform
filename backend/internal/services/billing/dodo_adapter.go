@@ -163,12 +163,20 @@ type DodoCheckoutResponse struct {
 }
 
 // dodoSubscriptionCreateRequest is the payload sent to POST /subscriptions.
+// Required fields (per Dodo API schema): billing, customer, product_id, quantity.
 type dodoSubscriptionCreateRequest struct {
-	ProductID string              `json:"product_id"`
-	Quantity  int                 `json:"quantity"`
-	Customer  dodoCustomerPayload `json:"customer"`
-	Metadata  map[string]string   `json:"metadata,omitempty"`
-	ReturnURL string              `json:"return_url"`
+	Billing     dodoBillingAddressParam `json:"billing"`               // REQUIRED
+	Customer    dodoCustomerPayload     `json:"customer"`               // REQUIRED
+	ProductID   string                  `json:"product_id"`             // REQUIRED
+	Quantity    int                     `json:"quantity"`               // REQUIRED
+	PaymentLink bool                    `json:"payment_link"`           // true → response includes payment_link URL
+	Metadata    map[string]string       `json:"metadata,omitempty"`
+	ReturnURL   string                  `json:"return_url,omitempty"`
+}
+
+// dodoBillingAddressParam — only country is required; others are optional.
+type dodoBillingAddressParam struct {
+	Country string `json:"country"` // ISO 3166-1 alpha-2, e.g. "IN" or "US"
 }
 
 type dodoCustomerPayload struct {
@@ -212,10 +220,18 @@ func (a *DodoAdapter) CreateSubscriptionCheckout(user *models.User, planCode, co
 		customer = dodoCustomerPayload{CustomerID: *user.DodoCustomerID}
 	}
 
+	// Normalise country code to uppercase ISO 3166-1 alpha-2
+	billingCountry := strings.ToUpper(strings.TrimSpace(countryCode))
+	if len(billingCountry) != 2 {
+		billingCountry = "US" // safe fallback
+	}
+
 	reqBody := dodoSubscriptionCreateRequest{
-		ProductID: productID,
-		Quantity:  1,
-		Customer:  customer,
+		Billing:     dodoBillingAddressParam{Country: billingCountry},
+		ProductID:   productID,
+		Quantity:    1,
+		Customer:    customer,
+		PaymentLink: true, // request a hosted payment-link URL in the response
 		Metadata: map[string]string{
 			"user_id":      fmt.Sprintf("%d", user.ID),
 			"plan_code":    planCode,
