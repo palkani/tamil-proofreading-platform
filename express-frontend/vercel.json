@@ -11,7 +11,7 @@
     "EMAIL_FROM_ADDRESS":  "contact@prooftamil.com",
     "EMAIL_FROM_NAME":     "ProofTamil",
     "CONTACT_TO_EMAIL":    "contact@prooftamil.com",
-    "PAYMENTS_ENABLED":    "false"
+    "PAYMENTS_ENABLED":    "true"
   },
   "headers": [
     {
