@@ -688,6 +688,7 @@ func (h *Handlers) SupabaseTokenExchange(c *gin.Context) {
         }
         user, err := h.authService.EnsureOAuthUser(email, name)
         if err != nil {
+                log.Printf("[SUPABASE-AUTH] ensure_user_failed email=%s err=%v", email, err)
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to ensure user"})
                 return
         }

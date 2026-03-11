@@ -87,32 +87,30 @@ func MigrateBilling(db *gorm.DB) error {
 }
 
 func migrateUserBillingColumns(db *gorm.DB) error {
-	// Add billing columns if they don't exist
-	columns := []struct {
-		column string
-		model  string
-	}{
-		{"country_code", "country_code"},
-		{"billing_country_locked", "billing_country_locked"},
-		{"stripe_customer_id", "stripe_customer_id"},
-		{"razorpay_customer_id", "razorpay_customer_id"},
-		{"dodo_customer_id", "dodo_customer_id"},
-		{"premium_override", "premium_override"},
-		{"premium_override_reason", "premium_override_reason"},
-		{"premium_override_by_admin", "premium_override_by_admin"},
-		{"premium_override_at", "premium_override_at"},
-		{"token_version", "token_version"},
+	// Use raw SQL with IF NOT EXISTS to reliably add billing columns.
+	// This avoids GORM Migrator issues with Supabase pgBouncer (bind message / prepared statement errors).
+	type colDef struct {
+		name string
+		ddl  string
+	}
+	columns := []colDef{
+		{"country_code", `ALTER TABLE users ADD COLUMN IF NOT EXISTS country_code varchar(2)`},
+		{"billing_country_locked", `ALTER TABLE users ADD COLUMN IF NOT EXISTS billing_country_locked boolean NOT NULL DEFAULT false`},
+		{"stripe_customer_id", `ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id varchar(100)`},
+		{"razorpay_customer_id", `ALTER TABLE users ADD COLUMN IF NOT EXISTS razorpay_customer_id varchar(100)`},
+		{"dodo_customer_id", `ALTER TABLE users ADD COLUMN IF NOT EXISTS dodo_customer_id varchar(100)`},
+		{"premium_override", `ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_override boolean NOT NULL DEFAULT false`},
+		{"premium_override_reason", `ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_override_reason text`},
+		{"premium_override_by_admin", `ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_override_by_admin bigint`},
+		{"premium_override_at", `ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_override_at timestamptz`},
+		{"token_version", `ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version integer NOT NULL DEFAULT 1`},
 	}
 
 	for _, col := range columns {
-		if !db.Migrator().HasColumn(&models.User{}, col.column) {
-			if err := db.Migrator().AddColumn(&models.User{}, col.model); err != nil {
-				if !isAlreadyExistsOrBind(err) {
-					log.Printf("[MIGRATIONS] Warning: Failed to add %s column: %v", col.column, err)
-				}
-			} else {
-				log.Printf("[MIGRATIONS] Added %s column to users table", col.column)
-			}
+		if err := db.Exec(col.ddl).Error; err != nil {
+			log.Printf("[MIGRATIONS] Warning: Failed to ensure column %s: %v", col.name, err)
+		} else {
+			log.Printf("[MIGRATIONS] Column users.%s OK", col.name)
 		}
 	}
 

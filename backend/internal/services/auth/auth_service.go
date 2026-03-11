@@ -543,15 +543,25 @@ func (s *AuthService) EnsureOAuthUser(email, name string) (*models.User, error) 
         }
 
         newUser := &models.User{
-                Email:        email,
-                PasswordHash: hashed,
-                Name:         displayName,
-                Role:         models.RoleWriter,
-                Subscription: models.PlanFree,
-                IsActive:     true,
+                Email:         email,
+                PasswordHash:  hashed,
+                Name:          displayName,
+                Role:          models.RoleWriter,
+                Subscription:  models.PlanFree,
+                IsActive:      true,
+                EmailVerified: true, // Google has already verified the email
+                TokenVersion:  1,
         }
 
         if err := s.db.Create(newUser).Error; err != nil {
+                // Handle concurrent sign-in: if unique constraint was violated, another
+                // request created the user between our SELECT and INSERT; just look it up.
+                if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "23505") {
+                        var existing models.User
+                        if lookupErr := s.db.Where("email = ?", email).First(&existing).Error; lookupErr == nil {
+                                return &existing, nil
+                        }
+                }
                 return nil, err
         }
 
