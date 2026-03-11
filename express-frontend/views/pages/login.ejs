@@ -209,10 +209,12 @@
 </div>
 
 <% if (typeof supabaseUrl !== 'undefined' && supabaseUrl && typeof supabaseAnonKey !== 'undefined' && supabaseAnonKey) { %>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="<%= supabaseUrl %>" crossorigin>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 <% } %>
-<script src="/js/google-auth.js?v=20251215b"></script>
-<script src="/js/supabase-google-auth.js?v=20260204"></script>
+<script src="/js/google-auth.js?v=20251215b" defer></script>
+<script src="/js/supabase-google-auth.js?v=20260204" defer></script>
 <script>
 document.getElementById('google-signin-btn')?.addEventListener('click', function () {
   if (window.triggerGoogleSignIn) {

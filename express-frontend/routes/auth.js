@@ -14,8 +14,8 @@ router.use((req, res, next) => {
 // Module-level fallback (used by getGoogleCallbackUrl which has no req context).
 const BACKEND_URL = getPrimaryBackendUrl();
 const AUTH_RETRY_PATHS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/supabase-token'];
-const AUTH_RETRY_MAX = 8;
-const AUTH_RETRY_DELAY_MS = 2500;
+const AUTH_RETRY_MAX = 5;
+const AUTH_RETRY_DELAY_MS = 2000;
 
 const forward = async (req, res, path, method = 'post') => {
   try {

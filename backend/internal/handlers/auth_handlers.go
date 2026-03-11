@@ -776,9 +776,11 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
         }
 
 	if tokens.AccessToken != "" {
-		if err := h.logGoogleUserInfo(c.Request.Context(), tokens.AccessToken, reqID); err != nil {
-			log.Printf("[OAUTH-WARN] step=userinfo_fetch request_id=%s err=%v", reqID, err)
-		}
+		go func(at, rid string) {
+			if err := h.logGoogleUserInfo(context.Background(), at, rid); err != nil {
+				log.Printf("[OAUTH-WARN] step=userinfo_fetch request_id=%s err=%v", rid, err)
+			}
+		}(tokens.AccessToken, reqID)
 	}
 
         // Get or create user

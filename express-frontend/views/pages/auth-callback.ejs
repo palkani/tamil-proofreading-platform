@@ -38,14 +38,27 @@
     return;
   }
 
+  // Show "taking longer" hint after 5 s (Cloud Run cold start)
+  var slowTimer = setTimeout(function () {
+    statusEl.textContent = 'Signing you in… (backend is warming up, please wait)';
+  }, 5000);
+
+  var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var fetchTimeout = setTimeout(function () {
+    if (controller) controller.abort();
+  }, 30000);
+
   fetch('/auth/supabase-token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
+    signal: controller ? controller.signal : undefined,
     body: JSON.stringify({ access_token: accessToken })
   })
     .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
     .then(function (result) {
+      clearTimeout(slowTimer);
+      clearTimeout(fetchTimeout);
       if (!result.ok) {
         var msg = (result.data && result.data.error) ? result.data.error : 'Sign-in failed.';
         if (result.data && result.data.status === 'starting') {
@@ -65,8 +78,14 @@
         window.location.replace(redirectTo);
       }
     })
-    .catch(function () {
-      showError('Network error. Try again.');
+    .catch(function (err) {
+      clearTimeout(slowTimer);
+      clearTimeout(fetchTimeout);
+      if (err && err.name === 'AbortError') {
+        showError('Sign-in is taking too long. Please try again.');
+      } else {
+        showError('Network error. Try again.');
+      }
     });
 })();
 </script>
