@@ -263,6 +263,7 @@ func main() {
 			&models.TamilBigram{},
 			&models.TamilPhrase{},
 			&models.BlogPost{},
+			&models.PasswordResetToken{},
 		); err != nil {
 			if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "42710") {
 				log.Printf("Warning: AutoMigrate failed: %v", err)

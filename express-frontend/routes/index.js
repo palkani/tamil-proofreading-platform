@@ -535,6 +535,30 @@ router.get('/auth/callback', (req, res) => {
   });
 });
 
+// Forgot password page - render form to request a reset link
+router.get('/forgot-password', (req, res) => {
+  if (req.user) return res.redirect('/drafts');
+  const seo = getSeoData('login') || getSeoData('home');
+  res.render('pages/forgot-password', {
+    title: 'Forgot Password | ProofTamil',
+    seo,
+    user: null,
+  });
+});
+
+// Reset password page - render form to set new password (token comes from query string)
+router.get('/reset-password', (req, res) => {
+  const token = String(req.query.token || '').slice(0, 200);
+  if (!token) return res.redirect('/forgot-password');
+  const seo = getSeoData('login') || getSeoData('home');
+  res.render('pages/reset-password', {
+    title: 'Reset Password | ProofTamil',
+    seo,
+    user: null,
+    token,
+  });
+});
+
 // Register page - redirect authenticated users to drafts
 router.get('/register', (req, res) => {
   if (req.user) {
