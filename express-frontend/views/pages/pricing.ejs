@@ -34,15 +34,16 @@
     <div class="text-center mb-12">
       <h1 class="text-4xl font-bold text-gray-900 mb-4">One plan. Everything you need to write Tamil perfectly.</h1>
       <p class="text-lg text-gray-600 max-w-xl mx-auto">
-        Start free. Go Pro when your Tamil writing gets serious.
+        <%= (user && user.email) ? 'Upgrade to Pro for unlimited Tamil AI proofreading.' : 'Start free. Go Pro when your Tamil writing gets serious.' %>
       </p>
     </div>
 
 
     <!-- Plan cards - Clean layout highlighting ProofTamil features -->
-    <div class="grid md:grid-cols-2 gap-8 items-stretch max-w-4xl mx-auto">
+    <div class="<%= (user && user.email) ? 'flex justify-center max-w-4xl mx-auto' : 'grid md:grid-cols-2 gap-8 items-stretch max-w-4xl mx-auto' %>">
 
-      <!-- Free Plan -->
+      <!-- Free Plan (hidden for logged-in users who already have an account) -->
+      <% if (!user || !user.email) { %>
       <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 flex flex-col">
         <div class="mb-6">
           <div class="flex items-center gap-3 mb-3">
@@ -79,13 +80,14 @@
             Smart Tamil word suggestions as you type
           </li>
         </ul>
-        <a href="<%= user && user.email ? '/' : '/register' %>" class="block w-full text-center px-5 py-3.5 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-800 transition">
-          <%= user && user.email ? 'Try Free Editor' : 'Create Account' %>
+        <a href="/register" class="block w-full text-center px-5 py-3.5 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-800 transition">
+          Create Account
         </a>
       </div>
+      <% } %>
 
       <!-- Pro Monthly -->
-      <div class="bg-white rounded-2xl border-2 border-primary-600 shadow-xl p-8 flex flex-col relative">
+      <div class="bg-white rounded-2xl border-2 border-primary-600 shadow-xl p-8 flex flex-col relative <%= (user && user.email) ? 'w-full max-w-md' : '' %>">
         <div class="absolute -top-3 left-1/2 -translate-x-1/2">
           <span class="bg-primary-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Most Popular</span>
         </div>
