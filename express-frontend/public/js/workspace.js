@@ -171,7 +171,7 @@ function _showWordLimitCard(wordCount) {
         ? '<button onclick="window.openUpgradeModal(\'PRO_MONTHLY\')" class="inline-block mt-3 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg font-semibold hover:bg-indigo-700 transition cursor-pointer">Upgrade to Pro</button>'
         : (window.PAYMENTS_ENABLED ? '<a href="/pricing" class="inline-block mt-3 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg font-semibold hover:bg-indigo-700 transition">View Plans</a>' : ''))
     : '<a href="/register" class="inline-block mt-3 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg font-semibold hover:bg-indigo-700 transition">Create free account</a>'
-    + '<p class="mt-2 text-xs text-gray-400">Sign in to get 20 more checks/day</p>';
+    + '<p class="mt-2 text-xs text-gray-400">Sign in to get 30 checks/day</p>';
   container.innerHTML =
     '<div class="text-center py-8 px-4">' +
     '<div class="w-12 h-12 mx-auto mb-3 rounded-full bg-amber-100 flex items-center justify-center">' +

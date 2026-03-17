@@ -499,8 +499,9 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 
 	// Daily Gemini token usage limit.
 	// Enforced only for authenticated, draft-saving submits (Workspace).
-	// Increased from 2000 to 15000 to allow more usage per day.
-	const dailyTokenLimit = 15000
+	// Set to 50000 to guarantee free users at least 5 full submissions per day
+	// even for max-length (200-word) Tamil texts (~8000 tokens/submission worst-case).
+	const dailyTokenLimit = 50000
 
 	// Admin bypass: do not enforce daily quota for the admin email(s) or admin role.
 	// This allows you to demo/test freely without hitting limits.
@@ -539,7 +540,7 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		if remaining == 0 {
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error":      "daily_limit_exceeded",
-				"message":    "You are exceeded your limit for the day.",
+				"message":    "You have exceeded your daily limit. Please come back tomorrow.",
 				"limit":      dailyTokenLimit,
 				"used":       usedToday,
 				"remaining":  remaining,
