@@ -62,28 +62,12 @@ func (h *BillingHandlers) CreateCheckoutSession(c *gin.Context) {
 		return
 	}
 
-	// Flatten the response so the frontend can read fields at the top level
-	// (e.g. data.checkout_url, data.client_secret, data.razorpay_order_id)
-	respMap := gin.H{
-		"success":  true,
-		"provider": response.Provider,
-		"quote":    response.Quote,
-	}
-	if response.CheckoutURL != "" {
-		respMap["checkout_url"] = response.CheckoutURL
-	}
-	if response.ClientSecret != "" {
-		respMap["client_secret"] = response.ClientSecret
-	}
-	if response.RazorpayPayload != nil {
-		p := response.RazorpayPayload
-		respMap["razorpay_order_id"] = p.OrderID
-		respMap["razorpay_key_id"]   = p.KeyID
-		respMap["amount"]            = p.Amount
-		respMap["currency"]          = p.Currency
-		respMap["plan_name"]         = p.Description
-	}
-	c.JSON(http.StatusOK, respMap)
+	c.JSON(http.StatusOK, gin.H{
+		"success":      true,
+		"provider":     response.Provider,
+		"quote":        response.Quote,
+		"checkout_url": response.CheckoutURL,
+	})
 }
 
 // GetBillingStatus returns the user's current billing status
@@ -174,30 +158,6 @@ func (h *BillingHandlers) CancelSubscription(c *gin.Context) {
 
 // ==================== WEBHOOK ENDPOINTS ====================
 
-// StripeWebhook handles Stripe webhooks
-// POST /webhooks/stripe
-func (h *BillingHandlers) StripeWebhook(c *gin.Context) {
-	// Read raw body for signature verification
-	payload, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
-		return
-	}
-
-	signature := c.GetHeader("Stripe-Signature")
-	if signature == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing Stripe-Signature header"})
-		return
-	}
-
-	if err := h.webhookService.HandleStripeWebhook(payload, signature); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"received": true})
-}
-
 // DodoWebhook handles DodoPayments webhooks (Standard Webhooks spec).
 // POST /billing/webhook
 func (h *BillingHandlers) DodoWebhook(c *gin.Context) {
@@ -217,30 +177,6 @@ func (h *BillingHandlers) DodoWebhook(c *gin.Context) {
 	}
 
 	if err := h.webhookService.HandleDodoWebhook(payload, webhookID, timestamp, signature); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"received": true})
-}
-
-// RazorpayWebhook handles Razorpay webhooks
-// POST /webhooks/razorpay
-func (h *BillingHandlers) RazorpayWebhook(c *gin.Context) {
-	// Read raw body for signature verification
-	payload, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
-		return
-	}
-
-	signature := c.GetHeader("X-Razorpay-Signature")
-	if signature == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing X-Razorpay-Signature header"})
-		return
-	}
-
-	if err := h.webhookService.HandleRazorpayWebhook(payload, signature); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -330,34 +266,3 @@ func (h *BillingHandlers) AdminGetGlobalPremiumStatus(c *gin.Context) {
 	})
 }
 
-// ==================== RAZORPAY VERIFICATION ====================
-
-// VerifyRazorpayPayment verifies a Razorpay payment from frontend
-// POST /billing/verify-razorpay
-func (h *BillingHandlers) VerifyRazorpayPayment(c *gin.Context) {
-	userID, err := middleware.GetUserFromContext(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	var req struct {
-		OrderID   string `json:"razorpay_order_id" binding:"required"`
-		PaymentID string `json:"razorpay_payment_id" binding:"required"`
-		Signature string `json:"razorpay_signature" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-		return
-	}
-
-	// Note: Payment verification should be handled via webhooks
-	// This endpoint is for frontend confirmation only
-	// The actual premium activation happens in the webhook handler
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Payment received. Premium will be activated shortly.",
-		"user_id": userID,
-	})
-}

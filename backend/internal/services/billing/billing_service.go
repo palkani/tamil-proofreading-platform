@@ -22,21 +22,17 @@ var (
 
 // BillingService orchestrates all billing operations
 type BillingService struct {
-	db              *gorm.DB
-	pricingService  *PricingService
-	stripeAdapter   *StripeAdapter
-	razorpayAdapter *RazorpayAdapter
-	dodoAdapter     *DodoAdapter
+	db             *gorm.DB
+	pricingService *PricingService
+	dodoAdapter    *DodoAdapter
 }
 
 // NewBillingService creates a new billing service
-func NewBillingService(db *gorm.DB, pricingService *PricingService, stripeAdapter *StripeAdapter, razorpayAdapter *RazorpayAdapter, dodoAdapter *DodoAdapter) *BillingService {
+func NewBillingService(db *gorm.DB, pricingService *PricingService, dodoAdapter *DodoAdapter) *BillingService {
 	return &BillingService{
-		db:              db,
-		pricingService:  pricingService,
-		stripeAdapter:   stripeAdapter,
-		razorpayAdapter: razorpayAdapter,
-		dodoAdapter:     dodoAdapter,
+		db:             db,
+		pricingService: pricingService,
+		dodoAdapter:    dodoAdapter,
 	}
 }
 
@@ -45,20 +41,17 @@ type CheckoutRequest struct {
 	PlanCode     string `json:"plan_code" binding:"required"`
 	SuccessURL   string `json:"success_url,omitempty"`
 	CancelURL    string `json:"cancel_url,omitempty"`
-	CountryCode  string `json:"country_code,omitempty"`  // Optional override
-	EmbeddedMode bool   `json:"embedded_mode,omitempty"` // true → Stripe embedded checkout
+	CountryCode string `json:"country_code,omitempty"` // Optional override
 }
 
 // CheckoutResponse represents the response from checkout initiation
 type CheckoutResponse struct {
-	Provider        string                   `json:"provider"`
-	CheckoutURL     string                   `json:"checkout_url,omitempty"`     // For Stripe redirect
-	ClientSecret    string                   `json:"client_secret,omitempty"`    // For Stripe embedded checkout
-	RazorpayPayload *RazorpayCheckoutPayload `json:"razorpay_payload,omitempty"` // For Razorpay
-	Quote           *models.PricingQuote     `json:"quote"`
+	Provider    string               `json:"provider"`
+	CheckoutURL string               `json:"checkout_url,omitempty"`
+	Quote       *models.PricingQuote `json:"quote"`
 }
 
-// CreateCheckoutSession creates a checkout session based on user's country
+// CreateCheckoutSession creates a checkout session via DodoPayments
 func (s *BillingService) CreateCheckoutSession(userID uint, req CheckoutRequest) (*CheckoutResponse, error) {
 	// Get user
 	var user models.User
@@ -68,86 +61,39 @@ func (s *BillingService) CreateCheckoutSession(userID uint, req CheckoutRequest)
 		}
 		return nil, err
 	}
-	
+
 	// Determine country code
 	countryCode := req.CountryCode
 	if countryCode == "" && user.CountryCode != nil {
 		countryCode = *user.CountryCode
 	}
 	if countryCode == "" {
-		// Default to US if not specified
 		countryCode = "US"
 	}
-	
+
 	// Calculate pricing
 	quote, err := s.pricingService.CalculatePricing(req.PlanCode, countryCode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate pricing: %w", err)
 	}
-	
-	// Get plan
-	plan, err := s.pricingService.GetPlan(req.PlanCode)
+
+	if !s.dodoAdapter.IsConfigured() {
+		return nil, fmt.Errorf("payment gateway not configured")
+	}
+
+	dodoResp, err := s.dodoAdapter.CreateSubscriptionCheckout(&user, req.PlanCode, countryCode)
 	if err != nil {
-		return nil, err
-	}
-	
-	response := &CheckoutResponse{
-		Provider: quote.Provider,
-		Quote:    quote,
+		return nil, fmt.Errorf("failed to create checkout: %w", err)
 	}
 
-	// --- DodoPayments (preferred when configured) ---
-	if s.dodoAdapter.IsConfigured() {
-		dodoResp, err := s.dodoAdapter.CreateSubscriptionCheckout(&user, req.PlanCode, countryCode)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create dodo checkout: %w", err)
-		}
-		response.CheckoutURL = dodoResp.CheckoutURL
-		response.Provider = string(models.PaymentProviderDodo)
-		log.Printf("[BILLING] Dodo checkout created: user=%d plan=%s country=%s sub=%s",
-			userID, req.PlanCode, countryCode, dodoResp.SubscriptionID)
-	} else if s.pricingService.IsIndiaUser(countryCode) && s.razorpayAdapter.IsConfigured() {
-		// --- Razorpay for India ---
-		log.Printf("[BILLING] Creating Razorpay order for user %d amount=%d %s", userID, quote.FinalPriceCents, quote.Currency)
-		order, err := s.razorpayAdapter.CreateOrder(&user, quote)
-		if err != nil {
-			log.Printf("[BILLING] Razorpay CreateOrder failed: %v", err)
-			return nil, fmt.Errorf("failed to create razorpay order: %w", err)
-		}
+	log.Printf("[BILLING] Dodo checkout created: user=%d plan=%s country=%s sub=%s",
+		userID, req.PlanCode, countryCode, dodoResp.SubscriptionID)
 
-		callbackURL := req.SuccessURL
-		if callbackURL == "" {
-			callbackURL = "https://prooftamil.com/billing/success"
-		}
-
-		response.RazorpayPayload = s.razorpayAdapter.BuildCheckoutPayload(&user, quote, order, plan, callbackURL)
-	} else {
-		// --- Stripe fallback for global ---
-		stripeQuote := quote
-		if quote.Currency != "USD" {
-			usdQuote, err := s.pricingService.CalculatePricing(req.PlanCode, "US")
-			if err == nil {
-				stripeQuote = usdQuote
-				response.Quote = usdQuote
-			}
-			log.Printf("[BILLING] Razorpay not configured — falling back to Stripe (USD) for India user %d", userID)
-		}
-		session, err := s.stripeAdapter.CreateCheckoutSession(&user, stripeQuote, plan, req.EmbeddedMode)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create stripe session: %w", err)
-		}
-		if req.EmbeddedMode {
-			response.ClientSecret = session.ClientSecret
-		} else {
-			response.CheckoutURL = session.URL
-		}
-		response.Provider = string(models.PaymentProviderStripe)
-	}
-	
-	log.Printf("[BILLING] Created checkout for user %d: provider=%s plan=%s country=%s",
-		userID, quote.Provider, req.PlanCode, countryCode)
-	
-	return response, nil
+	return &CheckoutResponse{
+		Provider:    string(models.PaymentProviderDodo),
+		CheckoutURL: dodoResp.CheckoutURL,
+		Quote:       quote,
+	}, nil
 }
 
 // GetBillingStatus returns the user's current billing status
@@ -307,6 +253,14 @@ func (s *BillingService) UpdateUserPremiumStatus(userID uint, isPremium bool) er
 		UpdateColumn("token_version", gorm.Expr("token_version + 1")).Error
 }
 
+// UpdateUserSubscriptionEnd stores or clears the subscription end date on the user.
+// Pass a non-nil *time.Time on activation/renewal; pass nil on cancellation/expiry.
+func (s *BillingService) UpdateUserSubscriptionEnd(userID uint, end *time.Time) error {
+	return s.db.Model(&models.User{}).
+		Where("id = ?", userID).
+		Update("subscription_end", end).Error
+}
+
 // UpdateUserDodoCustomerID stores the Dodo customer ID on the user record.
 func (s *BillingService) UpdateUserDodoCustomerID(userID uint, dodoCustomerID string) error {
 	return s.db.Model(&models.User{}).
@@ -430,35 +384,24 @@ func (s *BillingService) SetGlobalPremiumEnabled(adminUserID uint, enabled bool,
 	return tx.Commit().Error
 }
 
-// CancelSubscription cancels a user's subscription
+// CancelSubscription cancels a user's subscription via DodoPayments
 func (s *BillingService) CancelSubscription(userID uint, immediate bool) error {
 	var subscription models.Subscription
 	if err := s.db.Where("user_id = ? AND status = ?", userID, models.BillingSubStatusActive).
 		First(&subscription).Error; err != nil {
 		return err
 	}
-	
-	switch subscription.Provider {
-	case models.PaymentProviderStripe:
-		if err := s.stripeAdapter.CancelSubscription(subscription.ProviderSubscriptionID, immediate); err != nil {
-			return err
-		}
-	case models.PaymentProviderRazorpay:
-		if err := s.razorpayAdapter.CancelSubscription(subscription.ProviderSubscriptionID, !immediate); err != nil {
-			return err
-		}
-	case models.PaymentProviderDodo:
-		if err := s.dodoAdapter.CancelSubscription(subscription.ProviderSubscriptionID); err != nil {
-			return err
-		}
+
+	if err := s.dodoAdapter.CancelSubscription(subscription.ProviderSubscriptionID); err != nil {
+		return err
 	}
-	
+
 	// Update local status
 	now := time.Now()
 	subscription.CanceledAt = &now
 	if immediate {
 		subscription.Status = models.BillingSubStatusCanceled
 	}
-	
+
 	return s.db.Save(&subscription).Error
 }

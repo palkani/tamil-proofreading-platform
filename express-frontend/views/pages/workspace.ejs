@@ -1069,22 +1069,42 @@
           
           <div class="toolbar-divider"></div>
 
-          <!-- Language toggle: oval pill "தமிழ்" (Tamil on = purple, knob right; English = grey, knob left) -->
-          <button type="button" id="voice-lang-toggle" class="voice-lang-toggle" role="switch" aria-checked="true" title="Tamil / English — when English, pasted text is auto-translated to Tamil"
-                  onclick="var t=this; var isTamil=t.getAttribute('aria-checked')==='true'; t.setAttribute('aria-checked',isTamil?'false':'true'); t.querySelector('.voice-lang-toggle-label').textContent=isTamil?'English':'தமிழ்'; if(window.voiceTyping)window.voiceTyping.setLanguage(isTamil?'en-US':'ta-IN');">
+          <!-- Language toggle: oval pill "தமிழ்" / "English"
+               aria-checked="true"  → Tamil  (blue, knob right)
+               aria-checked="false" → English (grey, knob left)
+               Label + aria-checked updated by voiceTyping.setLanguage() via _updateLangUI() -->
+          <button type="button" id="voice-lang-toggle" class="voice-lang-toggle" role="switch" aria-checked="true"
+                  title="Tamil voice input — click to switch to English"
+                  onclick="(function(btn){
+                    var isTamil = btn.getAttribute('aria-checked') === 'true';
+                    var nextLang = isTamil ? 'en-US' : 'ta-IN';
+                    if (window.voiceTyping) {
+                      window.voiceTyping.setLanguage(nextLang);
+                    } else {
+                      /* voiceTyping not loaded yet — update UI manually */
+                      btn.setAttribute('aria-checked', isTamil ? 'false' : 'true');
+                      btn.querySelector('.voice-lang-toggle-label').textContent = isTamil ? 'English' : 'தமிழ்';
+                    }
+                  })(this)">
             <span class="voice-lang-toggle-label">தமிழ்</span>
             <span class="voice-lang-toggle-knob"></span>
           </button>
 
-          <!-- Microphone: circular purple button with white icon -->
+          <!-- Microphone: circular blue button; turns red + filled-mic when recording -->
           <button type="button" class="voice-mic-btn voice-typing-btn ml-2" id="voice-mic-btn"
                   onclick="window.voiceTyping && window.voiceTyping.toggle()"
-                  title="Voice typing"
-                  aria-label="Voice typing"
+                  title="Voice typing — click to dictate in Tamil"
+                  aria-label="Start voice typing"
                   aria-pressed="false">
+            <!--
+              path[0] = mic capsule body  → fill: none (idle) | fill: currentColor (active, via CSS)
+              path[1] = arc below mic     → stroke only
+              line[0] = stem
+              line[1] = base
+            -->
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <path fill="none" d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+              <path fill="none" d="M19 10v2a7 7 0 0 1-14 0v-2"/>
               <line x1="12" y1="19" x2="12" y2="23"/>
               <line x1="8" y1="23" x2="16" y2="23"/>
             </svg>
@@ -1387,7 +1407,7 @@
 <% } %>
 <script src="/js/workspace.js?v=20251229b&_ts=<%= new Date().getTime() %>&_cb=<%= Math.random().toString(36).slice(2) %>"></script>
 <script src="/js/oauth-callback.js"></script>
-<script src="/js/voice-typing.js?v=20260303d"></script>
+<script src="/js/voice-typing.js?v=20260317a"></script>
 <script src="/js/doc-import.js?v=20260305a"></script>
 <script src="/js/sentence-rewrite.js?v=20260222a"></script>
 

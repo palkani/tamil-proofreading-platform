@@ -27,10 +27,6 @@ type Config struct {
 	OpenAIAPIKey              string
 	GoogleGenAIKey            string
 	AnthropicAPIKey           string
-	StripeSecretKey           string
-	StripeWebhookSecret       string
-	RazorpayKeyID             string
-	RazorpayKeySecret         string
 	GoogleClientID            string
 	GoogleClientSecret        string
 	FacebookClientID          string
@@ -137,10 +133,6 @@ func Load() *Config {
 		OpenAIAPIKey:           getEnv("OPENAI_API_KEY", ""),
 		GoogleGenAIKey:         geminiKey,
 		AnthropicAPIKey:        getEnv("ANTHROPIC_API_KEY", ""),
-		StripeSecretKey:        getEnv("STRIPE_SECRET_KEY", ""),
-		StripeWebhookSecret:    getEnv("STRIPE_WEBHOOK_SECRET", ""),
-		RazorpayKeyID:          getEnv("RAZORPAY_KEY_ID", ""),
-		RazorpayKeySecret:      getEnv("RAZORPAY_KEY_SECRET", ""),
 		GoogleClientID:         getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:     getEnv("GOOGLE_CLIENT_SECRET", ""),
 		FacebookClientID:       getEnv("FACEBOOK_CLIENT_ID", ""),

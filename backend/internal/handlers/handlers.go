@@ -63,7 +63,7 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	emailService := email.NewEmailService()
 	nlpService := nlp.NewTamilNLPService()
 	llmService := llm.NewLLMService(cfg.OpenAIAPIKey, cfg.GoogleGenAIKey, cfg.AnthropicAPIKey, nlpService)
-	paymentService := payment.NewPaymentService(db, cfg)
+	paymentService := payment.NewPaymentService(db)
 
 	// Get *sql.DB from gorm for IME corpus queries
 	var sqlDB *sql.DB

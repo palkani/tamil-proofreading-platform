@@ -1,12 +1,43 @@
 /**
  * Voice Typing — Tamil Proofreading Platform
- * Uses Web Speech API to transcribe spoken words into the active editor.
+ * Uses the Web Speech API to transcribe spoken words into the active editor.
  *
- * Fixed:
- *  - Correct TipTap editor access (window.tiptapWorkspaceEditor is a getter fn)
- *  - Save/restore cursor position for contenteditable (focus leaves editor on mic click)
- *  - Fresh SpeechRecognition instance on every auto-restart
- *  - Filled mic icon when recording, outline when idle
+ * Root causes fixed in this version
+ * ──────────────────────────────────────────────────────────────────────────────
+ * 1. onspeechend double-insertion (CRITICAL)
+ *    Chrome fires onspeechend for *within-phrase* pauses in continuous mode.
+ *    The old code flushed _interimBuffer on onspeechend, then recognition
+ *    continued and re-delivered the same transcript as a new interim result.
+ *    The 1.5 s timer then fired and inserted the text a second time.
+ *    Fix: onspeechend only hides the interim banner; flushing happens on
+ *    onend (session boundary) and isFinal results only.
+ *
+ * 2. execCommand silent success (MEDIUM)
+ *    document.execCommand('insertText') can return true without inserting on
+ *    newer Chrome builds if focus assertion fails silently.
+ *    Fix: check document.activeElement before calling execCommand; fall through
+ *    to DOM-range and append strategies if focus is wrong.
+ *
+ * 3. alert() for errors (MEDIUM)
+ *    alert() blocks the tab, prevents cleanup, and is poor UX.
+ *    Fix: replaced with a non-blocking toast notification.
+ *
+ * 4. setActive() always says "speak in Tamil" (MEDIUM)
+ *    Fix: title reflects the current language.
+ *
+ * 5. Dead code: voice-icon-off / voice-icon-on IDs don't exist (MINOR)
+ *    Fix: removed. CSS .voice-typing-active handles all visual state.
+ *
+ * 6. Tab hidden → recognition silently dies, button stays red (MEDIUM)
+ *    Fix: visibilitychange listener stops recognition when tab is hidden.
+ *
+ * Public API  (window.voiceTyping)
+ * ──────────────────────────────────────────────────────────────────────────────
+ *   .toggle()           — start if stopped, stop if started
+ *   .start()            — start listening
+ *   .stop()             — stop listening (flushes any buffered text first)
+ *   .setLanguage(lang)  — 'ta-IN' | 'ta' → Tamil; anything else → 'en-US'
+ *   .isListening()      — returns boolean
  */
 (function () {
   'use strict';
@@ -17,67 +48,142 @@
   if (!SR) {
     document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.voice-typing-btn, .voice-mic-btn').forEach(btn => {
-        btn.title = 'Voice typing requires Chrome or Edge browser.';
+        btn.title = 'Voice typing requires Google Chrome or Microsoft Edge.';
         btn.style.opacity = '0.45';
         btn.style.cursor = 'not-allowed';
-        btn.onclick = e => {
+        btn.onclick = (e) => {
           e.preventDefault();
-          alert('Voice typing requires Google Chrome or Microsoft Edge.\nPlease open this page in Chrome to use voice typing.');
+          _showToast(
+            'Voice typing requires Google Chrome or Microsoft Edge. ' +
+            'Please open this page in Chrome to use voice typing.',
+            'error',
+            5000
+          );
         };
       });
     });
     return;
   }
 
-  // ── State ─────────────────────────────────────────────────────────────────
-  let isListening = false;
-  let currentLang = 'ta-IN';
-  let _rec = null;          // current SpeechRecognition instance
-  let _banner = null;       // interim text banner element
-  let _savedRange = null;   // saved cursor range for contenteditable
-  let _interimBuffer = '';  // last interim transcript (inserted on onspeechend if no final)
-  let _interimFlushTimer = null; // timer to flush interim buffer after silence (ta-IN onspeechend unreliable)
+  // ── Module state ──────────────────────────────────────────────────────────
+  let _isListening    = false;
+  let _currentLang    = 'ta-IN';
+  let _rec            = null;   // current SpeechRecognition instance
+  let _banner         = null;   // interim floating banner element
+  let _savedRange     = null;   // last known caret range in the editor
 
-  // ── Editor helpers ────────────────────────────────────────────────────────
-  function getTipTap() {
-    // workspace.js exposes tiptapWorkspaceEditor as a getter function
+  // Interim buffer (Tamil recognition rarely delivers isFinal:true)
+  let _interimBuffer     = '';
+  let _interimFlushTimer = null;
+
+  // Toast
+  let _toastEl    = null;
+  let _toastTimer = null;
+
+  // ── Toast notification (replaces alert) ───────────────────────────────────
+  function _showToast(msg, type, durationMs) {
+    type       = type       || 'info';
+    durationMs = durationMs || 4000;
+
+    if (!_toastEl) {
+      _toastEl = document.createElement('div');
+      _toastEl.id = 'voice-toast';
+      Object.assign(_toastEl.style, {
+        position:    'fixed',
+        bottom:      '72px',
+        left:        '50%',
+        transform:   'translateX(-50%) translateY(10px)',
+        padding:     '10px 20px',
+        borderRadius:'10px',
+        fontSize:    '14px',
+        lineHeight:  '1.5',
+        maxWidth:    'min(440px, 90vw)',
+        textAlign:   'center',
+        zIndex:      '99998',
+        pointerEvents:'none',
+        opacity:     '0',
+        transition:  'opacity 0.22s ease, transform 0.22s ease',
+        fontFamily:  "'Noto Sans Tamil', 'Latha', system-ui, sans-serif",
+        boxShadow:   '0 4px 20px rgba(0,0,0,0.25)',
+      });
+      document.body.appendChild(_toastEl);
+    }
+
+    clearTimeout(_toastTimer);
+    var palette = {
+      info:    { bg: 'rgba(15,15,15,0.9)',   fg: '#fff' },
+      error:   { bg: 'rgba(185,28,28,0.93)', fg: '#fff' },
+      success: { bg: 'rgba(21,128,61,0.93)', fg: '#fff' },
+      warn:    { bg: 'rgba(146,64,14,0.93)', fg: '#fff' },
+    };
+    var c = palette[type] || palette.info;
+    _toastEl.style.background = c.bg;
+    _toastEl.style.color      = c.fg;
+    _toastEl.textContent      = msg;
+    // Animate in
+    _toastEl.style.opacity   = '0';
+    _toastEl.style.transform = 'translateX(-50%) translateY(10px)';
+    requestAnimationFrame(function () {
+      _toastEl.style.opacity   = '1';
+      _toastEl.style.transform = 'translateX(-50%) translateY(0)';
+    });
+    _toastTimer = setTimeout(function () {
+      _toastEl.style.opacity   = '0';
+      _toastEl.style.transform = 'translateX(-50%) translateY(10px)';
+    }, durationMs);
+  }
+
+  // ── Editor accessors ──────────────────────────────────────────────────────
+  function _getTipTap() {
     if (!window.USE_TIPTAP_EDITOR) return null;
-    const getter = window.tiptapWorkspaceEditor;
-    if (typeof getter === 'function') return getter();   // call the getter
-    if (getter && typeof getter.commands === 'object') return getter; // direct ref
+    var getter = window.tiptapWorkspaceEditor;
+    if (typeof getter === 'function') return getter();
+    if (getter && typeof getter.commands === 'object') return getter;
     return null;
   }
 
-  function getContentEditable() {
-    const legacyEl = document.getElementById('editor');
-    if (legacyEl && !legacyEl.classList.contains('hidden')) return legacyEl;
-    const homeEl = document.getElementById('home-editor');
-    if (homeEl) return homeEl;
+  function _getContentEditable() {
+    var el = document.getElementById('editor');
+    if (el && !el.classList.contains('hidden')) return el;
+    el = document.getElementById('home-editor');
+    if (el) return el;
     return null;
   }
 
-  // ── Selection save/restore for contenteditable ────────────────────────────
-  function saveRange() {
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      _savedRange = sel.getRangeAt(0).cloneRange();
+  // ── Selection save / restore ──────────────────────────────────────────────
+  function _saveRange() {
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    var range    = sel.getRangeAt(0);
+    var editorEl = _getContentEditable();
+    // Only save ranges that are inside a known editor element
+    if (editorEl && (editorEl === range.commonAncestorContainer ||
+                     editorEl.contains(range.commonAncestorContainer))) {
+      _savedRange = range.cloneRange();
     }
   }
 
-  function restoreRange(el) {
+  function _restoreRange(el) {
+    if (!el) return false;
     el.focus();
     if (_savedRange) {
       try {
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(_savedRange);
-        return true;
-      } catch (_) { /* ignore */ }
+        // Verify the saved range nodes are still in the DOM
+        var ancestor = _savedRange.commonAncestorContainer;
+        if (document.contains(ancestor) && el.contains(ancestor)) {
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(_savedRange);
+          return true;
+        }
+      } catch (_) {
+        // Stale range — fall through
+      }
     }
-    // No saved range — place cursor at end
-    const sel = window.getSelection();
+    // Fallback: cursor at end of editor
+    var sel = window.getSelection();
     if (sel) {
-      const range = document.createRange();
+      var range = document.createRange();
       range.selectNodeContents(el);
       range.collapse(false);
       sel.removeAllRanges();
@@ -86,100 +192,88 @@
     return false;
   }
 
-  // Attach selection-saving listeners once DOM is ready
-  function attachSelectionListeners() {
-    ['#editor', '#home-editor'].forEach(selector => {
-      const el = document.querySelector(selector);
+  function _attachSelectionListeners() {
+    ['#editor', '#home-editor'].forEach(function (selector) {
+      var el = document.querySelector(selector);
       if (!el) return;
-      el.addEventListener('keyup',    saveRange);
-      el.addEventListener('mouseup',  saveRange);
-      el.addEventListener('touchend', saveRange);
-      el.addEventListener('blur',     saveRange); // most important: save on blur
+      el.addEventListener('keyup',    _saveRange);
+      el.addEventListener('mouseup',  _saveRange);
+      el.addEventListener('touchend', _saveRange);
+      // Most important: save on blur so we capture caret before mic button
+      // steals focus.
+      el.addEventListener('blur',     _saveRange);
     });
   }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', attachSelectionListeners);
+    document.addEventListener('DOMContentLoaded', _attachSelectionListeners);
   } else {
-    attachSelectionListeners();
+    _attachSelectionListeners();
   }
 
-  // ── Insert text at cursor ─────────────────────────────────────────────────
-  function insertText(text) {
-    const tiptap = getTipTap();
+  // ── Text insertion ────────────────────────────────────────────────────────
+  function _insertText(text) {
+    if (!text || !text.trim()) return;
+
+    // TipTap path (when USE_TIPTAP_EDITOR = true)
+    var tiptap = _getTipTap();
     if (tiptap) {
-      // TipTap manages focus/selection internally
       tiptap.chain().focus().insertContent(text).run();
       return;
     }
 
-    const el = getContentEditable();
+    // contenteditable path
+    var el = _getContentEditable();
     if (!el) {
-      console.warn('[VoiceTyping] No editor found to insert into');
+      console.warn('[VoiceTyping] No editor element found — cannot insert text');
       return;
     }
 
-    console.log('[VoiceTyping] insertText called, text length:', text.length, 'editor id:', el.id);
+    // Restore cursor (focuses el, places caret at saved or end position)
+    _restoreRange(el);
 
-    // ── Strategy 1: execCommand (undo-safe, respects cursor position) ────────
-    restoreRange(el);
-    let inserted = false;
-    try {
-      const ok = document.execCommand('insertText', false, text);
-      if (ok) {
-        console.log('[VoiceTyping] execCommand insertText succeeded');
-        inserted = true;
-      }
-    } catch (_) {}
+    var inserted = false;
 
-    // ── Strategy 2: DOM range insertion ──────────────────────────────────────
+    // ── Strategy 1: execCommand (undo-safe, respects caret) ──────────────────
+    // Only call execCommand when the element is actually focused; otherwise
+    // it returns true silently without inserting.
+    if (!inserted &&
+        typeof document.execCommand === 'function' &&
+        (document.activeElement === el || el.contains(document.activeElement))) {
+      try {
+        var ok = document.execCommand('insertText', false, text);
+        if (ok) {
+          inserted = true;
+        }
+      } catch (_) {}
+    }
+
+    // ── Strategy 2: DOM Range insertion (robust fallback) ────────────────────
     if (!inserted) {
       try {
-        const sel = window.getSelection();
+        var sel = window.getSelection();
         if (sel && sel.rangeCount > 0) {
-          const range = sel.getRangeAt(0);
-          const ancestor = range.commonAncestorContainer;
+          var range    = sel.getRangeAt(0);
+          var ancestor = range.commonAncestorContainer;
           if (el === ancestor || el.contains(ancestor)) {
             range.deleteContents();
-            const node = document.createTextNode(text);
-            range.insertNode(node);
-            range.setStartAfter(node);
-            range.setEndAfter(node);
+            var textNode = document.createTextNode(text);
+            range.insertNode(textNode);
+            range.setStartAfter(textNode);
+            range.setEndAfter(textNode);
             sel.removeAllRanges();
             sel.addRange(range);
-            console.log('[VoiceTyping] DOM range insertion succeeded');
             inserted = true;
           }
         }
       } catch (_) {}
     }
 
-    // ── Strategy 3: WorkspaceController API (uses TamilEditor.insertTextAtCursor) ──
+    // ── Strategy 3: Append to last block element (guaranteed fallback) ────────
     if (!inserted) {
       try {
-        const wc = window.workspaceController;
-        if (wc && wc.editor && typeof wc.editor.insertTextAtCursor === 'function') {
-          el.focus();
-          // Place cursor at end so TamilEditor has something to work with
-          const sel = window.getSelection();
-          const range = document.createRange();
-          range.selectNodeContents(el);
-          range.collapse(false);
-          sel.removeAllRanges();
-          sel.addRange(range);
-          wc.editor.insertTextAtCursor(text);
-          console.log('[VoiceTyping] WorkspaceController.editor.insertTextAtCursor succeeded');
-          inserted = true;
-        }
-      } catch (_) {}
-    }
-
-    // ── Strategy 4: Direct append — guaranteed to work regardless of focus ──
-    if (!inserted) {
-      console.warn('[VoiceTyping] All cursor-aware methods failed — appending directly to editor');
-      try {
-        // Append to last paragraph if possible, else to editor root
-        let target = el;
-        const lastChild = el.lastChild;
+        var target   = el;
+        var lastChild = el.lastChild;
         if (lastChild && lastChild.nodeType === Node.ELEMENT_NODE &&
             /^(P|DIV|SPAN|LI)$/.test(lastChild.nodeName)) {
           target = lastChild;
@@ -187,18 +281,19 @@
         target.appendChild(document.createTextNode(text));
         inserted = true;
       } catch (e) {
-        console.error('[VoiceTyping] Direct append failed:', e);
+        console.error('[VoiceTyping] All insertion strategies failed:', e);
       }
     }
 
     if (inserted) {
-      saveRange();
+      _saveRange();
+      // Notify workspace.js of the content change (triggers word count, etc.)
       el.dispatchEvent(new Event('input', { bubbles: true }));
     }
   }
 
   // ── Interim banner ────────────────────────────────────────────────────────
-  function showInterim(text) {
+  function _showInterim(text) {
     if (!_banner) {
       _banner = document.createElement('div');
       _banner.id = 'voice-interim-banner';
@@ -209,272 +304,362 @@
     _banner.classList.toggle('voice-interim-visible', Boolean(text));
   }
 
-  function hideInterim() {
+  function _hideInterim() {
     if (_banner) _banner.classList.remove('voice-interim-visible');
   }
 
-  // ── Button / icon state ───────────────────────────────────────────────────
-  function setActive(active) {
-    // Toggle class on all voice buttons
-    document.querySelectorAll('.voice-typing-btn, .voice-mic-btn').forEach(btn => {
+  // ── Button state ──────────────────────────────────────────────────────────
+  function _setActive(active) {
+    document.querySelectorAll('.voice-typing-btn, .voice-mic-btn').forEach(function (btn) {
       btn.classList.toggle('voice-typing-active', active);
       btn.setAttribute('aria-pressed', String(active));
-      btn.setAttribute('title', active ? 'Stop recording (click to stop)' : 'Voice typing — speak in Tamil');
     });
 
-    // Swap icon: outline ↔ filled
-    const iconOff = document.getElementById('voice-icon-off');
-    const iconOn  = document.getElementById('voice-icon-on');
-    if (iconOff) iconOff.classList.toggle('hidden', active);
-    if (iconOn)  iconOn.classList.toggle('hidden', !active);
+    // Update tooltip to reflect current language
+    var langLabel = _currentLang === 'ta-IN' ? 'Tamil' : 'English';
+    var micBtn = document.getElementById('voice-mic-btn');
+    if (micBtn) {
+      micBtn.title = active
+        ? ('Stop voice typing (' + langLabel + ') — click to stop')
+        : ('Voice typing — click to dictate in ' + langLabel);
+      micBtn.setAttribute('aria-label',
+        active ? 'Stop voice typing' : 'Start voice typing');
+    }
   }
 
-  // ── Language pill toggle ──────────────────────────────────────────────────
-  function updateLangUI(lang) {
-    const toggle = document.getElementById('voice-lang-toggle');
+  // ── Language pill UI ──────────────────────────────────────────────────────
+  function _updateLangUI(lang) {
+    var toggle = document.getElementById('voice-lang-toggle');
     if (toggle) {
-      const isTamil = lang === 'ta-IN';
+      var isTamil = lang === 'ta-IN';
       toggle.setAttribute('aria-checked', isTamil ? 'true' : 'false');
-      toggle.title = isTamil ? 'Tamil voice input (click for English)' : 'English voice input (click for Tamil)';
+      toggle.querySelector('.voice-lang-toggle-label').textContent =
+        isTamil ? 'தமிழ்' : 'English';
+      toggle.title = isTamil
+        ? 'Tamil voice input — click to switch to English'
+        : 'English voice input — click to switch to Tamil';
     }
-    // Legacy pill buttons
-    document.querySelectorAll('.voice-lang-btn').forEach(btn => {
+    // Legacy small pill buttons (if present)
+    document.querySelectorAll('.voice-lang-btn').forEach(function (btn) {
       btn.classList.toggle('voice-lang-active', btn.getAttribute('data-lang') === lang);
     });
   }
 
-  // ── SpeechRecognition ─────────────────────────────────────────────────────
+  // ── Buffer management ─────────────────────────────────────────────────────
+  function _clearBuffers() {
+    _interimBuffer = '';
+    clearTimeout(_interimFlushTimer);
+    _interimFlushTimer = null;
+  }
+
+  /**
+   * Flush the interim buffer.
+   * Called by:
+   *   - the 1.5 s silence timer (primary path for Tamil)
+   *   - onend (session boundary — covers the case where timer didn't fire yet)
+   *   - stopListening (user manually stops)
+   *
+   * NOT called by onspeechend — that's the key fix for double-insertion.
+   */
+  function _flushBuffer(source) {
+    var text = _interimBuffer.trim();
+    _clearBuffers();
+    _hideInterim();
+    if (!text) return;
+    console.log('[VoiceTyping] Flushing buffer (' + source + '):', text.slice(0, 50));
+    _insertText(text + ' ');
+  }
+
+  // ── SpeechRecognition instance builder ────────────────────────────────────
   function _build() {
-    const r = new SR();
-    r.lang = currentLang;
-    r.continuous = true;
-    r.interimResults = true;
+    var r      = new SR();
+    r.lang     = _currentLang;
+    r.continuous      = true;
+    r.interimResults  = true;
     r.maxAlternatives = 1;
 
-    r.onstart = () => {
-      setActive(true);
-      showInterim('🎤 Listening… speak now');
-      console.log('[VoiceTyping] Started, lang:', currentLang);
+    r.onstart = function () {
+      _setActive(true);
+      var langName = _currentLang === 'ta-IN' ? 'Tamil' : 'English';
+      _showInterim('🎤 Listening in ' + langName + '… speak now');
+      console.log('[VoiceTyping] Started, lang:', _currentLang);
     };
 
-    r.onresult = event => {
-      console.log('[VoiceTyping] onresult fired, resultIndex:', event.resultIndex, 'results.length:', event.results.length);
-      let finalText = '';
-      let interimText = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        console.log('[VoiceTyping] result[' + i + '] isFinal:', event.results[i].isFinal, 'text:', t.slice(0, 30));
-        if (event.results[i].isFinal) finalText += t;
-        else interimText += t;
+    r.onresult = function (event) {
+      var finalText   = '';
+      var interimText = '';
+
+      for (var i = event.resultIndex; i < event.results.length; i++) {
+        var t = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalText += t;
+        } else {
+          interimText += t;
+        }
       }
+
       if (finalText) {
-        _interimBuffer = '';
-        clearTimeout(_interimFlushTimer); _interimFlushTimer = null;
-        insertText(finalText + ' ');
-        hideInterim();
+        // Got a proper final result — clear buffer and insert immediately.
+        _clearBuffers();
+        _hideInterim();
+        var clean = finalText.trim();
+        if (clean) {
+          _insertText(clean + ' ');
+        }
       } else if (interimText) {
-        // Keep interim buffered — Tamil recognition often never marks isFinal.
-        // Flush via onspeechend OR via timer after 1.5 s of silence (ta-IN quirk:
-        // onspeechend is unreliable in Chrome continuous mode for Tamil).
+        // Accumulate interim transcript.
+        // ── CRITICAL FIX ──
+        // Do NOT insert here or on onspeechend.
+        // In Chrome continuous mode onspeechend fires for *within-phrase* pauses,
+        // then recognition continues and re-delivers the same accumulated text in
+        // the next onresult event. Flushing on onspeechend caused double-insertion.
+        // The timer (1.5 s after last speech) is the correct flush point for Tamil.
+        // For English, isFinal:true handles it reliably above.
         _interimBuffer = interimText;
-        showInterim('🎤 ' + interimText);
+        _showInterim('🎤 ' + interimText);
+
         clearTimeout(_interimFlushTimer);
-        _interimFlushTimer = setTimeout(() => {
-          _interimFlushTimer = null;
-          if (_interimBuffer) {
-            console.log('[VoiceTyping] Timer flush: inserting interim buffer:', _interimBuffer.slice(0, 40));
-            insertText(_interimBuffer + ' ');
-            _interimBuffer = '';
-            hideInterim();
+        _interimFlushTimer = setTimeout(function () {
+          if (_isListening) {
+            _flushBuffer('timer');
           }
         }, 1500);
       }
     };
 
-    r.onspeechend = () => {
-      console.log('[VoiceTyping] onspeechend fired, buffer:', _interimBuffer.slice(0, 30));
-      // Insert the buffered interim text if the API never sent isFinal:true.
-      // Also cancel the timer — we're flushing right now.
-      clearTimeout(_interimFlushTimer); _interimFlushTimer = null;
-      if (_interimBuffer) {
-        insertText(_interimBuffer + ' ');
-        _interimBuffer = '';
-      }
-      hideInterim();
+    r.onspeechend = function () {
+      // In continuous mode, onspeechend is not a session boundary — recognition
+      // keeps running. Only hide the interim banner; the timer or onend will flush.
+      console.log('[VoiceTyping] onspeechend — waiting for timer or isFinal result');
+      _hideInterim();
     };
 
-    r.onerror = event => {
+    r.onerror = function (event) {
       console.warn('[VoiceTyping] Error:', event.error);
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        isListening = false;
-        setActive(false);
-        hideInterim();
-        alert(
-          'Microphone access was denied.\n\n' +
-          'To fix: click the lock/camera icon in the browser address bar → ' +
-          'set Microphone to "Allow" → reload the page.'
-        );
-        return;
+
+      switch (event.error) {
+        case 'not-allowed':
+        case 'service-not-allowed':
+          _isListening = false;
+          _setActive(false);
+          _hideInterim();
+          _clearBuffers();
+          _showToast(
+            'Microphone access denied. ' +
+            'Click the 🔒 icon in the address bar → ' +
+            'set Microphone to "Allow" → reload the page.',
+            'error',
+            7000
+          );
+          break;
+
+        case 'network':
+          _isListening = false;
+          _setActive(false);
+          _hideInterim();
+          _clearBuffers();
+          _showToast(
+            'Voice typing requires an internet connection. ' +
+            'Please check your network and try again.',
+            'error'
+          );
+          break;
+
+        case 'audio-capture':
+          _isListening = false;
+          _setActive(false);
+          _hideInterim();
+          _clearBuffers();
+          _showToast(
+            'Microphone unavailable. ' +
+            'Check that your microphone is connected and not in use by another app.',
+            'error'
+          );
+          break;
+
+        case 'no-speech':
+          _showToast(
+            'No speech detected. Try speaking closer to your microphone.',
+            'warn',
+            3000
+          );
+          // Let onend handle restart
+          break;
+
+        case 'aborted':
+          // Triggered by our own .stop() call — not an error to surface
+          break;
+
+        default:
+          console.warn('[VoiceTyping] Unhandled recognition error:', event.error);
+          // Let onend handle restart / cleanup
+          break;
       }
-      if (event.error === 'network') {
-        isListening = false;
-        setActive(false);
-        hideInterim();
-        alert('Voice typing needs an internet connection. Please check your connection.');
-        return;
-      }
-      // 'no-speech', 'audio-capture', 'aborted' — let onend handle restart
     };
 
-    r.onend = () => {
+    r.onend = function () {
+      // Session boundary — flush any remaining interim buffer before restarting.
+      // This is the SAFE flush point (recognition has fully stopped for this session).
+      _flushBuffer('onend');
       _rec = null;
-      if (isListening) {
-        // Auto-restart with a short delay (avoid tight loops)
-        setTimeout(() => {
-          if (isListening) _rec = _build();
+
+      if (_isListening) {
+        // Auto-restart (Chrome continuous mode caps out at ~60 s; also restarts
+        // after transient errors like 'no-speech').
+        setTimeout(function () {
+          if (_isListening) {
+            console.log('[VoiceTyping] Auto-restart');
+            _rec = _build();
+          }
         }, 250);
       } else {
-        setActive(false);
-        hideInterim();
+        _setActive(false);
+        _hideInterim();
       }
     };
 
     try {
       r.start();
     } catch (e) {
-      console.error('[VoiceTyping] start() threw:', e);
-      _rec = null;
-      if (isListening) {
-        setTimeout(() => { if (isListening) _rec = _build(); }, 500);
-      }
+      console.error('[VoiceTyping] r.start() threw:', e.name, e.message);
+      // 'InvalidStateError' = already started (rapid double-call guard)
+      setTimeout(function () {
+        if (_isListening) _rec = _build();
+      }, 500);
     }
 
     return r;
   }
 
-  function startListening() {
-    if (isListening) return;
-    isListening = true;
-    setActive(true);
-    showInterim('🎤 Starting…');
+  // ── Controls ──────────────────────────────────────────────────────────────
+  function _startListening() {
+    if (_isListening) return;
+
+    // Guard: recognition fails silently in hidden tabs
+    if (document.hidden) {
+      _showToast('Switch to this tab first, then click the mic to start voice typing.', 'info');
+      return;
+    }
+
+    _isListening = true;
+    _clearBuffers();
+    _setActive(true);
+    _showInterim('🎤 Starting…');
     _rec = _build();
   }
 
-  function stopListening() {
-    isListening = false;
-    _interimBuffer = '';
-    clearTimeout(_interimFlushTimer); _interimFlushTimer = null;
-    setActive(false);
-    hideInterim();
+  function _stopListening() {
+    _isListening = false;
+    // Flush buffered interim text before stopping so the user doesn't lose it
+    _flushBuffer('stop');
+    _setActive(false);
+    _hideInterim();
     if (_rec) {
       try { _rec.stop(); } catch (_) {}
       _rec = null;
     }
   }
 
-  function toggle() {
-    if (isListening) stopListening();
-    else startListening();
+  function _toggle() {
+    if (_isListening) _stopListening();
+    else _startListening();
   }
 
-  function setLanguage(lang) {
-    currentLang = lang;
-    updateLangUI(lang);
-    // If already listening, restart with new language
-    if (isListening) {
-      stopListening();
-      setTimeout(startListening, 300);
+  function _setLanguage(lang) {
+    // Normalise: 'ta-IN', 'ta', 'ta_IN', etc. → 'ta-IN'; everything else → 'en-US'
+    var normalised = /^ta/i.test(lang) ? 'ta-IN' : 'en-US';
+
+    var changed = normalised !== _currentLang;
+    _currentLang = normalised;
+    _updateLangUI(normalised);
+
+    if (changed && _isListening) {
+      // Restart with the new locale
+      _stopListening();
+      setTimeout(_startListening, 300);
     }
   }
 
   // ── Public API ────────────────────────────────────────────────────────────
-  window.voiceTyping = { toggle, stop: stopListening, setLanguage, isListening: () => isListening };
+  window.voiceTyping = {
+    toggle:      _toggle,
+    start:       _startListening,
+    stop:        _stopListening,
+    setLanguage: _setLanguage,
+    isListening: function () { return _isListening; },
+  };
 
-  // ── Styles ────────────────────────────────────────────────────────────────
-  const css = `
-    /* Mic button active: red background + ring pulse */
-    .voice-mic-btn.voice-typing-active {
-      background: #dc2626 !important;
-      animation: voice-btn-ring 1.2s ease-out infinite;
+  // ── Tab visibility: stop mic when tab goes to background ──────────────────
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && _isListening) {
+      _showToast('Voice typing paused — tab switched to background.', 'info', 3000);
+      _stopListening();
     }
-    .voice-mic-btn.voice-typing-active:hover {
-      background: #b91c1c !important;
-    }
-    @keyframes voice-btn-ring {
-      0%   { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0.55); }
-      70%  { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
-      100% { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0); }
-    }
+  });
 
-    /* Mic SVG body: outline → filled when recording */
-    .voice-mic-btn svg path:first-child {
-      fill: none;
-      transition: fill 0.15s;
-    }
-    .voice-mic-btn.voice-typing-active svg path:first-child {
-      fill: white;
-    }
+  // ── Injected CSS ──────────────────────────────────────────────────────────
+  var css = [
+    /* Mic button active: red background + pulse ring */
+    '.voice-mic-btn.voice-typing-active {',
+    '  background: #dc2626 !important;',
+    '  animation: voice-btn-ring 1.2s ease-out infinite;',
+    '}',
+    '.voice-mic-btn.voice-typing-active:hover {',
+    '  background: #b91c1c !important;',
+    '}',
+    '@keyframes voice-btn-ring {',
+    '  0%   { box-shadow: 0 0 0 0px  rgba(220,38,38,0.55); }',
+    '  70%  { box-shadow: 0 0 0 10px rgba(220,38,38,0); }',
+    '  100% { box-shadow: 0 0 0 0px  rgba(220,38,38,0); }',
+    '}',
 
-    /* Fallback for toolbar-btn style voice buttons */
-    .toolbar-btn.voice-typing-btn.voice-typing-active {
-      color: #dc2626 !important;
-      background: #fef2f2 !important;
-    }
-    .toolbar-btn.voice-typing-btn.voice-typing-active svg {
-      animation: voice-icon-pulse 1.1s ease-in-out infinite;
-    }
-    @keyframes voice-icon-pulse {
-      0%, 100% { transform: scale(1);    opacity: 1; }
-      50%       { transform: scale(0.88); opacity: 0.6; }
-    }
+    /* Mic SVG fill: outline → filled mic body when recording */
+    '.voice-mic-btn svg path:first-child { fill: none; transition: fill 0.15s; }',
+    '.voice-mic-btn.voice-typing-active svg path:first-child { fill: currentColor; }',
+
+    /* Toolbar-style voice buttons (fallback) */
+    '.toolbar-btn.voice-typing-btn.voice-typing-active {',
+    '  color: #dc2626 !important; background: #fef2f2 !important;',
+    '}',
+    '.toolbar-btn.voice-typing-btn.voice-typing-active svg {',
+    '  animation: voice-icon-pulse 1.1s ease-in-out infinite;',
+    '}',
+    '@keyframes voice-icon-pulse {',
+    '  0%, 100% { transform: scale(1);    opacity: 1; }',
+    '  50%       { transform: scale(0.88); opacity: 0.6; }',
+    '}',
 
     /* Interim floating banner */
-    #voice-interim-banner {
-      position: fixed;
-      bottom: 28px;
-      left: 50%;
-      transform: translateX(-50%) translateY(14px);
-      background: rgba(15, 15, 15, 0.88);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      color: #fff;
-      padding: 10px 24px;
-      border-radius: 999px;
-      font-size: 15px;
-      line-height: 1.5;
-      max-width: min(560px, 88vw);
-      text-align: center;
-      z-index: 99999;
-      pointer-events: none;
-      font-family: 'Noto Sans Tamil', 'Latha', system-ui, sans-serif;
-      box-shadow: 0 6px 32px rgba(0, 0, 0, 0.32);
-      opacity: 0;
-      transition: opacity 0.18s ease, transform 0.18s ease;
-    }
-    #voice-interim-banner.voice-interim-visible {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
+    '#voice-interim-banner {',
+    '  position: fixed; bottom: 28px; left: 50%;',
+    '  transform: translateX(-50%) translateY(14px);',
+    '  background: rgba(15,15,15,0.88);',
+    '  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);',
+    '  color: #fff; padding: 10px 24px; border-radius: 999px;',
+    '  font-size: 15px; line-height: 1.5;',
+    '  max-width: min(560px, 88vw); text-align: center;',
+    '  z-index: 99999; pointer-events: none;',
+    "  font-family: 'Noto Sans Tamil', 'Latha', system-ui, sans-serif;",
+    '  box-shadow: 0 6px 32px rgba(0,0,0,0.32);',
+    '  opacity: 0; transition: opacity 0.18s ease, transform 0.18s ease;',
+    '}',
+    '#voice-interim-banner.voice-interim-visible {',
+    '  opacity: 1; transform: translateX(-50%) translateY(0);',
+    '}',
 
-    /* Small lang pill buttons */
-    .voice-lang-btn {
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 5px;
-      border: 1px solid #d1d5db;
-      background: transparent;
-      color: #6b7280;
-      cursor: pointer;
-      transition: all 0.15s;
-      line-height: 1.5;
-    }
-    .voice-lang-btn:hover { background: #f3f4f6; color: #111827; border-color: #9ca3af; }
-    .voice-lang-btn.voice-lang-active {
-      background: #eff6ff; color: #1d4ed8;
-      border-color: #93c5fd; font-weight: 600;
-    }
-  `;
-  const styleEl = document.createElement('style');
+    /* Small lang pill buttons (legacy) */
+    '.voice-lang-btn {',
+    '  font-size:11px; padding:2px 8px; border-radius:5px;',
+    '  border:1px solid #d1d5db; background:transparent;',
+    '  color:#6b7280; cursor:pointer; transition:all 0.15s; line-height:1.5;',
+    '}',
+    '.voice-lang-btn:hover { background:#f3f4f6; color:#111827; border-color:#9ca3af; }',
+    '.voice-lang-btn.voice-lang-active {',
+    '  background:#eff6ff; color:#1d4ed8; border-color:#93c5fd; font-weight:600;',
+    '}',
+  ].join('\n');
+
+  var styleEl = document.createElement('style');
   styleEl.textContent = css;
   document.head.appendChild(styleEl);
 
