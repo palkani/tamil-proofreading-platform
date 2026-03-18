@@ -76,6 +76,9 @@
   let _interimBuffer     = '';
   let _interimFlushTimer = null;
 
+  // no-speech loop guard: stop auto-restart after N consecutive no-speech errors
+  let _noSpeechCount = 0;
+
   // Toast
   let _toastEl    = null;
   let _toastTimer = null;
@@ -386,6 +389,9 @@
     };
 
     r.onresult = function (event) {
+      // Any successful result means the mic is working — reset the no-speech counter
+      _noSpeechCount = 0;
+
       var finalText   = '';
       var interimText = '';
 
@@ -478,12 +484,24 @@
           break;
 
         case 'no-speech':
-          _showToast(
-            'No speech detected. Try speaking closer to your microphone.',
-            'warn',
-            3000
-          );
-          // Let onend handle restart
+          _noSpeechCount++;
+          if (_noSpeechCount >= 2) {
+            // Two consecutive no-speech errors → stop the loop entirely.
+            // Setting _isListening = false here causes onend to call _setActive(false)
+            // instead of auto-restarting, breaking the infinite cycle.
+            _isListening = false;
+            _setActive(false);
+            _hideInterim();
+            _clearBuffers();
+            _showToast(
+              'No speech heard. Check your microphone and click the mic button to try again.',
+              'error',
+              6000
+            );
+          } else {
+            // First occurrence — gentle hint; let onend restart once more.
+            _showToast('No speech detected. Try speaking closer to your microphone.', 'warn', 3000);
+          }
           break;
 
         case 'aborted':
@@ -541,7 +559,8 @@
       return;
     }
 
-    _isListening = true;
+    _isListening   = true;
+    _noSpeechCount = 0;   // fresh budget when user manually starts
     _clearBuffers();
     _setActive(true);
     _showInterim('🎤 Starting…');
