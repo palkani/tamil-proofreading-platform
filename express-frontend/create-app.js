@@ -66,10 +66,6 @@ function createApp() {
 
   // Payment feature flag — set PAYMENTS_ENABLED=true in .env to enable payment UI
   app.locals.paymentsEnabled = process.env.PAYMENTS_ENABLED === 'true';
-  // Razorpay public key ID (safe to expose in frontend templates)
-  app.locals.razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';
-  // Stripe publishable key (safe to expose — used by Stripe.js for embedded checkout)
-  app.locals.stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY || '';
 
   app.set('trust proxy', true);
   app.set('view engine', 'ejs');

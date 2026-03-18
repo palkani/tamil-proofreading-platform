@@ -687,10 +687,6 @@ router.get('/pricing', async (req, res) => {
   const user = getCurrentUser(req);
   const seo = getSeoData('pricing');
 
-  const stripePaymentLinkMonthly = process.env.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '';
-  const stripePaymentLinkYearly  = process.env.STRIPE_PAYMENT_LINK_PRO_YEARLY  || '';
-  const stripePublishableKey     = process.env.STRIPE_PUBLISHABLE_KEY || '';
-
   if (!paymentsEnabled) {
     return res.render('pages/pricing', {
       title: seo.title,
@@ -700,10 +696,6 @@ router.get('/pricing', async (req, res) => {
       monthly: null,
       yearly: null,
       countryCode: 'US',
-      razorpayKeyId: '',
-      stripePaymentLinkMonthly: '',
-      stripePaymentLinkYearly:  '',
-      stripePublishableKey: '',
       error: false
     });
   }
@@ -760,10 +752,6 @@ router.get('/pricing', async (req, res) => {
       user,
       paymentsEnabled: true,
       countryCode,
-      razorpayKeyId: req.app.locals.razorpayKeyId,
-      stripePaymentLinkMonthly,
-      stripePaymentLinkYearly,
-      stripePublishableKey,
       monthly,
       yearly,
       error: false,
@@ -780,10 +768,6 @@ router.get('/pricing', async (req, res) => {
       monthly: fallback.monthly,
       yearly: fallback.yearly,
       countryCode,
-      razorpayKeyId: req.app.locals.razorpayKeyId,
-      stripePaymentLinkMonthly,
-      stripePaymentLinkYearly,
-      stripePublishableKey,
       error: false,
       pricingFromCache: true
     });

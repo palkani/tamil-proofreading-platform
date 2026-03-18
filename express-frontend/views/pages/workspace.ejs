@@ -1184,25 +1184,6 @@
   </footer>
 </div>
 
-<!-- =========================================================
-     Stripe Embedded Checkout Modal
-     ========================================================= -->
-<% if (locals.paymentsEnabled && locals.stripePublishableKey) { %>
-<div id="stripe-checkout-modal" class="fixed inset-0 z-[300] hidden items-center justify-center">
-  <div id="stripe-checkout-backdrop" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
-  <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-      <h2 class="text-base font-semibold text-gray-900">Secure Checkout</h2>
-      <button id="stripe-checkout-close" class="text-gray-400 hover:text-gray-600 text-xl leading-none" aria-label="Close">✕</button>
-    </div>
-    <div id="stripe-checkout-loading" class="p-10 text-center text-sm text-gray-400">Loading payment form…</div>
-    <div id="stripe-checkout-error" class="hidden p-6 text-center text-sm text-red-500">
-      Unable to load payment form. <a href="/pricing" class="underline">Try the pricing page</a>.
-    </div>
-    <div id="stripe-checkout-container" class="px-2 pb-2"></div>
-  </div>
-</div>
-<% } %>
 
 <!-- =========================================================
      Upgrade to Pro Modal (shown when free tier limits are hit)
@@ -1365,17 +1346,9 @@
   // USER_PLAN is resolved client-side after fetching /api/v1/me so we start with a safe default
   window.USER_PLAN      = 'free';
   // Payment / country globals (server-detected; used by upgrade modal and payment.js)
-  window.COUNTRY_CODE    = '<%= countryCode || "US" %>';
-  window.RAZORPAY_KEY_ID = '<%= razorpayKeyId || "" %>';
-  window.STRIPE_PK       = '<%= stripePublishableKey || "" %>';
+  window.COUNTRY_CODE     = '<%= countryCode || "US" %>';
   window.PAYMENTS_ENABLED = <%= locals.paymentsEnabled ? 'true' : 'false' %>;
 </script>
-<% if (locals.paymentsEnabled && countryCode === 'IN') { %>
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-<% } %>
-<% if (locals.paymentsEnabled && locals.stripePublishableKey && countryCode !== 'IN') { %>
-<script src="https://js.stripe.com/v3/"></script>
-<% } %>
 <!-- Expose transliterator base URL to browser (multi-region) -->
 <script>
   // Multi-region runner URLs for low latency

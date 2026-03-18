@@ -1,10 +1,6 @@
 <%- include('../partials/header', { seo: seo, title: title, googleClientId: typeof googleClientId !== 'undefined' ? googleClientId : '' }) %>
 <%- include('../partials/nav', { user: user, active: 'pricing' }) %>
 
-<% if (paymentsEnabled && countryCode === 'IN') { %>
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-<% } %>
-
 <div class="min-h-screen bg-gray-50 py-16 px-4">
   <div class="max-w-5xl mx-auto">
 
@@ -195,37 +191,10 @@
 
 <% if (paymentsEnabled) { %>
 
-<!-- Stripe Embedded Checkout modal -->
-<div id="stripe-checkout-modal" class="fixed inset-0 z-[300] hidden items-center justify-center">
-  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" id="stripe-checkout-backdrop"></div>
-  <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-      <p class="font-semibold text-gray-900 text-sm">Secure Checkout</p>
-      <button id="stripe-checkout-close"
-              class="text-gray-400 hover:text-gray-600 text-xl leading-none"
-              aria-label="Close checkout">✕</button>
-    </div>
-    <div id="stripe-checkout-loading" class="p-8 text-center text-sm text-gray-400">
-      Loading checkout…
-    </div>
-    <div id="stripe-checkout-container" class="px-2 pb-2"></div>
-    <div id="stripe-checkout-error" class="hidden p-5 text-center text-sm text-red-500">
-      Failed to load checkout. <a href="/contact" class="underline">Contact support</a>.
-    </div>
-  </div>
-</div>
-
 <script>
-  window.RAZORPAY_KEY_ID = '<%= razorpayKeyId %>';
-  window.USER_LOGGED_IN  = <%= user && user.email ? 'true' : 'false' %>;
-  window.USER_EMAIL = '<%= user && user.email ? user.email.replace(/'/g, "\\'") : "" %>';
-  window.STRIPE_PAYMENT_LINK_PRO_MONTHLY = '<%= stripePaymentLinkMonthly || "" %>';
-  window.STRIPE_PAYMENT_LINK_PRO_YEARLY  = '<%= stripePaymentLinkYearly  || "" %>';
-  window.STRIPE_PK = '<%= stripePublishableKey || "" %>';
+  window.USER_LOGGED_IN = <%= user && user.email ? 'true' : 'false' %>;
+  window.USER_EMAIL     = '<%= user && user.email ? user.email.replace(/'/g, "\\'") : "" %>';
 </script>
-<% if (stripePublishableKey) { %>
-<script src="https://js.stripe.com/v3/"></script>
-<% } %>
 <script src="/js/payment.js"></script>
 <script>
   // Auto-trigger checkout when the user arrives after login/signup from a "Go Pro" click.
