@@ -361,27 +361,50 @@
   }
 
   /**
-   * Schedule the silence-flush timer.
-   * Uses a shorter delay for longer buffers so fast speakers get faster commits.
-   *   ≤ 80 chars  → 800 ms (normal pace)
-   *   81–160 chars → 500 ms (faster commit)
-   *   > 160 chars  → 300 ms (bulk text, commit quickly)
+   * Stop the active recognition session so that onend fires and safely flushes
+   * the buffer, then auto-restarts a new session.
    *
-   * Also arms a max-hold timer (3 s absolute ceiling) so a non-stop speaker
-   * never waits more than 3 s to see text appear.
+   * WHY we do this instead of calling _flushBuffer() directly from timers:
+   *   Chrome accumulates interim results for the entire lifetime of a session.
+   *   If we flush the buffer mid-session without ending it, Chrome re-delivers
+   *   the same accumulated text as interim in the very next onresult event.
+   *   That causes every phrase to be inserted TWICE.
+   *   Ending the session (stop → onend → flush → restart) is the only safe way
+   *   to commit text without triggering that re-delivery.
+   */
+  function _triggerSessionRestart() {
+    if (!_isListening) return;
+    if (_rec) {
+      // Stop the session. onend will flush _interimBuffer and auto-restart.
+      try { _rec.stop(); } catch (_) {}
+    } else if (_interimBuffer) {
+      // Rare: timer fired during the 100 ms restart gap — flush directly.
+      _flushBuffer('timer-gap');
+    }
+  }
+
+  /**
+   * Schedule a session-restart (which triggers a safe flush via onend).
+   * Uses shorter delays for larger buffers so fast speakers get quicker commits.
+   *   ≤ 80 chars  → 800 ms  (normal pace)
+   *   81–160 chars → 500 ms  (faster)
+   *   > 160 chars  → 300 ms  (bulk, commit quickly)
+   *
+   * Also arms a max-hold timer (3 s ceiling) so a non-stop speaker never waits
+   * more than 3 s to see text appear.
    */
   function _scheduleFlushTimer(charCount) {
     clearTimeout(_interimFlushTimer);
     var delay = charCount > 160 ? 300 : charCount > 80 ? 500 : 800;
     _interimFlushTimer = setTimeout(function () {
       _interimFlushTimer = null;
-      if (_isListening) _flushBuffer('timer');
+      _triggerSessionRestart();
     }, delay);
 
     if (!_maxHoldTimer) {
       _maxHoldTimer = setTimeout(function () {
         _maxHoldTimer = null;
-        if (_isListening && _interimBuffer) _flushBuffer('maxhold');
+        if (_interimBuffer) _triggerSessionRestart();
       }, 3000);
     }
   }
