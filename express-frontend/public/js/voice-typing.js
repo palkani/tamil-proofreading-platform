@@ -75,6 +75,8 @@
   // Interim buffer (Tamil recognition rarely delivers isFinal:true)
   let _interimBuffer     = '';
   let _interimFlushTimer = null;
+  let _lastInterimText   = '';   // detect stalled recognition (same text re-delivered)
+  let _maxHoldTimer      = null; // absolute ceiling: flush even during continuous speech
 
   // no-speech loop guard: stop auto-restart after N consecutive no-speech errors
   let _noSpeechCount = 0;
@@ -350,15 +352,45 @@
 
   // ── Buffer management ─────────────────────────────────────────────────────
   function _clearBuffers() {
-    _interimBuffer = '';
+    _interimBuffer   = '';
+    _lastInterimText = '';
     clearTimeout(_interimFlushTimer);
+    clearTimeout(_maxHoldTimer);
     _interimFlushTimer = null;
+    _maxHoldTimer      = null;
+  }
+
+  /**
+   * Schedule the silence-flush timer.
+   * Uses a shorter delay for longer buffers so fast speakers get faster commits.
+   *   ≤ 80 chars  → 800 ms (normal pace)
+   *   81–160 chars → 500 ms (faster commit)
+   *   > 160 chars  → 300 ms (bulk text, commit quickly)
+   *
+   * Also arms a max-hold timer (3 s absolute ceiling) so a non-stop speaker
+   * never waits more than 3 s to see text appear.
+   */
+  function _scheduleFlushTimer(charCount) {
+    clearTimeout(_interimFlushTimer);
+    var delay = charCount > 160 ? 300 : charCount > 80 ? 500 : 800;
+    _interimFlushTimer = setTimeout(function () {
+      _interimFlushTimer = null;
+      if (_isListening) _flushBuffer('timer');
+    }, delay);
+
+    if (!_maxHoldTimer) {
+      _maxHoldTimer = setTimeout(function () {
+        _maxHoldTimer = null;
+        if (_isListening && _interimBuffer) _flushBuffer('maxhold');
+      }, 3000);
+    }
   }
 
   /**
    * Flush the interim buffer.
    * Called by:
-   *   - the 1.5 s silence timer (primary path for Tamil)
+   *   - the silence timer (primary path for Tamil)
+   *   - the max-hold timer (forces commit during continuous speech)
    *   - onend (session boundary — covers the case where timer didn't fire yet)
    *   - stopListening (user manually stops)
    *
@@ -369,7 +401,7 @@
     _clearBuffers();
     _hideInterim();
     if (!text) return;
-    console.log('[VoiceTyping] Flushing buffer (' + source + '):', text.slice(0, 50));
+    console.log('[VoiceTyping] Flushing buffer (' + source + '):', text.slice(0, 60));
     _insertText(text + ' ');
   }
 
@@ -405,31 +437,38 @@
       }
 
       if (finalText) {
-        // Got a proper final result — clear buffer and insert immediately.
+        // Got a definitive result (common in English; rare in Tamil).
+        // Clear interim state and insert immediately.
         _clearBuffers();
         _hideInterim();
         var clean = finalText.trim();
         if (clean) {
           _insertText(clean + ' ');
         }
+        // FIX: the same event can carry NEW interim text for the NEXT phrase
+        // (fast speaker already started the next sentence). Don't discard it.
+        if (interimText) {
+          _interimBuffer   = interimText;
+          _lastInterimText = interimText;
+          _showInterim('🎤 ' + interimText);
+          _scheduleFlushTimer(interimText.length);
+        }
       } else if (interimText) {
         // Accumulate interim transcript.
-        // ── CRITICAL FIX ──
-        // Do NOT insert here or on onspeechend.
-        // In Chrome continuous mode onspeechend fires for *within-phrase* pauses,
-        // then recognition continues and re-delivers the same accumulated text in
-        // the next onresult event. Flushing on onspeechend caused double-insertion.
-        // The timer (1.5 s after last speech) is the correct flush point for Tamil.
-        // For English, isFinal:true handles it reliably above.
+        // ── CRITICAL: do NOT flush here or on onspeechend ──
+        // Chrome fires onspeechend for within-phrase pauses in continuous mode,
+        // then re-delivers the same interim text. Flushing there caused double-
+        // insertion. The silence timer + onend are the correct flush points.
         _interimBuffer = interimText;
         _showInterim('🎤 ' + interimText);
 
-        clearTimeout(_interimFlushTimer);
-        _interimFlushTimer = setTimeout(function () {
-          if (_isListening) {
-            _flushBuffer('timer');
-          }
-        }, 1500);
+        if (interimText !== _lastInterimText) {
+          // Text actually changed → restart the silence timer.
+          _lastInterimText = interimText;
+          _scheduleFlushTimer(interimText.length);
+        }
+        // If interimText === _lastInterimText the recognition API is re-delivering
+        // the same stalled transcript. Don't reset the timer — let it fire naturally.
       }
     };
 
@@ -524,12 +563,13 @@
       if (_isListening) {
         // Auto-restart (Chrome continuous mode caps out at ~60 s; also restarts
         // after transient errors like 'no-speech').
+        // 100 ms gap (was 250 ms) — shorter gap = fewer words missed during restart.
         setTimeout(function () {
           if (_isListening) {
             console.log('[VoiceTyping] Auto-restart');
             _rec = _build();
           }
-        }, 250);
+        }, 100);
       } else {
         _setActive(false);
         _hideInterim();
@@ -560,8 +600,8 @@
     }
 
     _isListening   = true;
-    _noSpeechCount = 0;   // fresh budget when user manually starts
-    _clearBuffers();
+    _noSpeechCount = 0;  // fresh budget when user manually starts
+    _clearBuffers();     // also resets _lastInterimText and _maxHoldTimer
     _setActive(true);
     _showInterim('🎤 Starting…');
     _rec = _build();
