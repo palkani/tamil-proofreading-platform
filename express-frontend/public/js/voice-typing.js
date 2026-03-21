@@ -242,12 +242,18 @@
     // ── Strategy 1: execCommand (undo-safe, respects caret) ──────────────────
     // Only call execCommand when the element is actually focused; otherwise
     // it returns true silently without inserting.
-    if (!inserted &&
-        typeof document.execCommand === 'function' &&
+    //
+    // CRITICAL: do NOT use the return value of execCommand to decide whether
+    // it worked. In Chrome, execCommand('insertText') can successfully insert
+    // text while returning false — which caused every word to be inserted
+    // twice (Strategy 2 would then also run). Instead compare textContent
+    // before/after to detect actual insertion.
+    if (typeof document.execCommand === 'function' &&
         (document.activeElement === el || el.contains(document.activeElement))) {
       try {
-        var ok = document.execCommand('insertText', false, text);
-        if (ok) {
+        var beforeText = el.textContent;
+        document.execCommand('insertText', false, text);
+        if (el.textContent !== beforeText) {
           inserted = true;
         }
       } catch (_) {}

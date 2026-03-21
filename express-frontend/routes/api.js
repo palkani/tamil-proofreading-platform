@@ -3293,6 +3293,10 @@ router.post('/contact', async (req, res) => {
       </div>
     </div>`;
 
+  // SendGrid API key — reuse the SMTP password if it starts with SG. (they're the same credential)
+  const sgApiKey = process.env.SENDGRID_API_KEY ||
+    (smtpPass.startsWith('SG.') ? smtpPass : '');
+
   // ── Send via Resend API ──
   async function sendViaResend(to, replyTo, emailSubject, html) {
     const payload = {
@@ -3313,7 +3317,32 @@ router.post('/contact', async (req, res) => {
     }
   }
 
-  // ── Send via SMTP (nodemailer — works with Zoho, SendGrid, Gmail SMTP, etc.) ──
+  // ── Send via SendGrid HTTP API (preferred over SMTP — no port issues on serverless) ──
+  async function sendViaSendGrid(to, replyTo, emailSubject, html) {
+    const body = {
+      from:             { email: fromEmail, name: 'ProofTamil' },
+      personalizations: [{ to: [{ email: to }], subject: emailSubject }],
+      content:          [{ type: 'text/html', value: html }],
+      ...(replyTo ? { reply_to: { email: replyTo } } : {}),
+    };
+    const r = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${sgApiKey}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+    // SendGrid returns 202 Accepted on success
+    if (r.status >= 400) {
+      const txt = await r.text().catch(() => '');
+      console.error(`[Contact] SendGrid API ${r.status}:`, txt);
+      if (r.status === 403) {
+        console.error('[Contact] ❌ SendGrid 403: verify the sender identity for', fromEmail,
+          'at app.sendgrid.com → Settings → Sender Authentication');
+      }
+      throw new Error(`SendGrid ${r.status}: ${txt}`);
+    }
+  }
+
+  // ── Send via SMTP (nodemailer — fallback for Zoho / Gmail / non-SendGrid SMTP) ──
   async function sendViaSMTP(to, replyTo, emailSubject, html) {
     const nodemailer = require('nodemailer');
     const t = nodemailer.createTransport({
@@ -3327,20 +3356,26 @@ router.post('/contact', async (req, res) => {
 
   try {
     if (resendKey) {
-      // Send via Resend API (preferred)
+      // 1. Resend API (preferred)
+      console.log(`[Contact] Sending via Resend to ${contactTo}`);
       await sendViaResend(contactTo, email, `[Contact] ${subject}`, notifyHtml);
-      // Auto-reply to sender (best-effort — don't fail the whole request if it errors)
       sendViaResend(email, null, `We received your message — ProofTamil`, autoReplyHtml)
-        .catch(e => console.warn('[Contact] Auto-reply failed:', e.message));
+        .catch(e => console.warn('[Contact] Auto-reply (Resend) failed:', e.message));
+    } else if (sgApiKey) {
+      // 2. SendGrid HTTP API (reliable on serverless — no SMTP port issues)
+      console.log(`[Contact] Sending via SendGrid HTTP API from=${fromEmail} to=${contactTo}`);
+      await sendViaSendGrid(contactTo, email, `[Contact] ${subject}`, notifyHtml);
+      sendViaSendGrid(email, null, `We received your message — ProofTamil`, autoReplyHtml)
+        .catch(e => console.warn('[Contact] Auto-reply (SendGrid) failed:', e.message));
     } else if (smtpPass) {
-      // Fallback: SMTP (Zoho / SendGrid / Gmail / etc.)
-      console.log(`[Contact] Sending via SMTP host=${smtpHost} user=${smtpUser}`);
+      // 3. Generic SMTP fallback (Zoho / Gmail / non-SendGrid)
+      console.log(`[Contact] Sending via SMTP host=${smtpHost} user=${smtpUser} to=${contactTo}`);
       await sendViaSMTP(contactTo, email, `[Contact] ${subject}`, notifyHtml);
       sendViaSMTP(email, null, `We received your message — ProofTamil`, autoReplyHtml)
         .catch(e => console.warn('[Contact] Auto-reply (SMTP) failed:', e.message));
     } else {
       // Dev/unconfigured: log to console so messages aren't silently lost
-      console.warn('[Contact] ⚠️  No email service configured. Set RESEND_API_KEY or SMTP_PASSWORD (Zoho/SendGrid/Gmail).');
+      console.warn('[Contact] ⚠️  No email service configured. Set RESEND_API_KEY or SENDGRID_SMTP_PASSWORD.');
       console.log(`[Contact] From: ${email} | Subject: ${subject}\n${message}`);
     }
 
