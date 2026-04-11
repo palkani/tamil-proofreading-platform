@@ -135,34 +135,6 @@ const seoConfig = {
     ]
   },
 
-  converterTool: {
-    title: 'Tamil Document Converter - Convert PDF, DOCX, TXT, HTML | ProofTamil',
-    description: 'Convert documents between PDF, DOCX, TXT, HTML, RTF, and ODT. Preserve Tamil text and formatting. Fast online document converter for Tamil files.',
-    keywords: 'document converter online, tamil document converter, convert pdf to docx tamil, convert docx to txt tamil, convert html to docx tamil, rtf converter, odt converter',
-    canonical: BASE_URL + '/tools/converter',
-    ogTitle: 'Tamil Document Converter - PDF, DOCX, TXT, HTML | ProofTamil',
-    ogDescription: 'Convert Tamil documents between PDF, DOCX, TXT, HTML, RTF and ODT formats online. Preserves Tamil Unicode text. Free, no sign-up.',
-    pageType: 'tool',
-    faqItems: [
-      {
-        q: 'How do I convert a PDF to DOCX while keeping Tamil text?',
-        a: 'Upload your PDF to ProofTamil\'s document converter at prooftamil.com/tools/converter, select DOCX as the output format, and click Convert. The tool preserves Tamil Unicode characters during conversion.'
-      },
-      {
-        q: 'What file formats does ProofTamil\'s document converter support?',
-        a: 'ProofTamil\'s converter supports PDF, DOCX (Word), TXT, HTML, RTF, and ODT. You can convert between any combination of these formats online for free.'
-      },
-      {
-        q: 'Is the Tamil document converter free?',
-        a: 'Yes, ProofTamil\'s document converter is completely free. Upload your file, choose the output format, and download the converted file instantly at prooftamil.com/tools/converter.'
-      },
-      {
-        q: 'Does the converter support Tamil Unicode?',
-        a: 'Yes, ProofTamil\'s document converter fully supports Tamil Unicode (UTF-8) text. Tamil characters are preserved correctly when converting between DOCX, PDF, TXT, HTML, RTF, and ODT formats.'
-      }
-    ]
-  },
-
   aiContentWriterTool: {
     title: 'AI Tamil Content Writer - Generate Tamil Blogs & Articles | ProofTamil',
     description: 'Generate high-quality Tamil content with AI: blogs, essays, articles, and translations. Create Tamil writing faster with a Tamil-friendly AI content writer.',
@@ -189,26 +161,6 @@ const seoConfig = {
         a: 'Yes, the AI Tamil content writer is free to use at prooftamil.com. Sign up for a free account to save your generated drafts. A Pro plan is available for unlimited generation without daily limits.'
       }
     ]
-  },
-
-  eventNameSuggesterTool: {
-    title: 'Event Name Suggester - Catchy Tamil & English Event Names | ProofTamil',
-    description: 'Generate catchy, realistic event names in Tamil, English, or bilingual style. Provide event type, theme, audience, and get ready-to-use name ideas with taglines.',
-    keywords: 'event name generator tamil, tamil event name suggester, event name ideas tamil, catchy event names tamil, ai event name generator, event branding tamil',
-    canonical: BASE_URL + '/tools/event-name-suggester',
-    ogTitle: 'Event Name Suggester - ProofTamil',
-    ogDescription: 'Get catchy Tamil/English event name ideas with taglines using AI.',
-    pageType: 'tool'
-  },
-
-  emailSpamDetectorTool: {
-    title: 'Email Spam Detector - Check if Email is Spam | ProofTamil',
-    description: 'Check if an email (subject and body) looks like spam. Uses heuristics: keywords, link density, caps, urgency language. Free quick check for Tamil and English emails.',
-    keywords: 'email spam checker, spam detector, check spam email, email filter, spam score',
-    canonical: BASE_URL + '/tools/email-spam-detector',
-    ogTitle: 'Email Spam Detector - ProofTamil',
-    ogDescription: 'Check if an email is spam. Paste subject and body for an instant heuristic-based score.',
-    pageType: 'tool'
   },
 
   blog: {

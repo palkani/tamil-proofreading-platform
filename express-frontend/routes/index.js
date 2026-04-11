@@ -139,17 +139,6 @@ router.get('/tools/handwriting-ocr', (req, res) => {
   });
 });
 
-// Document Converter Tool page - accessible to everyone
-router.get('/tools/converter', (req, res) => {
-  const user = getCurrentUser(req);
-  const seo = getSeoData('converterTool');
-  res.render('pages/document-converter', { 
-    title: 'Document Converter - Convert PDF, DOCX, TXT, HTML | ProofTamil',
-    seo: seo,
-    user: user
-  });
-});
-
 // AI Content Writer Tool page - accessible to everyone
 router.get('/tools/ai-content-writer', (req, res) => {
   const user = getCurrentUser(req);
@@ -169,28 +158,6 @@ router.get('/tools/ai-content-writer/drafts', requireAuth, (req, res) => {
     title: 'My AI Content drafts | ProofTamil',
     seo: seo,
     user: user
-  });
-});
-
-// Event Name Suggester Tool page - accessible to everyone
-router.get('/tools/event-name-suggester', (req, res) => {
-  const user = getCurrentUser(req);
-  const seo = getSeoData('eventNameSuggesterTool') || getSeoData('home');
-  res.render('pages/event-name-suggester', {
-    title: 'Event Name Suggester - Catchy Tamil & English Event Names | ProofTamil',
-    seo: seo,
-    user: user
-  });
-});
-
-// Email Spam Detector Tool page - accessible to everyone
-router.get('/tools/email-spam-detector', (req, res) => {
-  const user = getCurrentUser(req);
-  const seo = getSeoData('emailSpamDetectorTool') || getSeoData('home');
-  res.render('pages/email-spam-detector', {
-    title: 'Email Spam Detector - Check if Email is Spam | ProofTamil',
-    seo,
-    user,
   });
 });
 
@@ -877,10 +844,7 @@ router.get('/sitemap.xml', (req, res) => {
     { url: '/blog', priority: '0.85', changefreq: 'weekly' },
     { url: '/tools/ocr', priority: '0.85', changefreq: 'weekly' },
     { url: '/tools/handwriting-ocr', priority: '0.85', changefreq: 'weekly' },
-    { url: '/tools/converter', priority: '0.85', changefreq: 'weekly' },
     { url: '/tools/ai-content-writer', priority: '0.8', changefreq: 'weekly' },
-    { url: '/tools/event-name-suggester', priority: '0.75', changefreq: 'weekly' },
-    { url: '/tools/email-spam-detector', priority: '0.75', changefreq: 'weekly' },
     { url: '/pricing', priority: '0.8', changefreq: 'monthly' },
     { url: '/contact', priority: '0.7', changefreq: 'monthly' },
     { url: '/privacy', priority: '0.4', changefreq: 'yearly' },
