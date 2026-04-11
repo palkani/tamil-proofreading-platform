@@ -1824,11 +1824,11 @@ const uploadHandwriting = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/bmp', 'image/tiff', 'image/webp'];
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPG, PNG, BMP, TIFF, WEBP images are allowed.'));
+      cb(new Error('Invalid file type. Please upload a JPG, PNG, or WEBP image.'));
     }
   }
 });
@@ -1847,20 +1847,32 @@ router.get('/handwriting-ocr/health', (req, res) => {
 
 router.post('/handwriting-ocr/extract-words', uploadHandwriting.single('file'), async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
+    return res.status(400).json({ error: 'No file uploaded. Please select an image file.' });
+  }
+
+  // Reject empty files before hitting Gemini
+  if (req.file.size === 0) {
+    return res.status(400).json({ error: 'The uploaded file is empty. Please upload a valid image.' });
   }
 
   const keyInfo = keyRotator.getNextKey();
   if (!keyInfo) {
-    return res.status(500).json({ error: 'AI service not configured' });
+    return res.status(500).json({
+      error: 'AI service not configured. Please contact support.',
+      details: 'Gemini API key is not set.'
+    });
   }
 
   const t0 = Date.now();
+
   const imageBase64 = req.file.buffer.toString('base64');
-  // Normalize mime type for Gemini (bmp/tiff → jpeg fallback handled gracefully)
-  const mimeType = req.file.mimetype === 'image/bmp' || req.file.mimetype === 'image/tiff'
-    ? 'image/jpeg'
-    : req.file.mimetype;
+  const mimeType = req.file.mimetype;
+
+  // Language selection from frontend (tamil | mixed)
+  const lang = (req.body && req.body.lang === 'mixed') ? 'mixed' : 'tamil';
+  const langInstruction = lang === 'mixed'
+    ? 'The image may contain both Tamil (தமிழ்) and English text. Extract ALL text in both languages, preserving each word in its original script.'
+    : 'Focus on extracting Tamil (தமிழ்) handwritten text. If any English words appear alongside Tamil, include them as written.';
 
   try {
     const response = await axiosWithPool.post(
@@ -1868,35 +1880,32 @@ router.post('/handwriting-ocr/extract-words', uploadHandwriting.single('file'), 
       {
         contents: [{
           parts: [
+            { inlineData: { mimeType, data: imageBase64 } },
             {
-              inlineData: {
-                mimeType,
-                data: imageBase64
-              }
-            },
-            {
-              text: `You are an expert Tamil OCR system specialized in handwritten Tamil script (தமிழ் கையெழுத்து).
+              text: `You are an expert OCR system specialized in handwritten Tamil script (தமிழ் கையெழுத்து).
 
-Carefully examine this image and extract ALL visible Tamil text — handwritten notes, letters, words, and sentences.
+${langInstruction}
 
-Return ONLY a strict JSON object with this exact structure (no markdown, no explanation):
+Carefully examine this image and extract ALL visible handwritten text — notes, letters, words, and sentences. Read every line from top to bottom, left to right.
+
+Return ONLY a raw JSON object (no markdown fences, no explanation, no code blocks):
 {
-  "full_text": "complete extracted text with newlines between lines",
+  "full_text": "complete extracted text with actual newlines between each line",
   "lines": ["line 1 text", "line 2 text"],
   "words": [
-    {"text": "word1", "confidence": 0.95},
-    {"text": "word2", "confidence": 0.75}
+    {"text": "சொல்1", "confidence": 0.95},
+    {"text": "சொல்2", "confidence": 0.75}
   ]
 }
 
-Confidence scoring guide:
+Confidence guide:
 - 0.90–1.0: clearly written, certain
 - 0.65–0.89: mostly clear, minor ambiguity
-- 0.40–0.64: difficult handwriting, uncertain
+- 0.40–0.64: difficult to read, uncertain
 - Below 0.4: very unclear
 
-If the image has no Tamil text, return: {"full_text":"","lines":[],"words":[]}
-If text is mixed Tamil+English, include both. Output ONLY the JSON object.`
+If no text is visible in the image: {"full_text":"","lines":[],"words":[]}
+Output ONLY the raw JSON — no markdown, no preamble.`
             }
           ]
         }],
@@ -1904,7 +1913,8 @@ If text is mixed Tamil+English, include both. Output ONLY the JSON object.`
           temperature: 0.1,
           topP: 0.95,
           maxOutputTokens: 4096,
-          responseMimeType: 'application/json'
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingBudget: 0 }
         }
       },
       {
@@ -1913,21 +1923,24 @@ If text is mixed Tamil+English, include both. Output ONLY the JSON object.`
       }
     );
 
-    const raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    // Strip markdown code fences as a safety net (defensive)
+    let raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    raw = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
     let parsed;
     try {
-      parsed = JSON.parse(raw.trim());
+      parsed = JSON.parse(raw);
     } catch (_) {
-      // If JSON parse fails, treat the raw text as the full_text
-      parsed = { full_text: raw.trim(), lines: raw.trim().split('\n').filter(Boolean), words: [] };
+      // Fallback: treat raw text as the extracted content
+      parsed = { full_text: raw, lines: raw.split('\n').filter(Boolean), words: [] };
     }
 
     const fullText = parsed.full_text || '';
     const words = Array.isArray(parsed.words) ? parsed.words : [];
     const lines = Array.isArray(parsed.lines) ? parsed.lines : fullText.split('\n').filter(Boolean);
-
     const processingMs = Date.now() - t0;
-    console.log(`[HANDWRITING-OCR] Extracted ${words.length} words, ${lines.length} lines in ${processingMs}ms`);
+
+    console.log(`[HANDWRITING-OCR] lang=${lang} extracted ${words.length} words, ${lines.length} lines in ${processingMs}ms`);
 
     return res.json({
       success: true,
@@ -1941,11 +1954,17 @@ If text is mixed Tamil+English, include both. Output ONLY the JSON object.`
     });
 
   } catch (error) {
+    const httpStatus = error.response?.status;
+    // Mark key as rate-limited on 429 so rotator skips it for 90s
+    if (httpStatus === 429) {
+      keyRotator.markRateLimited(keyInfo.index);
+      console.warn(`[HANDWRITING-OCR] Rate limited on key ${keyInfo.index + 1}, marked for cooldown`);
+    }
     console.error('[HANDWRITING-OCR] Gemini error:', error.response?.data || error.message);
-    const status = error.response?.status || 500;
-    return res.status(status >= 400 && status < 600 ? status : 500).json({
+    const errMsg = error.response?.data?.error?.message || error.message || 'Failed to process image';
+    return res.status(httpStatus >= 400 && httpStatus < 600 ? httpStatus : 500).json({
       success: false,
-      error: error.response?.data?.error?.message || error.message || 'Failed to process handwritten image'
+      error: errMsg
     });
   }
 });

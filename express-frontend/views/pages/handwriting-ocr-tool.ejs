@@ -42,8 +42,8 @@
       >
         <div class="text-5xl mb-3">✍️</div>
         <div class="text-lg font-semibold text-amber-800 mb-1">Click to upload or drag &amp; drop</div>
-        <div class="text-sm text-gray-500">JPG, PNG, WEBP, BMP, TIFF · Max 10 MB</div>
-        <input type="file" id="fileInput" accept="image/*,.jpg,.jpeg,.png,.bmp,.tiff,.webp" class="hidden">
+        <div class="text-sm text-gray-500">JPG, PNG, WEBP · Max 10 MB</div>
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" class="hidden">
       </div>
 
       <!-- Paste from clipboard -->
@@ -336,6 +336,7 @@
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
+      formData.append('lang', document.querySelector('input[name="ocrLang"]:checked')?.value || 'tamil');
 
       const res = await fetch('/api/handwriting-ocr/extract-words', {
         method: 'POST',
