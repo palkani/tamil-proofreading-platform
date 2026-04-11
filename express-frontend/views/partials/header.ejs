@@ -353,6 +353,23 @@
   <script type="application/ld+json"><%- seo.jsonLd %></script>
   <% } %>
 
+  <% if (typeof seo !== 'undefined' && seo.faqItems && seo.faqItems.length > 0) { %>
+  <!-- Structured Data - FAQPage for rich snippet accordions in SERPs -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": <%- JSON.stringify(seo.faqItems.map(function(item) {
+      return {
+        "@type": "Question",
+        "name": item.q,
+        "acceptedAnswer": { "@type": "Answer", "text": item.a }
+      };
+    })) %>
+  }
+  </script>
+  <% } %>
+
   <!-- Structured Data - WebSite (site-wide: enables Google Sitelinks & brand disambiguation) -->
   <% if (!noIndex) { %>
   <script type="application/ld+json">
@@ -376,6 +393,91 @@
   </script>
   <% } %>
   
+  <% if (pageType === 'tool') { %>
+  <!-- Structured Data - Tool-specific WebApplication schema -->
+  <% const toolSchemas = {
+    'Tamil OCR Online Free - Extract Tamil Text from Images | ProofTamil': {
+      name: 'Tamil OCR Tool - ProofTamil',
+      description: 'Free online Tamil OCR tool. Upload JPG, PNG, or PDF images and extract Tamil text instantly using Google Vision AI.',
+      url: baseUrl + '/tools/ocr',
+      featureList: ['Tamil OCR from JPG/PNG/PDF', 'Google Vision AI', 'Instant text extraction', 'Free no sign-up']
+    },
+    'Tamil Handwriting to Text Online - Free Handwriting OCR | ProofTamil': {
+      name: 'Tamil Handwriting OCR - ProofTamil',
+      description: 'Convert handwritten Tamil notes to editable text online. Upload a photo of handwritten Tamil and get text instantly.',
+      url: baseUrl + '/tools/handwriting-ocr',
+      featureList: ['Handwritten Tamil recognition', 'Photo to text conversion', 'AI handwriting model', 'Free online tool']
+    },
+    'Tamil Document Converter - Convert PDF, DOCX, TXT, HTML | ProofTamil': {
+      name: 'Tamil Document Converter - ProofTamil',
+      description: 'Convert Tamil documents between PDF, DOCX, TXT, HTML, RTF, and ODT formats online. Preserves Tamil Unicode text.',
+      url: baseUrl + '/tools/converter',
+      featureList: ['PDF to DOCX conversion', 'Tamil Unicode support', 'DOCX TXT HTML RTF ODT', 'Free online converter']
+    },
+    'AI Tamil Content Writer - Generate Tamil Blogs & Articles | ProofTamil': {
+      name: 'AI Tamil Content Writer - ProofTamil',
+      description: 'Generate high-quality Tamil blog posts, articles, and essays using AI. Supports formal and spoken Tamil styles.',
+      url: baseUrl + '/tools/ai-content-writer',
+      featureList: ['AI Tamil blog generator', 'Formal and spoken Tamil', 'English to Tamil content', 'Free AI writer']
+    }
+  };
+  const toolSchema = toolSchemas[seoTitle] || null;
+  %>
+  <% if (toolSchema) { %>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "<%= toolSchema.name %>",
+    "url": "<%= toolSchema.url %>",
+    "description": "<%= toolSchema.description %>",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "Web Browser",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" },
+    "featureList": <%- JSON.stringify(toolSchema.featureList) %>,
+    "isAccessibleForFree": true,
+    "inLanguage": ["ta", "en"]
+  }
+  </script>
+  <% } %>
+  <% } %>
+
+  <% if (pageType === 'pricing') { %>
+  <!-- Structured Data - Product with free and pro offers for pricing page -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "ProofTamil Pro",
+    "description": "Unlimited AI Tamil proofreading — unlimited words per analysis, unlimited checks per day, all correction types (grammar, style, rewrite), and unlimited saved drafts.",
+    "brand": { "@type": "Brand", "name": "ProofTamil" },
+    "url": "<%= baseUrl %>/pricing",
+    "offers": [
+      {
+        "@type": "Offer",
+        "name": "ProofTamil Free",
+        "price": "0",
+        "priceCurrency": "USD",
+        "availability": "https://schema.org/InStock",
+        "description": "200 words per analysis, 30 AI checks per day"
+      },
+      {
+        "@type": "Offer",
+        "name": "ProofTamil Pro Monthly",
+        "availability": "https://schema.org/InStock",
+        "description": "Unlimited words, unlimited checks, all correction types, unlimited drafts"
+      },
+      {
+        "@type": "Offer",
+        "name": "ProofTamil Pro Yearly",
+        "availability": "https://schema.org/InStock",
+        "description": "Unlimited words, unlimited checks, all correction types, unlimited drafts — best value"
+      }
+    ]
+  }
+  </script>
+  <% } %>
+
   <% if (pageType === 'article' || pageType === 'howToUse') { %>
   <!-- Structured Data - HowTo for tutorial pages -->
   <script type="application/ld+json">
@@ -429,24 +531,37 @@
   <% } %>
   
   <!-- BreadcrumbList for better navigation in search results -->
-  <% if (pageType !== 'home' && pageType !== 'error') { %>
+  <% if (pageType === 'blogPost') { %>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     "itemListElement": [
-      {
-        "@type": "ListItem",
-        "position": 1,
-        "name": "Home",
-        "item": "<%= baseUrl %>"
-      },
-      {
-        "@type": "ListItem",
-        "position": 2,
-        "name": "<%= seoTitle.split(' - ')[0].split(' | ')[0] %>",
-        "item": "<%= canonicalUrl %>"
-      }
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "<%= baseUrl %>" },
+      { "@type": "ListItem", "position": 2, "name": "Blog", "item": "<%= baseUrl %>/blog" },
+      { "@type": "ListItem", "position": 3, "name": "<%= seoTitle.split(' | ')[0] %>", "item": "<%= canonicalUrl %>" }
+    ]
+  }
+  </script>
+  <% } else if (pageType !== 'home' && pageType !== 'error' && pageType !== 'blogIndex') { %>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "<%= baseUrl %>" },
+      { "@type": "ListItem", "position": 2, "name": "<%= seoTitle.split(' - ')[0].split(' | ')[0] %>", "item": "<%= canonicalUrl %>" }
+    ]
+  }
+  </script>
+  <% } else if (pageType === 'blogIndex') { %>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "<%= baseUrl %>" },
+      { "@type": "ListItem", "position": 2, "name": "Blog", "item": "<%= baseUrl %>/blog" }
     ]
   }
   </script>

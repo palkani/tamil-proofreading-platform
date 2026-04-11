@@ -2,7 +2,7 @@ const BASE_URL = 'https://prooftamil.com';
 
 const seoConfig = {
   home: {
-    title: 'ProofTamil - Free Tamil Grammar Checker & AI Proofreading Tool | prooftamil.com',
+    title: 'ProofTamil - Free Tamil Grammar Checker & AI Proofreading Tool',
     description: 'ProofTamil (prooftamil.com) - Free Tamil proofreading tool with AI-powered grammar checker, spell check, and writing correction. Check Tamil grammar online free, fix spelling errors, and improve Tamil writing instantly. Best Tamil AI writing assistant - no download needed! தமிழ் இலக்கண சரிபார்ப்பு இலவசம்.',
     keywords: 'prooftamil, prooftamil.com, proof tamil, proof tamil.com, tamil editor, tamil typing, tanglish to tamil, phonetic tamil typing, tamil typing tool, tamil editor online, tamil proofreading tool, tamil proofreader online, tamil grammar checker, tamil grammar corrector, tamil spell checker, tamil spell check online, tamil writing assistant, tamil writing correction tool, tamil AI grammar checker, tamil grammar correction online, correct tamil grammar, fix tamil spelling, check tamil grammar free, tamil proofreading free, free tamil editor, free tamil editor online, online tamil editor, tamil text editor, tamil writing tool free, type tamil online, write tamil online, tamil language tool, best tamil grammar checker, tamil grammar checker free online',
     canonical: BASE_URL + '/',
@@ -23,64 +23,172 @@ const seoConfig = {
   },
 
   howToUse: {
-    title: 'How to Use ProofTamil - Tamil Grammar Checker Guide | prooftamil.com',
+    title: 'How to Use ProofTamil - Tamil Grammar Checker Guide',
     description: 'Learn how to use ProofTamil (prooftamil.com) Tamil proofreading tool. Step-by-step guide for Tamil grammar checking, spell check, and AI writing correction. Start improving your Tamil writing today!',
     keywords: 'how to check tamil grammar, tamil grammar check tutorial, tamil proofreading guide, tamil writing improvement tool, learn tamil grammar correction, tamil spell check guide',
     canonical: BASE_URL + '/how-to-use',
     ogTitle: 'How to Use ProofTamil - Tamil Grammar Checker Guide',
-    ogDescription: 'Step-by-step guide to using ProofTamil for Tamil grammar checking and proofreading.',
-    pageType: 'article'
+    ogDescription: 'Step-by-step guide to using ProofTamil for Tamil grammar checking and proofreading. Learn to type Tanglish, fix errors, and improve Tamil writing.',
+    pageType: 'article',
+    faqItems: [
+      {
+        q: 'How do I check Tamil grammar on ProofTamil?',
+        a: 'Visit prooftamil.com, type or paste your Tamil text in the editor, and click "Check Grammar". The AI analyzes the text, highlights all grammar and spelling errors with colored underlines, and shows correction suggestions. Click any suggestion to apply it instantly.'
+      },
+      {
+        q: 'How do I type Tamil on ProofTamil without a Tamil keyboard?',
+        a: 'ProofTamil supports Tanglish (phonetic Tamil typing). Type Tamil words using English letters — for example, "naan Tamil padikiren" becomes "நான் தமிழ் படிக்கிறேன்". The transliteration happens in real time as you type.'
+      },
+      {
+        q: 'Does ProofTamil support both spoken and formal Tamil?',
+        a: 'Yes! ProofTamil has a Style dropdown with "Spoken Tamil" (பேச்சு தமிழ்) and "Formal Tamil" (இலக்கிய தமிழ்) modes. In Spoken mode, everyday forms like பண்ற, போறேன், வேணும் are treated as correct. In Formal mode, stricter grammar rules apply.'
+      },
+      {
+        q: 'How do I proofread a full Tamil article?',
+        a: 'Paste your full article into the ProofTamil workspace at prooftamil.com. The AI checks the entire text and lists all grammar, spelling, and style errors. Free plan supports up to 200 words per check. Upgrade to Pro for unlimited word count.'
+      }
+    ]
   },
 
   freeTamilEditor: {
-    title: 'Free Tamil Editor Online - Tamil Typing & Proofreading Tool | ProofTamil (prooftamil.com)',
+    title: 'Free Tamil Editor Online - Type & Proofread Tamil | ProofTamil',
     description: 'Free Tamil editor online — type in Tanglish (phonetic English) to get Tamil instantly, or paste existing Tamil text for AI grammar and spell check. 100% free, no download, no sign-up required. Best free online Tamil text editor at prooftamil.com.',
     keywords: 'free tamil editor, free tamil editor online, online tamil editor, tamil editor online free, tamil text editor, tamil typing online, tamil writing online, type tamil online, write tamil online, tanglish to tamil, phonetic tamil typing, tamil typing tool, tamil typing without keyboard, tamil editor no download, free tamil writing tool, tamil editor for students, tamil article editor, tamil essay editor, tamil proofread online, tamil spell check free, tamil grammar check free, tamil sentence correction, tamil writing correction, free tamil language editor, tamil editing online, edit tamil text online, best free tamil editor, tamil typing keyboard online, tamil unicode editor',
     canonical: BASE_URL + '/free-tamil-editor',
     ogTitle: 'Free Tamil Editor Online - Type & Proofread Tamil | ProofTamil',
     ogDescription: 'Free online Tamil editor — type Tanglish to get Tamil, paste text, get instant AI grammar & spelling corrections. No download, no sign-up required.',
     pageType: 'landing',
-    includeStructuredData: true
+    includeStructuredData: true,
+    faqItems: [
+      {
+        q: 'How do I type Tamil online without a Tamil keyboard?',
+        a: 'Open ProofTamil\'s free Tamil editor at prooftamil.com/free-tamil-editor and type phonetically in English (Tanglish). For example: "vanakkam" → வணக்கம், "nandri" → நன்றி, "en peyar Tamil" → என் பெயர் தமிழ். No Tamil keyboard or special software needed.'
+      },
+      {
+        q: 'Can I proofread Tamil text in the free Tamil editor?',
+        a: 'Yes! After typing or pasting Tamil text in ProofTamil\'s free editor, click the Check Grammar button. The AI checks for grammar errors, spelling mistakes, and provides one-click correction suggestions.'
+      },
+      {
+        q: 'Is ProofTamil\'s Tamil editor completely free?',
+        a: 'Yes, the free Tamil editor at prooftamil.com/free-tamil-editor is 100% free. Type in Tanglish, paste Tamil text, and get AI grammar corrections — no download, no sign-up, no hidden fees.'
+      },
+      {
+        q: 'Can I use the free Tamil editor on mobile?',
+        a: 'Yes, ProofTamil\'s free Tamil editor works on all devices including mobile phones and tablets. Open prooftamil.com/free-tamil-editor in any browser on Android or iOS to start typing and proofreading Tamil.'
+      }
+    ]
   },
 
   ocrTool: {
-    title: 'Tamil OCR Online Free - Extract Tamil Text from Images & PDFs | ProofTamil (prooftamil.com)',
+    title: 'Tamil OCR Online Free - Extract Tamil Text from Images | ProofTamil',
     description: 'ProofTamil OCR tool - Free Tamil OCR tool to extract Tamil text from images and PDFs. Upload JPG/PNG/PDF and get editable Tamil text instantly. Best OCR for Tamil documents online.',
     keywords: 'tamil ocr, tamil ocr online, tamil ocr free, extract tamil text from image, tamil image to text, tamil pdf to text, scanned tamil document to text, tamil ocr tool',
     canonical: BASE_URL + '/tools/ocr',
-    ogTitle: 'Tamil OCR Online Free - ProofTamil',
-    ogDescription: 'Extract Tamil text from images and PDFs online. Fast, free, and accurate Tamil OCR.',
-    pageType: 'tool'
+    ogTitle: 'Tamil OCR Online Free - Extract Tamil Text from Images | ProofTamil',
+    ogDescription: 'Extract Tamil text from images and PDFs online. Fast, free, and accurate Tamil OCR. Upload JPG, PNG, or PDF — get editable Tamil text instantly.',
+    pageType: 'tool',
+    faqItems: [
+      {
+        q: 'How do I extract Tamil text from an image?',
+        a: 'Upload your image (JPG, PNG, or PDF) to ProofTamil\'s Tamil OCR tool at prooftamil.com/tools/ocr. The AI automatically extracts all Tamil text from the image in seconds — no download or sign-up required.'
+      },
+      {
+        q: 'What image formats does ProofTamil Tamil OCR support?',
+        a: 'ProofTamil\'s Tamil OCR tool supports JPG, PNG, WEBP, and PDF files. Both printed Tamil documents and scanned pages are supported.'
+      },
+      {
+        q: 'Is ProofTamil Tamil OCR free?',
+        a: 'Yes, ProofTamil\'s Tamil OCR tool is completely free to use. Upload images and extract Tamil text at prooftamil.com/tools/ocr at no cost.'
+      },
+      {
+        q: 'How accurate is ProofTamil\'s Tamil OCR?',
+        a: 'ProofTamil uses Google Vision AI for Tamil OCR, achieving high accuracy for printed Tamil text from documents, books, and printed letters. After extraction, you can proofread and correct the text using ProofTamil\'s AI grammar checker.'
+      }
+    ]
   },
 
   handwritingOcrTool: {
-    title: 'Tamil Handwriting to Text - Handwritten Notes OCR | ProofTamil (prooftamil.com)',
+    title: 'Tamil Handwriting to Text Online - Free Handwriting OCR | ProofTamil',
     description: 'Extract Tamil text from handwritten notes, whiteboard, or letters. Upload an image of handwritten Tamil and get editable text instantly. Free Tamil handwriting OCR online.',
     keywords: 'tamil handwriting ocr, handwritten tamil to text, tamil notes to text, tamil handwriting recognition, handwritten tamil ocr online',
     canonical: BASE_URL + '/tools/handwriting-ocr',
-    ogTitle: 'Tamil Handwriting to Text - ProofTamil',
-    ogDescription: 'Convert handwritten Tamil notes to editable text. Upload an image and get text instantly.',
-    pageType: 'tool'
+    ogTitle: 'Tamil Handwriting to Text - Free Online OCR | ProofTamil',
+    ogDescription: 'Convert handwritten Tamil notes to editable text. Upload a photo of handwritten Tamil and get text instantly — free, no sign-up.',
+    pageType: 'tool',
+    faqItems: [
+      {
+        q: 'Can I convert handwritten Tamil to text online for free?',
+        a: 'Yes, ProofTamil\'s handwriting OCR at prooftamil.com/tools/handwriting-ocr converts handwritten Tamil notes to editable text for free. Upload a clear photo and the AI extracts the text instantly.'
+      },
+      {
+        q: 'What types of handwritten Tamil can ProofTamil recognize?',
+        a: 'ProofTamil recognizes handwritten Tamil notes, exam answer sheets, letters, and whiteboard writing. Best results with clear, well-lit photos where the handwriting is legible.'
+      },
+      {
+        q: 'How do I get the best results from Tamil handwriting OCR?',
+        a: 'For best accuracy: use good lighting, keep the paper flat, avoid shadows, and ensure the handwriting is clearly readable. Block letter or neat cursive handwriting yields the highest accuracy.'
+      },
+      {
+        q: 'Is Tamil handwriting recognition different from printed OCR?',
+        a: 'Yes, handwriting recognition is more challenging than printed text OCR. ProofTamil uses a specialized AI model for handwritten Tamil to handle the natural variation in letter shapes. After extraction, use ProofTamil\'s grammar checker to correct any errors.'
+      }
+    ]
   },
 
   converterTool: {
-    title: 'Document Converter Online - Convert PDF DOCX TXT HTML RTF ODT | ProofTamil',
+    title: 'Tamil Document Converter - Convert PDF, DOCX, TXT, HTML | ProofTamil',
     description: 'Convert documents between PDF, DOCX, TXT, HTML, RTF, and ODT. Preserve Tamil text and formatting. Fast online document converter for Tamil files.',
     keywords: 'document converter online, tamil document converter, convert pdf to docx tamil, convert docx to txt tamil, convert html to docx tamil, rtf converter, odt converter',
     canonical: BASE_URL + '/tools/converter',
-    ogTitle: 'Document Converter Online - ProofTamil',
-    ogDescription: 'Convert Tamil documents between formats. Preserve Tamil text and formatting.',
-    pageType: 'tool'
+    ogTitle: 'Tamil Document Converter - PDF, DOCX, TXT, HTML | ProofTamil',
+    ogDescription: 'Convert Tamil documents between PDF, DOCX, TXT, HTML, RTF and ODT formats online. Preserves Tamil Unicode text. Free, no sign-up.',
+    pageType: 'tool',
+    faqItems: [
+      {
+        q: 'How do I convert a PDF to DOCX while keeping Tamil text?',
+        a: 'Upload your PDF to ProofTamil\'s document converter at prooftamil.com/tools/converter, select DOCX as the output format, and click Convert. The tool preserves Tamil Unicode characters during conversion.'
+      },
+      {
+        q: 'What file formats does ProofTamil\'s document converter support?',
+        a: 'ProofTamil\'s converter supports PDF, DOCX (Word), TXT, HTML, RTF, and ODT. You can convert between any combination of these formats online for free.'
+      },
+      {
+        q: 'Is the Tamil document converter free?',
+        a: 'Yes, ProofTamil\'s document converter is completely free. Upload your file, choose the output format, and download the converted file instantly at prooftamil.com/tools/converter.'
+      },
+      {
+        q: 'Does the converter support Tamil Unicode?',
+        a: 'Yes, ProofTamil\'s document converter fully supports Tamil Unicode (UTF-8) text. Tamil characters are preserved correctly when converting between DOCX, PDF, TXT, HTML, RTF, and ODT formats.'
+      }
+    ]
   },
 
   aiContentWriterTool: {
-    title: 'AI Tamil Content Writer - Generate Tamil Blogs, Articles & Captions | ProofTamil',
+    title: 'AI Tamil Content Writer - Generate Tamil Blogs & Articles | ProofTamil',
     description: 'Generate high-quality Tamil content with AI: blogs, essays, articles, and translations. Create Tamil writing faster with a Tamil-friendly AI content writer.',
     keywords: 'ai tamil content writer, tamil blog generator, tamil article generator, tamil content generation, tamil writing ai, tamil content creator',
     canonical: BASE_URL + '/tools/ai-content-writer',
-    ogTitle: 'AI Tamil Content Writer - ProofTamil',
-    ogDescription: 'Generate Tamil blogs, essays, and articles with AI in seconds.',
-    pageType: 'tool'
+    ogTitle: 'AI Tamil Content Writer - Generate Blogs & Articles | ProofTamil',
+    ogDescription: 'Generate high-quality Tamil blogs, essays, articles, and captions with AI in seconds. Supports formal and spoken Tamil. Free at ProofTamil.',
+    pageType: 'tool',
+    faqItems: [
+      {
+        q: 'Can AI write Tamil blog posts and articles?',
+        a: 'Yes, ProofTamil\'s AI Tamil content writer at prooftamil.com/tools/ai-content-writer generates full Tamil blog posts, essays, articles, and social media captions using AI. Just provide a topic and style preference to get started.'
+      },
+      {
+        q: 'What types of Tamil content can the AI generate?',
+        a: 'ProofTamil\'s AI can generate Tamil blog posts, articles, essays, product descriptions, social media captions, and more — in both formal (இலக்கிய தமிழ்) and spoken (பேச்சு தமிழ்) styles.'
+      },
+      {
+        q: 'Can I use ProofTamil AI to write Tamil content from an English prompt?',
+        a: 'Yes, ProofTamil\'s AI content writer accepts English topic descriptions and generates well-written Tamil content. Type your topic or outline in English and get Tamil output ready to publish.'
+      },
+      {
+        q: 'Is the AI Tamil content writer free?',
+        a: 'Yes, the AI Tamil content writer is free to use at prooftamil.com. Sign up for a free account to save your generated drafts. A Pro plan is available for unlimited generation without daily limits.'
+      }
+    ]
   },
 
   eventNameSuggesterTool: {
@@ -243,13 +351,31 @@ const seoConfig = {
   },
 
   pricing: {
-    title: 'Pricing - ProofTamil Pro Plans | Unlimited Tamil AI Proofreading',
+    title: 'ProofTamil Pro Pricing - Unlimited Tamil AI Proofreading Plans',
     description: 'ProofTamil Pro plans — unlimited AI Tamil proofreading, unlimited words, all correction types (grammar, style, rewrite), and save unlimited drafts. Affordable monthly and yearly plans. Start free, upgrade anytime.',
     keywords: 'prooftamil pricing, prooftamil pro, tamil grammar checker pro, tamil proofreading subscription, tamil ai writer pro, unlimited tamil proofreading, tamil grammar checker upgrade, tamil ai pro plan, best tamil proofreading tool price',
     canonical: BASE_URL + '/pricing',
     ogTitle: 'ProofTamil Pro Pricing - Unlimited Tamil AI Proofreading',
     ogDescription: 'Upgrade to ProofTamil Pro — unlimited words, unlimited AI checks per day, all correction types. Simple pricing, cancel anytime.',
-    pageType: 'pricing'
+    pageType: 'pricing',
+    faqItems: [
+      {
+        q: 'What is included in ProofTamil Pro?',
+        a: 'ProofTamil Pro includes: unlimited words per analysis (vs 200 on free), unlimited AI proofreading checks per day (vs 30 on free), all correction types (grammar, style, and full rewrite), and unlimited saved drafts. Visit prooftamil.com/pricing for current prices.'
+      },
+      {
+        q: 'Is there a free plan for ProofTamil?',
+        a: 'Yes, ProofTamil has a permanent free plan with 200 words per analysis and 30 AI proofreading checks per day — enough for students and casual Tamil writers. No credit card required. Upgrade to Pro anytime for unlimited access.'
+      },
+      {
+        q: 'Can I cancel ProofTamil Pro anytime?',
+        a: 'Yes, ProofTamil Pro subscriptions can be cancelled anytime from your account page. Your Pro access continues until the end of the current billing period with no additional charges.'
+      },
+      {
+        q: 'Does ProofTamil offer a yearly discount?',
+        a: 'Yes, ProofTamil Pro yearly plans are significantly cheaper than monthly billing. Visit prooftamil.com/pricing to compare monthly and yearly prices and choose the best option for you.'
+      }
+    ]
   },
 
   billingSuccess: {

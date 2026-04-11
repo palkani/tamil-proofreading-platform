@@ -4277,7 +4277,7 @@ class WorkspaceController {
       const response = await this.apiFetch('/api/corrections/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, tamil_style: this.getMode() || 'spoken' }),
         signal: this.abortController ? this.abortController.signal : undefined,
       });
 
