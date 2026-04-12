@@ -7,31 +7,34 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // Primary: Rich Indigo — modern AI/tech feel, premium
         primary: {
-          50:  '#EBF4FB',
-          100: '#d6e9f7',
-          200: '#b3d4f0',
-          300: '#7ab8e6',
-          400: '#4d9bdc',
-          500: '#2979FF',  // Vibrant medium blue (accent)
-          600: '#1A2B68',  // Deep navy (primary headings)
-          700: '#152558',
-          800: '#0f1a42',
-          900: '#0a122e',
+          50:  '#EEF2FF',
+          100: '#E0E7FF',
+          200: '#C7D2FE',
+          300: '#A5B4FC',
+          400: '#818CF8',
+          500: '#6366F1',
+          600: '#4F46E5',   // ← main brand (buttons, highlights)
+          700: '#4338CA',
+          800: '#3730A3',
+          900: '#312E81',
+          950: '#1E1B4B',   // ← deep brand (dark headings)
         },
+        // Accent: Saffron Amber — Tamil cultural warmth
         accent: {
-          50:  '#EBF4FB',
-          100: '#d6e9f7',
-          200: '#b3d4f0',
-          300: '#7ab8e6',
-          400: '#4d9bdc',
-          500: '#2979FF',
-          600: '#1A2B68',
-          700: '#152558',
-          800: '#0f1a42',
-          900: '#0a122e',
+          50:  '#FFFBEB',
+          100: '#FEF3C7',
+          200: '#FDE68A',
+          300: '#FCD34D',
+          400: '#FBBF24',
+          500: '#F59E0B',   // ← main saffron accent
+          600: '#D97706',
+          700: '#B45309',
+          800: '#92400E',
+          900: '#78350F',
         },
-        body: '#4A4A4A',
+        body: '#4A4556',
       },
     },
   },

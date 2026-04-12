@@ -1,83 +1,60 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 162" role="img" aria-label="Proof தமிழ் Logo"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 155" role="img" aria-label="ProofTamil - Tamil AI Proofreading"
      text-rendering="optimizeLegibility" shape-rendering="geometricPrecision">
-  <title>Proof தமிழ்</title>
+  <title>ProofTamil</title>
   <defs>
-    <!-- Shield gradient: bright cyan-blue top → deep blue bottom -->
-    <linearGradient id="shieldGrad" x1="25%" y1="0%" x2="75%" y2="100%">
-      <stop offset="0%" stop-color="#7dd3fc"/>
-      <stop offset="45%" stop-color="#38a3f5"/>
-      <stop offset="100%" stop-color="#1a4fd8"/>
+    <!-- Icon: indigo gradient (top-left bright → bottom-right deep) -->
+    <linearGradient id="iconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#6366F1"/>
+      <stop offset="55%"  stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#1E1B4B"/>
     </linearGradient>
-    <!-- Left-edge darkening for 3-D depth -->
-    <linearGradient id="shieldEdge" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#0c30a0" stop-opacity="0.45"/>
-      <stop offset="100%" stop-color="#0c30a0" stop-opacity="0"/>
+    <!-- Icon inner top highlight (gloss) -->
+    <linearGradient id="iconGloss" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
-    <!-- Subtle drop shadow for shield -->
-    <filter id="shieldShadow" x="-8%" y="-6%" width="120%" height="120%">
-      <feDropShadow dx="3" dy="4" stdDeviation="5" flood-color="#1a4fd8" flood-opacity="0.35"/>
-    </filter>
-    <!-- "Proof" text gradient: light→medium blue -->
+    <!-- "Proof" text: indigo gradient -->
     <linearGradient id="proofGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#5eb4f0"/>
-      <stop offset="100%" stop-color="#2876d4"/>
+      <stop offset="0%"   stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#312E81"/>
     </linearGradient>
+    <!-- Soft drop shadow for icon -->
+    <filter id="iconShadow" x="-12%" y="-8%" width="130%" height="128%">
+      <feDropShadow dx="0" dy="5" stdDeviation="9" flood-color="#4F46E5" flood-opacity="0.28"/>
+    </filter>
   </defs>
 
-  <!-- ── Shield body ── -->
-  <path d="
-    M 78 6
-    C 55 6, 14 18, 10 22
-    L 10 82
-    C 10 122, 78 154, 78 154
-    C 78 154, 146 122, 146 82
-    L 146 22
-    C 142 18, 101 6, 78 6 Z"
-    fill="url(#shieldGrad)"
-    filter="url(#shieldShadow)"/>
+  <!-- ── Icon: Rounded square ── -->
+  <rect x="5" y="5" width="144" height="144" rx="30" ry="30"
+        fill="url(#iconGrad)" filter="url(#iconShadow)"/>
+  <!-- Gloss layer (top half) -->
+  <rect x="5" y="5" width="144" height="72" rx="30" ry="30"
+        fill="url(#iconGloss)"/>
 
-  <!-- Left-edge shadow stripe for 3-D effect -->
-  <path d="
-    M 78 6
-    C 55 6, 14 18, 10 22
-    L 10 82
-    C 10 122, 78 154, 78 154"
-    fill="url(#shieldEdge)"
-    opacity="1"/>
-
-  <!-- Inner highlight ring (top rim, white glow) -->
-  <path d="
-    M 78 12
-    C 58 12, 20 22, 17 26
-    L 17 80
-    C 17 116, 78 146, 78 146
-    C 78 146, 139 116, 139 80
-    L 139 26
-    C 136 22, 98 12, 78 12 Z"
-    fill="none"
-    stroke="rgba(255,255,255,0.18)"
-    stroke-width="3"/>
-
-  <!-- ── Checkmark ── -->
-  <path d="M 35 80 L 63 108 L 122 52"
-    fill="none"
-    stroke="white"
-    stroke-width="18"
-    stroke-linecap="round"
-    stroke-linejoin="round"/>
-
-  <!-- ── "Proof" text ── -->
-  <text x="172" y="118"
-    font-family="'Georgia', 'Palatino Linotype', 'Book Antiqua', 'Times New Roman', serif"
-    font-size="82"
+  <!-- Tamil letter "த" centred inside icon (white) -->
+  <text x="77" y="114"
+    font-family="'Noto Serif Tamil', 'Tamil MN', 'Latha', 'Vijaya', serif"
+    font-size="88"
     font-weight="700"
+    text-anchor="middle"
+    fill="white"
+    opacity="0.96">த</text>
+
+  <!-- Amber accent bar — bottom of icon -->
+  <rect x="28" y="130" width="98" height="9" rx="4.5" fill="#F59E0B"/>
+
+  <!-- ── Wordmark: "Proof" ── -->
+  <text x="174" y="108"
+    font-family="'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
+    font-size="76"
+    font-weight="800"
     fill="url(#proofGrad)"
-    letter-spacing="-1">Proof</text>
+    letter-spacing="-2">Proof</text>
 
-  <!-- ── "தமிழ்" text ── -->
-  <text x="415" y="118"
-    font-family="'Noto Serif Tamil', 'Latha', 'Tamil MN', 'Vijaya', 'Noto Sans Tamil', serif"
-    font-size="82"
+  <!-- ── Wordmark: "தமிழ்" in saffron amber ── -->
+  <text x="414" y="108"
+    font-family="'Noto Serif Tamil', 'Tamil MN', 'Latha', 'Vijaya', 'Noto Sans Tamil', serif"
+    font-size="76"
     font-weight="700"
-    fill="#1a2f72">தமிழ்</text>
+    fill="#F59E0B">தமிழ்</text>
 </svg>

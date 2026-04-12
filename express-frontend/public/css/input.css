@@ -5,37 +5,40 @@
 /* Mobile safe area for devices with notches/home indicators */
 .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0); }
 
-/* Theme tokens — Deep navy headings, vibrant blue accent, soft gray body */
+/* Theme tokens — Indigo brand + Saffron amber accent + clean surfaces */
 :root {
   --bg-primary: #ffffff;
-  --bg-secondary: #EBF4FB;   /* Very light blue (gradient start) */
+  --bg-secondary: #EEF2FF;   /* Lavender tint (gradient start) */
   --bg-surface: #ffffff;
 
-  --accent-primary: #2979FF;   /* Vibrant medium blue */
-  --accent-secondary: #1A2B68; /* Deep navy */
-  --accent-blue: #2979FF;
+  --accent-primary: #4F46E5;   /* Brand indigo */
+  --accent-secondary: #1E1B4B; /* Deep indigo */
+  --accent-amber: #F59E0B;     /* Saffron amber (Tamil cultural) */
 
-  --text-primary: #1A2B68;     /* Deep navy (headings) */
-  --text-secondary: #4A4A4A;   /* Soft dark gray (body) */
+  --text-primary: #1E1B4B;     /* Deep indigo (headings) */
+  --text-secondary: #4A4556;   /* Soft dark with purple undertone (body) */
   --text-muted: #6b7280;
 
-  --border-soft: rgba(26, 43, 104, 0.12);
+  --border-soft: rgba(79, 70, 229, 0.12);
 
   --gradient-primary: linear-gradient(
     135deg,
-    #1A2B68 0%,
-    #2979FF 100%
+    #1E1B4B 0%,
+    #4F46E5 100%
   );
-  --color-bg: #EBF4FB;            /* Very light blue page background */
+  --gradient-amber: linear-gradient(135deg, #D97706 0%, #F59E0B 100%);
+
+  --color-bg: #EEF2FF;            /* Lavender tint page background */
   --color-card: #ffffff;
-  --color-text: #1A2B68;           /* Deep navy text */
-  --color-muted: #4A4A4A;          /* Body text (soft dark gray) */
+  --color-text: #1E1B4B;           /* Deep indigo text */
+  --color-muted: #4A4556;          /* Body text */
   --color-border: #e5e7eb;         /* Muted border */
-  --color-primary: #1A2B68;        /* Deep navy */
-  --color-primary-hover: #152558;   /* Deeper navy on hover */
-  --color-primary-ghost: #EBF4FB;   /* Soft blue tint surface */
-  --color-accent: #2979FF;         /* Vibrant medium blue */
-  --color-accent-light: #EBF4FB;    /* Light blue background */
+  --color-primary: #4F46E5;        /* Brand indigo */
+  --color-primary-hover: #4338CA;  /* Darker indigo on hover */
+  --color-primary-ghost: #EEF2FF;  /* Lavender tint surface */
+  --color-accent: #4F46E5;         /* Brand indigo */
+  --color-accent-light: #EEF2FF;   /* Light lavender background */
+  --color-amber: #F59E0B;          /* Saffron amber */
 }
 
 @layer base {
@@ -144,15 +147,15 @@
     color: #ffffff;
     background: var(--gradient-primary);
     border: none;
-    box-shadow: 0 4px 14px rgba(41, 121, 255, 0.35);
+    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
     border-radius: 8px;
     transform: translateZ(0);
   }
 
   .btn-primary:hover {
-    background: linear-gradient(135deg, #152558 0%, #1a6ae6 100%);
+    background: linear-gradient(135deg, #312E81 0%, #4338CA 100%);
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(41, 121, 255, 0.45);
+    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.45);
   }
 
   .btn-secondary {
@@ -168,7 +171,7 @@
     border-color: var(--color-primary);
     color: var(--color-primary);
   }
-  
+
   .input-field {
     @apply w-full px-4 py-2 rounded-lg outline-none;
     border: 1px solid var(--color-border);
@@ -176,18 +179,18 @@
     color: var(--color-text);
     transition: box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
   }
-  
+
   .input-field:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(26, 43, 104, 0.25);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
     background-color: #fff;
   }
-  
+
   .card {
     @apply rounded-xl shadow-sm;
     background: var(--bg-surface);
     border: 1px solid var(--border-soft);
-    box-shadow: 0 4px 24px rgba(26, 43, 104, 0.08);
+    box-shadow: 0 4px 24px rgba(79, 70, 229, 0.08);
   }
 }
 
@@ -211,14 +214,14 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #1A2B68;
+  color: #4F46E5;
   margin-bottom: 0.5rem;
 }
 
 .prooftamil-blog header h1 {
   font-size: 1.875rem;
   font-weight: 800;
-  color: #1A2B68;
+  color: #1E1B4B;
   line-height: 1.2;
   margin-bottom: 0.75rem;
 }
@@ -283,10 +286,10 @@
 /* Suggestion card styles */
 .suggestion-card {
   @apply border rounded-2xl p-4 transition-all;
-  background: #0a122e;
+  background: #1E1B4B;
   border-color: rgba(255, 255, 255, 0.12);
   color: #e2e8f0;
-  box-shadow: 0 20px 40px rgba(26, 43, 104, 0.35);
+  box-shadow: 0 20px 40px rgba(79, 70, 229, 0.35);
 }
 
 .suggestion-card:hover {
