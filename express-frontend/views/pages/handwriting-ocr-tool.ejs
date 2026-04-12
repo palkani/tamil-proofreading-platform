@@ -118,6 +118,44 @@
       </div>
     </div>
 
+    <!-- Daily Limit / Upgrade Card (shown when free quota is exhausted) -->
+    <div id="upgradeCard" class="hidden mb-6 rounded-2xl overflow-hidden shadow-xl border border-indigo-200">
+      <!-- Gradient header -->
+      <div class="px-6 py-5 text-white" style="background: linear-gradient(135deg, #1e3a8a 0%, #4f46e5 60%, #7c3aed 100%);">
+        <div class="flex items-center gap-3">
+          <span class="text-3xl">✋</span>
+          <div>
+            <p class="text-lg font-bold leading-tight">Free daily limit reached</p>
+            <p class="text-sm text-white/80 mt-0.5">You've used your 2 free extractions for today</p>
+          </div>
+        </div>
+      </div>
+      <!-- Body -->
+      <div class="bg-white px-6 py-5">
+        <p class="text-sm text-gray-600 mb-4">Upgrade to <strong>Pro</strong> for unlimited handwriting extractions — no daily caps, no limits.</p>
+        <!-- Feature list -->
+        <ul class="text-sm text-gray-600 space-y-2 mb-5">
+          <li class="flex items-center gap-2"><span class="text-green-500 font-bold">✓</span> Unlimited OCR extractions per day</li>
+          <li class="flex items-center gap-2"><span class="text-green-500 font-bold">✓</span> Unlimited Tamil proofreading checks</li>
+          <li class="flex items-center gap-2"><span class="text-green-500 font-bold">✓</span> All correction types (grammar, style, rewrite)</li>
+          <li class="flex items-center gap-2"><span class="text-green-500 font-bold">✓</span> Save unlimited drafts</li>
+        </ul>
+        <!-- CTAs -->
+        <div class="flex flex-col sm:flex-row gap-3">
+          <a href="/pricing"
+             class="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-full font-bold text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all text-sm"
+             style="background: linear-gradient(135deg, #1e3a8a 0%, #4f46e5 100%);">
+            ⚡ Upgrade to Pro
+          </a>
+          <a href="/register"
+             class="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-full font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-all text-sm">
+            Create free account
+          </a>
+        </div>
+        <p class="text-xs text-gray-400 mt-3 text-center">🔄 Free quota resets at midnight UTC · Pro plans start from ₹199/month</p>
+      </div>
+    </div>
+
     <!-- Results -->
     <div id="resultArea" class="hidden bg-white rounded-2xl shadow-xl border border-gray-200 mb-6 overflow-hidden">
       <!-- Result Header -->
@@ -257,6 +295,7 @@
     selectedFile = file;
     processBtn.disabled = false;
     errorEl.classList.add('hidden');
+    document.getElementById('upgradeCard').classList.add('hidden');
     resultArea.classList.add('hidden');
 
     // Show preview
@@ -350,7 +389,13 @@
       processBtn.disabled = false;
 
       if (!res.ok || data.error) {
-        showError(data.error || data.details || 'Failed to process image. Please try again.');
+        if (data.upgrade_required) {
+          // Hide generic error, show upgrade card instead
+          errorEl.classList.add('hidden');
+          document.getElementById('upgradeCard').classList.remove('hidden');
+        } else {
+          showError(data.error || data.details || 'Failed to process image. Please try again.');
+        }
         return;
       }
 

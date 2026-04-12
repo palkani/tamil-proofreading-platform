@@ -10,6 +10,9 @@ const crypto = require('crypto');
 // Shared Gemini key rotator for multi-key support
 const { keyRotator } = require('../utils/gemini-key-rotator');
 
+// Daily rate limit for handwriting OCR (2 free extractions per IP per day)
+const ocrDailyLimit = require('../middleware/ocrDailyLimit');
+
 // Latency-based regional backend resolver (Asia vs US Cloud Run instances)
 const { getRegionalBackendUrl } = require('../utils/regional-backend');
 
@@ -1845,7 +1848,7 @@ router.get('/handwriting-ocr/health', (req, res) => {
   return res.json({ status: 'ok', service: 'gemini-vision', model: 'gemini-2.5-flash' });
 });
 
-router.post('/handwriting-ocr/extract-words', uploadHandwriting.single('file'), async (req, res) => {
+router.post('/handwriting-ocr/extract-words', ocrDailyLimit(), uploadHandwriting.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded. Please select an image file.' });
   }
