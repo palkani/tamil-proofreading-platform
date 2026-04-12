@@ -22,13 +22,13 @@
     <!-- Header -->
     <div class="text-center mb-10">
       <div class="inline-block px-4 py-2 bg-amber-100 text-amber-800 rounded-full text-sm font-semibold mb-4">
-        ✍️ Powered by Gemini AI Vision
+        ✍️ Powered by ProofReading AI
       </div>
       <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
         Handwritten Tamil Notes to Text
       </h1>
       <p class="text-lg text-gray-600 max-w-2xl mx-auto">
-        Upload a photo of handwritten Tamil (notes, whiteboard, letters) — Gemini AI reads and converts it to editable text instantly.
+        Upload a photo of handwritten Tamil (notes, whiteboard, letters) — ProofReading AI reads and converts it to editable text instantly.
       </p>
     </div>
 
@@ -104,7 +104,7 @@
         </div>
       </div>
       <div id="loadingMsg" class="text-base font-semibold text-amber-700">Uploading image…</div>
-      <div class="text-sm text-gray-400 mt-1">Gemini AI is reading your handwriting</div>
+      <div class="text-sm text-gray-400 mt-1">ProofReading AI is reading your handwriting</div>
     </div>
 
     <!-- Error -->
@@ -223,7 +223,7 @@
     [step1, step2, step3].forEach(d => d.className = 'step-dot');
     let s = 0;
     const dots = [step1, step2, step3];
-    const msgs = ['Uploading image…', 'Gemini AI is reading your handwriting…', 'Extracting text…'];
+    const msgs = ['Uploading image…', 'ProofReading AI is reading your handwriting…', 'Extracting text…'];
     function advance() {
       if (s < dots.length) {
         dots[s].classList.add('active');
