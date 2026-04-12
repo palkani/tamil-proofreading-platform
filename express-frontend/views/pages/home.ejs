@@ -974,18 +974,40 @@
               <span class="text-amber-600">📝</span>
               <span class="text-sm font-semibold text-gray-500 uppercase tracking-wide">Handwritten Photo</span>
             </div>
-            <!-- Simulated lined notebook paper -->
-            <div class="bg-white rounded-2xl shadow-inner border border-amber-200 overflow-hidden" style="background: repeating-linear-gradient(white, white 31px, #e2e8f0 31px, #e2e8f0 32px); padding: 16px 20px; min-height: 260px;">
-              <!-- Red margin line -->
-              <div style="border-left: 2px solid #fca5a5; padding-left: 16px;">
-                <p style="font-family: 'Caveat', 'Patrick Hand', cursive; font-size: 1.35rem; line-height: 2rem; color: #1e293b; margin: 0;" class="handwriting-text">
-                  வணக்கம்! என் பெயர் கார்த்திக்.<br>
-                  நான் தமிழ் படிக்கிறேன்.<br>
-                  தமிழ் என் தாய்மொழி.<br>
-                  இன்று பள்ளியில் புதிய<br>
-                  பாடம் கற்றோம்.
-                </p>
-              </div>
+            <!-- SVG notebook simulation -->
+            <div class="rounded-2xl shadow-md overflow-hidden border border-amber-200">
+              <svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;" role="img" aria-label="Handwritten Tamil notebook notes">
+                <!-- Cream paper background -->
+                <rect width="300" height="220" fill="#fffcf0"/>
+                <!-- Top margin line -->
+                <line x1="0" y1="22" x2="300" y2="22" stroke="#bfdbfe" stroke-width="0.6"/>
+                <!-- Ruled horizontal lines (slight angle variation per line for realism) -->
+                <line x1="18" y1="55"  x2="300" y2="55.4"  stroke="#bfdbfe" stroke-width="0.6"/>
+                <line x1="18" y1="90"  x2="300" y2="89.7"  stroke="#bfdbfe" stroke-width="0.6"/>
+                <line x1="18" y1="125" x2="300" y2="125.3" stroke="#bfdbfe" stroke-width="0.6"/>
+                <line x1="18" y1="160" x2="300" y2="159.8" stroke="#bfdbfe" stroke-width="0.6"/>
+                <line x1="18" y1="195" x2="300" y2="195.2" stroke="#bfdbfe" stroke-width="0.6"/>
+                <!-- Spiral binding holes -->
+                <g fill="#d1d5db" stroke="#9ca3af" stroke-width="0.8">
+                  <ellipse cx="9" cy="38"  rx="5" ry="6"/>
+                  <ellipse cx="9" cy="73"  rx="5" ry="6"/>
+                  <ellipse cx="9" cy="108" rx="5" ry="6"/>
+                  <ellipse cx="9" cy="143" rx="5" ry="6"/>
+                  <ellipse cx="9" cy="178" rx="5" ry="6"/>
+                </g>
+                <!-- Spiral wire through holes -->
+                <path d="M9,22 Q14,30 9,38 Q4,46 9,55 Q14,63 9,73 Q4,81 9,90 Q14,98 9,108 Q4,116 9,125 Q14,133 9,143 Q4,151 9,160 Q14,168 9,178 Q4,186 9,195" stroke="#94a3b8" stroke-width="1.5" fill="none"/>
+                <!-- Red margin line (slightly wobbly path) -->
+                <path d="M 41,22 L 40.5,110 L 41.5,220" stroke="#fca5a5" stroke-width="1.3" fill="none"/>
+                <!-- Handwritten Tamil text — each line has its own slight rotation -->
+                <g font-family="'Noto Sans Tamil', 'Arial Unicode MS', sans-serif" font-size="13.5" fill="#1e3799" font-weight="400">
+                  <text x="48" y="47"  transform="rotate(-0.8, 48, 47)">வணக்கம்! என் பெயர் கார்த்திக்.</text>
+                  <text x="48" y="82"  transform="rotate(0.5, 48, 82)">நான் தமிழ் படிக்கிறேன்.</text>
+                  <text x="48" y="117" transform="rotate(-0.4, 48, 117)">தமிழ் என் தாய்மொழி.</text>
+                  <text x="48" y="152" transform="rotate(0.7, 48, 152)">இன்று பள்ளியில் புதிய</text>
+                  <text x="48" y="187" transform="rotate(-0.3, 48, 187)">பாடம் கற்றோம்.</text>
+                </g>
+              </svg>
             </div>
             <p class="text-xs text-gray-400 mt-3 text-center">↑ Photo of handwritten Tamil notes</p>
           </div>
