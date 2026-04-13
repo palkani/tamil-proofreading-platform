@@ -1,60 +1,66 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 155" role="img" aria-label="ProofTamil - Tamil AI Proofreading"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 148" role="img" aria-label="ProofTamil - Tamil AI Proofreading"
      text-rendering="optimizeLegibility" shape-rendering="geometricPrecision">
   <title>ProofTamil</title>
   <defs>
-    <!-- Icon: indigo gradient (top-left bright → bottom-right deep) -->
+    <!-- Icon: indigo gradient -->
     <linearGradient id="iconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"   stop-color="#6366F1"/>
-      <stop offset="55%"  stop-color="#4F46E5"/>
+      <stop offset="0%"   stop-color="#818CF8"/>
+      <stop offset="45%"  stop-color="#4F46E5"/>
       <stop offset="100%" stop-color="#1E1B4B"/>
     </linearGradient>
-    <!-- Icon inner top highlight (gloss) -->
+    <!-- Gloss layer -->
     <linearGradient id="iconGloss" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.20"/>
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
-    <!-- "Proof" text: indigo gradient -->
+    <!-- "Proof" wordmark gradient -->
     <linearGradient id="proofGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%"   stop-color="#4F46E5"/>
-      <stop offset="100%" stop-color="#312E81"/>
+      <stop offset="0%"   stop-color="#4338CA"/>
+      <stop offset="100%" stop-color="#1E1B4B"/>
     </linearGradient>
-    <!-- Soft drop shadow for icon -->
-    <filter id="iconShadow" x="-12%" y="-8%" width="130%" height="128%">
-      <feDropShadow dx="0" dy="5" stdDeviation="9" flood-color="#4F46E5" flood-opacity="0.28"/>
+    <!-- Drop shadow -->
+    <filter id="iconShadow" x="-14%" y="-10%" width="132%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#4F46E5" flood-opacity="0.30"/>
     </filter>
   </defs>
 
   <!-- ── Icon: Rounded square ── -->
-  <rect x="5" y="5" width="144" height="144" rx="30" ry="30"
+  <rect x="4" y="4" width="138" height="138" rx="28" ry="28"
         fill="url(#iconGrad)" filter="url(#iconShadow)"/>
-  <!-- Gloss layer (top half) -->
-  <rect x="5" y="5" width="144" height="72" rx="30" ry="30"
+  <!-- Gloss highlight (top half only) -->
+  <rect x="4" y="4" width="138" height="70" rx="28" ry="28"
         fill="url(#iconGloss)"/>
 
-  <!-- Tamil letter "த" centred inside icon (white) -->
-  <text x="77" y="114"
+  <!-- Tamil "த" centred inside icon -->
+  <text x="73" y="106"
     font-family="'Noto Serif Tamil', 'Tamil MN', 'Latha', 'Vijaya', serif"
-    font-size="88"
+    font-size="84"
     font-weight="700"
     text-anchor="middle"
     fill="white"
-    opacity="0.96">த</text>
+    opacity="0.97">த</text>
 
-  <!-- Amber accent bar — bottom of icon -->
-  <rect x="28" y="130" width="98" height="9" rx="4.5" fill="#F59E0B"/>
+  <!-- Amber accent bar at bottom of icon -->
+  <rect x="26" y="124" width="94" height="8" rx="4" fill="#F59E0B"/>
 
-  <!-- ── Wordmark: "Proof" ── -->
-  <text x="174" y="108"
-    font-family="'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
-    font-size="76"
+  <!-- ── Wordmark: single <text> with two <tspan> so they flow tight ── -->
+  <text x="162" y="102"
+    font-size="70"
     font-weight="800"
-    fill="url(#proofGrad)"
-    letter-spacing="-2">Proof</text>
+    text-anchor="start"
+    dominant-baseline="auto">
+    <!-- "Proof" in deep indigo -->
+    <tspan
+      font-family="'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
+      fill="url(#proofGrad)"
+      letter-spacing="-2">Proof</tspan><!--
+    --><tspan
+      font-family="'Noto Serif Tamil', 'Tamil MN', 'Latha', 'Vijaya', serif"
+      fill="#F59E0B"
+      dx="2"
+      letter-spacing="0">தமிழ்</tspan>
+  </text>
 
-  <!-- ── Wordmark: "தமிழ்" in saffron amber ── -->
-  <text x="414" y="108"
-    font-family="'Noto Serif Tamil', 'Tamil MN', 'Latha', 'Vijaya', 'Noto Sans Tamil', serif"
-    font-size="76"
-    font-weight="700"
-    fill="#F59E0B">தமிழ்</text>
+  <!-- Thin amber underline spanning the full wordmark -->
+  <rect x="162" y="116" width="508" height="3.5" rx="2" fill="#F59E0B" opacity="0.25"/>
 </svg>

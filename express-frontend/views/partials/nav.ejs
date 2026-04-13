@@ -251,22 +251,37 @@
 <div class="promo-stripe" role="region" aria-label="ProofTamil features">
   <!-- Mobile: static centered text (no cut-off) -->
   <div class="promo-stripe-mobile sm:hidden py-2.5 px-4 text-center text-white text-sm font-medium">
-    🎤 Voice to Tamil • ✨ AI Content Generator • ✓ Proofreading
+    🎤 Voice to Tamil &nbsp;•&nbsp; ✨ AI Writer &nbsp;•&nbsp; ✓ Proofreading &nbsp;•&nbsp; 📄 OCR &nbsp;•&nbsp; ✍️ Handwriting to Text
   </div>
-  <!-- Desktop: scrolling animation -->
+  <!-- Desktop: seamless infinite scroll — two identical sets -->
   <div class="promo-stripe-inner hidden sm:block">
-    <div class="promo-stripe-track">
-      <span class="promo-stripe-item">🎤 Voice to Tamil — Speak it, we type it. Convert speech to Tamil text instantly.</span>
-      <span class="promo-stripe-sep" aria-hidden="true">•</span>
-      <span class="promo-stripe-item">✨ AI Content Generator — Create blogs, essays & articles in Tamil & English. Powered by AI.</span>
-      <span class="promo-stripe-sep" aria-hidden="true">•</span>
-      <span class="promo-stripe-item">✓ Proofreading — Polish your Tamil. Grammar, spelling & style—all in one place.</span>
-      <span class="promo-stripe-sep" aria-hidden="true">•</span>
-      <span class="promo-stripe-item">🎤 Voice to Tamil — Speak it, we type it. Convert speech to Tamil text instantly.</span>
-      <span class="promo-stripe-sep" aria-hidden="true">•</span>
-      <span class="promo-stripe-item">✨ AI Content Generator — Create blogs, essays & articles in Tamil & English. Powered by AI.</span>
-      <span class="promo-stripe-sep" aria-hidden="true">•</span>
-      <span class="promo-stripe-item">✓ Proofreading — Polish your Tamil. Grammar, spelling & style—all in one place.</span>
+    <div class="promo-stripe-track" aria-hidden="true">
+      <!-- Set A -->
+      <span class="promo-stripe-item">🎤 Voice to Tamil — Speak it, we type it.</span>
+      <span class="promo-stripe-sep">·</span>
+      <span class="promo-stripe-item">✨ AI Content Writer — Blogs, essays &amp; articles in Tamil &amp; English.</span>
+      <span class="promo-stripe-sep">·</span>
+      <span class="promo-stripe-item">✓ Smart Proofreading — Grammar, spelling &amp; style in one place.</span>
+      <span class="promo-stripe-sep">·</span>
+      <span class="promo-stripe-item">📄 Tamil OCR — Extract Tamil text from images &amp; PDFs instantly.</span>
+      <span class="promo-stripe-sep">·</span>
+      <span class="promo-stripe-item">✍️ Handwriting to Text — Upload a photo, get editable Tamil text.</span>
+      <span class="promo-stripe-sep">·</span>
+      <span class="promo-stripe-item">🌐 Used by Tamil writers worldwide — Free to get started.</span>
+      <span class="promo-stripe-sep">·</span>
+      <!-- Set B (exact duplicate for seamless loop) -->
+      <span class="promo-stripe-item">🎤 Voice to Tamil — Speak it, we type it.</span>
+      <span class="promo-stripe-sep">·</span>
+      <span class="promo-stripe-item">✨ AI Content Writer — Blogs, essays &amp; articles in Tamil &amp; English.</span>
+      <span class="promo-stripe-sep">·</span>
+      <span class="promo-stripe-item">✓ Smart Proofreading — Grammar, spelling &amp; style in one place.</span>
+      <span class="promo-stripe-sep">·</span>
+      <span class="promo-stripe-item">📄 Tamil OCR — Extract Tamil text from images &amp; PDFs instantly.</span>
+      <span class="promo-stripe-sep">·</span>
+      <span class="promo-stripe-item">✍️ Handwriting to Text — Upload a photo, get editable Tamil text.</span>
+      <span class="promo-stripe-sep">·</span>
+      <span class="promo-stripe-item">🌐 Used by Tamil writers worldwide — Free to get started.</span>
+      <span class="promo-stripe-sep">·</span>
     </div>
   </div>
 </div>
@@ -274,50 +289,52 @@
 
 <style>
 .promo-stripe {
-  background: linear-gradient(90deg, #1A2B68 0%, #152558 25%, #2979FF 50%, #152558 75%, #1A2B68 100%);
-  background-size: 200% 100%;
+  background: linear-gradient(90deg, #1E1B4B 0%, #312E81 30%, #4F46E5 60%, #312E81 85%, #1E1B4B 100%);
   color: #fff;
   overflow: hidden;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  box-shadow: 0 2px 8px rgba(26, 43, 104, 0.2);
+  border-bottom: 1px solid rgba(99,102,241,0.25);
+  box-shadow: 0 2px 10px rgba(30,27,75,0.30);
 }
 .promo-stripe-inner {
-  padding: 0.5rem 0;
+  padding: 0.55rem 0;
   overflow: hidden;
 }
 .promo-stripe-track {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 2rem;
+  /* Must be wide enough that translateX(-50%) creates a seamless loop */
   width: max-content;
-  animation: promo-stripe-scroll 45s linear infinite;
+  will-change: transform;
+  animation: promo-stripe-scroll 40s linear infinite;
 }
 .promo-stripe-track:hover {
   animation-play-state: paused;
 }
 .promo-stripe-item {
   white-space: nowrap;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   letter-spacing: 0.01em;
   flex-shrink: 0;
+  opacity: 0.95;
 }
 .promo-stripe-sep {
-  color: rgba(255,255,255,0.5);
-  font-weight: 700;
+  color: #F59E0B;
+  font-weight: 900;
+  font-size: 1rem;
   flex-shrink: 0;
+  opacity: 0.8;
 }
 @keyframes promo-stripe-scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
 }
 @media (prefers-reduced-motion: reduce) {
   .promo-stripe-track { animation: none; }
 }
-/* Mobile: smaller text, ensure no horizontal overflow */
 @media (max-width: 640px) {
   .promo-stripe-item { font-size: 0.75rem; }
-  .promo-stripe-track { gap: 1rem; animation-duration: 35s; }
 }
 </style>
 
