@@ -298,24 +298,21 @@
 .promo-stripe-inner {
   padding: 0.55rem 0;
   overflow: hidden;
+  position: relative;
 }
 .promo-stripe-track {
   display: flex;
   align-items: center;
-  gap: 2rem;
-  /* Must be wide enough that translateX(-50%) creates a seamless loop */
   width: max-content;
   will-change: transform;
-  animation: promo-stripe-scroll 40s linear infinite;
-}
-.promo-stripe-track:hover {
-  animation-play-state: paused;
+  /* JS drives the animation — no CSS animation here */
 }
 .promo-stripe-item {
   white-space: nowrap;
   font-size: 0.8125rem;
   font-weight: 500;
   letter-spacing: 0.01em;
+  padding: 0 1.25rem;
   flex-shrink: 0;
   opacity: 0.95;
 }
@@ -324,19 +321,58 @@
   font-weight: 900;
   font-size: 1rem;
   flex-shrink: 0;
-  opacity: 0.8;
-}
-@keyframes promo-stripe-scroll {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .promo-stripe-track { animation: none; }
+  opacity: 0.80;
+  padding: 0 0.1rem;
 }
 @media (max-width: 640px) {
-  .promo-stripe-item { font-size: 0.75rem; }
+  .promo-stripe-item { font-size: 0.75rem; padding: 0 0.75rem; }
 }
 </style>
+
+<!-- Marquee JS: bulletproof pixel-based RAF loop (no CSS %-based animation bugs) -->
+<script>
+(function() {
+  var track = document.querySelector('.promo-stripe-track');
+  if (!track) return;
+  // Respect prefers-reduced-motion
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  var offset = 0;
+  var speed = 0.55; // px per frame (~33px/s at 60fps)
+  var paused = false;
+  var halfWidth = 0;
+  var raf;
+
+  function measure() {
+    // scrollWidth = total width of both sets (A+B); halfWidth = width of one set
+    halfWidth = track.scrollWidth / 2;
+  }
+
+  function step() {
+    if (!paused) {
+      offset += speed;
+      if (offset >= halfWidth) offset = 0; // seamless jump back to set A start
+      track.style.transform = 'translateX(-' + offset.toFixed(2) + 'px)';
+    }
+    raf = requestAnimationFrame(step);
+  }
+
+  // Pause on hover so users can read
+  track.addEventListener('mouseenter', function() { paused = true; });
+  track.addEventListener('mouseleave', function() { paused = false; });
+
+  // Wait for fonts/layout to settle before measuring
+  window.addEventListener('load', function() {
+    measure();
+    step();
+  });
+  // Fallback if load already fired
+  if (document.readyState === 'complete') {
+    measure();
+    step();
+  }
+})();
+</script>
 
 <script>
   // Flag to prevent multiple logout confirmations
