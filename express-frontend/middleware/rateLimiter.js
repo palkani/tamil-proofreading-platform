@@ -7,15 +7,15 @@
 
 const store = new Map();
 
-// Cleanup old entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, data] of store.entries()) {
-    if (now - data.resetTime > 60000) {
-      store.delete(key);
-    }
+// Lazy probabilistic cleanup: on ~1% of requests, evict entries older than 2 windows.
+// Works correctly in serverless (Vercel) where setInterval is unreliable across invocations.
+function maybePurgeStore(windowSeconds) {
+  if (Math.random() > 0.01) return;
+  const cutoff = Date.now() - windowSeconds * 2000;
+  for (const [key, data] of store) {
+    if (data.resetTime < cutoff) store.delete(key);
   }
-}, 300000);
+}
 
 /**
  * Get client IP address, considering x-forwarded-for header
@@ -34,6 +34,7 @@ function getClientIP(req) {
  */
 function rateLimiter(maxRequests = 3, windowSeconds = 60) {
   return (req, res, next) => {
+    maybePurgeStore(windowSeconds);
     const clientIP = getClientIP(req);
     const now = Date.now();
 

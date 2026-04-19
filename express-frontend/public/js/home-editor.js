@@ -362,10 +362,11 @@ class HomeEditor {
         e.stopPropagation();
         this.formatDropdown.classList.toggle('hidden');
       });
-      document.addEventListener('click', (e) => {
+      this._formatDropdownClickListener = (e) => {
         if (e.target.closest('a[href]')) return;
         this.formatDropdown.classList.add('hidden');
-      });
+      };
+      document.addEventListener('click', this._formatDropdownClickListener);
       this.formatDropdown.querySelectorAll('[data-format]').forEach((item) => {
         item.addEventListener('click', (e) => {
           e.preventDefault();
@@ -384,10 +385,11 @@ class HomeEditor {
         e.stopPropagation();
         this.alignDropdown.classList.toggle('hidden');
       });
-      document.addEventListener('click', (e) => {
+      this._alignDropdownClickListener = (e) => {
         if (e.target.closest('a[href]')) return;
         this.alignDropdown.classList.add('hidden');
-      });
+      };
+      document.addEventListener('click', this._alignDropdownClickListener);
       this.alignDropdown.querySelectorAll('[data-command]').forEach((item) => {
         item.addEventListener('click', (e) => {
           e.preventDefault();
@@ -421,6 +423,7 @@ class HomeEditor {
     if (this.modeSelect) {
       this.modeSelect.addEventListener('change', () => {
         this.autocompleteCache = {};
+        this.autocompleteCacheOrder = [];
         this.currentSuggestions = [];
         this.currentCaretInfo = null;
         if (this.autocompleteBox) this.autocompleteBox.classList.add('hidden');
@@ -581,12 +584,13 @@ class HomeEditor {
         this.autocompleteBox?.classList.add('hidden');
       });
     }
-    document.addEventListener('click', (e) => {
+    this._autocompleteClickListener = (e) => {
       const t = e.target;
       if (!this.autocompleteBox || this.autocompleteBox.classList.contains('hidden')) return;
       if (t && (this.autocompleteBox.contains(t) || this.editor.contains(t))) return;
       this.autocompleteBox.classList.add('hidden');
-    });
+    };
+    document.addEventListener('click', this._autocompleteClickListener);
     
     // Update word count on load
     this.updateWordCount();
@@ -2285,6 +2289,12 @@ class HomeEditor {
       toast.style.opacity = '0';
       setTimeout(() => { toast.remove(); }, 300);
     }, 2000);
+  }
+
+  destroy() {
+    if (this._formatDropdownClickListener) document.removeEventListener('click', this._formatDropdownClickListener);
+    if (this._alignDropdownClickListener) document.removeEventListener('click', this._alignDropdownClickListener);
+    if (this._autocompleteClickListener) document.removeEventListener('click', this._autocompleteClickListener);
   }
 }
 

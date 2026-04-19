@@ -926,8 +926,8 @@ router.get('/sitemap.xml', (req, res) => {
             priority: '0.65',
           };
         });
-      global.__sitemapBlogCache = { ts: Date.now(), urls: blogUrls };
-      addBlogUrls(blogUrls);
+      global.__sitemapBlogCache = { ts: Date.now(), urls: blogUrls.slice(0, 500) };
+      addBlogUrls(global.__sitemapBlogCache.urls);
       return sendSitemap();
     })
     .catch(() => sendSitemap()); // best-effort: serve static pages on error

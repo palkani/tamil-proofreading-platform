@@ -135,6 +135,14 @@ const GEMINI_429_RETRY_MS = 1500;
 const correctionsCache = new Map();
 const CORRECTIONS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// Evict expired cache entries every 2 minutes (prevents unbounded growth on sustained traffic)
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of correctionsCache) {
+    if (now - v.ts > CORRECTIONS_CACHE_TTL) correctionsCache.delete(k);
+  }
+}, 120000).unref?.();
+
 // In-flight deduplication: if the same text is already being processed, await the existing promise
 // instead of spawning a duplicate set of Gemini calls.
 const inFlightCorrections = new Map(); // cacheKey → Promise<result>
@@ -154,8 +162,8 @@ function getCachedResult(key) {
 }
 
 function setCachedResult(key, data) {
-  // Cap at 500 entries; evict oldest to avoid unbounded growth
-  if (correctionsCache.size >= 500) {
+  // Cap at 100 entries; evict oldest to avoid unbounded growth
+  if (correctionsCache.size >= 100) {
     correctionsCache.delete(correctionsCache.keys().next().value);
   }
   correctionsCache.set(key, { ts: Date.now(), data });
@@ -469,9 +477,11 @@ router.post('/corrections', async (req, res) => {
     // In-flight deduplication: if identical text is already being processed by another request,
     // piggyback on that promise instead of spawning a duplicate set of Gemini API calls.
     if (inFlightCorrections.has(cacheKey)) {
-      const result = await inFlightCorrections.get(cacheKey).catch(() => null);
+      const timeout60s = new Promise((_, rej) => setTimeout(() => rej(new Error('in-flight timeout')), 60000));
+      const result = await Promise.race([inFlightCorrections.get(cacheKey), timeout60s]).catch(() => null);
       if (result) return res.json(result);
-      // If the in-flight request errored, fall through and try ourselves.
+      // In-flight request errored or timed out — fall through and try ourselves.
+      inFlightCorrections.delete(cacheKey);
     }
     // Register our computation so concurrent identical requests can await us.
     _inFlightKey = cacheKey;
@@ -1151,11 +1161,11 @@ ${tamilStyle === 'formal' ? `• எண் பொருந்தல்: ❌ "அ
   } catch (e) {
     if (!abort.signal.aborted) {
       console.error('[CORRECTIONS/STREAM] Unhandled error:', e.message);
-      sendEvent('error', { message: e.message });
+      try { sendEvent('error', { message: e.message }); } catch (_) {}
     }
+  } finally {
+    if (!res.writableEnded) res.end();
   }
-
-  if (!res.writableEnded) res.end();
 });
 
 // English to Tamil Translation with Gemini AI
