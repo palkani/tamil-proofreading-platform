@@ -68,9 +68,50 @@ User-agent: Yandex
 Allow: /
 Crawl-delay: 0
 
-# CommonCrawl (used by AI training datasets - can opt out here if desired)
+# ── AI SEARCH BOTS ─────────────────────────────────────────────────────────────
+# Explicitly allow AI search bots so they can CITE prooftamil.com in answers.
+# Blocking these = invisible to ChatGPT, Perplexity, Claude, Gemini, Copilot.
+
+# OpenAI — ChatGPT search & browsing
+User-agent: GPTBot
+Allow: /
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /workspace
+Disallow: /account
+Crawl-delay: 2
+
+User-agent: ChatGPT-User
+Allow: /
+
+# Perplexity AI
+User-agent: PerplexityBot
+Allow: /
+Disallow: /api/
+Crawl-delay: 2
+
+# Anthropic — Claude
+User-agent: ClaudeBot
+Allow: /
+Disallow: /api/
+Crawl-delay: 2
+
+User-agent: anthropic-ai
+Allow: /
+
+# Google — Gemini & AI Overviews (separate from Googlebot)
+User-agent: Google-Extended
+Allow: /
+Disallow: /api/
+
+# Microsoft — Copilot (via Bing — Bingbot already listed above)
+User-agent: cohere-ai
+Allow: /
+
+# CommonCrawl — AI training dataset crawler (allow blog/public content only)
 User-agent: CCBot
 Allow: /blog
 Allow: /how-to-use
+Allow: /tools/
 Disallow: /api/
 Crawl-delay: 10

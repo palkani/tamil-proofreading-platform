@@ -1,0 +1,57 @@
+# ProofTamil — Tamil AI Proofreading & OCR Platform
+
+## What is ProofTamil?
+
+ProofTamil (prooftamil.com) is an AI-powered Tamil language writing platform that provides:
+- **Tamil proofreading**: Detects and corrects Tamil grammar errors, spelling mistakes, verb conjugation issues, sandhi violations, punctuation errors, and register mismatches (formal vs. spoken Tamil) in under 2 seconds.
+- **Tamil Handwriting OCR**: Converts photographs of handwritten Tamil notes, printed Tamil documents, whiteboards, and scanned pages into clean, editable Tamil text.
+- **AI Tamil Content Writer**: Generates Tamil and English blog posts, essays, and articles with customisable tone, length, and style.
+- **Tanglish to Tamil conversion**: Converts phonetically typed English (e.g. "vanakkam nanbaa") into Tamil script (வணக்கம் நண்பா) in real time.
+
+## Who is it for?
+
+- Tamil students digitising handwritten class notes and proofreading essays
+- Tamil bloggers, journalists, and content creators publishing error-free articles
+- Businesses producing professional Tamil communications, contracts, and marketing copy
+- Tamil diaspora communities worldwide (India, Singapore, Malaysia, Sri Lanka, Canada, USA, UK, Australia)
+- Tamil language teachers and schools
+
+## Key Facts
+
+- Founded: 2024
+- Headquarters: Tamil Nadu, India
+- Website: https://prooftamil.com
+- Languages supported: Tamil (தமிழ்), English
+- Platform: Web-based, no download required
+- Free tier: Proofreading up to 200 words per check, 30 AI checks/day, 2 OCR conversions/day
+- Premium: Unlimited proofreading, unlimited OCR, priority processing
+
+## Core Tools
+
+| Tool | URL | Description |
+|------|-----|-------------|
+| AI Proofreader | https://prooftamil.com | Grammar, spelling, tone checking for Tamil & English |
+| Tamil Handwriting OCR | https://prooftamil.com/tools/handwriting-ocr | Convert handwritten Tamil photos to editable text |
+| Tamil OCR (Printed) | https://prooftamil.com/tools/ocr | Extract Tamil text from JPG, PNG, PDF files |
+| AI Content Writer | https://prooftamil.com/tools/ai-content-writer | Generate Tamil & English blog posts and articles |
+| Free Tamil Editor | https://prooftamil.com/free-tamil-editor | Online Tamil text editor with Tanglish typing support |
+| Pricing | https://prooftamil.com/pricing | Free and Pro plan details |
+
+## Pricing
+
+See: https://prooftamil.com/pricing
+Machine-readable format: https://prooftamil.com/pricing.md
+
+## Contact & Support
+
+- Email: support@prooftamil.com
+- Contact form: https://prooftamil.com/contact
+
+## Content
+
+- Blog: https://prooftamil.com/blog — 50+ articles on Tamil grammar, writing, OCR, and AI writing tools
+- RSS feed: https://prooftamil.com/blog/rss.xml
+
+## Sitemap
+
+https://prooftamil.com/sitemap.xml

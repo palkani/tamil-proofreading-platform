@@ -933,6 +933,23 @@ router.get('/sitemap.xml', (req, res) => {
     .catch(() => sendSitemap()); // best-effort: serve static pages on error
 });
 
+// ── AI-SEO machine-readable files ────────────────────────────────────────────
+// /llms.txt — context file for AI assistants (llmstxt.org standard)
+// /pricing.md — structured pricing for AI agents evaluating tools
+// Served as text so LLMs can parse them without rendering HTML.
+router.get('/llms.txt', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile('llms.txt', { root: require('path').join(__dirname, '../public') });
+});
+
+router.get('/pricing.md', (req, res) => {
+  res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile('pricing.md', { root: require('path').join(__dirname, '../public') });
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Terms of Service page - accessible to everyone
 router.get('/terms', (req, res) => {
   const user = getCurrentUser(req);
