@@ -1,4 +1,4 @@
-const BASE_URL = 'https://prooftamil.com';
+const BASE_URL = 'https://www.prooftamil.com';
 
 const seoConfig = {
   home: {

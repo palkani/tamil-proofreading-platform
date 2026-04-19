@@ -834,7 +834,7 @@ router.get('/privacy', (req, res) => {
 // Serves static pages immediately; best-effort includes published blog posts
 // fetched from the backend (10-minute in-memory cache keeps it fast on serverless).
 router.get('/sitemap.xml', (req, res) => {
-  const BASE_URL = 'https://prooftamil.com';
+  const BASE_URL = 'https://www.prooftamil.com';
   const currentDate = new Date().toISOString().split('T')[0];
 
   const pages = [
