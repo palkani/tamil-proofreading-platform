@@ -645,7 +645,45 @@ const commonWordMap = {
   'romba':   'ரொம்ப',
   'semma':   'சேம்மா',
   'super':   'சூப்பர்',
-  'nandri':  'நன்றி'
+  'nandri':  'நன்றி',
+
+  // ── Time words (நேரம் family) ─────────────────────────────────────────────
+  'neram':     'நேரம்',
+  'neramum':   'நேரமும்',
+  'neratil':   'நேரத்தில்',
+  'nerathil':  'நேரத்தில்',
+  'nerathile':  'நேரத்திலே',
+  'neramaana': 'நேரமான',
+  'neramilla': 'நேரமில்ல',
+  'naeram':    'நேரம்',
+  'naeramum':  'நேரமும்',
+  'pozhuthu':  'பொழுது',
+  'pozhudhum': 'பொழுதும்',
+  'vaelai':    'வேளை',
+  'samayam':   'சமயம்',
+  'nattu':     'நாட்டு',
+  'natkal':    'நாட்கள்',
+
+  // ── More common words ─────────────────────────────────────────────────────
+  'mudhal':    'முதல்',
+  'kadaisi':   'கடைசி',
+  'mudivil':   'முடிவில்',
+  'mudive':    'முடிவே',
+  'ellam':     'எல்லாம்',
+  'ellorum':   'எல்லோரும்',
+  'anaivarum': 'அனைவரும்',
+  'engum':     'எங்கும்',
+  'enpatum':   'என்பதும்',
+  'enbathu':   'என்பது',
+  'athanal':   'அதனால்',
+  'aaganaal':  'ஆகவே',
+  'meelum':    'மேலும்',
+  'konjam':    'கொஞ்சம்',
+  'konjamum':  'கொஞ்சமும்',
+  'thirumba':  'திரும்ப',
+  'thirumbavum':'திரும்பவும்',
+  'marupadi':  'மறுபடி',
+  'parvai':    'பார்வை'
 };
 
 /**
@@ -730,6 +768,11 @@ function generateTamilVariants(englishText) {
   const lower = englishText.toLowerCase();
   const allVariants = [];
   
+  // Tamil linguistic rule: these consonants CANNOT start a word.
+  // ன் (alveolar n) and ண் (retroflex n) appear only mid/end-of-word.
+  // ற் (alveolar r), ள் (retroflex l), ழ் (retroflex zh) are also word-medial/final only.
+  const wordInitialForbidden = new Set(['ன', 'ண', 'ற', 'ள', 'ழ']);
+
   // Helper function to build Tamil syllables recursively
   const buildVariants = (input, position, current) => {
     // Base case: reached end of input
@@ -739,50 +782,61 @@ function generateTamilVariants(englishText) {
       }
       return;
     }
-    
+
     // Limit total variants to prevent explosion
     if (allVariants.length >= 10) return;
-    
+
+    const isWordInitial = current.length === 0;
+
     let matched = false;
-    
+
     // Try to match consonant clusters (longest first)
     for (let cLen = 4; cLen >= 1; cLen--) {
       if (position + cLen > input.length) continue;
-      
+
       const consonantStr = input.substring(position, position + cLen);
       const consonantData = tamilConsonantMap[consonantStr];
-      
+
       if (!consonantData) continue;
-      
+
       // Look ahead for vowel
       let vowelMatched = false;
       for (let vLen = 2; vLen >= 1; vLen--) {
         const vowelPos = position + cLen;
         if (vowelPos + vLen > input.length) continue;
-        
+
         const vowelStr = input.substring(vowelPos, vowelPos + vLen);
         const vowelSign = tamilVowelSigns[vowelStr];
-        
+
         if (vowelSign !== undefined) {
           // Build consonant + vowel syllable variants
           // CRITICAL: When vowel sign is present, NEVER add pulli
-          consonantData.variants.slice(0, 2).forEach(cons => {  // Limit to 2 consonant variants
+          let consVariants = consonantData.variants.slice(0, 2);
+          // At word start, remove consonants that cannot begin a Tamil word
+          if (isWordInitial) {
+            consVariants = consVariants.filter(c => !wordInitialForbidden.has(c));
+          }
+          consVariants.forEach(cons => {
             const syllable = cons + vowelSign;
             const nextPos = vowelPos + vLen;
-            
+
             // Vowel sign present = NO pulli (e.g., "தெ" in "தென்றல்")
             buildVariants(input, nextPos, current + syllable);
           });
-          
+
           vowelMatched = true;
           matched = true;
           break;
         }
       }
-      
+
       // If no vowel found, use inherent 'a' (default vowel)
       if (!vowelMatched) {
-        consonantData.variants.slice(0, 1).forEach(cons => {  // Primary consonant only
+        let consVariants = consonantData.variants.slice(0, 1);
+        if (isWordInitial) {
+          consVariants = consVariants.filter(c => !wordInitialForbidden.has(c));
+        }
+        consVariants.forEach(cons => {
           const nextPos = position + cLen;
 
           // Add pulli when:
@@ -799,7 +853,7 @@ function generateTamilVariants(englishText) {
         });
         matched = true;
       }
-      
+
       if (matched) break;
     }
     
@@ -828,24 +882,37 @@ function generateTamilVariants(englishText) {
   // Start building variants
   buildVariants(lower, 0, '');
   
-  // Add vowel length variations
-  const withLengthVariants = new Set(allVariants);
-  
+  // Interleave long-vowel variants immediately after each short-vowel form.
+  // This ensures நேரமும் (long ே) appears right after நெரமும் (short ெ),
+  // giving realistic Tamil words a chance to rank near the top.
+  const seen = new Set();
+  const withLengthVariants = [];
+
   allVariants.forEach(variant => {
-    // Create long vowel versions
-    if (variant.includes('ெ') && withLengthVariants.size < 8) {
-      withLengthVariants.add(variant.replace(/ெ/g, 'ே')); // e → ee
+    if (!seen.has(variant)) {
+      seen.add(variant);
+      withLengthVariants.push(variant);
     }
-    if (variant.includes('ொ') && withLengthVariants.size < 8) {
-      withLengthVariants.add(variant.replace(/ொ/g, 'ோ')); // o → oo
+
+    // Immediately follow each short-vowel form with its long-vowel counterpart
+    if (variant.includes('ெ')) {
+      const long = variant.replace(/ெ/g, 'ே');
+      if (!seen.has(long) && withLengthVariants.length < 8) {
+        seen.add(long);
+        withLengthVariants.push(long);
+      }
     }
-    if (variant.includes('ா') && withLengthVariants.size < 8) {
-      // a → aa already handled
+    if (variant.includes('ொ')) {
+      const long = variant.replace(/ொ/g, 'ோ');
+      if (!seen.has(long) && withLengthVariants.length < 8) {
+        seen.add(long);
+        withLengthVariants.push(long);
+      }
     }
   });
-  
+
   // Return top 6 unique variants
-  return Array.from(withLengthVariants).slice(0, 6);
+  return withLengthVariants.slice(0, 6);
 }
 
 /**
