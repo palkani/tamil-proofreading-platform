@@ -28,6 +28,7 @@ Allow: /sitemap.xml
 
 # Disallow private/authenticated pages from indexing
 Disallow: /dashboard
+Disallow: /drafts
 Disallow: /workspace
 Disallow: /account
 Disallow: /archive
@@ -37,6 +38,14 @@ Disallow: /admin/
 Disallow: /my-blogs
 Disallow: /affiliate/
 Disallow: /billing/
+
+# Disallow redirect aliases — these 301 to canonical URLs.
+# Disallowing prevents crawl budget waste on non-canonical paths.
+Disallow: /signup
+Disallow: /home
+Disallow: /tamil-typing
+Disallow: /tamil-editor
+Disallow: /tanglish-to-tamil
 
 # Sitemap location (submit in Google Search Console > Sitemaps)
 Sitemap: https://prooftamil.com/sitemap.xml

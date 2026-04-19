@@ -838,17 +838,17 @@ router.get('/sitemap.xml', (req, res) => {
   const currentDate = new Date().toISOString().split('T')[0];
 
   const pages = [
-    { url: '/', priority: '1.0', changefreq: 'daily' },
-    { url: '/free-tamil-editor', priority: '0.95', changefreq: 'weekly' },
-    { url: '/how-to-use', priority: '0.9', changefreq: 'weekly' },
-    { url: '/blog', priority: '0.85', changefreq: 'weekly' },
-    { url: '/tools/ocr', priority: '0.85', changefreq: 'weekly' },
-    { url: '/tools/handwriting-ocr', priority: '0.85', changefreq: 'weekly' },
-    { url: '/tools/ai-content-writer', priority: '0.8', changefreq: 'weekly' },
-    { url: '/pricing', priority: '0.8', changefreq: 'monthly' },
-    { url: '/contact', priority: '0.7', changefreq: 'monthly' },
-    { url: '/privacy', priority: '0.4', changefreq: 'yearly' },
-    { url: '/terms', priority: '0.4', changefreq: 'yearly' },
+    { url: '/',                       priority: '1.0',  changefreq: 'weekly',  lastmod: currentDate },
+    { url: '/free-tamil-editor',      priority: '0.95', changefreq: 'weekly',  lastmod: '2026-04-19' },
+    { url: '/tools/handwriting-ocr',  priority: '0.90', changefreq: 'weekly',  lastmod: '2026-04-19' },
+    { url: '/tools/ocr',              priority: '0.85', changefreq: 'monthly', lastmod: '2026-02-01' },
+    { url: '/tools/ai-content-writer',priority: '0.80', changefreq: 'monthly', lastmod: '2026-02-01' },
+    { url: '/how-to-use',             priority: '0.80', changefreq: 'monthly', lastmod: '2026-03-01' },
+    { url: '/blog',                   priority: '0.80', changefreq: 'weekly',  lastmod: currentDate },
+    { url: '/pricing',                priority: '0.75', changefreq: 'monthly', lastmod: '2026-03-01' },
+    { url: '/contact',                priority: '0.60', changefreq: 'yearly',  lastmod: '2025-12-01' },
+    { url: '/privacy',                priority: '0.30', changefreq: 'yearly',  lastmod: '2025-12-01' },
+    { url: '/terms',                  priority: '0.30', changefreq: 'yearly',  lastmod: '2025-12-01' },
   ];
 
   const escapeXml = (s) =>
@@ -868,7 +868,7 @@ router.get('/sitemap.xml', (req, res) => {
   pages.forEach((page) => {
     sitemap += '  <url>\n';
     sitemap += `    <loc>${escapeXml(BASE_URL + page.url)}</loc>\n`;
-    sitemap += `    <lastmod>${currentDate}</lastmod>\n`;
+    sitemap += `    <lastmod>${page.lastmod || currentDate}</lastmod>\n`;
     sitemap += `    <changefreq>${page.changefreq}</changefreq>\n`;
     sitemap += `    <priority>${page.priority}</priority>\n`;
     sitemap += '  </url>\n';

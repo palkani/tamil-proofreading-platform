@@ -925,7 +925,15 @@ function getTamilSuggestionsFromEnglish(englishInput, tamilWords) {
   return sortedSuggestions;
 }
 
-// Export for use in other modules
+// Expose to browser global scope so translit-suggest.js (V3) can call them
+// without requiring a module bundler. Must come BEFORE module.exports so that
+// both the browser build and any Node.js tests see the correct references.
+if (typeof window !== 'undefined') {
+  window.transliterateToTamil = transliterateToTamil;
+  window.getTamilSuggestionsFromEnglish = getTamilSuggestionsFromEnglish;
+}
+
+// Export for use in other modules (Node / Jest)
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { transliterateToTamil, getTamilSuggestionsFromEnglish };
 }

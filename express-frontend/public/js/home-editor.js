@@ -812,6 +812,9 @@ class HomeEditor {
   }
 
   async showAutocomplete() {
+    // V3 (translit-suggest.js) handles all suggestions — skip the legacy pipeline
+    if (window.__TRANSLIT_V3_LOADED) return;
+
     if (!this.autocompleteBox) {
       console.warn('[AUTOCOMPLETE] Dropdown not found');
       return;

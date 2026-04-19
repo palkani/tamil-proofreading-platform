@@ -408,7 +408,7 @@ const structuredData = {
     "contactPoint": {
       "@type": "ContactPoint",
       "contactType": "customer service",
-      "email": "prooftamil@gmail.com",
+      "email": "contact@prooftamil.com",
       "availableLanguage": ["Tamil", "English"]
     }
   },
@@ -458,13 +458,6 @@ const structuredData = {
     ],
     "screenshot": BASE_URL + "/images/tamil-logo.svg",
     "softwareVersion": "2.0",
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": "4.8",
-      "ratingCount": "1250",
-      "bestRating": "5",
-      "worstRating": "1"
-    },
     "inLanguage": ["ta", "en"],
     "isAccessibleForFree": true
   },
@@ -582,11 +575,6 @@ const structuredData = {
       "@type": "Offer",
       "price": "0",
       "priceCurrency": "USD"
-    },
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": "4.8",
-      "reviewCount": "850"
     }
   }
 };
