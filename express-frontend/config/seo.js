@@ -5,7 +5,7 @@ const seoConfig = {
     // Title: 55 chars — primary keyword first, brand at end (Google rewrites titles > 60 chars)
     title: 'Tamil Grammar Checker & AI Proofreading Tool | ProofTamil',
     // Description: 155 chars — one clear value prop, includes OCR for keyword coverage
-    description: 'AI-powered Tamil proofreading that catches grammar errors, spelling mistakes, and verb conjugation issues in under 2 seconds. Also converts handwritten Tamil notes to text via OCR.',
+    description: 'AI-powered Tamil proofreading — catches grammar errors, spelling mistakes, and verb conjugation in under 2 seconds. Free Tamil handwriting OCR included.',
     keywords: 'tamil grammar checker, tamil proofreading tool, tamil proofreader online, tamil spell checker, tamil grammar corrector, tamil handwriting to text, tamil ocr, tanglish to tamil, tamil writing assistant, tamil AI grammar checker, check tamil grammar online, fix tamil grammar, tamil spelling correction, prooftamil, prooftamil.com',
     canonical: BASE_URL + '/',
     ogTitle: 'Tamil Grammar Checker & AI Proofreading Tool | ProofTamil',
@@ -15,7 +15,7 @@ const seoConfig = {
 
   workspace: {
     title: 'Tamil Writing Workspace - AI Grammar Checker & Text Editor | ProofTamil (prooftamil.com)',
-    description: 'ProofTamil workspace - Write Tamil with confidence using our AI-powered workspace. Real-time grammar checking, spelling correction, and smart suggestions. Free Tamil text correction tool with phonetic typing support.',
+    description: 'Write Tamil with confidence using AI-powered grammar checking, spelling correction, and smart suggestions. Free Tamil text correction tool with phonetic typing support.',
     keywords: 'tamil writing assistant, tamil text correction tool, tamil grammar fix tool, tamil sentence correction tool, tamil content writing correction, tamil article proofreading tool, rewrite tamil sentences, improve tamil writing online',
     canonical: BASE_URL + '/workspace',
     ogTitle: 'Tamil Writing Workspace - AI Grammar & Spelling Checker',
@@ -26,7 +26,7 @@ const seoConfig = {
 
   howToUse: {
     title: 'How to Use ProofTamil - Tamil Grammar Checker Guide',
-    description: 'Learn how to use ProofTamil (prooftamil.com) Tamil proofreading tool. Step-by-step guide for Tamil grammar checking, spell check, and AI writing correction. Start improving your Tamil writing today!',
+    description: 'Step-by-step guide to ProofTamil Tamil grammar checker and spell check. Learn Tanglish typing, fix Tamil errors, and improve your Tamil writing today.',
     keywords: 'how to check tamil grammar, tamil grammar check tutorial, tamil proofreading guide, tamil writing improvement tool, learn tamil grammar correction, tamil spell check guide',
     canonical: BASE_URL + '/how-to-use',
     ogTitle: 'How to Use ProofTamil - Tamil Grammar Checker Guide',
@@ -54,7 +54,7 @@ const seoConfig = {
 
   freeTamilEditor: {
     title: 'Free Tamil Editor Online - Type & Proofread Tamil | ProofTamil',
-    description: 'Free Tamil editor online — type in Tanglish (phonetic English) to get Tamil instantly, or paste existing Tamil text for AI grammar and spell check. 100% free, no download, no sign-up required. Best free online Tamil text editor at prooftamil.com.',
+    description: 'Free Tamil editor online — type in Tanglish (phonetic English) for instant Tamil, or paste text for AI grammar and spell check. 100% free, no sign-up.',
     keywords: 'free tamil editor, free tamil editor online, online tamil editor, tamil editor online free, tamil text editor, tamil typing online, tamil writing online, type tamil online, write tamil online, tanglish to tamil, phonetic tamil typing, tamil typing tool, tamil typing without keyboard, tamil editor no download, free tamil writing tool, tamil editor for students, tamil article editor, tamil essay editor, tamil proofread online, tamil spell check free, tamil grammar check free, tamil sentence correction, tamil writing correction, free tamil language editor, tamil editing online, edit tamil text online, best free tamil editor, tamil typing keyboard online, tamil unicode editor',
     canonical: BASE_URL + '/free-tamil-editor',
     ogTitle: 'Free Tamil Editor Online - Type & Proofread Tamil | ProofTamil',
@@ -83,7 +83,7 @@ const seoConfig = {
 
   ocrTool: {
     title: 'Tamil OCR Online Free - Extract Tamil Text from Images | ProofTamil',
-    description: 'ProofTamil OCR tool - Free Tamil OCR tool to extract Tamil text from images and PDFs. Upload JPG/PNG/PDF and get editable Tamil text instantly. Best OCR for Tamil documents online.',
+    description: 'Extract Tamil text from images and PDFs online — free Tamil OCR tool. Upload JPG, PNG, or PDF and get editable Tamil text instantly.',
     keywords: 'tamil ocr, tamil ocr online, tamil ocr free, extract tamil text from image, tamil image to text, tamil pdf to text, scanned tamil document to text, tamil ocr tool',
     canonical: BASE_URL + '/tools/ocr',
     ogTitle: 'Tamil OCR Online Free - Extract Tamil Text from Images | ProofTamil',
@@ -113,7 +113,7 @@ const seoConfig = {
     // Title: 57 chars — "handwritten Tamil to text" is the high-intent query
     title: 'Tamil Handwriting to Text — Free Online OCR | ProofTamil',
     // Description: 158 chars — specific use cases, natural language
-    description: 'Photograph handwritten Tamil notes, letters, or whiteboard content and get editable Tamil text in seconds. Free Tamil handwriting OCR — no app or sign-up needed.',
+    description: 'Photograph handwritten Tamil notes or letters — get editable Tamil text in seconds. Free Tamil handwriting OCR, no app or sign-up needed.',
     keywords: 'tamil handwriting to text, handwritten tamil ocr, convert handwritten tamil notes to text, tamil notes to digital text, tamil handwriting recognition, tamil ocr handwriting online, photograph tamil notes, tamil whiteboard to text',
     canonical: BASE_URL + '/tools/handwriting-ocr',
     ogTitle: 'Tamil Handwriting to Text — Free OCR | ProofTamil',
@@ -171,7 +171,7 @@ const seoConfig = {
     // Title: 52 chars — clean, keyword + brand
     title: 'Tamil Writing & Proofreading Blog | ProofTamil',
     // Description: 157 chars — specific topics listed for AI extractability
-    description: 'Guides on Tamil grammar rules, proofreading techniques, handwriting OCR tips, AI writing tools, and Tamil language preservation. 50+ articles in Tamil and English.',
+    description: 'Guides on Tamil grammar, proofreading techniques, handwriting OCR, AI writing tools, and Tamil language preservation. Articles in Tamil and English.',
     keywords: 'tamil writing blog, tamil grammar guide, tamil proofreading tips, tamil grammar rules, handwritten tamil notes, tamil spelling guide, tamil language articles, tamil ocr guide',
     canonical: BASE_URL + '/blog',
     ogTitle: 'Tamil Writing & Proofreading Blog | ProofTamil',
@@ -236,7 +236,7 @@ const seoConfig = {
 
   contact: {
     title: 'Contact ProofTamil - Tamil Grammar Checker Support | prooftamil.com',
-    description: 'Need help with Tamil proofreading? Contact ProofTamil (prooftamil.com) support team. We are here to help with Tamil grammar checker, spelling correction, and writing assistance queries.',
+    description: 'Need help with Tamil proofreading? Contact ProofTamil support for questions about Tamil grammar checker, spelling correction, and AI writing tools.',
     keywords: 'prooftamil contact, tamil grammar checker support, tamil proofreading help, tamil writing tool support',
     canonical: BASE_URL + '/contact',
     ogTitle: 'Contact ProofTamil - Tamil Grammar Checker Support',
@@ -310,7 +310,7 @@ const seoConfig = {
 
   pricing: {
     title: 'ProofTamil Pro Pricing - Unlimited Tamil AI Proofreading Plans',
-    description: 'ProofTamil Pro plans — unlimited AI Tamil proofreading, unlimited words, all correction types (grammar, style, rewrite), and save unlimited drafts. Affordable monthly and yearly plans. Start free, upgrade anytime.',
+    description: 'ProofTamil Pro — unlimited AI Tamil proofreading, unlimited words, all correction types, and unlimited draft saves. Affordable monthly and yearly plans.',
     keywords: 'prooftamil pricing, prooftamil pro, tamil grammar checker pro, tamil proofreading subscription, tamil ai writer pro, unlimited tamil proofreading, tamil grammar checker upgrade, tamil ai pro plan, best tamil proofreading tool price',
     canonical: BASE_URL + '/pricing',
     ogTitle: 'ProofTamil Pro Pricing - Unlimited Tamil AI Proofreading',
