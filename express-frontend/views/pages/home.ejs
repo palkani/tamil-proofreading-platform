@@ -204,35 +204,91 @@
 
 <div class="min-h-screen bg-white overflow-x-hidden">
   <!-- Hero Section -->
-  <section class="relative py-12 sm:py-16 md:py-24 lg:py-32 pb-safe" style="background: linear-gradient(160deg, #EEF2FF 0%, #F5F3FF 40%, #FDF8FF 70%, #ffffff 100%);">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 text-center">
-      <div class="space-y-6 sm:space-y-8">
-        <!-- Main Heading: responsive sizes -->
-        <h1 class="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-extrabold leading-tight">
-          <span style="color: #1E1B4B;">Improve Your Tamil Writing with </span><span style="color: #4F46E5;">AI-Powered Proofreading</span>
-          <span class="block mt-2 sm:mt-3 text-xl sm:text-2xl md:text-3xl lg:text-4xl" style="color: #1E1B4B;">All-in-one Tamil Writing Assistant</span>
-        </h1>
-        
-        <p class="text-base sm:text-lg md:text-xl max-w-3xl mx-auto leading-relaxed px-1" style="color: #4A4A4A;">
-          Turn your thoughts into clear, natural Tamil blogs and polish your writing with smart Tamil proofreading — all in one place.
-        </p>
-        
-        
-        <!-- CTA Buttons: responsive padding, safe area for mobile nav -->
-        <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center pt-4 sm:pt-6 pb-8 sm:pb-0 pb-safe">
-          <% if (user) { %>
-            <a href="/workspace" class="w-full sm:w-auto px-6 py-3.5 sm:px-8 sm:py-4 text-white rounded-full font-semibold text-base sm:text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-center" style="background: linear-gradient(135deg, #1E1B4B 0%, #4F46E5 100%);">
-              Open Workspace
-            </a>
-            <a href="/drafts" class="w-full sm:w-auto px-6 py-3.5 sm:px-8 sm:py-4 bg-white border-2 border-gray-300 rounded-full font-semibold text-base sm:text-lg hover:bg-primary-50 transition-all text-center" style="color: #1E1B4B; border-color: #1E1B4B;">
-              View My Drafts
-            </a>
-          <% } else { %>
-            <a href="/register" class="w-full sm:w-auto px-6 py-3.5 sm:px-8 sm:py-4 text-white rounded-full font-semibold text-base sm:text-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-center" style="background: linear-gradient(135deg, #1E1B4B 0%, #4F46E5 100%);">
-              Start Tamil Writing — Free Account
-            </a>
-          <% } %>
+  <!-- ═══ AURORA HERO ═══ -->
+  <section class="aurora-hero relative py-16 sm:py-20 md:py-28 lg:py-36 pb-safe">
+    <!-- Floating orbs (decorative depth) -->
+    <div class="orb orb-1" aria-hidden="true"></div>
+    <div class="orb orb-2" aria-hidden="true"></div>
+    <div class="orb orb-3" aria-hidden="true"></div>
+
+    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 text-center">
+
+      <!-- Eyebrow badge -->
+      <div class="flex justify-center mb-6" style="animation: reveal-up 0.5s ease both 0.1s;">
+        <span class="glass-badge">
+          <span class="badge-dot"></span>
+          Tamil AI · Proofread · OCR · Write
+        </span>
+      </div>
+
+      <!-- Headline -->
+      <h1 class="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-extrabold leading-[1.08] tracking-tight mb-6"
+          style="animation: reveal-up 0.6s ease both 0.2s;">
+        <span class="text-gradient">Write Tamil</span>
+        <span style="color:#1E1B4B;"> with Confidence.</span>
+        <span class="block mt-2 text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold" style="color:#4A4556; letter-spacing:-0.01em;">
+          AI proofreads, OCR digitises, you shine.
+        </span>
+      </h1>
+
+      <!-- Subheadline -->
+      <p class="text-base sm:text-lg md:text-xl max-w-2xl mx-auto leading-relaxed mb-8 sm:mb-10"
+         style="color:#4A4556; animation: reveal-up 0.6s ease both 0.35s;">
+        Catch grammar errors in under 2 seconds. Convert handwritten Tamil notes to text with one photo. All free — no app download needed.
+      </p>
+
+      <!-- CTA row -->
+      <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center pb-8 sm:pb-0 pb-safe"
+           style="animation: reveal-up 0.6s ease both 0.45s;">
+        <% if (user) { %>
+          <a href="/workspace" class="btn-hero w-full sm:w-auto justify-center">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            Open Workspace
+          </a>
+          <a href="/drafts" class="btn-hero-outline w-full sm:w-auto justify-center">
+            View My Drafts
+          </a>
+        <% } else { %>
+          <a href="/register" class="btn-hero w-full sm:w-auto justify-center">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            Start Free — No Credit Card
+          </a>
+          <a href="/tools/handwriting-ocr" class="btn-hero-outline w-full sm:w-auto justify-center">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            Try Tamil OCR Free
+          </a>
+        <% } %>
+      </div>
+
+      <!-- Trust micro-stats -->
+      <div class="flex flex-wrap justify-center gap-6 sm:gap-10 mt-10 sm:mt-12"
+           style="animation: reveal-up 0.6s ease both 0.55s;">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+            <svg class="w-4 h-4 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+          </div>
+          <span class="text-sm font-medium text-gray-700">Proofread in &lt;2 seconds</span>
         </div>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+            <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/></svg>
+          </div>
+          <span class="text-sm font-medium text-gray-700">Handwriting OCR</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+            <svg class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 14a6 6 0 110-12 6 6 0 010 12z"/><path d="M10 6a1 1 0 011 1v3.586l2.707 2.707a1 1 0 01-1.414 1.414l-3-3A1 1 0 019 11V7a1 1 0 011-1z"/></svg>
+          </div>
+          <span class="text-sm font-medium text-gray-700">Free forever plan</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+            <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+          </div>
+          <span class="text-sm font-medium text-gray-700">Works on any device</span>
+        </div>
+      </div>
+    </div>
         
         <!-- Interactive Editor (Only for non-logged-in users) -->
         <% if (!user) { %>
@@ -546,70 +602,116 @@
   </section>
 
   <!-- Tools Section -->
-  <section class="py-20 bg-gradient-to-b from-white to-primary-50">
-    <div class="max-w-7xl mx-auto px-6">
-      <div class="text-center mb-16">
-        <div class="inline-block px-4 py-2 bg-primary-100 text-primary-700 rounded-full text-sm font-semibold mb-4">
-          Tamil Tools Suite
-        </div>
-        <h2 class="text-4xl md:text-5xl font-extrabold text-primary-600 mb-4">
-          Powerful Tools for Tamil Content
+  <!-- ═══ BENTO TOOLS GRID ═══ -->
+  <section class="py-20 sm:py-24" style="background:#F7F6FF;">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6">
+
+      <!-- Section header -->
+      <div class="text-center mb-12 reveal">
+        <span class="section-label mb-4">Tamil AI Suite</span>
+        <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold mt-4 mb-4" style="color:#1E1B4B; letter-spacing:-0.02em;">
+          Three tools. One platform.
         </h2>
-        <p class="text-xl text-body max-w-3xl mx-auto" style="color: #4A4A4A;">
-          Explore our collection of AI-powered tools designed to help you work with Tamil text and images more efficiently.
-        </p>
+        <p class="text-lg text-gray-500 max-w-xl mx-auto">Everything you need to write, correct, and digitise Tamil — built together so they work better together.</p>
       </div>
 
-      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <!-- OCR Tool -->
-        <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group">
-          <div class="flex items-start justify-between mb-4">
-            <div class="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-              📄
+      <!-- Bento grid: 2-col on md, asymmetric on lg -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+
+        <!-- CARD 1: AI Proofreader — featured (dark) -->
+        <div class="bento-card bento-card-featured lg:col-span-2 p-7 sm:p-8 reveal" style="--reveal-delay:0.05s;">
+          <div class="flex items-start justify-between mb-6">
+            <div class="bento-icon-wrap" style="background:rgba(255,255,255,0.15);">
+              <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
             </div>
-            <span class="px-3 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full">Available</span>
+            <span class="px-3 py-1 text-xs font-bold rounded-full" style="background:rgba(245,158,11,0.2);color:#FCD34D;">Core Feature</span>
           </div>
-          <h3 class="text-xl font-bold text-gray-900 mb-2">Tamil OCR</h3>
-          <p class="text-gray-600 text-sm mb-4">
-            Extract Tamil text from images, PDFs, and scanned documents. Convert printed Tamil text into editable digital format instantly.
+          <h3 class="text-2xl sm:text-3xl font-extrabold text-white mb-3 leading-tight">
+            AI Tamil Proofreader
+          </h3>
+          <p class="text-indigo-200 text-base mb-6 leading-relaxed max-w-lg">
+            Catches verb conjugation errors, sandhi violations, spelling mistakes, and register mismatches — all in under 2 seconds. Trained specifically on Tamil, not adapted from English tools.
           </p>
-          <a href="/tools/ocr" class="block w-full px-4 py-2 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors text-center">
-            Launch Tool
+          <!-- Before/after demo -->
+          <div class="grid sm:grid-cols-2 gap-3 mb-6">
+            <div class="rounded-xl p-3" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);">
+              <div class="text-xs font-semibold text-red-300 mb-2 uppercase tracking-wide">❌ Before</div>
+              <div class="text-sm text-white font-medium">குழந்தைகள் <span class="bg-red-500/30 text-red-200 px-1 rounded line-through">விளையாடுகிறது</span>.</div>
+            </div>
+            <div class="rounded-xl p-3" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);">
+              <div class="text-xs font-semibold text-green-300 mb-2 uppercase tracking-wide">✓ After</div>
+              <div class="text-sm text-white font-medium">குழந்தைகள் <span class="bg-green-500/30 text-green-200 px-1 rounded font-bold">விளையாடுகின்றனர்</span>.</div>
+            </div>
+          </div>
+          <a href="/register" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all"
+             style="background:#F59E0B;color:#1E1B4B;">
+            Proofread Free
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
           </a>
         </div>
 
-        <!-- Tamil Handwriting to Text -->
-        <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group">
-          <div class="flex items-start justify-between mb-4">
-            <div class="w-14 h-14 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-              ✍️
-            </div>
-            <span class="px-3 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full">Available</span>
+        <!-- CARD 2: Handwriting OCR -->
+        <div class="bento-card p-7 reveal" style="--reveal-delay:0.1s;">
+          <div class="bento-icon-wrap mb-5" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);">
+            <svg class="w-7 h-7" style="color:#D97706;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
           </div>
-          <h3 class="text-xl font-bold text-gray-900 mb-2">Tamil Handwriting to Text</h3>
-          <p class="text-gray-600 text-sm mb-4">
-            Convert handwritten Tamil notes, whiteboard, or letters to editable text. Upload an image and get Tamil text instantly.
+          <span class="section-label text-xs mb-3 inline-flex" style="background:#FEF3C7;border-color:#FDE68A;color:#D97706;">Handwriting OCR</span>
+          <h3 class="text-xl font-extrabold mb-2" style="color:#1E1B4B;">Handwritten Notes → Text</h3>
+          <p class="text-gray-500 text-sm leading-relaxed mb-5">
+            Photograph your handwritten Tamil notes and get clean editable text in seconds. Class notes, letters, whiteboards — all supported.
           </p>
-          <a href="/tools/handwriting-ocr" class="block w-full px-4 py-2 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors text-center">
-            Launch Tool
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-600"><span class="w-4 h-4 rounded-full flex items-center justify-center text-xs" style="background:#FEF3C7;color:#D97706;">✓</span> 2 free conversions/day</li>
+            <li class="flex items-center gap-2 text-sm text-gray-600"><span class="w-4 h-4 rounded-full flex items-center justify-center text-xs" style="background:#FEF3C7;color:#D97706;">✓</span> JPG, PNG supported</li>
+            <li class="flex items-center gap-2 text-sm text-gray-600"><span class="w-4 h-4 rounded-full flex items-center justify-center text-xs" style="background:#FEF3C7;color:#D97706;">✓</span> No sign-up required</li>
+          </ul>
+          <a href="/tools/handwriting-ocr" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all hover:opacity-90"
+             style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#ffffff;">
+            Try OCR Now →
           </a>
         </div>
 
-        <!-- AI Content Writer -->
-        <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group">
-          <div class="flex items-start justify-between mb-4">
-            <div class="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-              ✍️
-            </div>
-            <span class="px-3 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full">Available</span>
+        <!-- CARD 3: AI Content Writer -->
+        <div class="bento-card p-7 reveal" style="--reveal-delay:0.15s;">
+          <div class="bento-icon-wrap mb-5" style="background:linear-gradient(135deg,#EEF2FF,#C7D2FE);">
+            <svg class="w-7 h-7 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+            </svg>
           </div>
-          <h3 class="text-xl font-bold text-gray-900 mb-2">AI Content Writer</h3>
-          <p class="text-gray-600 text-sm mb-4">
-            Generate high-quality blogs, essays, and articles in Tamil and English using AI. Create professional content with customizable tone, length, and style.
+          <span class="section-label text-xs mb-3 inline-flex">AI Content Writer</span>
+          <h3 class="text-xl font-extrabold mb-2" style="color:#1E1B4B;">Generate Tamil Articles</h3>
+          <p class="text-gray-500 text-sm leading-relaxed mb-5">
+            Type a topic in English, get a full Tamil blog post, essay, or article — in formal or spoken style. Publish-ready in one click.
           </p>
-          <a href="/tools/ai-content-writer" class="block w-full px-4 py-2 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-colors text-center">
-            Launch Tool
+          <a href="/tools/ai-content-writer" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm border transition-all hover:bg-indigo-50"
+             style="border-color:#C7D2FE;color:#4F46E5;">
+            Start Writing →
           </a>
+        </div>
+
+        <!-- CARD 4: Tanglish converter (compact) -->
+        <div class="bento-card p-6 reveal" style="--reveal-delay:0.2s;">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="bento-icon-wrap" style="background:linear-gradient(135deg,#F0FDF4,#BBF7D0);">
+              <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 4v8m0 0l4-4m-4 4l-4-4"/>
+              </svg>
+            </div>
+            <h3 class="text-lg font-extrabold" style="color:#1E1B4B;">Tanglish → Tamil</h3>
+          </div>
+          <div class="rounded-xl p-3 mb-3" style="background:#F9F8FF;border:1px solid #E8E5FF;">
+            <div class="text-xs text-gray-400 mb-1">You type</div>
+            <div class="font-mono text-sm text-gray-700">"vanakkam nanbaa"</div>
+          </div>
+          <div class="rounded-xl p-3" style="background:#F0FDF4;border:1px solid #BBF7D0;">
+            <div class="text-xs text-gray-400 mb-1">ProofTamil outputs</div>
+            <div class="font-semibold text-lg" style="color:#059669;">வணக்கம் நண்பா</div>
+          </div>
         </div>
 
       </div>
@@ -617,139 +719,169 @@
   </section>
 
   <!-- How to Use Quick Link -->
-  <section class="py-8 bg-primary-50 border-b border-primary-200">
-    <div class="max-w-7xl mx-auto px-6 text-center">
-      <div class="flex items-center justify-center gap-3 mb-4">
-        <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <section class="py-8 border-b" style="background:#F5F3FF;border-color:#E0E7FF;">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 text-center reveal">
+      <div class="inline-flex items-center gap-3">
+        <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
         </svg>
-        <p class="text-lg text-gray-900">
-          <strong>New to ProofTamil?</strong> 
-          <a href="/how-to-use" class="text-primary-600 font-semibold hover:text-primary-700 ml-2">View Step-by-Step Guide →</a>
+        <p class="text-base text-gray-700">
+          <strong>New to ProofTamil?</strong>
+          <a href="/how-to-use" class="font-semibold ml-2 hover:opacity-80 transition-opacity" style="color:#4F46E5;">View Step-by-Step Guide →</a>
         </p>
       </div>
     </div>
   </section>
 
   <!-- Trusted By Section -->
-  <section class="py-12 bg-white">
-    <div class="max-w-7xl mx-auto px-6 text-center">
-      <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+  <section class="py-14 bg-white">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 text-center reveal">
+      <p class="text-xl sm:text-2xl font-bold leading-snug" style="color:#1E1B4B;">
         இலக்கணம் முதல் வாக்கியம் வரை — உலக தமிழ் எழுத்தாளர்கள் நம்பும் AI.
-      </h2>
+      </p>
+      <div class="flex items-center justify-center gap-8 mt-8 flex-wrap">
+        <div class="text-center">
+          <div class="text-2xl font-extrabold text-gradient">30+</div>
+          <div class="text-xs text-gray-400 mt-1">AI checks / day free</div>
+        </div>
+        <div class="w-px h-8 bg-gray-200 hidden sm:block"></div>
+        <div class="text-center">
+          <div class="text-2xl font-extrabold text-gradient">&lt; 2s</div>
+          <div class="text-xs text-gray-400 mt-1">Grammar check speed</div>
+        </div>
+        <div class="w-px h-8 bg-gray-200 hidden sm:block"></div>
+        <div class="text-center">
+          <div class="text-2xl font-extrabold text-gradient">2</div>
+          <div class="text-xs text-gray-400 mt-1">Free OCR scans / day</div>
+        </div>
+        <div class="w-px h-8 bg-gray-200 hidden sm:block"></div>
+        <div class="text-center">
+          <div class="text-2xl font-extrabold text-gradient">$0</div>
+          <div class="text-xs text-gray-400 mt-1">To get started</div>
+        </div>
+      </div>
     </div>
   </section>
 
   <!-- Features Grid -->
-  <section class="py-20 bg-white">
-    <div class="max-w-7xl mx-auto px-6">
-      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-        <div class="text-center space-y-4 section-animate" style="animation-delay: 0s">
-          <div class="w-16 h-16 mx-auto bg-blue-50 rounded-2xl flex items-center justify-center text-3xl">
-            🎯
+  <section class="py-24 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6">
+      <div class="text-center mb-14 reveal">
+        <span class="section-label">Why ProofTamil</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold mt-4 mb-3" style="color:#1E1B4B;">Built for Tamil. Unlike anything else.</h2>
+        <p class="text-gray-500 max-w-2xl mx-auto text-base">Every feature is designed around the way Tamil actually works — not a port from English tools.</p>
+      </div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+
+        <div class="bento-card p-7 reveal" style="--reveal-delay:0s;">
+          <div class="bento-icon-wrap mb-5" style="background:linear-gradient(135deg,#EEF2FF,#C7D2FE);">
+            <svg class="w-7 h-7 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
           </div>
-          <h3 class="text-xl font-bold text-gray-900">Tamil-First AI</h3>
-          <p class="text-gray-600">
-            Built from the ground up for Tamil, our AI is trained on the unique nuances of the language.
-          </p>
+          <h3 class="text-lg font-extrabold mb-2" style="color:#1E1B4B;">Tamil-First AI</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Built from the ground up for Tamil — trained on வேர்ச்சொல் patterns, sandhi rules, and dialect variation.</p>
         </div>
 
-        <div class="text-center space-y-4 section-animate" style="animation-delay: 0.1s">
-          <div class="w-16 h-16 mx-auto bg-blue-50 rounded-2xl flex items-center justify-center text-3xl">
-            ✍️
+        <div class="bento-card p-7 reveal" style="--reveal-delay:0.08s;">
+          <div class="bento-icon-wrap mb-5" style="background:linear-gradient(135deg,#F0FDF4,#BBF7D0);">
+            <svg class="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
           </div>
-          <h3 class="text-xl font-bold text-gray-900">Beyond Grammar</h3>
-          <p class="text-gray-600">
-            Correct complex grammar, subtle spelling errors, punctuation, style, and tone.
-          </p>
+          <h3 class="text-lg font-extrabold mb-2" style="color:#1E1B4B;">Beyond Grammar</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Catches verb conjugation, sandhi violations, spelling mismatches, register errors, and tone — all at once.</p>
         </div>
 
-        <div class="text-center space-y-4 section-animate" style="animation-delay: 0.2s">
-          <div class="w-16 h-16 mx-auto bg-blue-50 rounded-2xl flex items-center justify-center text-3xl">
-            ⚡
+        <div class="bento-card p-7 reveal" style="--reveal-delay:0.16s;">
+          <div class="bento-icon-wrap mb-5" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);">
+            <svg class="w-7 h-7 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
           </div>
-          <h3 class="text-xl font-bold text-gray-900">Smart Typing</h3>
-          <p class="text-gray-600">
-            Instantly convert English characters into perfect Tamil script as you type.
-          </p>
+          <h3 class="text-lg font-extrabold mb-2" style="color:#1E1B4B;">Smart Typing</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Type Tanglish naturally — "vanakkam nanbaa" becomes வணக்கம் நண்பா instantly as you press Space.</p>
         </div>
 
-        <div class="text-center space-y-4 section-animate" style="animation-delay: 0.3s">
-          <div class="w-16 h-16 mx-auto bg-blue-50 rounded-2xl flex items-center justify-center text-3xl">
-            ☁️
+        <div class="bento-card p-7 reveal" style="--reveal-delay:0.24s;">
+          <div class="bento-icon-wrap mb-5" style="background:linear-gradient(135deg,#FDF4FF,#E9D5FF);">
+            <svg class="w-7 h-7 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+            </svg>
           </div>
-          <h3 class="text-xl font-bold text-gray-900">Access Anywhere</h3>
-          <p class="text-gray-600">
-            Start on your phone, finish on your laptop. Your work is always saved and in sync.
-          </p>
+          <h3 class="text-lg font-extrabold mb-2" style="color:#1E1B4B;">Access Anywhere</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Phone, tablet, or laptop — start writing in one place and pick up seamlessly on any device.</p>
         </div>
+
       </div>
     </div>
   </section>
 
   <!-- Grammar Engine Section -->
-  <section class="py-20 bg-gradient-to-b from-white to-gray-50">
-    <div class="max-w-6xl mx-auto px-6">
-      <div class="text-center mb-16">
-        <div class="inline-block px-4 py-2 bg-primary-50 text-primary-600 rounded-full text-sm font-semibold mb-4">
-          AI Grammar Engine
-        </div>
-        <h2 class="text-4xl md:text-5xl font-extrabold text-primary-600 mb-4">
-          Correct Tamil grammar mistakes<br/>in seconds
+  <section class="py-24" style="background:linear-gradient(180deg,#F8F9FF 0%,#FFFFFF 100%);">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="text-center mb-14 reveal">
+        <span class="section-label">AI Grammar Engine</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold mt-4 mb-3" style="color:#1E1B4B;">
+          Correct Tamil grammar mistakes<br class="hidden sm:block"/> in under 2 seconds
         </h2>
-        <p class="text-xl text-body max-w-3xl mx-auto" style="color: #4A4A4A;">
-          Don't worry about tricky rules. ProofTamil's AI instantly detects and fixes the most complex errors, so your writing is always clear and professional.
+        <p class="text-gray-500 max-w-2xl mx-auto text-base">
+          ProofTamil's AI understands the structural rules of Tamil grammar — not just word lists. It catches what spell-checkers miss.
         </p>
       </div>
 
-      <div class="grid md:grid-cols-3 gap-8 mb-12">
-        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
-          <div class="text-3xl mb-3">📝</div>
-          <h3 class="text-lg font-bold text-gray-900 mb-2">Verb conjugation errors</h3>
-          <p class="text-gray-600 text-sm">Catches incorrect verb forms and tense usage</p>
+      <div class="grid md:grid-cols-3 gap-5 mb-10">
+        <div class="bento-card p-6 reveal" style="--reveal-delay:0s;">
+          <div class="bento-icon-wrap mb-4" style="background:linear-gradient(135deg,#FEF2F2,#FECACA);">
+            <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+            </svg>
+          </div>
+          <h3 class="text-base font-extrabold mb-1.5" style="color:#1E1B4B;">Verb Conjugation</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Catches incorrect verb forms, tense mismatches, and gender agreement errors instantly.</p>
         </div>
 
-        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
-          <div class="text-3xl mb-3">🔗</div>
-          <h3 class="text-lg font-bold text-gray-900 mb-2">Sandhi rule violations</h3>
-          <p class="text-gray-600 text-sm">Identifies and corrects complex sandhi mistakes</p>
+        <div class="bento-card p-6 reveal" style="--reveal-delay:0.08s;">
+          <div class="bento-icon-wrap mb-4" style="background:linear-gradient(135deg,#EEF2FF,#C7D2FE);">
+            <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+          </div>
+          <h3 class="text-base font-extrabold mb-1.5" style="color:#1E1B4B;">Sandhi Violations</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Identifies and corrects complex sandhi (புணர்ச்சி) mistakes that are invisible to standard spell-checkers.</p>
         </div>
 
-        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
-          <div class="text-3xl mb-3">✅</div>
-          <h3 class="text-lg font-bold text-gray-900 mb-2">Subject-verb agreement</h3>
-          <p class="text-gray-600 text-sm">Guarantees proper agreement between subjects and verbs</p>
+        <div class="bento-card p-6 reveal" style="--reveal-delay:0.16s;">
+          <div class="bento-icon-wrap mb-4" style="background:linear-gradient(135deg,#F0FDF4,#BBF7D0);">
+            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+          </div>
+          <h3 class="text-base font-extrabold mb-1.5" style="color:#1E1B4B;">Subject–Verb Agreement</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Guarantees proper agreement between subjects, verbs, and objects across plural and singular forms.</p>
         </div>
       </div>
 
       <!-- Grammar Example -->
-      <div class="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-        <div class="bg-blue-50 px-6 py-3 border-b border-gray-200 flex items-center justify-between">
-          <span class="text-sm font-semibold text-primary-700">Free Editor</span>
-          <img src="/images/tamil-logo.svg" alt="Proofதமிழ்" class="w-8 h-8 object-contain" width="32" height="32" loading="lazy" decoding="async">
+      <div class="bento-card overflow-hidden reveal" style="--reveal-delay:0.2s;">
+        <div class="px-6 py-3 border-b flex items-center justify-between" style="background:#F5F3FF;border-color:#E0E7FF;">
+          <span class="text-sm font-semibold" style="color:#4F46E5;">Live Grammar Check</span>
+          <img src="/images/tamil-logo.svg" alt="ProofTamil" class="w-8 h-8 object-contain" width="32" height="32" loading="lazy" decoding="async">
         </div>
         <div class="p-6">
-          <div class="mb-4">
-            <p class="text-gray-700 leading-relaxed">
-              குழந்தைகள் <span class="bg-red-100 text-red-700 px-1 rounded">விளையாடுகிறது</span>.
-            </p>
-          </div>
-          <div class="bg-blue-50 rounded-lg p-4 border-l-4 border-primary-700">
+          <p class="text-gray-700 leading-relaxed mb-4">
+            குழந்தைகள் <span class="bg-red-100 text-red-700 px-1.5 rounded underline decoration-wavy decoration-red-400">விளையாடுகிறது</span>.
+          </p>
+          <div class="rounded-xl p-4" style="background:#F5F3FF;border:1px solid #E0E7FF;">
             <div class="flex items-start gap-3">
-              <div class="flex-shrink-0">
-                <span class="inline-block px-2 py-1 bg-primary-600 text-white text-xs rounded font-semibold">Grammar</span>
-              </div>
+              <span class="inline-block px-2 py-1 rounded-lg text-xs font-bold shrink-0" style="background:#4F46E5;color:#fff;">Grammar</span>
               <div class="flex-1">
-                <p class="text-gray-700 mb-2">
-                  குழந்தைகள் <span class="line-through text-red-700 px-1">விளையாடுகிறது</span><span class="bg-green-100 text-green-800 px-1 rounded font-semibold">விளையாடுகிறார்கள்</span>.
+                <p class="text-gray-700 mb-3">
+                  குழந்தைகள் <span class="line-through text-red-600 px-1">விளையாடுகிறது</span><span class="bg-green-100 text-green-800 px-1.5 rounded font-semibold">விளையாடுகிறார்கள்</span>.
                 </p>
                 <div class="flex gap-2">
-                  <button class="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-semibold hover:bg-primary-500 transition">
-                    Apply suggestion
-                  </button>
-                  <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition">
-                    Dismiss
-                  </button>
+                  <button class="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all" style="background:#4F46E5;">Apply fix</button>
+                  <button class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-200 transition-all">Dismiss</button>
                 </div>
               </div>
             </div>
@@ -760,189 +892,203 @@
   </section>
 
   <!-- Spell Check Section -->
-  <section class="py-20 bg-white">
-    <div class="max-w-6xl mx-auto px-6">
-      <div class="text-center mb-16">
-        <div class="inline-block px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-semibold mb-4">
-          Smart Spell Check
-        </div>
-        <h2 class="text-4xl md:text-5xl font-extrabold text-primary-600 mb-4">
-          Fix spelling errors with context
-        </h2>
-        <p class="text-xl text-body max-w-3xl mx-auto" style="color: #4A4A4A;">
-          Avoid that "oops" moment after you've sent the message. ProofTamil catches everything from simple typos to tricky sound-alike words (ல vs. ழ vs. ள).
-        </p>
-      </div>
+  <section class="py-24 bg-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="grid lg:grid-cols-2 gap-12 items-center">
 
-      <div class="grid md:grid-cols-3 gap-8 mb-12">
-        <div class="text-center space-y-3">
-          <div class="text-3xl">🔊</div>
-          <h3 class="text-lg font-bold text-gray-900">Phonetic awareness</h3>
-          <p class="text-gray-600 text-sm">
-            சோதணையா, சோதனையானு confuse ஆகுதா? We find the right spelling, instantly.
+        <!-- Left: copy + feature pills -->
+        <div class="reveal">
+          <span class="section-label" style="background:#F0FDF4;border-color:#BBF7D0;color:#059669;">Smart Spell Check</span>
+          <h2 class="text-3xl sm:text-4xl font-extrabold mt-4 mb-4" style="color:#1E1B4B;">
+            Fix spelling errors<br/>with context, not guesses.
+          </h2>
+          <p class="text-gray-500 text-base mb-8 leading-relaxed">
+            ProofTamil catches everything from simple typos to tricky sound-alike letters — ல vs. ழ vs. ள — and gives you the right correction based on meaning, not just phonetics.
           </p>
-        </div>
-
-        <div class="text-center space-y-3">
-          <div class="text-3xl">🌍</div>
-          <h3 class="text-lg font-bold text-gray-900">Understands Your Dialect</h3>
-          <p class="text-gray-600 text-sm">
-            Trained on Tamil from across the globe, our AI recognizes regional spelling variations.
-          </p>
-        </div>
-
-        <div class="text-center space-y-3">
-          <div class="text-3xl">🎯</div>
-          <h3 class="text-lg font-bold text-gray-900">Fixes with Context</h3>
-          <p class="text-gray-600 text-sm">
-            We don't just suggest a random word. We give you the right correction based on meaning.
-          </p>
-        </div>
-      </div>
-
-      <!-- Spelling Example -->
-      <div class="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-        <div class="bg-green-50 px-6 py-3 border-b border-gray-200 flex items-center justify-between">
-          <img src="/images/tamil-logo.svg" alt="Proofதமிழ்" class="w-8 h-8 object-contain" width="32" height="32" loading="lazy" decoding="async">
-        </div>
-        <div class="p-6">
-          <div class="mb-4">
-            <p class="text-gray-700 leading-relaxed">
-              இந்தக் கதையை <span class="bg-red-100 text-red-700 px-1 rounded">படிசிட்டேன்</span>.
-            </p>
-          </div>
-          <div class="bg-green-50 rounded-lg p-4 border-l-4 border-green-500">
+          <div class="space-y-4">
             <div class="flex items-start gap-3">
-              <div class="flex-shrink-0">
-                <span class="inline-block px-2 py-1 bg-green-600 text-white text-xs rounded font-semibold">Spelling</span>
+              <span class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:#F0FDF4;">
+                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              </span>
+              <div>
+                <div class="font-semibold text-sm" style="color:#1E1B4B;">Phonetic Awareness</div>
+                <div class="text-gray-500 text-sm">சோதணை vs சோதனை — we know which is right from the sentence context.</div>
               </div>
-              <div class="flex-1">
-                <p class="text-gray-700 mb-2">
-                  இந்தக் கதையை <span class="line-through text-red-700 px-1">படிசிட்டேன்</span><span class="bg-green-100 text-green-800 px-1 rounded font-semibold">படித்துவிட்டேன்</span>.
-                </p>
-                <div class="flex gap-2">
-                  <button class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition">
-                    Apply suggestion
-                  </button>
-                  <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition">
-                    Dismiss
-                  </button>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:#F0FDF4;">
+                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              </span>
+              <div>
+                <div class="font-semibold text-sm" style="color:#1E1B4B;">Dialect-Aware</div>
+                <div class="text-gray-500 text-sm">Trained on global Tamil — recognises regional spelling variations without flagging them as errors.</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:#F0FDF4;">
+                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              </span>
+              <div>
+                <div class="font-semibold text-sm" style="color:#1E1B4B;">Context-Driven Fix</div>
+                <div class="text-gray-500 text-sm">Suggestions are chosen by meaning, not just phonetic similarity — no random guesses.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: spell check demo card -->
+        <div class="bento-card overflow-hidden reveal" style="--reveal-delay:0.1s;">
+          <div class="px-6 py-3 border-b flex items-center justify-between" style="background:#F0FDF4;border-color:#BBF7D0;">
+            <span class="text-sm font-semibold text-green-700">Spell Check</span>
+            <img src="/images/tamil-logo.svg" alt="ProofTamil" class="w-8 h-8 object-contain" width="32" height="32" loading="lazy" decoding="async">
+          </div>
+          <div class="p-6">
+            <p class="text-gray-700 leading-relaxed mb-4">
+              இந்தக் கதையை <span class="bg-red-100 text-red-700 px-1.5 rounded underline decoration-wavy decoration-red-400">படிசிட்டேன்</span>.
+            </p>
+            <div class="rounded-xl p-4" style="background:#F0FDF4;border:1px solid #BBF7D0;">
+              <div class="flex items-start gap-3">
+                <span class="inline-block px-2 py-1 rounded-lg text-xs font-bold shrink-0" style="background:#059669;color:#fff;">Spelling</span>
+                <div class="flex-1">
+                  <p class="text-gray-700 mb-3">
+                    இந்தக் கதையை <span class="line-through text-red-600 px-1">படிசிட்டேன்</span><span class="bg-green-100 text-green-800 px-1.5 rounded font-semibold">படித்துவிட்டேன்</span>.
+                  </p>
+                  <div class="flex gap-2">
+                    <button class="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all" style="background:#059669;">Apply fix</button>
+                    <button class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-200 transition-all">Dismiss</button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+
       </div>
     </div>
   </section>
 
   <!-- Transliteration Section -->
-  <section class="py-20 bg-gradient-to-b from-white to-primary-50">
-    <div class="max-w-6xl mx-auto px-6">
-      <div class="text-center mb-16">
-        <div class="inline-block px-4 py-2 bg-purple-100 text-purple-800 rounded-full text-sm font-semibold mb-4">
-          Smart transliteration
-        </div>
-        <h2 class="text-4xl md:text-5xl font-extrabold text-primary-600 mb-4">
-          Type in English. We'll make it Tamil.
-        </h2>
-        <p class="text-xl text-body max-w-3xl mx-auto" style="color: #4A4A4A;">
-          You already type <em>epdi irukinga</em>. Now, let us handle the rest. ProofTamil intelligently converts your everyday Tanglish messages into beautiful, clear Tamil script, instantly.
-        </p>
-      </div>
+  <section class="py-24" style="background:linear-gradient(180deg,#FAFBFF 0%,#F5F3FF 100%);">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="grid lg:grid-cols-2 gap-12 items-center">
 
-      <div class="grid md:grid-cols-3 gap-8 mb-12">
-        <div class="text-center space-y-3">
-          <div class="text-3xl">🤖</div>
-          <h3 class="text-lg font-bold text-gray-900">Intelligent understanding</h3>
-          <p class="text-gray-600 text-sm">
-            Our AI knows you mean வணக்கம் when you type vanakkam.
-          </p>
-        </div>
-
-        <div class="text-center space-y-3">
-          <div class="text-3xl">✨</div>
-          <h3 class="text-lg font-bold text-gray-900">Multiple smart choices</h3>
-          <p class="text-gray-600 text-sm">
-            Get multiple, context-aware options for any word in real-time.
-          </p>
-        </div>
-
-        <div class="text-center space-y-3">
-          <div class="text-3xl">⚡</div>
-          <h3 class="text-lg font-bold text-gray-900">Seamless experience</h3>
-          <p class="text-gray-600 text-sm">
-            Type naturally without switching keyboards or copy-pasting.
-          </p>
-        </div>
-      </div>
-
-      <!-- Transliteration Demo -->
-      <div class="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-        <div class="bg-purple-50 px-6 py-3 border-b border-gray-200 flex items-center justify-end">
-          <span class="px-2 py-1 bg-purple-600 text-white text-xs rounded font-semibold">AI</span>
-        </div>
-        <div class="p-6">
-          <div class="mb-4">
-            <p class="text-gray-700 text-lg leading-relaxed">
-              உயர்தனிக் செம்மொழியாம் தமிழ்மொழியில் <span class="bg-blue-50 text-primary-700 px-1 rounded">yelidhu</span>
+        <!-- Left: transliteration demo card -->
+        <div class="bento-card overflow-hidden reveal order-2 lg:order-1">
+          <div class="px-6 py-3 border-b flex items-center justify-between" style="background:#EDE9FE;border-color:#DDD6FE;">
+            <span class="text-sm font-semibold text-purple-700">Tanglish → Tamil</span>
+            <span class="px-2.5 py-1 rounded-lg text-xs font-bold" style="background:#7C3AED;color:#fff;">AI</span>
+          </div>
+          <div class="p-6">
+            <p class="text-gray-700 text-base leading-relaxed mb-4">
+              உயர்தனிக் செம்மொழியாம் தமிழ்மொழியில் <span class="px-1.5 py-0.5 rounded text-purple-700 font-mono text-sm" style="background:#EDE9FE;">yelidhu</span>
             </p>
-          </div>
-          <div class="bg-white rounded-lg border-2 border-primary-500 p-4 shadow-lg">
-            <div class="grid grid-cols-2 gap-2 mb-3">
-              <button class="px-4 py-3 bg-blue-50 text-primary-700 rounded-lg text-sm font-semibold hover:bg-blue-100 transition text-left">
-                <span class="text-xs text-gray-500">1</span> எளிது
-              </button>
-              <button class="px-4 py-3 bg-gray-50 text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-100 transition text-left">
-                <span class="text-xs text-gray-500">2</span> எளித
-              </button>
-              <button class="px-4 py-3 bg-gray-50 text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-100 transition text-left">
-                <span class="text-xs text-gray-500">3</span> எளிதி
-              </button>
-              <button class="px-4 py-3 bg-gray-50 text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-100 transition text-left">
-                <span class="text-xs text-gray-500">4</span> எளிதத
-              </button>
+            <div class="rounded-xl border-2 p-4" style="border-color:#7C3AED;background:#fff;">
+              <div class="grid grid-cols-2 gap-2 mb-3">
+                <button class="px-4 py-3 rounded-lg text-sm font-semibold text-left transition-all hover:scale-[1.02]" style="background:#EDE9FE;color:#4C1D95;">
+                  <span class="text-xs opacity-50 mr-1">1</span> எளிது
+                </button>
+                <button class="px-4 py-3 bg-gray-50 text-gray-700 rounded-lg text-sm font-semibold text-left hover:bg-gray-100 transition-all">
+                  <span class="text-xs opacity-50 mr-1">2</span> எளித
+                </button>
+                <button class="px-4 py-3 bg-gray-50 text-gray-700 rounded-lg text-sm font-semibold text-left hover:bg-gray-100 transition-all">
+                  <span class="text-xs opacity-50 mr-1">3</span> எளிதி
+                </button>
+                <button class="px-4 py-3 bg-gray-50 text-gray-700 rounded-lg text-sm font-semibold text-left hover:bg-gray-100 transition-all">
+                  <span class="text-xs opacity-50 mr-1">4</span> எளிதத
+                </button>
+              </div>
+              <p class="text-xs text-gray-400 text-center">Press <kbd class="px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded font-mono">Space</kbd> to select</p>
             </div>
-            <p class="text-xs text-gray-700 text-center">Press <kbd class="px-2 py-1 bg-gray-200 text-gray-900 rounded font-mono">Space</kbd> to select</p>
           </div>
         </div>
+
+        <!-- Right: copy -->
+        <div class="reveal order-1 lg:order-2" style="--reveal-delay:0.1s;">
+          <span class="section-label" style="background:#EDE9FE;border-color:#DDD6FE;color:#7C3AED;">Smart Transliteration</span>
+          <h2 class="text-3xl sm:text-4xl font-extrabold mt-4 mb-4" style="color:#1E1B4B;">
+            Type in English.<br/>We'll write it in Tamil.
+          </h2>
+          <p class="text-gray-500 text-base mb-8 leading-relaxed">
+            You already type <em>"epdi irukinga"</em> — ProofTamil converts it into beautiful Tamil script in real time. No keyboard switch. No copy-paste.
+          </p>
+          <div class="space-y-4">
+            <div class="flex items-start gap-3">
+              <span class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:#EDE9FE;">
+                <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              </span>
+              <div>
+                <div class="font-semibold text-sm" style="color:#1E1B4B;">Intelligent Understanding</div>
+                <div class="text-gray-500 text-sm">AI knows you mean வணக்கம் when you type vanakkam — not just phonetic lookup.</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:#EDE9FE;">
+                <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              </span>
+              <div>
+                <div class="font-semibold text-sm" style="color:#1E1B4B;">Multiple Smart Choices</div>
+                <div class="text-gray-500 text-sm">Context-aware word suggestions ranked by how likely they are in your sentence.</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:#EDE9FE;">
+                <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              </span>
+              <div>
+                <div class="font-semibold text-sm" style="color:#1E1B4B;">Zero Friction</div>
+                <div class="text-gray-500 text-sm">Works inline in the editor — press Space to accept, no extra steps, no keyboard app needed.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </section>
 
   <!-- Handwriting to Text Promo Section -->
-  <section class="py-20 bg-white">
-    <div class="max-w-6xl mx-auto px-6">
+  <section class="py-24 bg-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
 
       <!-- Header -->
-      <div class="text-center mb-16">
-        <div class="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-800 rounded-full text-sm font-semibold mb-4">
-          ✍️ New Feature
-        </div>
-        <h2 class="text-4xl md:text-5xl font-extrabold text-primary-600 mb-4">
+      <div class="text-center mb-14 reveal">
+        <span class="section-label" style="background:#FEF3C7;border-color:#FDE68A;color:#D97706;">Handwriting OCR</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold mt-4 mb-3" style="color:#1E1B4B;">
           Handwritten Tamil Notes → Digital Text
         </h2>
-        <p class="text-xl text-gray-600 max-w-3xl mx-auto">
-          Snap a photo of your handwritten Tamil notes, letters, or whiteboard — ProofReading AI extracts every word into editable text in seconds.
+        <p class="text-gray-500 max-w-2xl mx-auto text-base">
+          Snap a photo of your handwritten Tamil notes, letters, or whiteboard — ProofTamil extracts every word into editable text in seconds.
         </p>
       </div>
 
       <!-- 3 feature pills -->
-      <div class="grid md:grid-cols-3 gap-8 mb-14">
-        <div class="text-center space-y-3">
-          <div class="text-3xl">📷</div>
-          <h3 class="text-lg font-bold text-gray-900">Photo to text instantly</h3>
-          <p class="text-gray-600 text-sm">Upload any photo of handwritten Tamil — notes, exam sheets, letters, whiteboards. Get editable text in under 2 seconds.</p>
+      <div class="grid md:grid-cols-3 gap-5 mb-14">
+        <div class="bento-card p-6 reveal" style="--reveal-delay:0s;">
+          <div class="bento-icon-wrap mb-4" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);">
+            <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </div>
+          <h3 class="text-base font-extrabold mb-1.5" style="color:#1E1B4B;">Photo to Text Instantly</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Upload any photo of handwritten Tamil — notes, exam sheets, letters, whiteboards. Get editable text in under 2 seconds.</p>
         </div>
-        <div class="text-center space-y-3">
-          <div class="text-3xl">🎯</div>
-          <h3 class="text-lg font-bold text-gray-900">High accuracy Tamil OCR</h3>
-          <p class="text-gray-600 text-sm">AI understands Tamil script curves and strokes, correctly reading even complex conjunct letters (உயிர்மெய் எழுத்துக்கள்).</p>
+        <div class="bento-card p-6 reveal" style="--reveal-delay:0.08s;">
+          <div class="bento-icon-wrap mb-4" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);">
+            <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+          </div>
+          <h3 class="text-base font-extrabold mb-1.5" style="color:#1E1B4B;">High Accuracy Tamil OCR</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">AI understands Tamil script curves and strokes, correctly reading complex conjunct letters (உயிர்மெய் எழுத்துக்கள்).</p>
         </div>
-        <div class="text-center space-y-3">
-          <div class="text-3xl">✏️</div>
-          <h3 class="text-lg font-bold text-gray-900">Edit & proofread instantly</h3>
-          <p class="text-gray-600 text-sm">Once extracted, open the text directly in the ProofTamil workspace to grammar-check, correct, and download.</p>
+        <div class="bento-card p-6 reveal" style="--reveal-delay:0.16s;">
+          <div class="bento-icon-wrap mb-4" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);">
+            <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+            </svg>
+          </div>
+          <h3 class="text-base font-extrabold mb-1.5" style="color:#1E1B4B;">Edit & Proofread Instantly</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Once extracted, open the text directly in the ProofTamil workspace to grammar-check, correct, and download.</p>
         </div>
       </div>
 
@@ -1057,63 +1203,52 @@
   </section>
 
   <!-- FAQ Section -->
-  <section class="py-20 bg-gray-50">
-    <div class="max-w-4xl mx-auto px-6">
-      <div class="text-center mb-16">
-        <h2 class="text-4xl md:text-5xl font-extrabold text-primary-600 mb-4">
-          Everything you need to know
-        </h2>
-        <p class="text-xl text-gray-600">
-          Common questions about ProofTamil's AI-powered Tamil writing assistant
-        </p>
+  <section class="py-24" style="background:linear-gradient(180deg,#F8F9FF 0%,#EEF2FF 100%);">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6">
+      <div class="text-center mb-14 reveal">
+        <span class="section-label">FAQ</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold mt-4 mb-3" style="color:#1E1B4B;">Everything you need to know</h2>
+        <p class="text-gray-500 text-base">Common questions about ProofTamil's AI proofreading and Tamil handwriting OCR.</p>
       </div>
 
-      <div class="space-y-4">
-        <details class="bg-white rounded-xl p-6 shadow-md border border-gray-200 group">
-          <summary class="font-bold text-lg text-gray-900 cursor-pointer list-none flex items-center justify-between">
+      <div class="space-y-3 reveal" style="--reveal-delay:0.1s;">
+        <details class="group" style="background:#fff;border:1px solid #E0E7FF;border-radius:16px;overflow:hidden;">
+          <summary class="font-bold text-base cursor-pointer list-none flex items-center justify-between px-6 py-5" style="color:#1E1B4B;">
             <span>What exactly is ProofTamil?</span>
-            <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-            </svg>
+            <svg class="w-5 h-5 shrink-0 text-indigo-400 group-open:rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </summary>
-          <p class="text-gray-600 mt-4 leading-relaxed">
-            ProofTamil is an AI-powered Tamil writing assistant that helps you write flawless Tamil content with real-time grammar checking, spelling correction, style suggestions, and intelligent transliteration. It's designed specifically for Tamil writers who want to produce professional, error-free content.
+          <p class="text-gray-500 text-sm leading-relaxed px-6 pb-5">
+            ProofTamil is an AI-powered Tamil proofreading and OCR platform. It checks Tamil grammar, spelling, and style errors in real time — and can also convert photos of handwritten Tamil notes into editable digital text using its Handwriting OCR tool.
           </p>
         </details>
 
-        <details class="bg-white rounded-xl p-6 shadow-md border border-gray-200 group">
-          <summary class="font-bold text-lg text-gray-900 cursor-pointer list-none flex items-center justify-between">
-            <span>How accurate is ProofTamil's Tamil spelling checker?</span>
-            <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-            </svg>
+        <details class="group" style="background:#fff;border:1px solid #E0E7FF;border-radius:16px;overflow:hidden;">
+          <summary class="font-bold text-base cursor-pointer list-none flex items-center justify-between px-6 py-5" style="color:#1E1B4B;">
+            <span>How accurate is the Tamil handwriting OCR?</span>
+            <svg class="w-5 h-5 shrink-0 text-indigo-400 group-open:rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </summary>
-          <p class="text-gray-600 mt-4 leading-relaxed">
-            ProofTamil uses advanced AI models specifically trained on Tamil language patterns. It understands phonetic nuances, regional spelling variations, and contextual word usage to provide highly accurate spelling and grammar corrections. The AI continuously learns and improves with use.
+          <p class="text-gray-500 text-sm leading-relaxed px-6 pb-5">
+            The OCR engine is trained specifically on Tamil script, including complex conjunct letters (உயிர்மெய் எழுத்துக்கள்). It handles notebook pages, exam sheets, and whiteboard photos — and shows a confidence score per word so you know exactly where to double-check.
           </p>
         </details>
 
-        <details class="bg-white rounded-xl p-6 shadow-md border border-gray-200 group">
-          <summary class="font-bold text-lg text-gray-900 cursor-pointer list-none flex items-center justify-between">
-            <span>Can I use ProofTamil for professional work?</span>
-            <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-            </svg>
+        <details class="group" style="background:#fff;border:1px solid #E0E7FF;border-radius:16px;overflow:hidden;">
+          <summary class="font-bold text-base cursor-pointer list-none flex items-center justify-between px-6 py-5" style="color:#1E1B4B;">
+            <span>Is ProofTamil free to use?</span>
+            <svg class="w-5 h-5 shrink-0 text-indigo-400 group-open:rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </summary>
-          <p class="text-gray-600 mt-4 leading-relaxed">
-            Absolutely! ProofTamil is designed for both casual and professional Tamil writing. It's perfect for blog posts, articles, business communications, academic papers, social media content, and more. Many professional Tamil writers and content creators use ProofTamil to ensure their work is polished and error-free.
+          <p class="text-gray-500 text-sm leading-relaxed px-6 pb-5">
+            Yes — the Free plan includes 30 AI grammar checks per day (up to 200 words each) and 2 handwriting OCR conversions per day, with no sign-up required to try. Pro plans unlock unlimited checks, priority processing, and full API access.
           </p>
         </details>
 
-        <details class="bg-white rounded-xl p-6 shadow-md border border-gray-200 group">
-          <summary class="font-bold text-lg text-gray-900 cursor-pointer list-none flex items-center justify-between">
+        <details class="group" style="background:#fff;border:1px solid #E0E7FF;border-radius:16px;overflow:hidden;">
+          <summary class="font-bold text-base cursor-pointer list-none flex items-center justify-between px-6 py-5" style="color:#1E1B4B;">
             <span>What's the smart transliteration feature?</span>
-            <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-            </svg>
+            <svg class="w-5 h-5 shrink-0 text-indigo-400 group-open:rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </summary>
-          <p class="text-gray-600 mt-4 leading-relaxed">
-            Smart transliteration allows you to type in English characters and automatically converts them to Tamil script. Just type "vanakkam" and press Space, and it becomes "வணக்கம்". The AI provides multiple context-aware options for each word, so you can choose the right one for your meaning.
+          <p class="text-gray-500 text-sm leading-relaxed px-6 pb-5">
+            Type in English (Tanglish) directly in the editor — "vanakkam nanbaa" — and ProofTamil converts it to வணக்கம் நண்பா as you press Space. The AI ranks multiple context-aware word choices so you can pick the right meaning without switching keyboards.
           </p>
         </details>
       </div>
@@ -1121,22 +1256,38 @@
   </section>
 
   <!-- Final CTA Section -->
-  <section class="py-20 text-white" style="background: linear-gradient(135deg, #1E1B4B 0%, #4F46E5 100%);">
-    <div class="max-w-4xl mx-auto px-6 text-center">
-      <h2 class="text-4xl md:text-5xl font-extrabold mb-6">
-        Ready to write perfect Tamil?
+  <section class="relative py-28 overflow-hidden" style="background:linear-gradient(135deg,#1E1B4B 0%,#312E81 40%,#4F46E5 100%);">
+    <!-- Decorative orbs -->
+    <div class="absolute inset-0 pointer-events-none" aria-hidden="true">
+      <div style="position:absolute;top:-80px;left:-80px;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(99,102,241,0.25) 0%,transparent 70%);"></div>
+      <div style="position:absolute;bottom:-100px;right:-60px;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(245,158,11,0.15) 0%,transparent 70%);"></div>
+    </div>
+    <div class="relative max-w-3xl mx-auto px-4 sm:px-6 text-center reveal">
+      <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold mb-6" style="background:rgba(255,255,255,0.12);color:#E0E7FF;border:1px solid rgba(255,255,255,0.18);">
+        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse inline-block"></span>
+        Free to start — no credit card needed
+      </span>
+      <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white mb-5 leading-tight">
+        Proofread Tamil.<br/>Digitise handwriting.<br/>All in one place.
       </h2>
-      <p class="text-xl mb-8">
-        Join thousands of Tamil writers who trust ProofTamil for flawless writing.
+      <p class="text-indigo-200 text-base sm:text-lg mb-10 max-w-xl mx-auto">
+        Join Tamil students, writers, and businesses who use ProofTamil every day to write clearly and confidently.
       </p>
       <% if (user) { %>
-        <a href="/workspace" class="inline-block px-8 py-4 bg-white rounded-full font-bold text-lg hover:bg-gray-100 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5" style="color: #1E1B4B;">
+        <a href="/workspace" class="btn-hero inline-flex items-center gap-2 px-8 py-4 rounded-2xl font-bold text-base text-white shadow-2xl">
           Open Workspace
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
         </a>
       <% } else { %>
-        <a href="/register" class="inline-block px-8 py-4 bg-white rounded-full font-bold text-lg hover:bg-gray-100 transition-all shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5" style="color: #1E1B4B;">
-          Try ProofTamil Free
-        </a>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a href="/register" class="btn-hero inline-flex items-center gap-2 px-8 py-4 rounded-2xl font-bold text-base text-white shadow-2xl">
+            Try ProofTamil Free
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+          </a>
+          <a href="/tools/handwriting-ocr" class="inline-flex items-center gap-2 px-8 py-4 rounded-2xl font-bold text-base transition-all hover:bg-white/10" style="color:#E0E7FF;border:1px solid rgba(255,255,255,0.25);">
+            Try Handwriting OCR
+          </a>
+        </div>
       <% } %>
     </div>
   </section>
@@ -1165,5 +1316,24 @@
 <script src="/js/voice-typing.js?v=20260318d"></script>
 <script src="/js/doc-import.js?v=20260305a"></script>
 <script src="/js/sentence-rewrite.js?v=20260222a"></script>
+
+<script>
+(function() {
+  var els = document.querySelectorAll('.reveal');
+  if (!els.length) return;
+  var io = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) {
+        var el = e.target;
+        var delay = el.style.getPropertyValue('--reveal-delay') || '0s';
+        el.style.transitionDelay = delay;
+        el.classList.add('revealed');
+        io.unobserve(el);
+      }
+    });
+  }, { threshold: 0.12 });
+  els.forEach(function(el) { io.observe(el); });
+})();
+</script>
 
 <%- include('../partials/footer') %>
