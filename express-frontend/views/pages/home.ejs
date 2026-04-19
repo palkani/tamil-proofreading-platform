@@ -1256,46 +1256,47 @@
   </section>
 
   <!-- Final CTA Section -->
-  <section class="relative overflow-hidden" style="background:linear-gradient(135deg,#1E1B4B 0%,#312E81 40%,#4F46E5 100%);padding:6rem 0 7rem;">
+  <section class="relative overflow-hidden" style="background:linear-gradient(135deg,#1E1B4B 0%,#312E81 40%,#4F46E5 100%);min-height:520px;display:flex;align-items:center;">
     <!-- Decorative orbs -->
     <div class="absolute inset-0 pointer-events-none" aria-hidden="true">
       <div style="position:absolute;top:-80px;left:-80px;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(99,102,241,0.25) 0%,transparent 70%);"></div>
       <div style="position:absolute;bottom:-100px;right:-60px;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(245,158,11,0.15) 0%,transparent 70%);"></div>
     </div>
-    <div class="relative max-w-2xl mx-auto px-6 sm:px-8 text-center reveal">
+    <div class="relative w-full max-w-xl mx-auto px-6 sm:px-10 text-center reveal" style="padding-top:5rem;padding-bottom:5rem;">
 
       <!-- Badge -->
-      <span class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium" style="background:rgba(255,255,255,0.10);color:#C7D2FE;border:1px solid rgba(255,255,255,0.18);margin-bottom:2rem;display:inline-flex;">
-        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0"></span>
-        Free to start — no credit card needed
-      </span>
+      <div style="margin-bottom:2.25rem;">
+        <span style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.5rem 1.25rem;border-radius:9999px;background:rgba(255,255,255,0.10);color:#C7D2FE;border:1px solid rgba(255,255,255,0.18);font-size:0.875rem;font-weight:500;letter-spacing:0.01em;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#FBBF24;flex-shrink:0;display:inline-block;" class="animate-pulse"></span>
+          Free to start — no credit card needed
+        </span>
+      </div>
 
-      <!-- Heading -->
-      <h2 class="text-4xl sm:text-5xl font-extrabold text-white" style="line-height:1.2;letter-spacing:-0.02em;margin-top:0;margin-bottom:1.5rem;">
-        Proofread Tamil.<br class="hidden sm:block"/>
-        <span style="opacity:0.92;">Digitise handwriting.</span><br class="hidden sm:block"/>
-        <span style="opacity:0.85;">All in one place.</span>
-      </h2>
+      <!-- Heading — one line per row, generous gap -->
+      <div style="margin-bottom:2rem;">
+        <p style="font-size:clamp(2rem,5vw,3.25rem);font-weight:800;color:#ffffff;line-height:1.25;letter-spacing:-0.025em;margin:0;">Proofread Tamil.</p>
+        <p style="font-size:clamp(2rem,5vw,3.25rem);font-weight:800;color:rgba(255,255,255,0.88);line-height:1.25;letter-spacing:-0.025em;margin:0.35rem 0 0;">Digitise handwriting.</p>
+        <p style="font-size:clamp(2rem,5vw,3.25rem);font-weight:800;color:rgba(255,255,255,0.76);line-height:1.25;letter-spacing:-0.025em;margin:0.35rem 0 0;">All in one place.</p>
+      </div>
 
       <!-- Subtext -->
-      <p style="color:#A5B4FC;font-size:1.125rem;line-height:1.75;margin-bottom:2.5rem;max-width:36rem;margin-left:auto;margin-right:auto;">
-        Join Tamil students, writers, and businesses who use ProofTamil
-        every day to write clearly and confidently.
+      <p style="color:#A5B4FC;font-size:1.0625rem;line-height:1.8;margin:0 auto 2.75rem;max-width:32rem;">
+        Join Tamil students, writers, and businesses who use ProofTamil every day to write clearly and confidently.
       </p>
 
       <!-- CTA buttons -->
       <% if (user) { %>
-        <a href="/workspace" class="btn-hero inline-flex items-center gap-2.5 px-8 py-4 rounded-2xl font-bold text-base text-white shadow-2xl">
+        <a href="/workspace" class="btn-hero" style="display:inline-flex;align-items:center;gap:0.625rem;padding:0.9rem 2.25rem;border-radius:1rem;font-weight:700;font-size:1rem;color:#fff;box-shadow:0 20px 40px rgba(0,0,0,0.3);">
           Open Workspace
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
         </a>
       <% } else { %>
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <a href="/register" class="btn-hero inline-flex items-center gap-2.5 px-8 py-4 rounded-2xl font-bold text-base text-white shadow-2xl">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:1rem;">
+          <a href="/register" class="btn-hero" style="display:inline-flex;align-items:center;gap:0.625rem;padding:0.9rem 2.25rem;border-radius:1rem;font-weight:700;font-size:1rem;color:#fff;box-shadow:0 20px 40px rgba(0,0,0,0.3);">
             Try ProofTamil Free
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
           </a>
-          <a href="/tools/handwriting-ocr" class="inline-flex items-center gap-2 px-8 py-4 rounded-2xl font-semibold text-base transition-all hover:bg-white/10" style="color:#C7D2FE;border:1px solid rgba(255,255,255,0.22);">
+          <a href="/tools/handwriting-ocr" style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.9rem 2.25rem;border-radius:1rem;font-weight:600;font-size:1rem;color:#C7D2FE;border:1.5px solid rgba(255,255,255,0.25);transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">
             Try Handwriting OCR
           </a>
         </div>
