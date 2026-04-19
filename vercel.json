@@ -3,8 +3,8 @@
   "redirects": [
     {
       "source": "/:path*",
-      "has": [{ "type": "host", "value": "www.prooftamil.com" }],
-      "destination": "https://prooftamil.com/:path*",
+      "has": [{ "type": "host", "value": "prooftamil.com" }],
+      "destination": "https://www.prooftamil.com/:path*",
       "permanent": true
     }
   ]

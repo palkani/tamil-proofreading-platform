@@ -4,7 +4,7 @@
   "buildCommand": "npm run build:css",
   "regions": ["bom1", "iad1"],
   "env": {
-    "FRONTEND_URL":        "https://prooftamil.com",
+    "FRONTEND_URL":        "https://www.prooftamil.com",
     "SMTP_HOST":           "smtp.sendgrid.net",
     "SMTP_PORT":           "587",
     "SMTP_USER":           "apikey",
