@@ -707,6 +707,14 @@ function transliterateToTamil(englishText) {
     }
   }
 
+  // Tamil linguistic rule: a word-final consonant has no following vowel, so it
+  // must carry a pulli (virama ்). Without it the consonant is read with an inherent
+  // 'a' — e.g. "உயிர" reads as "uyira", but the correct word is "உயிர்" ("uyir").
+  // This applies to ANY word ending in a consonant, not just specific words.
+  if (lastWasConsonant && result.length > 0) {
+    result += '்'; // U+0BCD Tamil virama (pulli)
+  }
+
   return result || englishText;
 }
 
@@ -776,14 +784,17 @@ function generateTamilVariants(englishText) {
       if (!vowelMatched) {
         consonantData.variants.slice(0, 1).forEach(cons => {  // Primary consonant only
           const nextPos = position + cLen;
-          
-          // Add pulli ONLY when inherent 'a' AND followed by consonant
-          // Example: "த்" in "த்மிழ்" but NOT in "தமிழ்"
+
+          // Add pulli when:
+          // (a) consonant is followed by another consonant — e.g. "த்" in "த்மிழ்"
+          // (b) consonant is at word end — e.g. "ர்" in "உயிர்", "ல்" in "பாடல்"
+          // Without pulli a word-final consonant gains a ghost inherent 'a' vowel.
           const isFollowedByConsonant = nextPos < input.length &&
             (tamilConsonantMap[input[nextPos]] ||
              tamilConsonantMap[input.substring(nextPos, nextPos + 2)]);
-          
-          const syllable = isFollowedByConsonant ? (cons + '்') : cons;
+          const isWordEnd = nextPos >= input.length;
+
+          const syllable = (isFollowedByConsonant || isWordEnd) ? (cons + '்') : cons;
           buildVariants(input, nextPos, current + syllable);
         });
         matched = true;

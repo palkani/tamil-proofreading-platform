@@ -102,28 +102,6 @@ function createApp() {
 
   app.use(ensureReadyMiddleware);
 
-  // ── SEO: Canonical URL enforcement ──────────────────────────────────────────
-  // Must run before routes so redirects happen before any page renders.
-  app.use((req, res, next) => {
-    if (process.env.NODE_ENV !== 'production') return next();
-    const host = req.headers.host || '';
-
-    // 1. www → non-www (301 permanent)
-    if (host.startsWith('www.')) {
-      return res.redirect(301, 'https://prooftamil.com' + req.url);
-    }
-
-    // 2. Remove trailing slash from all paths except root (301 permanent)
-    //    Prevents /pricing/ and /pricing serving as duplicate content
-    const { pathname, search } = new URL(req.url, 'https://prooftamil.com');
-    if (pathname.length > 1 && pathname.endsWith('/')) {
-      const clean = pathname.slice(0, -1) + (search || '');
-      return res.redirect(301, clean);
-    }
-
-    next();
-  });
-
   app.use(compression({ level: 6, threshold: 1024 }));
 
   app.use(
