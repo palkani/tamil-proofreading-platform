@@ -297,17 +297,6 @@ const seoConfig = {
     noIndex: true
   },
 
-  analytics: {
-    title: 'Analytics Dashboard - ProofTamil Admin',
-    description: 'ProofTamil analytics dashboard for administrators.',
-    keywords: 'prooftamil analytics, admin dashboard',
-    canonical: BASE_URL + '/analytics',
-    ogTitle: 'Analytics - ProofTamil Admin',
-    ogDescription: 'Admin analytics dashboard.',
-    pageType: 'admin',
-    noIndex: true
-  },
-
   pricing: {
     title: 'ProofTamil Pro Pricing - Unlimited Tamil AI Proofreading Plans',
     description: 'ProofTamil Pro — unlimited AI Tamil proofreading, unlimited words, all correction types, and unlimited draft saves. Affordable monthly and yearly plans.',
@@ -349,14 +338,6 @@ const seoConfig = {
     description: 'Checkout cancelled. Your free plan is still active. Return to pricing to try again.',
     canonical: BASE_URL + '/billing/cancel',
     pageType: 'billing',
-    noIndex: true
-  },
-
-  affiliate: {
-    title: 'Affiliate Dashboard - ProofTamil',
-    description: 'Manage your ProofTamil affiliate account. View referrals, earnings, and your unique referral link.',
-    canonical: BASE_URL + '/affiliate/dashboard',
-    pageType: 'affiliate',
     noIndex: true
   },
 

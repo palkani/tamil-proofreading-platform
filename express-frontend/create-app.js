@@ -12,7 +12,6 @@ const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const querystring = require('querystring');
 const compression = require('compression');
-const { trackPageView } = require('./middleware/analytics');
 const { getSeoData } = require('./config/seo');
 const { attachUser } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
@@ -124,7 +123,6 @@ function createApp() {
   app.use(cookieParser());
   // attachUser must run for /workspace so requireAuth works and draft links don't loop.
   app.use((req, res, next) => attachUser(req, res, next));
-  app.use(trackPageView);
 
   // Serve frequently-updated JS files with no-cache headers before the
   // general static middleware so the headers are applied correctly.

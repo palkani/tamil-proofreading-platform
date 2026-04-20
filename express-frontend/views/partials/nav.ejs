@@ -28,14 +28,6 @@
             Pro Access
           </a>
           <% } %>
-          <% if (user.role === 'admin' || ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com'].includes(String(user.email || '').toLowerCase())) { %>
-          <a href="/analytics" class="nav-link <%= active === 'analytics' ? 'active' : '' %> inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg whitespace-nowrap">
-            <span aria-hidden="true">📊</span> Analytics
-          </a>
-          <a href="/admin/affiliates" class="nav-link <%= active === 'affiliates' ? 'active' : '' %> inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg whitespace-nowrap">
-            <span aria-hidden="true">🤝</span> Affiliates
-          </a>
-          <% } %>
         <% } %>
       </div>
 
@@ -157,11 +149,6 @@
          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
         <span class="w-4 h-4 flex-shrink-0 text-center text-base leading-none">✍️</span>
         My Blogs
-      </a>
-      <a href="/analytics"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-        <span class="w-4 h-4 flex-shrink-0 text-center text-base leading-none">📊</span>
-        Analytics
       </a>
       <% } %>
     </div>

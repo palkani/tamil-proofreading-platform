@@ -83,14 +83,7 @@ router.get('/', (req, res) => {
     });
   }
 
-  // Store affiliate referral code in a 30-day cookie
-  if (req.query.ref) {
-    res.cookie('ref_code', String(req.query.ref).slice(0, 20), {
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      httpOnly: false,
-      sameSite: 'lax'
-    });
-  }
+
 
   const user = getCurrentUser(req);
   const seo = getSeoData('home');
@@ -604,49 +597,6 @@ router.get('/subscription', (req, res) => {
   });
 });
 
-// Analytics dashboard - client-side auth only
-router.get('/analytics', (req, res) => {
-  // Check if user is admin
-  const user = req.user;
-  const adminEmails = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com'];
-  const userEmail = String((user && user.email) || '').toLowerCase();
-  if (!user || (!adminEmails.includes(userEmail) && user.role !== 'admin')) {
-    const seo = getSeoData('error');
-    return res.status(403).render('pages/error', {
-      title: 'Access Denied',
-      seo: seo,
-      message: 'You do not have permission to view this page.',
-      user: user
-    });
-  }
-  
-  const seo = getSeoData('analytics');
-  res.render('pages/analytics', { 
-    title: seo.title,
-    seo: seo,
-    user: user
-  });
-});
-
-// Admin Affiliates page
-router.get('/admin/affiliates', (req, res) => {
-  const user = req.user;
-  const adminEmails = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com'];
-  const userEmail = String(user?.email || '').toLowerCase();
-  
-  if (!user || (!adminEmails.includes(userEmail) && user.role !== 'admin')) {
-    return res.status(403).render('pages/error', {
-      title: 'Access Denied',
-      message: 'You do not have permission to access this page.',
-      user: user
-    });
-  }
-  
-  res.render('pages/admin-affiliates', { 
-    title: 'Affiliate Management - ProofTamil',
-    user: user
-  });
-});
 
 // Pricing page — gated by PAYMENTS_ENABLED env var
 router.get('/pricing', async (req, res) => {
@@ -765,17 +715,6 @@ router.get('/billing/cancel', (req, res) => {
   });
 });
 
-// Affiliate dashboard — auth required
-router.get('/affiliate/dashboard', requireAuth, (req, res) => {
-  const user = getCurrentUser(req);
-  const seo = getSeoData('affiliate');
-  res.render('pages/affiliate-dashboard', {
-    title: seo.title,
-    seo,
-    user,
-    paymentsEnabled: req.app.locals.paymentsEnabled
-  });
-});
 
 // Archive/Trash: redirect to Drafts Trash tab
 router.get('/archive', (req, res) => {
