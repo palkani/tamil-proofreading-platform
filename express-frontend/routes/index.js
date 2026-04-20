@@ -557,10 +557,9 @@ router.get('/register', (req, res) => {
   });
 });
 
-// /signup is an alias for /register — preserves ?ref= for affiliate tracking
+// /signup is a legacy alias for /register
 router.get('/signup', (req, res) => {
-  const qs = new URLSearchParams(req.query).toString();
-  return res.redirect(302, '/register' + (qs ? '?' + qs : ''));
+  return res.redirect(301, '/register');
 });
 
 // Note: Login and registration form submissions are handled client-side via /auth/login and /auth/register
@@ -592,7 +591,7 @@ router.get('/account', (req, res) => {
 router.get('/subscription', (req, res) => {
   res.render('pages/subscription', {
     title: 'Pro Access — ProofTamil',
-    seo: { title: 'Pro Access — ProofTamil', description: 'Manage your ProofTamil Pro access.' },
+    seo: { title: 'Pro Access — ProofTamil', description: 'Manage your ProofTamil Pro access.', noIndex: true },
     user: req.user
   });
 });
