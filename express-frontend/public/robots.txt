@@ -1,5 +1,5 @@
 # ProofTamil - Free Tamil Grammar Checker & AI Proofreading Tool
-# https://prooftamil.com | prooftamil.com
+# https://www.prooftamil.com
 # Free Tamil editor, Tamil grammar checker, Tamil spell check, Tanglish to Tamil
 
 User-agent: *
@@ -32,11 +32,9 @@ Disallow: /drafts
 Disallow: /workspace
 Disallow: /account
 Disallow: /archive
-Disallow: /analytics
 Disallow: /api/
 Disallow: /admin/
 Disallow: /my-blogs
-Disallow: /affiliate/
 Disallow: /billing/
 
 # Disallow redirect aliases — these 301 to canonical URLs.
@@ -48,7 +46,7 @@ Disallow: /tamil-editor
 Disallow: /tanglish-to-tamil
 
 # Sitemap location (submit in Google Search Console > Sitemaps)
-Sitemap: https://prooftamil.com/sitemap.xml
+Sitemap: https://www.prooftamil.com/sitemap.xml
 
 # Google - no crawl delay for faster indexing
 User-agent: Googlebot
