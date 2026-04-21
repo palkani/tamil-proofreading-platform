@@ -750,6 +750,7 @@ class HomeEditor {
   }
 
   handleInput() {
+    this._clearHighlights();
     const fullText = this.editor.textContent || '';
     console.log('[INPUT-HANDLER] Current text length:', fullText.length, 'Previous length:', this.previousText.length);
 
@@ -1902,94 +1903,82 @@ class HomeEditor {
   }
   
   highlightErrorsInEditor(suggestions) {
-    if (!this.editor || !suggestions || suggestions.length === 0) {
-      // Clear any existing highlights
-      if (this.editor) {
-        const text = this.getPlainText();
-        this.editor.textContent = text;
-      }
-      return;
+    if (!this.editor) return;
+
+    this._clearHighlights();
+
+    if (!suggestions || suggestions.length === 0) return;
+
+    // Save cursor so DOM changes don't lose it
+    const sel = window.getSelection();
+    let savedRange = null;
+    if (sel && sel.rangeCount > 0) {
+      try {
+        const r = sel.getRangeAt(0);
+        if (this.editor.contains(r.startContainer)) savedRange = r.cloneRange();
+      } catch (_) {}
     }
-    
-    try {
-      const text = this.getPlainText();
-      
-      // Create an array of segments to build the HTML
-      const segments = [];
-      let lastIndex = 0;
-      
-      // Sort suggestions by start_index to process them in order
-      const sortedSuggestions = [...suggestions].sort((a, b) => {
-        const aStart = a.start_index || 0;
-        const bStart = b.start_index || 0;
-        return aStart - bStart;
-      });
-      
-      // Process each suggestion and create highlighted spans
-      sortedSuggestions.forEach((suggestion, idx) => {
-        if (!suggestion.original) return;
-        
-        // Find the error text in the content
-        const errorText = suggestion.original;
-        const errorIndex = text.indexOf(errorText, lastIndex);
-        
-        if (errorIndex === -1) return; // Skip if not found
-        
-        // Add text before the error (plain text)
-        if (errorIndex > lastIndex) {
-          segments.push({
-            type: 'text',
-            content: text.substring(lastIndex, errorIndex)
-          });
-        }
-        
-        // Add the error text with highlighting
-        const typeClass = this.getTypeColorClass(suggestion.type);
-        segments.push({
-          type: 'error',
-          content: errorText,
-          class: typeClass,
-          index: idx
-        });
-        
-        lastIndex = errorIndex + errorText.length;
-      });
-      
-      // Add remaining text after last error
-      if (lastIndex < text.length) {
-        segments.push({
-          type: 'text',
-          content: text.substring(lastIndex)
-        });
-      }
-      
-      // Build the HTML with highlights
-      let html = '';
-      segments.forEach(segment => {
-        if (segment.type === 'text') {
-          html += this.escapeHtml(segment.content);
-        } else if (segment.type === 'error') {
-          html += `<span class="${segment.class}" data-error-index="${segment.index}" style="background-color: rgba(239, 68, 68, 0.15); border-bottom: 2px solid rgb(239, 68, 68); cursor: pointer; position: relative;" title="Click suggestion to fix">${this.escapeHtml(segment.content)}</span>`;
-        }
-      });
-      
-      // Update editor with highlighted content
-      this.editor.innerHTML = html;
-      
-      // Add click handlers to highlighted errors
-      this.editor.querySelectorAll('span[data-error-index]').forEach(span => {
-        span.addEventListener('click', (e) => {
-          const errorIndex = parseInt(e.target.getAttribute('data-error-index'));
-          this.scrollToSuggestion(errorIndex);
-        });
-      });
-      
-    } catch (error) {
-      console.error('[HIGHLIGHT] Error highlighting text:', error);
-      // Fallback: just show plain text
-      const text = this.getPlainText();
-      this.editor.textContent = text;
+
+    for (const s of suggestions) {
+      const searchText = (s.original || s.sourceText || '').trim();
+      if (searchText.length < 2) continue;
+      const typeClass = this._getHighlightClass(s.type);
+      this._wrapTextMatches(this.editor, searchText, String(s.id || ''), typeClass);
     }
+
+    // Restore cursor after DOM manipulation
+    if (savedRange && sel) {
+      try { sel.removeAllRanges(); sel.addRange(savedRange); } catch (_) {}
+    }
+  }
+
+  _clearHighlights() {
+    if (!this.editor) return;
+    const spans = Array.from(this.editor.querySelectorAll('.home-correction-highlight'));
+    spans.forEach(span => {
+      if (!span.parentNode) return;
+      const p = span.parentNode;
+      while (span.firstChild) p.insertBefore(span.firstChild, span);
+      p.removeChild(span);
+    });
+    // Merge adjacent text nodes created by unwrapping
+    this.editor.normalize();
+  }
+
+  _wrapTextMatches(container, searchText, suggestionId, typeClass) {
+    const walk = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (node.parentNode && node.parentNode.classList &&
+            node.parentNode.classList.contains('home-correction-highlight')) return;
+        let remaining = node;
+        let idx = remaining.textContent.indexOf(searchText);
+        while (idx !== -1) {
+          const matchAndAfter = remaining.splitText(idx);
+          const after = matchAndAfter.splitText(searchText.length);
+          const span = document.createElement('span');
+          span.className = `home-correction-highlight ${typeClass}`;
+          span.dataset.suggestionId = suggestionId;
+          span.textContent = matchAndAfter.textContent;
+          matchAndAfter.parentNode.replaceChild(span, matchAndAfter);
+          remaining = after;
+          idx = remaining.textContent.indexOf(searchText);
+        }
+      } else if (node.nodeType === Node.ELEMENT_NODE &&
+                 !node.classList.contains('home-correction-highlight')) {
+        Array.from(node.childNodes).forEach(walk);
+      }
+    };
+    walk(container);
+  }
+
+  _getHighlightClass(type) {
+    const map = {
+      grammar: 'hc-grammar', punctuation: 'hc-grammar', sandhi: 'hc-grammar',
+      space: 'hc-grammar', phonetic: 'hc-grammar', case: 'hc-grammar',
+      spelling: 'hc-spelling', 'incomplete-word': 'hc-spelling',
+      style: 'hc-style', clarity: 'hc-style', 'word-choice': 'hc-style',
+    };
+    return map[(type || '').toLowerCase()] || 'hc-grammar';
   }
   
   getTypeColorClass(type) {
@@ -2031,10 +2020,7 @@ class HomeEditor {
       return;
     }
     
-    // CRITICAL FIX: DISABLE highlighting to prevent cursor/text manipulation
-    // Highlighting was causing reverse text by destroying DOM structure
-    // this.highlightErrorsInEditor(suggestions);
-    console.log('[DISPLAY] ⚠️ Highlighting DISABLED to prevent text manipulation');
+    this.highlightErrorsInEditor(suggestions);
     
     // Get current text to check if editor is empty
     const currentText = this.getPlainText().trim();

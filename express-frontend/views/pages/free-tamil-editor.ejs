@@ -1,4 +1,12 @@
 <%- include('../partials/header') %>
+<style>
+  /* Inline correction highlights (matches home.ejs) */
+  .home-correction-highlight { border-radius:2px; cursor:pointer; transition:background-color 0.15s; }
+  .home-correction-highlight:hover { background-color:rgba(239,68,68,0.10); }
+  .hc-grammar  { text-decoration:underline wavy #ef4444; text-underline-offset:4px; text-decoration-thickness:2px; }
+  .hc-spelling { text-decoration:underline wavy #f97316; text-underline-offset:4px; text-decoration-thickness:2px; }
+  .hc-style    { text-decoration:underline wavy #8b5cf6; text-underline-offset:4px; text-decoration-thickness:2px; }
+</style>
 
 <!-- Navigation -->
 <%- include('../partials/nav', { active: 'tools', user: user || null }) %>
@@ -131,7 +139,7 @@
 <script src="/js/transliteration.js?v=20251127b"></script>
 <script src="/js/translit/typeahead.js?v=20260122b"></script>
 <script src="/js/translit/homeEditorAdapter.js?v=20260122b"></script>
-<script src="/js/home-editor.js?v=20260122a"></script>
+<script src="/js/home-editor.js?v=20260421a"></script>
 
 <%- include('../partials/footer') %>
 
