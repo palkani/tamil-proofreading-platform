@@ -165,48 +165,65 @@
   }
   </script>
 
-  <!-- Structured Data - WebApplication -->
+  <!-- Structured Data - SoftwareApplication (EducationalApplication — homepage rich result eligibility) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebApplication",
+    "@type": "SoftwareApplication",
+    "@id": "<%= baseUrl %>/#software",
     "name": "ProofTamil",
     "alternateName": ["Tamil Grammar Checker", "Tamil Proofreader Online", "Tamil OCR Tool", "Tamil Handwriting to Text"],
-    "applicationCategory": "UtilitiesApplication",
-    "applicationSubCategory": "Grammar Checker",
+    "applicationCategory": "EducationalApplication",
+    "applicationSubCategory": "Language Learning",
     "operatingSystem": "Web Browser",
     "browserRequirements": "Requires JavaScript",
     "url": "<%= baseUrl %>",
     "dateModified": "<%= new Date().toISOString().split('T')[0] %>",
+    "image": {
+      "@type": "ImageObject",
+      "url": "<%= baseUrl %>/images/favicon-512x512.png",
+      "width": 512,
+      "height": 512
+    },
+    "screenshot": "<%= baseUrl %>/images/favicon-512x512.png",
     "offers": [
       {
         "@type": "Offer",
-        "name": "Free Plan",
+        "@id": "<%= baseUrl %>/pricing#free-offer",
+        "name": "ProofTamil Free",
         "price": "0",
         "priceCurrency": "USD",
         "availability": "https://schema.org/InStock",
+        "url": "<%= baseUrl %>/register",
         "description": "200 words per proofreading check, 30 AI checks per day, 2 OCR conversions per day"
       },
       {
         "@type": "Offer",
-        "name": "Pro Plan",
+        "@id": "<%= baseUrl %>/pricing#pro-offer",
+        "name": "ProofTamil Pro",
         "availability": "https://schema.org/InStock",
-        "description": "Unlimited proofreading, unlimited OCR, unlimited AI checks, priority support"
+        "url": "<%= baseUrl %>/pricing",
+        "description": "Unlimited words per check, unlimited daily AI checks, unlimited OCR, all correction types, unlimited saved drafts"
       }
     ],
-    "description": "AI-powered Tamil proofreading tool that detects grammar errors, spelling mistakes, verb conjugation issues, and punctuation errors in Tamil text. Also converts handwritten Tamil notes and printed Tamil documents to editable text via OCR.",
+    "description": "AI-powered Tamil language platform — checks Tamil grammar, spelling, verb conjugation, and sandhi errors; converts handwritten Tamil notes to text via OCR; and generates Tamil blog articles. Free for students, writers, and journalists.",
     "featureList": [
       "Tamil grammar and spelling checker",
-      "Tamil handwriting to text (OCR)",
-      "Tamil printed document OCR",
-      "Tanglish to Tamil phonetic conversion",
+      "Tamil handwriting-to-text OCR",
+      "Tamil printed document OCR (JPG, PNG, PDF)",
+      "Tanglish phonetic typing (English to Tamil)",
       "AI Tamil content writer",
       "Formal and spoken Tamil style modes",
       "Real-time grammar suggestions",
       "One-click error correction"
     ],
     "inLanguage": ["ta", "en"],
-    "isAccessibleForFree": true
+    "isAccessibleForFree": true,
+    "creator": {
+      "@type": "Organization",
+      "name": "ProofTamil",
+      "url": "<%= baseUrl %>"
+    }
   }
   </script>
 
@@ -410,35 +427,62 @@
   <% } %>
 
   <% if (pageType === 'pricing') { %>
-  <!-- Structured Data - Product with free and pro offers for pricing page -->
+  <!-- Structured Data - Product with offers for pricing page -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "Product",
+    "@id": "<%= baseUrl %>/pricing#product",
     "name": "ProofTamil Pro",
-    "description": "Unlimited AI Tamil proofreading — unlimited words per analysis, unlimited checks per day, all correction types (grammar, style, rewrite), and unlimited saved drafts.",
+    "description": "Unlimited AI Tamil proofreading — unlimited words per analysis, unlimited checks per day, all correction types (grammar, spelling, style, rewrite), and unlimited saved drafts.",
     "brand": { "@type": "Brand", "name": "ProofTamil" },
     "url": "<%= baseUrl %>/pricing",
+    "image": {
+      "@type": "ImageObject",
+      "url": "<%= baseUrl %>/images/favicon-512x512.png",
+      "width": 512,
+      "height": 512
+    },
+    "category": "Educational Software",
     "offers": [
       {
         "@type": "Offer",
+        "@id": "<%= baseUrl %>/pricing#free-offer",
         "name": "ProofTamil Free",
         "price": "0",
         "priceCurrency": "USD",
         "availability": "https://schema.org/InStock",
-        "description": "200 words per analysis, 30 AI checks per day"
+        "url": "<%= baseUrl %>/register",
+        "eligibleRegion": { "@type": "Place", "name": "Worldwide" },
+        "description": "200 words per analysis, 30 AI checks per day, 2 OCR conversions per day, up to 5 saved drafts"
       },
       {
         "@type": "Offer",
-        "name": "ProofTamil Pro Monthly",
+        "@id": "<%= baseUrl %>/pricing#pro-monthly-offer",
+        "name": "ProofTamil Pro — Monthly",
         "availability": "https://schema.org/InStock",
-        "description": "Unlimited words, unlimited checks, all correction types, unlimited drafts"
+        "url": "<%= baseUrl %>/pricing",
+        "eligibleRegion": { "@type": "Place", "name": "Worldwide" },
+        "priceSpecification": {
+          "@type": "UnitPriceSpecification",
+          "unitCode": "MON",
+          "billingDuration": { "@type": "QuantitativeValue", "value": 1, "unitCode": "MON" }
+        },
+        "description": "Unlimited words per check, unlimited daily AI checks, unlimited OCR conversions, all correction types, unlimited saved drafts"
       },
       {
         "@type": "Offer",
-        "name": "ProofTamil Pro Yearly",
+        "@id": "<%= baseUrl %>/pricing#pro-yearly-offer",
+        "name": "ProofTamil Pro — Yearly",
         "availability": "https://schema.org/InStock",
-        "description": "Unlimited words, unlimited checks, all correction types, unlimited drafts — best value"
+        "url": "<%= baseUrl %>/pricing",
+        "eligibleRegion": { "@type": "Place", "name": "Worldwide" },
+        "priceSpecification": {
+          "@type": "UnitPriceSpecification",
+          "unitCode": "ANN",
+          "billingDuration": { "@type": "QuantitativeValue", "value": 1, "unitCode": "ANN" }
+        },
+        "description": "Unlimited words per check, unlimited daily AI checks, unlimited OCR, all correction types, unlimited drafts — best value"
       }
     ]
   }

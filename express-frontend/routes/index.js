@@ -161,7 +161,7 @@ router.get('/blog', async (req, res) => {
   const seoBase = getSeoData('blog') || getSeoData('home');
   const seo = {
     ...seoBase,
-    canonical: `https://prooftamil.com/blog${page > 1 ? `?page=${page}` : ''}`,
+    canonical: `https://www.prooftamil.com/blog${page > 1 ? `?page=${page}` : ''}`,
     pageType: 'blogIndex',
   };
   try {
@@ -315,7 +315,7 @@ router.get('/blog/:slug', async (req, res) => {
       'content_html length:', post.content_html?.length || 0,
       'content_text length:', post.content_text?.length || 0);
 
-    const canonical = `https://prooftamil.com/blog/${post.slug || slug}`;
+    const canonical = `https://www.prooftamil.com/blog/${post.slug || slug}`;
     const desc =
       (post.meta_description && String(post.meta_description).trim()) ||
       (post.excerpt && String(post.excerpt).trim()) ||
@@ -327,6 +327,7 @@ router.get('/blog/:slug', async (req, res) => {
     const jsonLdObj = {
       "@context": "https://schema.org",
       "@type": "BlogPosting",
+      "@id": canonical + "#article",
       "headline": post.title,
       "description": desc,
       "inLanguage": (post.language || "tamil") === "tamil" ? "ta" : "en",
@@ -334,8 +335,34 @@ router.get('/blog/:slug', async (req, res) => {
       "url": canonical,
       "datePublished": publishedIso || undefined,
       "dateModified": modifiedIso || undefined,
-      "author": { "@type": "Organization", "name": "ProofTamil" },
-      "publisher": { "@type": "Organization", "name": "ProofTamil", "logo": { "@type": "ImageObject", "url": "https://prooftamil.com/images/tamil-logo.svg" } },
+      "image": {
+        "@type": "ImageObject",
+        "url": "https://www.prooftamil.com/images/favicon-512x512.png",
+        "width": 512,
+        "height": 512
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "ProofTamil",
+        "url": "https://www.prooftamil.com"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "ProofTamil",
+        "url": "https://www.prooftamil.com",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://www.prooftamil.com/images/favicon-512x512.png",
+          "width": 512,
+          "height": 512
+        }
+      },
+      "isPartOf": {
+        "@type": "Blog",
+        "@id": "https://www.prooftamil.com/blog#blog",
+        "name": "ProofTamil Blog",
+        "publisher": { "@type": "Organization", "name": "ProofTamil" }
+      }
     };
 
     const seo = {
