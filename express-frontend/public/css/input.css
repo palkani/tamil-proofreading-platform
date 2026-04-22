@@ -198,6 +198,7 @@
 @font-face {
   font-family: 'Tamil';
   src: local('Noto Sans Tamil'), local('Lohit Tamil');
+  font-display: swap;
 }
 
 .tamil-text {
