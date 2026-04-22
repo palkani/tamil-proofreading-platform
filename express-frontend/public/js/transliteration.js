@@ -13,7 +13,7 @@ const tamilConsonantMap = {
   'nj': { primary: 'ஞ', variants: ['ஞ'] },
   'ñ': { primary: 'ஞ', variants: ['ஞ'] },
   't': { primary: 'ட', variants: ['ட', 'த'] },
-  'th': { primary: 'த', variants: ['த', 'ட'] },
+  'th': { primary: 'த', variants: ['த'] },
   'd': { primary: 'ட', variants: ['ட', 'த'] },
   'N': { primary: 'ண', variants: ['ண'] },
   'n': { primary: 'ந', variants: ['ந', 'ன', 'ண'] },
@@ -982,24 +982,31 @@ function getTamilSuggestionsFromEnglish(englishInput, tamilWords) {
     });
   }
 
-  // 7. Partial transliteration (first 2-3 chars) — prefix fallback
-  if (lower.length >= 2) {
-    const partialTranslit = transliterateToTamil(lower.substring(0, Math.min(3, lower.length)));
-    if (partialTranslit && partialTranslit !== lower.substring(0, Math.min(3, lower.length))) {
-      wordList.forEach(word => {
+  // 7. Partial transliteration prefix fallback — only when we need more suggestions.
+  // Use at least 65% of the input (min 4 chars) so the Tamil prefix is specific enough.
+  // Require the Tamil result to be ≥ 3 chars to avoid matching a single consonant
+  // (e.g. 'tha' → 'த' would flood results with every த-starting word).
+  if (suggestions.length < 5 && lower.length >= 3) {
+    const prefixLen = Math.min(lower.length, Math.max(4, Math.ceil(lower.length * 0.65)));
+    const partialTranslit = transliterateToTamil(lower.substring(0, prefixLen));
+    if (partialTranslit && partialTranslit.length >= 3 &&
+        partialTranslit !== lower.substring(0, prefixLen)) {
+      let step7Added = 0;
+      for (const word of wordList) {
         if (word.startsWith(partialTranslit)) {
           addSuggestion(word, 55);
+          if (++step7Added >= 5) break; // cap at 5 to avoid flooding
         }
-      });
+      }
     }
   }
-  
+
   // Sort by priority (highest first) and return top 8
   const sortedSuggestions = suggestions
     .sort((a, b) => b.priority - a.priority)
     .map(s => s.word)
     .slice(0, 8);
-  
+
   return sortedSuggestions;
 }
 
