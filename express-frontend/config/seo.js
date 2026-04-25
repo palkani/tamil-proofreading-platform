@@ -2,14 +2,14 @@ const BASE_URL = 'https://www.prooftamil.com';
 
 const seoConfig = {
   home: {
-    // Title: 55 chars — primary keyword first, brand at end (Google rewrites titles > 60 chars)
-    title: 'Tamil Grammar Checker & AI Proofreading Tool | ProofTamil',
-    // Description: 155 chars — one clear value prop, includes OCR for keyword coverage
-    description: 'AI-powered Tamil proofreading — catches grammar errors, spelling mistakes, and verb conjugation in under 2 seconds. Free Tamil handwriting OCR included.',
-    keywords: 'tamil grammar checker, tamil proofreading tool, tamil proofreader online, tamil spell checker, tamil grammar corrector, tamil handwriting to text, tamil ocr, tanglish to tamil, tamil writing assistant, tamil AI grammar checker, check tamil grammar online, fix tamil grammar, tamil spelling correction, prooftamil, prooftamil.com',
+    // Title: 56 chars — leads with "Free" (transactional intent), keyword first, brand at end
+    title: 'Free Tamil Grammar Checker — AI Proofreader | ProofTamil',
+    // Description: 158 chars — leads with high-volume phrase, action verb, expands keyword surface (OCR)
+    description: 'Free Tamil grammar checker online — fix Tamil spelling, grammar, and verb conjugation errors in 2 seconds. Includes Tamil OCR for books and handwriting.',
+    keywords: 'tamil grammar checker, tamil grammar checker online free, tamil proofreading tool, tamil proofreader online, tamil spell checker, tamil grammar corrector, tamil handwriting to text, tamil ocr online free, tanglish to tamil, tamil writing assistant, tamil AI grammar checker, check tamil grammar online, fix tamil grammar, tamil spelling correction, prooftamil, prooftamil.com',
     canonical: BASE_URL + '/',
-    ogTitle: 'Tamil Grammar Checker & AI Proofreading Tool | ProofTamil',
-    ogDescription: 'Fix Tamil grammar, spelling, and verb errors in under 2 seconds. Convert handwritten Tamil notes to text with OCR. Free plan — no credit card needed.',
+    ogTitle: 'Free Tamil Grammar Checker — AI Proofreader | ProofTamil',
+    ogDescription: 'Fix Tamil grammar, spelling, and verb errors in 2 seconds. Includes free Tamil handwriting OCR and Tanglish typing. No credit card, no sign-up.',
     pageType: 'home'
   },
 
@@ -53,12 +53,14 @@ const seoConfig = {
   },
 
   freeTamilEditor: {
-    title: 'Free Tamil Editor Online - Type & Proofread Tamil | ProofTamil',
-    description: 'Free Tamil editor online — type in Tanglish (phonetic English) for instant Tamil, or paste text for AI grammar and spell check. 100% free, no sign-up.',
+    // Title: 54 chars — em dash, fits Google's 60-char window
+    title: 'Free Tamil Editor — Type & Proofread Online | ProofTamil',
+    // Description: 158 chars — concrete example (vanakkam → வணக்கம்) makes it memorable
+    description: 'Free online Tamil editor — type Tanglish phonetically (vanakkam → வணக்கம்) and get instant AI grammar + spell check. No download, no sign-up needed.',
     keywords: 'free tamil editor, free tamil editor online, online tamil editor, tamil editor online free, tamil text editor, tamil typing online, tamil writing online, type tamil online, write tamil online, tanglish to tamil, phonetic tamil typing, tamil typing tool, tamil typing without keyboard, tamil editor no download, free tamil writing tool, tamil editor for students, tamil article editor, tamil essay editor, tamil proofread online, tamil spell check free, tamil grammar check free, tamil sentence correction, tamil writing correction, free tamil language editor, tamil editing online, edit tamil text online, best free tamil editor, tamil typing keyboard online, tamil unicode editor',
     canonical: BASE_URL + '/free-tamil-editor',
-    ogTitle: 'Free Tamil Editor Online - Type & Proofread Tamil | ProofTamil',
-    ogDescription: 'Free online Tamil editor — type Tanglish to get Tamil, paste text, get instant AI grammar & spelling corrections. No download, no sign-up required.',
+    ogTitle: 'Free Tamil Editor — Type & Proofread Online | ProofTamil',
+    ogDescription: 'Free online Tamil editor — Tanglish typing (vanakkam → வணக்கம்) plus AI grammar and spell check. Works on any device. No download, no sign-up.',
     pageType: 'landing',
     includeStructuredData: true,
     faqItems: [
@@ -82,12 +84,14 @@ const seoConfig = {
   },
 
   ocrTool: {
-    title: 'Tamil OCR Online Free - Extract Tamil Text from Images | ProofTamil',
-    description: 'Extract Tamil text from images and PDFs online — free Tamil OCR tool. Upload JPG, PNG, or PDF and get editable Tamil text instantly.',
-    keywords: 'tamil ocr, tamil ocr online, tamil ocr free, extract tamil text from image, tamil image to text, tamil pdf to text, scanned tamil document to text, tamil ocr tool',
+    // Title: 50 chars (was 67, over Google's 60-char limit)
+    title: 'Tamil OCR Online Free — Image to Text | ProofTamil',
+    // Description: 159 chars — file formats listed, action-oriented
+    description: 'Free Tamil OCR online — extract Tamil text from JPG, PNG, and PDF images instantly. Convert printed Tamil books and scanned documents to editable text.',
+    keywords: 'tamil ocr online free, tamil ocr, tamil image to text, tamil pdf to text, extract tamil text from image, scanned tamil document to text, tamil ocr tool, tamil printed book ocr, tamil unicode ocr',
     canonical: BASE_URL + '/tools/ocr',
-    ogTitle: 'Tamil OCR Online Free - Extract Tamil Text from Images | ProofTamil',
-    ogDescription: 'Extract Tamil text from images and PDFs online. Fast, free, and accurate Tamil OCR. Upload JPG, PNG, or PDF — get editable Tamil text instantly.',
+    ogTitle: 'Tamil OCR Online Free — Image to Text | ProofTamil',
+    ogDescription: 'Extract Tamil text from JPG, PNG, and PDF instantly. Free Tamil OCR — works on printed books, scans, and screenshots. No app, no sign-up.',
     pageType: 'tool',
     faqItems: [
       {
@@ -110,14 +114,14 @@ const seoConfig = {
   },
 
   handwritingOcrTool: {
-    // Title: 57 chars — "handwritten Tamil to text" is the high-intent query
-    title: 'Tamil Handwriting to Text — Free Online OCR | ProofTamil',
-    // Description: 158 chars — specific use cases, natural language
-    description: 'Photograph handwritten Tamil notes or letters — get editable Tamil text in seconds. Free Tamil handwriting OCR, no app or sign-up needed.',
-    keywords: 'tamil handwriting to text, handwritten tamil ocr, convert handwritten tamil notes to text, tamil notes to digital text, tamil handwriting recognition, tamil ocr handwriting online, photograph tamil notes, tamil whiteboard to text',
+    // Title: 56 chars — "handwritten Tamil to text" is the high-intent query phrase
+    title: 'Handwritten Tamil to Text — Free Online OCR | ProofTamil',
+    // Description: 156 chars — specific use cases (notes, letters, exam answers) for keyword surface
+    description: 'Convert handwritten Tamil notes, letters, and exam answers to editable text in seconds. Free Tamil handwriting OCR — no app, no download, no sign-up.',
+    keywords: 'handwritten tamil to text, tamil handwriting ocr, tamil handwriting to text, convert handwritten tamil notes, tamil notes to digital text, tamil handwriting recognition, tamil ocr handwriting online, photograph tamil notes, tamil whiteboard to text, tamil exam answer ocr',
     canonical: BASE_URL + '/tools/handwriting-ocr',
-    ogTitle: 'Tamil Handwriting to Text — Free OCR | ProofTamil',
-    ogDescription: 'Take a photo of handwritten Tamil notes and get clean editable text instantly. Free Tamil handwriting OCR — works on any device.',
+    ogTitle: 'Handwritten Tamil to Text — Free OCR | ProofTamil',
+    ogDescription: 'Photograph handwritten Tamil notes or letters and get clean editable text in seconds. Free Tamil handwriting OCR — works on any device.',
     pageType: 'tool',
     faqItems: [
       {
@@ -140,12 +144,14 @@ const seoConfig = {
   },
 
   aiContentWriterTool: {
-    title: 'AI Tamil Content Writer - Generate Tamil Blogs & Articles | ProofTamil',
-    description: 'Generate high-quality Tamil content with AI: blogs, essays, articles, and translations. Create Tamil writing faster with a Tamil-friendly AI content writer.',
-    keywords: 'ai tamil content writer, tamil blog generator, tamil article generator, tamil content generation, tamil writing ai, tamil content creator',
+    // Title: 53 chars (was 70, over Google's 60-char limit)
+    title: 'AI Tamil Content Writer — Blog Generator | ProofTamil',
+    // Description: 158 chars — concrete output types, register support, free signal
+    description: 'Generate Tamil blog posts, articles, and essays in seconds with AI. Supports formal and spoken Tamil. Free Tamil content writer at ProofTamil.',
+    keywords: 'ai tamil content writer, tamil blog generator, tamil article generator, tamil ai writer, tamil content generation, tamil writing ai, tamil content creator, ai tamil blog, generate tamil content',
     canonical: BASE_URL + '/tools/ai-content-writer',
-    ogTitle: 'AI Tamil Content Writer - Generate Blogs & Articles | ProofTamil',
-    ogDescription: 'Generate high-quality Tamil blogs, essays, articles, and captions with AI in seconds. Supports formal and spoken Tamil. Free at ProofTamil.',
+    ogTitle: 'AI Tamil Content Writer — Blog Generator | ProofTamil',
+    ogDescription: 'Generate Tamil blogs, articles, and essays with AI in seconds. Formal and spoken Tamil supported. Free Tamil content writer — start now.',
     pageType: 'tool',
     faqItems: [
       {
