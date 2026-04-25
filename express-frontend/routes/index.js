@@ -29,6 +29,7 @@ const axiosWithPool = axios.create({
 });
 const { getSeoData } = require('../config/seo');
 const { getRegionalBackendUrl } = require('../utils/regional-backend');
+const fileBlog = require('../utils/fileBlog');
 
 // Stamp the regional backend URL once per request.
 router.use((req, res, next) => {
@@ -175,6 +176,7 @@ router.get('/blog', async (req, res) => {
     
     console.log(`[BLOG] Backend response: status=${backendRes.status}, posts=${backendRes.data?.posts?.length || 0}`);
     
+    const filePosts = fileBlog.getAllPosts();
     if (backendRes.status < 200 || backendRes.status >= 300) {
       const msg = backendRes.data?.error || `HTTP ${backendRes.status}`;
       console.error(`[BLOG] Backend error: ${msg}`, backendRes.data);
@@ -182,29 +184,35 @@ router.get('/blog', async (req, res) => {
         title: 'Blog | ProofTamil',
         seo,
         user,
-        posts: [],
-        error: msg,
+        posts: filePosts,
+        error: filePosts.length ? null : msg,
+        page,
+        limit: 12,
       });
     }
-    const posts = backendRes.data?.posts || [];
-    console.log(`[BLOG] Rendering ${posts.length} posts`);
+    const dbPosts = backendRes.data?.posts || [];
+    const fileSlugs = new Set(filePosts.map((p) => p.slug));
+    const merged = [...filePosts, ...dbPosts.filter((p) => !fileSlugs.has(p.slug))]
+      .sort((a, b) => new Date(b.published_at || b.created_at) - new Date(a.published_at || a.created_at));
+    console.log(`[BLOG] Rendering ${merged.length} posts (${filePosts.length} file, ${dbPosts.length} db)`);
     return res.render('pages/blog-index', {
       title: 'Blog | ProofTamil',
       seo,
       user,
-      posts,
+      posts: merged,
       error: null,
       page,
       limit: 12,
     });
   } catch (e) {
     console.error(`[BLOG] Error fetching posts:`, e.message);
+    const filePosts = fileBlog.getAllPosts();
     return res.render('pages/blog-index', {
       title: 'Blog | ProofTamil',
       seo,
       user,
-      posts: [],
-      error: e.message || 'Failed to load posts',
+      posts: filePosts,
+      error: filePosts.length ? null : (e.message || 'Failed to load posts'),
       page,
       limit: 12,
     });
@@ -213,13 +221,17 @@ router.get('/blog', async (req, res) => {
 
 // RSS feed for blog (public) — must be before /blog/:slug so "rss.xml" is not treated as a slug
 router.get('/blog/rss.xml', async (req, res) => {
-  const baseUrl = 'https://prooftamil.com';
+  const baseUrl = 'https://www.prooftamil.com';
   try {
     const backendRes = await getWithColdStartRetry(`${req._backendUrl}/blog/posts`, {
       params: { page: 1, limit: 50 },
       timeout: 10000,
     });
-    const posts = backendRes.status >= 200 && backendRes.status < 300 ? (backendRes.data?.posts || []) : [];
+    const dbPosts = backendRes.status >= 200 && backendRes.status < 300 ? (backendRes.data?.posts || []) : [];
+    const filePosts = fileBlog.getAllPosts();
+    const fileSlugs = new Set(filePosts.map((p) => p.slug));
+    const posts = [...filePosts, ...dbPosts.filter((p) => !fileSlugs.has(p.slug))]
+      .sort((a, b) => new Date(b.published_at || b.created_at) - new Date(a.published_at || a.created_at));
 
     const escapeXml = (s) =>
       String(s || '')
@@ -276,11 +288,17 @@ router.get('/blog/:slug', async (req, res) => {
   const user = getCurrentUser(req);
   const seoBase = getSeoData('blogPost') || getSeoData('home');
   const slug = String(req.params.slug || '').trim();
+
+  // File-based seeds take precedence on slug collision (hand-curated SEO content).
+  const filePost = fileBlog.getPostBySlug(slug);
+
   try {
-    const backendRes = await getWithColdStartRetry(`${req._backendUrl}/blog/posts/${encodeURIComponent(slug)}`, {
-      timeout: 10000,
-    });
-    if (backendRes.status === 404) {
+    const backendRes = filePost
+      ? { status: 404, data: null }
+      : await getWithColdStartRetry(`${req._backendUrl}/blog/posts/${encodeURIComponent(slug)}`, {
+          timeout: 10000,
+        });
+    if (backendRes.status === 404 && !filePost) {
       const seoErr = getSeoData('error');
       return res.status(404).render('pages/error', {
         title: 'Not Found',
@@ -299,7 +317,7 @@ router.get('/blog/:slug', async (req, res) => {
         error: msg,
       });
     }
-    const post = backendRes.data?.post;
+    const post = filePost || backendRes.data?.post;
     if (!post) {
       return res.render('pages/blog-post', {
         title: 'Blog | ProofTamil',
@@ -390,6 +408,17 @@ router.get('/blog/:slug', async (req, res) => {
       error: null,
     });
   } catch (e) {
+    if (filePost) {
+      // Backend errored but we have a file-based post — render it.
+      const canonical = `https://www.prooftamil.com/blog/${filePost.slug}`;
+      return res.render('pages/blog-post', {
+        title: `${filePost.title} | ProofTamil`,
+        seo: { ...seoBase, title: `${filePost.title} | ProofTamil`, canonical, pageType: 'blogPost' },
+        user,
+        post: filePost,
+        error: null,
+      });
+    }
     return res.render('pages/blog-post', {
       title: 'Blog | ProofTamil',
       seo: seoBase,
@@ -839,6 +868,14 @@ router.get('/sitemap.xml', (req, res) => {
     sitemap += '  </url>\n';
   });
 
+  // File-based seed blog posts — added unconditionally (not subject to backend cache).
+  const fileBlogUrls = fileBlog.getAllPosts().map((p) => ({
+    loc: `${BASE_URL}/blog/${p.slug}`,
+    lastmod: (p.updated_at || p.published_at || '').slice(0, 10) || currentDate,
+    changefreq: 'monthly',
+    priority: '0.70',
+  }));
+
   global.__sitemapBlogCache = global.__sitemapBlogCache || { ts: 0, urls: [] };
 
   const addBlogUrls = (list) => {
@@ -864,8 +901,12 @@ router.get('/sitemap.xml', (req, res) => {
     return res.send(sitemap);
   };
 
+  // Always include file-based seed blog URLs first (slug-deduped against db cache).
+  const fileSlugs = new Set(fileBlogUrls.map((u) => u.loc));
+  addBlogUrls(fileBlogUrls);
+
   if (isCacheFresh && cached.length) {
-    addBlogUrls(cached);
+    addBlogUrls(cached.filter((u) => !fileSlugs.has(u.loc)));
     return sendSitemap();
   }
 
@@ -892,7 +933,7 @@ router.get('/sitemap.xml', (req, res) => {
           };
         });
       global.__sitemapBlogCache = { ts: Date.now(), urls: blogUrls.slice(0, 500) };
-      addBlogUrls(global.__sitemapBlogCache.urls);
+      addBlogUrls(global.__sitemapBlogCache.urls.filter((u) => !fileSlugs.has(u.loc)));
       return sendSitemap();
     })
     .catch(() => sendSitemap()); // best-effort: serve static pages on error
