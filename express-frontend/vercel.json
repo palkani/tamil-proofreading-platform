@@ -98,6 +98,14 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "prooftamil.com" }],
+      "destination": "https://www.prooftamil.com/:path*",
+      "statusCode": 308
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/transliterate/suggest",
