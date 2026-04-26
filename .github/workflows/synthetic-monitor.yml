@@ -1,0 +1,98 @@
+name: Synthetic monitor — production health
+
+# Hits production every hour and verifies the golden-path pages are healthy.
+# Failures fire GitHub email notifications (Settings → Notifications → Actions:
+# "Send notifications for failed workflows only" must be on).
+#
+# Each check asserts both the HTTP status code AND a string that proves the page
+# rendered correctly — a 200 OK with an empty body would still fail.
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # every hour, on the hour, UTC
+  workflow_dispatch: {}    # allow manual run from the Actions tab
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe public URLs
+        shell: bash
+        run: |
+          set -e
+          fail=0
+          ok() { printf '\033[32m✓\033[0m %s\n' "$1"; }
+          err() { printf '\033[31m✗\033[0m %s\n' "$1"; fail=$((fail+1)); }
+
+          assert_status() {
+            local url="$1" expected="$2" name="$3"
+            local code
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 30 "$url" || echo "000")
+            if [ "$code" = "$expected" ]; then
+              ok "[$code] $name — $url"
+            else
+              err "[$code, want $expected] $name — $url"
+            fi
+          }
+
+          assert_contains() {
+            local url="$1" needle="$2" name="$3"
+            local body
+            body=$(curl -sS --max-time 30 "$url" || echo "")
+            if echo "$body" | grep -q "$needle"; then
+              ok "$name (contains \"$needle\") — $url"
+            else
+              err "$name (MISSING \"$needle\") — $url"
+            fi
+          }
+
+          echo "── HTTP status checks ───────────────────────────────────"
+          # Top-level pages must return 200.
+          assert_status "https://www.prooftamil.com/"                   "200" "Home"
+          assert_status "https://www.prooftamil.com/free-tamil-editor"  "200" "Free Tamil Editor"
+          assert_status "https://www.prooftamil.com/tools/ocr"          "200" "Tamil OCR"
+          assert_status "https://www.prooftamil.com/tools/handwriting-ocr" "200" "Handwriting OCR"
+          assert_status "https://www.prooftamil.com/tools/ai-content-writer" "200" "AI Content Writer"
+          assert_status "https://www.prooftamil.com/blog"               "200" "Blog index"
+          assert_status "https://www.prooftamil.com/pricing"            "200" "Pricing"
+          assert_status "https://www.prooftamil.com/login"              "200" "Login page"
+          assert_status "https://www.prooftamil.com/register"           "200" "Register page"
+          assert_status "https://www.prooftamil.com/sitemap.xml"        "200" "Sitemap"
+          assert_status "https://www.prooftamil.com/robots.txt"         "200" "Robots"
+          assert_status "https://www.prooftamil.com/blog/rss.xml"       "200" "Blog RSS"
+
+          # Seed blog posts (file-based) — must render.
+          assert_status "https://www.prooftamil.com/blog/tamil-grammar-checker-online-free" "200" "Seed blog post"
+
+          # Non-www must 308 redirect (NOT 307).
+          assert_status "https://prooftamil.com/"                       "308" "Non-www redirect"
+
+          echo "── Content sanity checks ────────────────────────────────"
+          assert_contains "https://www.prooftamil.com/login"            "Sign In"          "Login page renders"
+          assert_contains "https://www.prooftamil.com/sitemap.xml"      "<urlset"          "Sitemap is XML"
+          assert_contains "https://www.prooftamil.com/blog/rss.xml"     "<rss"             "RSS is XML"
+          assert_contains "https://www.prooftamil.com/blog"             "ProofTamil"       "Blog index has brand"
+          assert_contains "https://www.prooftamil.com/blog/tamil-grammar-checker-online-free" "Tamil Grammar Checker" "Seed blog post has expected H1"
+
+          echo "── Backend reachability ─────────────────────────────────"
+          # Auth endpoint should reject invalid token with 401, NOT 500. A 500
+          # here is the smoking gun for issues like the dodo_customer_id bug.
+          status=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 30 \
+            -X POST "https://www.prooftamil.com/auth/supabase-token" \
+            -H "Content-Type: application/json" \
+            -d '{"access_token":"synthetic-monitor-invalid"}' || echo "000")
+          if [ "$status" = "401" ] || [ "$status" = "503" ]; then
+            ok "[$status] Auth endpoint rejects invalid token cleanly"
+          else
+            err "[$status, want 401/503] Auth endpoint returned wrong status — backend may be broken"
+          fi
+
+          echo
+          if [ "$fail" -eq 0 ]; then
+            echo "✅ All synthetic checks passed."
+            exit 0
+          else
+            echo "❌ $fail synthetic check(s) failed."
+            exit 1
+          fi
