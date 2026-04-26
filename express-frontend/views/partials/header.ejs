@@ -202,9 +202,11 @@
         "@type": "Offer",
         "@id": "<%= baseUrl %>/pricing#pro-offer",
         "name": "ProofTamil Pro",
+        "price": "12.00",
+        "priceCurrency": "USD",
         "availability": "https://schema.org/InStock",
         "url": "<%= baseUrl %>/pricing",
-        "description": "Unlimited words per check, unlimited daily AI checks, unlimited OCR, all correction types, unlimited saved drafts"
+        "description": "Unlimited words per check, unlimited daily AI checks, unlimited OCR, all correction types, unlimited saved drafts. From USD 12/month or USD 115.20/year (regional pricing applies — INR 499/month or INR 4999/year in India)."
       }
     ],
     "description": "AI-powered Tamil language platform — checks Tamil grammar, spelling, verb conjugation, and sandhi errors; converts handwritten Tamil notes to text via OCR; and generates Tamil blog articles. Free for students, writers, and journalists.",
@@ -461,33 +463,49 @@
         "@type": "Offer",
         "@id": "<%= baseUrl %>/pricing#pro-monthly-offer",
         "name": "ProofTamil Pro — Monthly",
+        "price": "12.00",
+        "priceCurrency": "USD",
         "availability": "https://schema.org/InStock",
         "url": "<%= baseUrl %>/pricing",
         "eligibleRegion": { "@type": "Place", "name": "Worldwide" },
         "priceSpecification": {
           "@type": "UnitPriceSpecification",
+          "price": "12.00",
+          "priceCurrency": "USD",
           "unitCode": "MON",
+          "referenceQuantity": { "@type": "QuantitativeValue", "value": 1, "unitCode": "MON" },
           "billingDuration": { "@type": "QuantitativeValue", "value": 1, "unitCode": "MON" }
         },
-        "description": "Unlimited words per check, unlimited daily AI checks, unlimited OCR conversions, all correction types, unlimited saved drafts"
+        "description": "Unlimited words per check, unlimited daily AI checks, unlimited OCR conversions, all correction types, unlimited saved drafts. Regional pricing: INR 499/month in India."
       },
       {
         "@type": "Offer",
         "@id": "<%= baseUrl %>/pricing#pro-yearly-offer",
         "name": "ProofTamil Pro — Yearly",
+        "price": "115.20",
+        "priceCurrency": "USD",
         "availability": "https://schema.org/InStock",
         "url": "<%= baseUrl %>/pricing",
         "eligibleRegion": { "@type": "Place", "name": "Worldwide" },
         "priceSpecification": {
           "@type": "UnitPriceSpecification",
+          "price": "115.20",
+          "priceCurrency": "USD",
           "unitCode": "ANN",
+          "referenceQuantity": { "@type": "QuantitativeValue", "value": 1, "unitCode": "ANN" },
           "billingDuration": { "@type": "QuantitativeValue", "value": 1, "unitCode": "ANN" }
         },
-        "description": "Unlimited words per check, unlimited daily AI checks, unlimited OCR, all correction types, unlimited drafts — best value"
+        "description": "Unlimited words per check, unlimited daily AI checks, unlimited OCR, all correction types, unlimited drafts — best value. Regional pricing: INR 4999/year in India."
       }
     ]
   }
   </script>
+  <%#
+    aggregateRating and review are intentionally omitted from the Product schema above.
+    Google Search Console flags them as "non-critical" missing fields, but Google's
+    structured-data spam policy penalizes fabricated ratings. Add them only when
+    ProofTamil has real, verifiable customer reviews (Trustpilot / G2 / first-party).
+  %>
   <% } %>
 
   <% if (pageType === 'article' || pageType === 'howToUse') { %>
