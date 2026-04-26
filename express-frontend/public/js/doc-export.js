@@ -180,6 +180,42 @@
     return pairs;
   }
 
+  // Position the menu using `position: fixed` so it escapes any parent's
+  // `overflow: hidden / auto` (the toolbar containers clip absolute children).
+  // Right-edge clamping keeps it on-screen on small viewports.
+  function positionMenu(btn, menu) {
+    const btnRect = btn.getBoundingClientRect();
+    // Make menu visible (still off-screen) so we can measure its width.
+    menu.classList.remove('hidden');
+    menu.style.position = 'fixed';
+    menu.style.visibility = 'hidden';
+    menu.style.top = '0px';
+    menu.style.left = '0px';
+
+    const menuWidth = menu.offsetWidth || 176;          // w-44 fallback
+    const menuHeight = menu.offsetHeight || 96;
+    const margin = 8;
+
+    // Prefer aligning the menu's right edge to the button's right edge so the
+    // dropdown sits under the icon. Clamp to the viewport.
+    let left = btnRect.right - menuWidth;
+    if (left < margin) left = margin;
+    if (left + menuWidth > window.innerWidth - margin) {
+      left = window.innerWidth - menuWidth - margin;
+    }
+
+    // Default: open downward. If not enough space below, flip upward.
+    let top = btnRect.bottom + 4;
+    if (top + menuHeight > window.innerHeight - margin) {
+      top = btnRect.top - menuHeight - 4;
+      if (top < margin) top = margin;
+    }
+
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+    menu.style.visibility = '';
+  }
+
   function closeAllMenus() {
     findMenuPairs().forEach(({ menu }) => menu.classList.add('hidden'));
   }
@@ -191,7 +227,7 @@
         e.stopPropagation();
         const isOpen = !menu.classList.contains('hidden');
         closeAllMenus();
-        if (!isOpen) menu.classList.remove('hidden');
+        if (!isOpen) positionMenu(btn, menu);
       });
     });
     // Close on outside click / Escape
@@ -199,6 +235,9 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closeAllMenus();
     });
+    // Reposition or close on viewport changes (avoid stale floating menu)
+    window.addEventListener('resize', closeAllMenus);
+    window.addEventListener('scroll', closeAllMenus, true);
   }
 
   if (document.readyState === 'loading') {
