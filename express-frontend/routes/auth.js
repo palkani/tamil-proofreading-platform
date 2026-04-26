@@ -86,55 +86,59 @@ router.post('/refresh', (req, res) => forward(req, res, '/auth/refresh', 'post')
 router.post('/otp/send', (req, res) => forward(req, res, '/auth/otp/send', 'post'));
 router.post('/otp/verify', (req, res) => forward(req, res, '/auth/otp/verify', 'post'));
 router.post('/logout', async (req, res) => {
-  // IMPORTANT: Always clear cookies on the frontend domain (prooftamil.com),
-  // even if the backend is unreachable or the browser navigates early.
+  // CRITICAL: Clear cookies on the response IMMEDIATELY, BEFORE the backend call.
+  // The backend call can take 5+ seconds on Cloud Run cold-start; the browser
+  // races the logout fetch against an 800 ms timeout in the navbar. If we awaited
+  // the backend before sending Set-Cookie clearing headers, the redirect to /login
+  // would fire with the old access_token cookie still attached, attachUser would
+  // populate req.user, and redirectIfAuth would bounce the user to /dashboard —
+  // making logout appear broken.
+  //
+  // Backend (Go) sets these cookies with: HttpOnly, Secure, SameSite=None,
+  // Domain=.prooftamil.com (when host ends in prooftamil.com). To delete reliably
+  // across browsers we issue Set-Cookie deletions for every (domain × sameSite)
+  // combination that may have been used historically.
   const clearCookieEverywhere = (name) => {
-    // Cookie identity is name + domain + path. Some deployments have different domain attributes.
-    // Clear aggressively across common variants so attachUser cannot rehydrate the navbar.
-    const baseOpts = {
-      path: '/',
-      // Secure helps ensure clearing works on HTTPS-only cookies too (Vercel/Cloud Run).
-      secure: true,
-      sameSite: 'lax',
-    };
-
-    // Host-only cookie
-    res.clearCookie(name, { ...baseOpts });
-    // Bare apex domain cookie
-    res.clearCookie(name, { ...baseOpts, domain: 'prooftamil.com' });
-    // Subdomain cookie (covers www + other subdomains)
-    res.clearCookie(name, { ...baseOpts, domain: '.prooftamil.com' });
-    // Explicit www domain cookie (some stacks set this)
-    res.clearCookie(name, { ...baseOpts, domain: 'www.prooftamil.com' });
+    const variants = [
+      { path: '/', secure: true, sameSite: 'lax' },
+      { path: '/', secure: true, sameSite: 'lax', domain: 'prooftamil.com' },
+      { path: '/', secure: true, sameSite: 'lax', domain: '.prooftamil.com' },
+      { path: '/', secure: true, sameSite: 'lax', domain: 'www.prooftamil.com' },
+      // SameSite=None to match how the backend actually sets these cookies.
+      { path: '/', secure: true, sameSite: 'none' },
+      { path: '/', secure: true, sameSite: 'none', domain: '.prooftamil.com' },
+      { path: '/', secure: true, sameSite: 'none', domain: 'prooftamil.com' },
+      { path: '/', secure: true, sameSite: 'none', domain: 'www.prooftamil.com' },
+    ];
+    variants.forEach((opts) => res.clearCookie(name, opts));
   };
 
-  try {
-    // Fire backend logout best-effort (revokes refresh token server-side)
-    await axios({
-      method: 'post',
-      url: `${req._backendUrl}/auth/logout`,
-      data: req.body,
-      params: req.query,
-      headers: {
-        ...req.headers,
-        host: undefined,
-        cookie: req.headers.cookie,
-        origin: undefined,
-      },
-      withCredentials: true,
-      validateStatus: () => true,
-      timeout: 8000,
-    });
-  } catch (err) {
-    console.warn('[AUTH-PROXY] Logout backend call failed (non-fatal):', err.message);
-  } finally {
-    clearCookieEverywhere('access_token');
-    clearCookieEverywhere('proof_refresh_token');
-    clearCookieEverywhere('refresh_token');
+  clearCookieEverywhere('access_token');
+  clearCookieEverywhere('proof_refresh_token');
+  clearCookieEverywhere('refresh_token');
 
-    // Match backend: 204 No Content
-    res.status(204).send();
-  }
+  // Send 204 immediately — Set-Cookie deletions are now in flight to the browser.
+  res.status(204).send();
+
+  // Best-effort: tell the backend to revoke the refresh token server-side.
+  // Fire-and-forget — never block logout UX on this.
+  axios({
+    method: 'post',
+    url: `${req._backendUrl}/auth/logout`,
+    data: req.body,
+    params: req.query,
+    headers: {
+      ...req.headers,
+      host: undefined,
+      cookie: req.headers.cookie,
+      origin: undefined,
+    },
+    withCredentials: true,
+    validateStatus: () => true,
+    timeout: 8000,
+  }).catch((err) => {
+    console.warn('[AUTH-PROXY] Logout backend call failed (non-fatal):', err.message);
+  });
 });
 router.post('/social', (req, res) => forward(req, res, '/auth/social', 'post'));
 router.post('/password-strength', (req, res) =>

@@ -483,33 +483,33 @@
     }
     
     // Call logout API with keepalive so the request can complete even if we navigate.
-    // Also wait briefly to allow Set-Cookie clears to apply before the next page render.
+    // Express now clears cookies BEFORE awaiting the backend, so this responds in
+    // tens of milliseconds — wait for it (no race) so Set-Cookie deletions are
+    // applied before the next page request.
     const logoutRequest = fetch('/auth/logout', {
       method: 'POST',
       credentials: 'include',
       keepalive: true,
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      headers: { 'Content-Type': 'application/json' }
     }).catch(() => null);
-    
-    console.log('[NAV] Logging out (keepalive) and redirecting to home page');
-    
-    // CRITICAL: Clear the logout flag after a delay to prevent loops
-    // But set a flag to prevent immediate re-logout
+
+    console.log('[NAV] Logging out, awaiting Set-Cookie clear before redirect');
+
     try {
       sessionStorage.setItem('just_logged_out', 'true');
       sessionStorage.setItem('logout_time', Date.now().toString());
     } catch (e) {
       console.warn('[NAV] Could not set sessionStorage flag:', e);
     }
-    
+
+    // Wait up to 1500 ms (Express response is normally <50 ms; this is a safety cap).
+    // Then redirect to /login?logout=1 so the login route force-clears any stale
+    // cookie that might still be attached (browser/CDN edge cases).
     Promise.race([
       logoutRequest,
-      new Promise((resolve) => setTimeout(resolve, 800))
+      new Promise((resolve) => setTimeout(resolve, 1500))
     ]).finally(() => {
-      // Prefer login page after logout so navbar rehydrates unauthenticated state immediately.
-      window.location.replace('/login');
+      window.location.replace('/login?logout=1');
     });
   };
 

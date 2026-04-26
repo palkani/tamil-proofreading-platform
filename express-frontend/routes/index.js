@@ -500,6 +500,23 @@ router.get(['/tamil-typing', '/tamil-editor', '/tanglish-to-tamil'], (req, res) 
 
 // Login page - redirect authenticated users to drafts
 router.get('/login', (req, res) => {
+  // Belt-and-braces: if the user just logged out (?logout=1), do NOT bounce them
+  // back to /drafts even if a stale access_token cookie is still attached. Also
+  // re-issue Set-Cookie deletions so the next request lands without auth.
+  const justLoggedOut = req.query.logout === '1';
+  if (justLoggedOut) {
+    const variants = [
+      { path: '/', secure: true, sameSite: 'lax' },
+      { path: '/', secure: true, sameSite: 'lax', domain: '.prooftamil.com' },
+      { path: '/', secure: true, sameSite: 'none' },
+      { path: '/', secure: true, sameSite: 'none', domain: '.prooftamil.com' },
+    ];
+    ['access_token', 'proof_refresh_token', 'refresh_token'].forEach((name) => {
+      variants.forEach((opts) => res.clearCookie(name, opts));
+    });
+    req.user = null;
+  }
+
   if (req.user) {
     // If user is already authenticated and a redirect target is provided, honor it.
     // This prevents /workspace?draftId=... flows from bouncing back to /drafts after a 401-triggered /login.
