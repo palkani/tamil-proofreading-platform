@@ -2056,6 +2056,87 @@ router.get('/converter/supported-conversions', async (req, res) => {
   }
 });
 
+// Document Export - Generate .docx from editor content (text or HTML)
+// Body: { text?: string, html?: string, title?: string }
+// Returns: .docx file as a download
+router.post('/document/export-docx', async (req, res) => {
+  try {
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel } = require('docx');
+    const text = typeof req.body?.text === 'string' ? req.body.text : '';
+    const html = typeof req.body?.html === 'string' ? req.body.html : '';
+    const title = (typeof req.body?.title === 'string' && req.body.title.trim()) || 'ProofTamil-Document';
+
+    // Pick source: prefer plain text, else strip HTML to text.
+    let bodyText = text;
+    if (!bodyText && html) {
+      bodyText = String(html)
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<\/p\s*>/gi, '\n\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/div\s*>/gi, '\n')
+        .replace(/<\/h[1-6]\s*>/gi, '\n\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .trim();
+    }
+
+    if (!bodyText.trim()) {
+      return res.status(400).json({ error: 'Empty document — provide non-empty `text` or `html`.' });
+    }
+
+    // Split on blank lines for paragraphs; preserve hard line breaks within a paragraph as soft breaks.
+    const paragraphs = String(bodyText)
+      .replace(/\r\n/g, '\n')
+      .split(/\n{2,}/g)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    const docParagraphs = paragraphs.map((p) => {
+      const lines = p.split('\n');
+      const runs = [];
+      lines.forEach((line, idx) => {
+        if (idx > 0) runs.push(new TextRun({ break: 1 }));
+        runs.push(new TextRun({ text: line }));
+      });
+      return new Paragraph({ children: runs });
+    });
+
+    const titleHeading = new Paragraph({
+      text: title,
+      heading: HeadingLevel.HEADING_1,
+    });
+
+    const doc = new Document({
+      creator: 'ProofTamil',
+      title,
+      description: 'Exported from ProofTamil — prooftamil.com',
+      sections: [
+        {
+          properties: {},
+          children: [titleHeading, ...docParagraphs],
+        },
+      ],
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+    const safeTitle = String(title).replace(/[^\w஀-௿.\-]+/g, '-').slice(0, 80) || 'document';
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.docx"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(buffer);
+  } catch (err) {
+    console.error('[Export DOCX] error:', err && err.message);
+    return res.status(500).json({ error: 'Failed to generate Word document', details: err && err.message });
+  }
+});
+
 // Document Converter - Convert document
 router.post('/converter/convert', uploadConverter.single('file'), async (req, res) => {
   try {

@@ -416,16 +416,35 @@
                     </svg>
                   </button>
 
-                  <!-- Import Document (.txt / .docx) -->
+                  <!-- Import Document (.txt / .docx / .pdf) -->
                   <button class="toolbar-btn" id="home-import-doc-btn" onclick="window.docImport && window.docImport.open()"
-                          title="Import document (.txt or .docx)" aria-label="Import document">
+                          title="Import document (.pdf, .docx or .txt)" aria-label="Import document">
                     <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <!-- Upload tray: arrow pointing up from a base = import from file system -->
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                       <polyline points="17 8 12 3 7 8"/>
                       <line x1="12" y1="3" x2="12" y2="15"/>
                     </svg>
                   </button>
+
+                  <!-- Export Document (PDF / Word) -->
+                  <div class="relative inline-block" id="home-export-wrap">
+                    <button class="toolbar-btn" id="home-export-btn" type="button"
+                            title="Export to PDF or Word" aria-label="Export document">
+                      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                      </svg>
+                    </button>
+                    <div id="home-export-menu" class="hidden absolute left-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-30 py-1">
+                      <button type="button" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50" onclick="window.docExport && window.docExport.exportPdf()">
+                        <span class="font-medium text-gray-900">Export as PDF</span>
+                      </button>
+                      <button type="button" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50" onclick="window.docExport && window.docExport.exportDocx()">
+                        <span class="font-medium text-gray-900">Export as Word</span>
+                      </button>
+                    </div>
+                  </div>
 
                   <div class="toolbar-divider"></div>
 
@@ -1340,6 +1359,7 @@
 <% } %>
 <script src="/js/voice-typing.js?v=20260318d"></script>
 <script src="/js/doc-import.js?v=20260305a"></script>
+<script src="/js/doc-export.js?v=20260426a"></script>
 <script src="/js/sentence-rewrite.js?v=20260222a"></script>
 
 <script>

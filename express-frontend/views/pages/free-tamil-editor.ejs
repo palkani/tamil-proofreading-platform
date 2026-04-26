@@ -56,6 +56,38 @@
             <span class="font-medium">AI proofreading</span>
           </label>
         </div>
+
+        <!-- Import / Export buttons -->
+        <div class="flex items-center gap-2 sm:ml-auto">
+          <button type="button" id="fte-import-btn" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition" title="Import .pdf, .docx or .txt" onclick="window.docImport && window.docImport.open()">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span class="hidden sm:inline">Import</span>
+          </button>
+
+          <div class="relative" id="fte-export-wrap">
+            <button type="button" id="fte-export-btn" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition" title="Export to PDF or Word">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span class="hidden sm:inline">Export</span>
+              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div id="fte-export-menu" class="hidden absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-30 py-1">
+              <button type="button" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2" onclick="window.docExport && window.docExport.exportPdf()">
+                <span class="font-medium text-gray-900">Export as PDF</span>
+              </button>
+              <button type="button" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2" onclick="window.docExport && window.docExport.exportDocx()">
+                <span class="font-medium text-gray-900">Export as Word</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="p-8 relative">
@@ -140,6 +172,8 @@
 <script src="/js/translit/typeahead.js?v=20260122b"></script>
 <script src="/js/translit/homeEditorAdapter.js?v=20260122b"></script>
 <script src="/js/home-editor.js?v=20260421a"></script>
+<script src="/js/doc-import.js?v=20260305a"></script>
+<script src="/js/doc-export.js?v=20260426a"></script>
 
 <%- include('../partials/footer') %>
 
