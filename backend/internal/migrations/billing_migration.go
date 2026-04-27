@@ -152,7 +152,7 @@ func seedBillingData(db *gorm.DB) {
 			BaseCurrency:            "USD",
 			BasePriceUSD:            1200,  // $12.00
 			IndiaMultiplier:         0.75,  // 25% discount for India
-			IndiaFixedPriceINRCents: 59900, // ₹599.00 fixed India price
+			IndiaFixedPriceINRCents: 99900, // ₹999.00 fixed India price
 			BillingInterval:         "month",
 			Active:                  true,
 			TrialDays:               0,
@@ -175,7 +175,7 @@ func seedBillingData(db *gorm.DB) {
 			BaseCurrency:            "USD",
 			BasePriceUSD:            11520,  // $115.20 (12 * 12 * 0.8)
 			IndiaMultiplier:         0.75,
-			IndiaFixedPriceINRCents: 574900, // ₹5749.00 fixed India price (~20% off ₹599×12)
+			IndiaFixedPriceINRCents: 959900, // ₹9599.00 fixed India price (~20% off ₹999×12)
 			BillingInterval:         "year",
 			Active:                  true,
 			TrialDays:               0,
