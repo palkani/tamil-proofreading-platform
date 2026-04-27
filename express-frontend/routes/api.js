@@ -2161,14 +2161,18 @@ router.get('/converter/supported-conversions', async (req, res) => {
 });
 
 // Document Export - Generate .docx from editor content (text or HTML)
-// Body: { text?: string, html?: string, title?: string }
+// Body: { text?: string, html?: string, title?: string, plan?: string }
+//   plan ∈ {'pro','basic','enterprise'} → clean export (no auto title, no footer watermark)
+//   anything else (incl. omitted)        → free-tier export with "prooftamil.com" page footer
 // Returns: .docx file as a download
 router.post('/document/export-docx', async (req, res) => {
   try {
-    const { Document, Packer, Paragraph, TextRun, HeadingLevel } = require('docx');
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, Footer, AlignmentType } = require('docx');
     const text = typeof req.body?.text === 'string' ? req.body.text : '';
     const html = typeof req.body?.html === 'string' ? req.body.html : '';
     const title = (typeof req.body?.title === 'string' && req.body.title.trim()) || 'ProofTamil-Document';
+    const planRaw = String(req.body?.plan || '').toLowerCase();
+    const isPro = ['pro', 'basic', 'enterprise'].includes(planRaw);
 
     // Pick source: prefer plain text, else strip HTML to text.
     let bodyText = text;
@@ -2211,21 +2215,38 @@ router.post('/document/export-docx', async (req, res) => {
       return new Paragraph({ children: runs });
     });
 
-    const titleHeading = new Paragraph({
-      text: title,
-      heading: HeadingLevel.HEADING_1,
-    });
+    // Pro tier: clean export — no auto-prepended title heading, no footer.
+    // Free tier: keep the title (so the user knows what they exported) AND
+    // add a "prooftamil.com" footer that repeats on every page.
+    const sectionChildren = isPro
+      ? docParagraphs
+      : [new Paragraph({ text: title, heading: HeadingLevel.HEADING_1 }), ...docParagraphs];
+
+    const sectionConfig = { properties: {}, children: sectionChildren };
+    if (!isPro) {
+      sectionConfig.footers = {
+        default: new Footer({
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.RIGHT,
+              children: [
+                new TextRun({
+                  text: 'prooftamil.com',
+                  size: 16,        // half-points → 8pt
+                  color: '9CA3AF', // gray-400
+                }),
+              ],
+            }),
+          ],
+        }),
+      };
+    }
 
     const doc = new Document({
       creator: 'ProofTamil',
       title,
       description: 'Exported from ProofTamil — prooftamil.com',
-      sections: [
-        {
-          properties: {},
-          children: [titleHeading, ...docParagraphs],
-        },
-      ],
+      sections: [sectionConfig],
     });
 
     const buffer = await Packer.toBuffer(doc);

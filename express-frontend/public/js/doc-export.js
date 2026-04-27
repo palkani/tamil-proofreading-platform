@@ -12,6 +12,40 @@
 (function () {
   'use strict';
 
+  // ── Plan detection ────────────────────────────────────────────────────────
+  // Pro/Basic/Enterprise users get a clean export (no H1 title, no watermark).
+  // Free / anonymous users get a "prooftamil.com" watermark on each page.
+  // Resolved from window.USER_PLAN if available (workspace pre-injects it),
+  // otherwise from /api/v1/me on first export. Cached after first resolve.
+  let _planCache = null;
+
+  function _planFromString(s) {
+    const p = String(s || '').toLowerCase();
+    return ['pro', 'basic', 'enterprise'].includes(p) ? p : 'free';
+  }
+
+  async function getUserPlan() {
+    if (_planCache) return _planCache;
+    const fromGlobal = _planFromString(window.USER_PLAN);
+    if (fromGlobal !== 'free' || window.USER_LOGGED_IN === false) {
+      _planCache = fromGlobal;
+      return _planCache;
+    }
+    // Either logged-out (free) or USER_PLAN not yet resolved — ask the backend.
+    try {
+      const res = await fetch('/api/v1/me', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        const plan = _planFromString(data && data.user && data.user.subscription);
+        window.USER_PLAN = plan;
+        _planCache = plan;
+        return plan;
+      }
+    } catch (_) {}
+    _planCache = 'free';
+    return _planCache;
+  }
+
   // ── Editor helpers (mirrors doc-import.js) ────────────────────────────────
   function getTipTap() {
     if (!window.USE_TIPTAP_EDITOR) return null;
@@ -46,12 +80,16 @@
   }
 
   // ── PDF export via Print dialog ───────────────────────────────────────────
-  function exportPdf() {
+  async function exportPdf() {
     const { html, text } = getEditorContent();
     if (!html.trim() && !text.trim()) {
       window.alert('Editor is empty — type or import some text before exporting.');
       return;
     }
+
+    closeAllMenus();
+    const plan = await getUserPlan();
+    const isPro = plan !== 'free';
 
     const title = getDocumentTitle();
     const safeTitle = String(title).replace(/[<>&"]/g, '');
@@ -67,6 +105,14 @@
     iframe.style.height = '0';
     iframe.style.border = '0';
     document.body.appendChild(iframe);
+
+    // Pro tier: no auto-prepended title heading and no watermark.
+    // Free / anonymous: keep the title (so the user knows what they exported)
+    // AND add a "prooftamil.com" watermark on every printed page.
+    const titleHtml = isPro ? '' : `<h1>${safeTitle}</h1>`;
+    const watermarkHtml = isPro
+      ? ''
+      : '<div class="watermark-footer" aria-hidden="true">prooftamil.com</div>';
 
     const doc = iframe.contentDocument || iframe.contentWindow.document;
     doc.open();
@@ -87,11 +133,22 @@
   blockquote { margin: 8pt 0; padding-left: 12pt; border-left: 2pt solid #ddd; color: #555; }
   /* Strip any error-highlight styling that leaks from the editor */
   .home-correction-highlight, .hc-grammar, .hc-spelling, .hc-style { text-decoration: none !important; background: transparent !important; }
+  /* Free-tier watermark — fixed positioning repeats on every printed page in Chrome/Safari */
+  .watermark-footer {
+    position: fixed;
+    bottom: 6mm;
+    right: 10mm;
+    font-size: 8.5pt;
+    color: #9ca3af;
+    letter-spacing: 0.02em;
+  }
+  @media print { .watermark-footer { color: #9ca3af !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style>
 </head>
 <body>
-  <h1>${safeTitle}</h1>
+  ${titleHtml}
   ${html.trim() ? html : escapeHtml(text).replace(/\n\n+/g, '</p><p>').replace(/^/, '<p>') + '</p>'}
+  ${watermarkHtml}
 </body>
 </html>`);
     doc.close();
@@ -110,8 +167,6 @@
     };
     if (iframe.contentDocument.readyState === 'complete') fire();
     else iframe.onload = fire;
-
-    closeAllMenus();
   }
 
   // ── DOCX export via backend ───────────────────────────────────────────────
@@ -124,13 +179,14 @@
 
     closeAllMenus();
     const title = getDocumentTitle();
+    const plan = await getUserPlan();
 
     try {
       const res = await fetch('/api/document/export-docx', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ html, text, title }),
+        body: JSON.stringify({ html, text, title, plan }),
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
