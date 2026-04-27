@@ -55,13 +55,15 @@ const tamilVowelSigns = {
   'au': 'ௌ'
 };
 
-// Legacy consonants for backward compatibility
-const tamilConsonants = {
-  'k': 'க', 'ng': 'ங', 'ch': 'ச', 'nj': 'ஞ', 'ñ': 'ஞ',
-  't': 'ட', 'N': 'ண', 'th': 'த', 'n': 'ந', 'p': 'ப',
-  'm': 'ம', 'y': 'ய', 'r': 'ர', 'l': 'ல', 'v': 'வ',
-  'zh': 'ழ', 'L': 'ள', 'R': 'ற', 'n': 'ன'
-};
+// Legacy single-mapping consonant table — DERIVED from tamilConsonantMap so
+// we don't drift. Previous hand-maintained version was missing loanword
+// consonants (s, j, g, b, d, w, z, h, f, sh) which made transliterateToTamil
+// silently drop those letters — e.g. "selvam" became "எலவம்" because the 's'
+// was skipped. It also had a duplicate 'n' key where the second 'n':'ன'
+// overwrote the first 'n':'ந', so 'n' always mapped to ன instead of ந.
+const tamilConsonants = Object.fromEntries(
+  Object.entries(tamilConsonantMap).map(([k, v]) => [k, v.primary])
+);
 
 // Common word mappings for better accuracy (100+ words)
 const commonWordMap = {
@@ -715,6 +717,14 @@ function transliterateToTamil(englishText) {
 
       // Check for consonant combinations
       if (tamilConsonants[substr]) {
+        // Tamil rule: when a consonant is immediately followed by another
+        // consonant (no vowel between), the first one carries a pulli so it
+        // is read with no inherent vowel — e.g. "செல்வம்" not "செலவம்",
+        // "வணக்கம்" not "வணககம்". Add the pulli BEFORE writing the new
+        // consonant.
+        if (lastWasConsonant) {
+          result += '்';
+        }
         result += tamilConsonants[substr];
         lastWasConsonant = true;
         i += len;
