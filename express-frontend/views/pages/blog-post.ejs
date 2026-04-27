@@ -57,17 +57,23 @@
 </style>
 
 <main class="max-w-4xl mx-auto px-6 py-12">
+  <%
+    // Localise the "Back to Blog" link based on the current post's language so
+    // a Tamil reader sees a Tamil link and an English reader sees English.
+    const isTamilPost = (post && post.language === 'tamil');
+    const backLabel = isTamilPost ? '← வலைப்பதிவுக்குத் திரும்பு' : '← Back to Blog';
+  %>
   <% if (error) { %>
     <div class="border border-red-200 bg-red-50 rounded-xl p-4 text-red-700">
       <div class="font-semibold">Failed to load blog post</div>
       <div class="text-sm mt-1"><%= error %></div>
       <div class="mt-4">
-        <a href="/blog" class="text-primary-600 hover:text-primary-700 font-medium">Back to Blog</a>
+        <a href="/blog" class="text-primary-600 hover:text-primary-700 font-medium"><%= backLabel %></a>
       </div>
     </div>
   <% } else { %>
     <div class="mb-6">
-      <a href="/blog" class="text-sm text-primary-600 hover:text-primary-700 font-medium">← Back to Blog</a>
+      <a href="/blog" class="text-sm text-primary-600 hover:text-primary-700 font-medium"><%= backLabel %></a>
     </div>
 
     <article class="bg-white border border-gray-200 rounded-3xl p-8 md:p-10 shadow-sm">
