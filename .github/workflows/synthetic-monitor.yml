@@ -25,10 +25,43 @@ jobs:
           ok() { printf '\033[32m✓\033[0m %s\n' "$1"; }
           err() { printf '\033[31m✗\033[0m %s\n' "$1"; fail=$((fail+1)); }
 
+          # Curl with one retry on transient 5xx to tolerate Cloud Run cold-start
+          # 503s. Real outages will still be caught on the next hourly run.
+          retry_curl_status() {
+            local url="$1"
+            local code
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 30 "$url" || echo "000")
+            case "$code" in
+              502|503|504|000)
+                sleep 6
+                code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 30 "$url" || echo "000")
+                ;;
+            esac
+            echo "$code"
+          }
+
+          retry_curl_body() {
+            local url="$1"
+            local body
+            body=$(curl -sS --max-time 30 -w "\n__HTTPCODE:%{http_code}" "$url" 2>/dev/null || echo "")
+            local code
+            code=$(echo "$body" | tail -1 | sed 's/__HTTPCODE://')
+            case "$code" in
+              502|503|504|000)
+                sleep 6
+                body=$(curl -sS --max-time 30 "$url" || echo "")
+                ;;
+              *)
+                body=$(echo "$body" | sed '$d')  # strip the trailing __HTTPCODE line
+                ;;
+            esac
+            echo "$body"
+          }
+
           assert_status() {
             local url="$1" expected="$2" name="$3"
             local code
-            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 30 "$url" || echo "000")
+            code=$(retry_curl_status "$url")
             if [ "$code" = "$expected" ]; then
               ok "[$code] $name — $url"
             else
@@ -39,7 +72,7 @@ jobs:
           assert_contains() {
             local url="$1" needle="$2" name="$3"
             local body
-            body=$(curl -sS --max-time 30 "$url" || echo "")
+            body=$(retry_curl_body "$url")
             if echo "$body" | grep -q "$needle"; then
               ok "$name (contains \"$needle\") — $url"
             else
@@ -76,12 +109,18 @@ jobs:
           assert_contains "https://www.prooftamil.com/blog/tamil-grammar-checker-online-free" "Tamil Grammar Checker" "Seed blog post has expected H1"
 
           echo "── Backend reachability ─────────────────────────────────"
-          # Auth endpoint should reject invalid token with 401, NOT 500. A 500
-          # here is the smoking gun for issues like the dodo_customer_id bug.
-          status=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 30 \
-            -X POST "https://www.prooftamil.com/auth/supabase-token" \
-            -H "Content-Type: application/json" \
-            -d '{"access_token":"synthetic-monitor-invalid"}' || echo "000")
+          # Auth endpoint should reject invalid token with 401 (or 503 during
+          # Cloud Run cold start). A 500 here is the smoking gun for issues
+          # like the dodo_customer_id-missing-column bug.
+          probe_auth() {
+            curl -sS -o /dev/null -w "%{http_code}" --max-time 30 \
+              -X POST "https://www.prooftamil.com/auth/supabase-token" \
+              -H "Content-Type: application/json" \
+              -d '{"access_token":"synthetic-monitor-invalid"}' || echo "000"
+          }
+          status=$(probe_auth)
+          # Retry once on transient cold-start codes
+          case "$status" in 502|503|504|000) sleep 6; status=$(probe_auth) ;; esac
           if [ "$status" = "401" ] || [ "$status" = "503" ]; then
             ok "[$status] Auth endpoint rejects invalid token cleanly"
           else
