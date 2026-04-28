@@ -46,20 +46,32 @@ function getBackendApiUrl() {
 }
 const BACKEND_URL = getBackendApiUrl(); // fallback — handlers use req._backendUrl
 
-// Retry GET on backend 503 "starting" (Cloud Run cold start). Max 3 attempts, 2.5s apart.
-async function getWithColdStartRetry(url, options = {}, maxRetries = 3) {
-  const delayMs = 2500;
+// Retry GET on backend 503 (Cloud Run cold start) or 502 (instance restarting).
+//
+// Previous version only retried when the response body was JSON containing
+// `{status: "starting"}` — but Cloud Run's native cold-start 503 returns a
+// ~108-byte HTML/text page with no JSON, so the retry never fired in
+// practice. Now we retry on ANY 5xx that might be transient (502/503/504).
+//
+// Backoff is exponential: 2s → 4s → 8s. Total worst case ≈ 14s + 3 request
+// timeouts. Cloud Run cold starts of this Go binary land in 5–15s, so 4
+// attempts is enough to wait through one cold start.
+async function getWithColdStartRetry(url, options = {}, maxRetries = 4) {
+  const TRANSIENT_STATUSES = new Set([502, 503, 504]);
+  let lastRes = null;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const res = await axiosWithPool.get(url, { ...options, validateStatus: () => true });
-    if (res.status !== 503) return res;
-    const body = res.data || {};
-    if (body.status !== 'starting' && body.status !== 'Starting') return res;
+    lastRes = res;
+    if (!TRANSIENT_STATUSES.has(res.status)) return res;
     if (attempt < maxRetries) {
-      if (process.env.NODE_ENV !== 'test') console.log(`[BLOG] Backend 503 (starting), retry ${attempt}/${maxRetries} in ${delayMs}ms`);
+      const delayMs = 2000 * Math.pow(2, attempt - 1); // 2s, 4s, 8s
+      if (process.env.NODE_ENV !== 'test') {
+        console.log(`[backend-retry] ${res.status} on ${url} — retry ${attempt}/${maxRetries - 1} in ${delayMs}ms`);
+      }
       await new Promise((r) => setTimeout(r, delayMs));
     }
   }
-  return axiosWithPool.get(url, { ...options, validateStatus: () => true });
+  return lastRes;
 }
 
 // Demo banner should only show in development / explicit demo deployments.
