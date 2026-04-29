@@ -1,33 +1,34 @@
-<!DOCTYPE html>
-<html lang="en" xml:lang="en" itemscope itemtype="https://schema.org/WebSite">
-<head>
-  <% 
+<%
   const baseUrl = 'https://www.prooftamil.com';
-  %>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta itemprop="name" content="ProofTamil - prooftamil.com">
-  <meta itemprop="url" content="<%= typeof seo !== 'undefined' && seo.canonical ? seo.canonical : baseUrl + '/' %>">
-  
-  <%
-  const defaultKeywords = 'prooftamil, prooftamil.com, tamil proofreading tool, tamil proofreader online, tamil grammar checker, tamil grammar corrector, tamil spell checker, tamil spell check online, tamil writing assistant, tamil writing correction tool, tamil writing improvement tool, tamil grammar correction online, tamil grammar error checker, tamil AI grammar checker, tamil spelling correction tool, tamil spelling corrector online, tamil grammar and spelling checker, tamil AI writing tool, tamil text correction tool, tamil grammar fix tool, tamil grammar rewrite tool, tamil sentence correction tool, tamil content writing correction, tamil article proofreading tool, tamil blog writing checker, correct tamil grammar, fix tamil spelling, fix tamil grammar mistakes, check tamil grammar, check tamil spelling, improve tamil writing online, tamil grammar check free, tamil proofreading free, tamil grammar correction free tool';
-  
   const seoTitle = typeof seo !== 'undefined' && seo.title ? seo.title : title;
-  const seoDescription = typeof seo !== 'undefined' && seo.description ? seo.description : 'Free Tamil proofreading tool with AI-powered grammar checker, spell check, and writing correction. Check Tamil grammar online free, fix spelling errors, and improve Tamil writing instantly.';
-  const seoKeywords = typeof seo !== 'undefined' && seo.keywords ? seo.keywords + ', ' + defaultKeywords : defaultKeywords;
+  const seoDescription = typeof seo !== 'undefined' && seo.description ? seo.description : 'Free Tamil grammar checker online — fix Tamil spelling, grammar, and verb conjugation errors in 2 seconds. Includes Tamil OCR and Tanglish typing.';
+  const seoKeywords = typeof seo !== 'undefined' && seo.keywords ? seo.keywords : '';
   const canonicalUrl = typeof seo !== 'undefined' && seo.canonical ? seo.canonical : baseUrl + '/';
   const ogTitle = typeof seo !== 'undefined' && seo.ogTitle ? seo.ogTitle : seoTitle;
   const ogDescription = typeof seo !== 'undefined' && seo.ogDescription ? seo.ogDescription : seoDescription;
   const noIndex = typeof seo !== 'undefined' && seo.noIndex ? true : false;
   const pageType = typeof seo !== 'undefined' && seo.pageType ? seo.pageType : 'website';
   const ogType = pageType === 'blogPost' ? 'article' : 'website';
-  %>
+  const htmlLang = typeof seo !== 'undefined' && seo.htmlLang ? seo.htmlLang : 'en';
+  const ogLocale = typeof seo !== 'undefined' && seo.ogLocale ? seo.ogLocale : 'ta_IN';
+  const ogLocaleAlternate = pageType === 'blogPost' ? null : (ogLocale === 'ta_IN' ? 'en_US' : 'ta_IN');
+  const hreflangSelf = typeof seo !== 'undefined' && seo.hreflang ? seo.hreflang : null;
+%>
+<!DOCTYPE html>
+<html lang="<%= htmlLang %>" xml:lang="<%= htmlLang %>" itemscope itemtype="https://schema.org/WebSite">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta itemprop="name" content="ProofTamil - prooftamil.com">
+  <meta itemprop="url" content="<%= canonicalUrl %>">
   
   <!-- Primary Meta Tags - Optimized for Tamil Grammar Checker & Proofreading Keywords -->
   <title><%= seoTitle %></title>
   <meta name="title" content="<%= seoTitle %>">
   <meta name="description" content="<%= seoDescription %>">
+  <% if (seoKeywords) { %>
   <meta name="keywords" content="<%= seoKeywords %>">
+  <% } %>
   <meta name="author" content="ProofTamil">
   <% if (noIndex) { %>
   <meta name="robots" content="noindex, nofollow">
@@ -43,8 +44,6 @@
   <meta name="geo.placename" content="Tamil Nadu, India">
   <meta name="geo.position" content="11.1271;78.6569">
   <meta name="ICBM" content="11.1271, 78.6569">
-  <!-- Tamil-script keywords for Tamil-language searches on Google India -->
-  <meta name="keywords" lang="ta" content="தமிழ் இலக்கண சரிபார்ப்பு, தமிழ் வரிசை சரிபார்ப்பு, தமிழ் எழுத்து திருத்தி, தமிழ் ஆய்வு கருவி, தமிழ் தட்டச்சு, இலவச தமிழ் திருத்தி">
   <meta name="theme-color" content="#1A2B68">
   <!-- Global injection of Google Client ID for browser usage (must be xxx.apps.googleusercontent.com, never a domain) -->
   <script>
@@ -76,8 +75,10 @@
   <meta property="og:title" content="<%= ogTitle %>">
   <meta property="og:description" content="<%= ogDescription %>">
   <meta property="og:site_name" content="ProofTamil - Tamil Grammar Checker & Proofreading Tool">
-  <meta property="og:locale" content="ta_IN">
-  <meta property="og:locale:alternate" content="en_US">
+  <meta property="og:locale" content="<%= ogLocale %>">
+  <% if (ogLocaleAlternate) { %>
+  <meta property="og:locale:alternate" content="<%= ogLocaleAlternate %>">
+  <% } %>
   <meta property="og:image" content="<%= baseUrl %>/images/favicon-512x512.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="512">
@@ -107,6 +108,9 @@
   
   <!-- x-default hreflang: signals canonical URL to search engines -->
   <link rel="alternate" hreflang="x-default" href="<%= canonicalUrl %>">
+  <% if (hreflangSelf) { %>
+  <link rel="alternate" hreflang="<%= hreflangSelf %>" href="<%= canonicalUrl %>">
+  <% } %>
   
   <!-- Favicon - Multiple formats for best compatibility -->
   <link rel="icon" type="image/svg+xml" href="/images/favicon.svg">

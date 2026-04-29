@@ -296,21 +296,108 @@ ${items}
   }
 });
 
+// Build the full SEO/JSON-LD object for a single blog post. Shared by the
+// file-seed and backend-fetched render paths so both produce identical
+// titles, meta descriptions, OG tags, and BlogPosting schema.
+function buildPostSeo(post, slug, seoBase) {
+  const canonical = `https://www.prooftamil.com/blog/${post.slug || slug}`;
+  const desc =
+    (post.meta_description && String(post.meta_description).trim()) ||
+    (post.excerpt && String(post.excerpt).trim()) ||
+    String(post.content_text || '').trim().slice(0, 160);
+  const keywords = [post.keywords, seoBase.keywords].filter(Boolean).join(', ');
+  const publishedIso = post.published_at ? new Date(post.published_at).toISOString() : null;
+  const modifiedIso = post.updated_at ? new Date(post.updated_at).toISOString() : (post.created_at ? new Date(post.created_at).toISOString() : null);
+  const isTamil = (post.language || 'tamil') === 'tamil';
+  const langCode = isTamil ? 'ta' : 'en';
+  const ogLocale = isTamil ? 'ta_IN' : 'en_US';
+
+  const jsonLdObj = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "@id": canonical + "#article",
+    "headline": post.title,
+    "description": desc,
+    "inLanguage": langCode,
+    "mainEntityOfPage": { "@type": "WebPage", "@id": canonical },
+    "url": canonical,
+    "datePublished": publishedIso || undefined,
+    "dateModified": modifiedIso || undefined,
+    "image": {
+      "@type": "ImageObject",
+      "url": "https://www.prooftamil.com/images/favicon-512x512.png",
+      "width": 512,
+      "height": 512
+    },
+    "author": {
+      "@type": "Organization",
+      "name": "ProofTamil",
+      "url": "https://www.prooftamil.com"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "ProofTamil",
+      "url": "https://www.prooftamil.com",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.prooftamil.com/images/favicon-512x512.png",
+        "width": 512,
+        "height": 512
+      }
+    },
+    "isPartOf": {
+      "@type": "Blog",
+      "@id": "https://www.prooftamil.com/blog#blog",
+      "name": "ProofTamil Blog",
+      "publisher": { "@type": "Organization", "name": "ProofTamil" }
+    }
+  };
+
+  return {
+    ...seoBase,
+    title: `${post.title} | ProofTamil`,
+    ogTitle: post.title,
+    description: desc,
+    ogDescription: desc,
+    keywords,
+    canonical,
+    pageType: 'blogPost',
+    htmlLang: langCode,
+    ogLocale,
+    hreflang: langCode,
+    article: {
+      publishedTime: publishedIso,
+      modifiedTime: modifiedIso,
+      section: 'Blog',
+    },
+    jsonLd: JSON.stringify(jsonLdObj),
+  };
+}
+
 router.get('/blog/:slug', async (req, res) => {
   const user = getCurrentUser(req);
   const seoBase = getSeoData('blogPost') || getSeoData('home');
   const slug = String(req.params.slug || '').trim();
 
   // File-based seeds take precedence on slug collision (hand-curated SEO content).
+  // Short-circuit so file posts never depend on the backend being reachable.
   const filePost = fileBlog.getPostBySlug(slug);
+  if (filePost) {
+    return res.render('pages/blog-post', {
+      title: `${filePost.title} | ProofTamil`,
+      seo: buildPostSeo(filePost, slug, seoBase),
+      user,
+      post: filePost,
+      error: null,
+    });
+  }
 
   try {
-    const backendRes = filePost
-      ? { status: 404, data: null }
-      : await getWithColdStartRetry(`${req._backendUrl}/blog/posts/${encodeURIComponent(slug)}`, {
-          timeout: 10000,
-        });
-    if (backendRes.status === 404 && !filePost) {
+    const backendRes = await getWithColdStartRetry(
+      `${req._backendUrl}/blog/posts/${encodeURIComponent(slug)}`,
+      { timeout: 10000 }
+    );
+    if (backendRes.status === 404) {
       const seoErr = getSeoData('error');
       return res.status(404).render('pages/error', {
         title: 'Not Found',
@@ -323,13 +410,13 @@ router.get('/blog/:slug', async (req, res) => {
       const msg = backendRes.data?.error || `HTTP ${backendRes.status}`;
       return res.render('pages/blog-post', {
         title: 'Blog | ProofTamil',
-        seo,
+        seo: seoBase,
         user,
         post: null,
         error: msg,
       });
     }
-    const post = filePost || backendRes.data?.post;
+    const post = backendRes.data?.post;
     if (!post) {
       return res.render('pages/blog-post', {
         title: 'Blog | ProofTamil',
@@ -339,98 +426,19 @@ router.get('/blog/:slug', async (req, res) => {
         error: 'Invalid backend response',
       });
     }
-    
-    // Debug: log what content we received from backend
-    console.log('[BLOG-POST] Fetched post:', post.slug, 
+
+    console.log('[BLOG-POST] Fetched post:', post.slug,
       'content_html length:', post.content_html?.length || 0,
       'content_text length:', post.content_text?.length || 0);
 
-    const canonical = `https://www.prooftamil.com/blog/${post.slug || slug}`;
-    const desc =
-      (post.meta_description && String(post.meta_description).trim()) ||
-      (post.excerpt && String(post.excerpt).trim()) ||
-      String(post.content_text || '').trim().slice(0, 160);
-    const keywords = [post.keywords, seoBase.keywords].filter(Boolean).join(', ');
-    const publishedIso = post.published_at ? new Date(post.published_at).toISOString() : null;
-    const modifiedIso = post.updated_at ? new Date(post.updated_at).toISOString() : (post.created_at ? new Date(post.created_at).toISOString() : null);
-
-    const jsonLdObj = {
-      "@context": "https://schema.org",
-      "@type": "BlogPosting",
-      "@id": canonical + "#article",
-      "headline": post.title,
-      "description": desc,
-      "inLanguage": (post.language || "tamil") === "tamil" ? "ta" : "en",
-      "mainEntityOfPage": { "@type": "WebPage", "@id": canonical },
-      "url": canonical,
-      "datePublished": publishedIso || undefined,
-      "dateModified": modifiedIso || undefined,
-      "image": {
-        "@type": "ImageObject",
-        "url": "https://www.prooftamil.com/images/favicon-512x512.png",
-        "width": 512,
-        "height": 512
-      },
-      "author": {
-        "@type": "Organization",
-        "name": "ProofTamil",
-        "url": "https://www.prooftamil.com"
-      },
-      "publisher": {
-        "@type": "Organization",
-        "name": "ProofTamil",
-        "url": "https://www.prooftamil.com",
-        "logo": {
-          "@type": "ImageObject",
-          "url": "https://www.prooftamil.com/images/favicon-512x512.png",
-          "width": 512,
-          "height": 512
-        }
-      },
-      "isPartOf": {
-        "@type": "Blog",
-        "@id": "https://www.prooftamil.com/blog#blog",
-        "name": "ProofTamil Blog",
-        "publisher": { "@type": "Organization", "name": "ProofTamil" }
-      }
-    };
-
-    const seo = {
-      ...seoBase,
-      title: `${post.title} | ProofTamil`,
-      ogTitle: post.title,
-      description: desc,
-      ogDescription: desc,
-      keywords,
-      canonical,
-      pageType: 'blogPost',
-      article: {
-        publishedTime: publishedIso,
-        modifiedTime: modifiedIso,
-        section: 'Blog',
-      },
-      jsonLd: JSON.stringify(jsonLdObj),
-    };
-
     return res.render('pages/blog-post', {
       title: `${post.title} | ProofTamil`,
-      seo,
+      seo: buildPostSeo(post, slug, seoBase),
       user,
       post,
       error: null,
     });
   } catch (e) {
-    if (filePost) {
-      // Backend errored but we have a file-based post — render it.
-      const canonical = `https://www.prooftamil.com/blog/${filePost.slug}`;
-      return res.render('pages/blog-post', {
-        title: `${filePost.title} | ProofTamil`,
-        seo: { ...seoBase, title: `${filePost.title} | ProofTamil`, canonical, pageType: 'blogPost' },
-        user,
-        post: filePost,
-        error: null,
-      });
-    }
     return res.render('pages/blog-post', {
       title: 'Blog | ProofTamil',
       seo: seoBase,
