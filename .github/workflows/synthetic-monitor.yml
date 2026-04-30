@@ -73,8 +73,18 @@ jobs:
             local url="$1" needle="$2" name="$3"
             local body
             body=$(retry_curl_body "$url")
-            if echo "$body" | grep -q "$needle"; then
+            # Bash glob match avoids the SIGPIPE noise from `grep -q` exiting
+            # early on large bodies, and lets us retry cleanly on a Cloud Run
+            # cold-start race where the first response was a partial 200 that
+            # didn't trigger retry_curl_body's 5xx-only retry path.
+            if [[ "$body" == *"$needle"* ]]; then
               ok "$name (contains \"$needle\") — $url"
+              return
+            fi
+            sleep 6
+            body=$(retry_curl_body "$url")
+            if [[ "$body" == *"$needle"* ]]; then
+              ok "$name (contains \"$needle\" — after retry) — $url"
             else
               err "$name (MISSING \"$needle\") — $url"
             fi
