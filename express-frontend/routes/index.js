@@ -100,10 +100,15 @@ router.get('/', (req, res) => {
 
   const user = getCurrentUser(req);
   const seo = getSeoData('home');
+  // File posts only — synchronous, no backend dependency, keeps homepage fast
+  // and reliable. Authority links from the homepage to these posts help them
+  // get crawled and indexed.
+  const latestPosts = fileBlog.getAllPosts().slice(0, 6);
   res.render('pages/home', {
     title: seo.title,
     seo: seo,
-    user: user
+    user: user,
+    latestPosts,
   });
 });
 
@@ -947,15 +952,37 @@ router.get('/sitemap.xml', (req, res) => {
     return sendSitemap();
   }
 
-  // Fetch up to 200 blog posts; keep timeout low so sitemap stays responsive. Retry on 503 (cold start).
-  getWithColdStartRetry(`${req._backendUrl}/blog/posts`, {
-    params: { page: 1, limit: 200 },
-    timeout: 2500,
-  })
-    .then((r) => {
+  // The Go backend mishandles large `limit` values: limit=200 returns only ~10
+  // posts, while limit=12 returns 12. Until that's fixed server-side, paginate
+  // in pages of 12 and stop on the first short/empty page.
+  // Backend cold start can add ~6s, so 8s timeout per page absorbs one retry.
+  const PAGE_SIZE = 12;
+  const MAX_PAGES = 20; // 240 posts max — safety bound, not expected ceiling
+  const fetchAll = async () => {
+    const out = [];
+    for (let p = 1; p <= MAX_PAGES; p++) {
+      const r = await getWithColdStartRetry(`${req._backendUrl}/blog/posts`, {
+        params: { page: p, limit: PAGE_SIZE },
+        timeout: 8000,
+      });
+      if (r.status < 200 || r.status >= 300) break;
       const posts = r.data?.posts || [];
+      if (posts.length === 0) break;
+      out.push(...posts);
+      if (posts.length < PAGE_SIZE) break;
+    }
+    return out;
+  };
+
+  fetchAll()
+    .then((posts) => {
       const blogUrls = posts
-        .filter((p) => p && (p.slug || p.Slug))
+        .filter((p) => {
+          const slug = String(p?.slug || p?.Slug || '').trim();
+          // Drop test/placeholder posts (slugs like post-2, post-3) that
+          // shouldn't be indexed.
+          return slug && !/^post-\d+$/.test(slug);
+        })
         .map((p) => {
           const slug = String(p.slug || p.Slug || '').trim();
           const updated = String(
@@ -969,11 +996,20 @@ router.get('/sitemap.xml', (req, res) => {
             priority: '0.65',
           };
         });
-      global.__sitemapBlogCache = { ts: Date.now(), urls: blogUrls.slice(0, 500) };
-      addBlogUrls(global.__sitemapBlogCache.urls.filter((u) => !fileSlugs.has(u.loc)));
+      // Update cache only on a non-empty fetch — preserves prior good data on
+      // partial backend failure.
+      if (blogUrls.length) {
+        global.__sitemapBlogCache = { ts: Date.now(), urls: blogUrls.slice(0, 500) };
+      }
+      const toAdd = blogUrls.length ? blogUrls : cached;
+      addBlogUrls(toAdd.filter((u) => !fileSlugs.has(u.loc)));
       return sendSitemap();
     })
-    .catch(() => sendSitemap()); // best-effort: serve static pages on error
+    .catch(() => {
+      // Backend unreachable — serve stale cache rather than dropping all posts.
+      if (cached.length) addBlogUrls(cached.filter((u) => !fileSlugs.has(u.loc)));
+      return sendSitemap();
+    });
 });
 
 // ── AI-SEO machine-readable files ────────────────────────────────────────────

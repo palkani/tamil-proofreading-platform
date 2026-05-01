@@ -1285,6 +1285,46 @@
     </div>
   </section>
 
+  <% if (typeof latestPosts !== 'undefined' && latestPosts && latestPosts.length) { %>
+  <!-- Latest from the Blog (authority flow → indexable posts) -->
+  <section class="py-20 sm:py-24 bg-white">
+    <div class="max-w-6xl mx-auto px-6 sm:px-8">
+      <div class="text-center mb-12">
+        <span class="section-label">From the Blog</span>
+        <h2 style="font-size:clamp(1.75rem,4vw,2.5rem);font-weight:800;color:#111827;line-height:1.2;letter-spacing:-0.02em;margin:0.75rem 0 1rem;">Tamil writing guides &amp; tutorials</h2>
+        <p style="color:#4B5563;font-size:1.0625rem;line-height:1.7;max-width:36rem;margin:0 auto;">Practical guides on Tamil grammar, OCR, and writing — from beginner basics to deep dives.</p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <% latestPosts.forEach(function(post) { %>
+        <a href="/blog/<%= post.slug %>" class="block p-6 rounded-2xl border border-gray-200 bg-white hover:border-indigo-300 hover:shadow-lg transition-all duration-200" style="text-decoration:none;">
+          <div style="font-size:0.75rem;font-weight:600;color:#6366F1;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem;">
+            <%= post.language === 'tamil' ? 'தமிழில்' : 'In English' %>
+          </div>
+          <h3 style="font-size:1.125rem;font-weight:700;color:#111827;line-height:1.4;margin:0 0 0.75rem;">
+            <%= post.title %>
+          </h3>
+          <% if (post.excerpt) { %>
+          <p style="color:#4B5563;font-size:0.9375rem;line-height:1.6;margin:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">
+            <%= post.excerpt %>
+          </p>
+          <% } %>
+          <div style="margin-top:1rem;display:inline-flex;align-items:center;gap:0.375rem;color:#4F46E5;font-size:0.875rem;font-weight:600;">
+            Read article
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+          </div>
+        </a>
+        <% }); %>
+      </div>
+      <div class="text-center mt-12">
+        <a href="/blog" style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.75rem 1.75rem;border-radius:0.875rem;font-weight:600;font-size:0.9375rem;color:#4F46E5;border:1.5px solid #C7D2FE;background:#FFFFFF;transition:all 0.2s;" onmouseover="this.style.background='#EEF2FF'" onmouseout="this.style.background='#FFFFFF'">
+          View all blog posts
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+  </section>
+  <% } %>
+
   <!-- Final CTA Section -->
   <section class="relative overflow-hidden" style="background:linear-gradient(135deg,#1E1B4B 0%,#312E81 40%,#4F46E5 100%);min-height:520px;display:flex;align-items:center;">
     <!-- Decorative orbs -->
