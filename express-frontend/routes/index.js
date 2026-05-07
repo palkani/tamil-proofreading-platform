@@ -590,6 +590,8 @@ router.get('/auth/callback', (req, res) => {
     title: 'Signing you in',
     redirectTo,
     supabaseUsed: !!(SUPABASE_URL && SUPABASE_ANON_KEY),
+    // Auth handoff page must never be indexed — leaks no content, just a transient redirect.
+    seo: { title: 'Signing you in', description: 'Authentication callback', noIndex: true },
   });
 });
 
@@ -676,7 +678,7 @@ router.get('/dashboard', (req, res) => {
 });
 
 // Account page - client-side auth only
-router.get('/account', (req, res) => {
+router.get('/account', requireAuth, (req, res) => {
   const seo = getSeoData('account');
   res.render('pages/account', {
     title: seo.title,
