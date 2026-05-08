@@ -45,8 +45,15 @@ function runQualityGate({
   }
 
   // ── Word count ─────────────────────────────────────────────────────
-  if (wordCount < minWords) {
-    failures.push(`Word count ${wordCount} < required ${minWords}.`);
+  // 10% slack matches the wrapping AI service's "MUST write EXACTLY N words
+  // (±10% tolerance)" — Gemini routinely drifts a bit short of target, and
+  // a post that's 1481 words instead of 1500 is functionally identical for
+  // SEO. Fail only on substantively-short content.
+  const hardMin = Math.floor(minWords * 0.9);
+  if (wordCount < hardMin) {
+    failures.push(`Word count ${wordCount} < required ${hardMin} (target ${minWords}, 10% slack).`);
+  } else if (wordCount < minWords) {
+    warnings.push(`Word count ${wordCount} slightly below target ${minWords} (within 10% slack).`);
   } else if (wordCount > minWords * 3) {
     warnings.push(`Word count ${wordCount} is unusually high; consider splitting into multiple posts.`);
   }
