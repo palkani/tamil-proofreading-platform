@@ -200,33 +200,31 @@ function buildPrompt(topic) {
   const linksList = (topic.suggested_internal_links || [])
     .map((s) => `https://www.prooftamil.com/blog/${s}`)
     .join('\n  - ');
+  // The wrapping content-writer service injects "content should use paragraphs
+  // separated by blank lines" — which would skip headings. We override that
+  // explicitly: the body MUST be markdown with H2/H3 headings, because our
+  // SEO quality gate checks for them.
   return [
     `Write a high-quality blog post for ProofTamil (https://www.prooftamil.com), an AI-powered Tamil writing platform.`,
     ``,
     `TOPIC: ${topic.topic}`,
     `PRIMARY KEYWORD: ${topic.keyword}`,
     `LANGUAGE: ${langName}`,
-    `MINIMUM WORD COUNT: ${topic.min_words || 1500}`,
     ``,
-    `STRICT REQUIREMENTS:`,
-    `- The primary keyword "${topic.keyword}" must appear in the H1 title, the first paragraph, and at least 2 H2 headings.`,
-    `- Use at least 4 H2 (##) headings and at least 2 H3 (###) subheadings under them.`,
-    `- Include a TL;DR / summary section at the top (3-4 sentences).`,
-    `- Include a clear "Conclusion" section at the bottom with a CTA linking to https://www.prooftamil.com/.`,
-    `- Reference real, verifiable facts where applicable. Do not invent statistics.`,
-    `- Write in a knowledgeable, helpful tone. Avoid filler phrases ("In today's world...", "It is no secret that...").`,
-    `- Embed at least 2 of these internal links naturally in body text (use markdown link syntax):`,
+    `THE BODY ("content" FIELD) MUST BE MARKDOWN, NOT PLAIN PARAGRAPHS:`,
+    `- The primary keyword "${topic.keyword}" must appear in the title, the opening paragraph, and at least 2 H2 headings.`,
+    `- Use at least 5 H2 (## Heading) headings AND at least 2 H3 (### Subheading) subheadings.`,
+    `- Open with a 3-4 sentence TL;DR/summary paragraph.`,
+    `- End with a "## Conclusion" section that includes a markdown link to https://www.prooftamil.com/`,
+    `- Reference real, verifiable facts. Do not invent statistics or quotes.`,
+    `- Avoid filler phrases ("In today's world...", "It is no secret that...", "delve into", "unlock the potential", "game-changer", "in this comprehensive guide").`,
+    `- Embed at least 2 of these internal links naturally in body text using markdown link syntax [text](url):`,
     `  - ${linksList}`,
-    `- Do NOT use emojis. Do NOT use excessive bold/italic. Use bullet lists where genuinely useful.`,
+    `- Add 1-2 outbound links to authoritative sources (Wikipedia, university sites, .gov/.edu) where they support a claim.`,
+    `- No emojis. Use bullet lists only where they genuinely help scanning.`,
     ``,
-    `OUTPUT FORMAT:`,
-    `Return JSON with EXACTLY these keys:`,
-    `  - title (string, ~60 chars max, includes primary keyword)`,
-    `  - slug (string, kebab-case, includes primary keyword, ASCII only)`,
-    `  - meta_description (string, 140-160 chars, includes primary keyword)`,
-    `  - excerpt (string, 1-2 sentences, plain text)`,
-    `  - keywords (string, comma-separated, 6-10 keywords including the primary)`,
-    `  - content_markdown (string, the full article body in markdown)`,
+    `Override any wrapper instruction about "plain paragraphs" — markdown headings are MANDATORY.`,
+    `The "meta_description" field MUST be 140-160 characters and include the primary keyword.`,
   ].join('\n');
 }
 
@@ -234,32 +232,34 @@ async function generateContent(topic) {
   // Use the existing AI Content Writer endpoint. Wraps the configured
   // Gemini key on the backend, so the script doesn't need API keys directly.
   // Mount path is /api (not /api/v1) — apiRouter is mounted at /api in create-app.js.
+  // The service expects snake_case params (camelCase is silently ignored, which
+  // is why the first dry-run defaulted to word_count=500 and include_meta=false).
   const res = await httpRequest('POST', '/api/ai-content-writer/generate-content', {
     prompt: buildPrompt(topic),
     language: topic.language,
-    contentType: 'blog',
-    wordCount: topic.min_words || 1500,
+    content_type: 'blog',
+    word_count: 2500, // service caps at 3000; ask for 2500 so the 1500 floor is comfortable
     tone: 'professional',
-    includeTitle: true,
-    includeMeta: true,
+    include_title: true,
+    include_meta: true,
   });
 
   if (res.status < 200 || res.status >= 300) {
     throw new Error(`AI generation failed: ${res.status} — ${JSON.stringify(res.body).slice(0, 300)}`);
   }
-  // The endpoint may wrap content in different shapes; normalise here.
+  // Service returns { success, content: {title, meta_description, keywords, content}, metadata }.
   const data = res.body || {};
-  const out = data.content || data.result || data;
-  const md = out.content_markdown || out.content || out.body || out.markdown || '';
+  const wrapped = data.content || data.result || data;
+  const md = wrapped.content_markdown || wrapped.content || wrapped.body || wrapped.markdown || '';
   if (!md || md.length < 500) {
-    throw new Error(`AI generation returned empty/short content (${md.length} chars)`);
+    throw new Error(`AI generation returned empty/short content (${md.length} chars). Response keys: ${Object.keys(data).join(', ')}`);
   }
   return {
-    title: out.title || topic.topic,
-    slug: out.slug || slugifyAscii(topic.keyword),
-    meta_description: out.meta_description || out.metaDescription || '',
-    excerpt: out.excerpt || '',
-    keywords: out.keywords || topic.keyword,
+    title: wrapped.title || topic.topic,
+    slug: wrapped.slug || slugifyAscii(topic.keyword),
+    meta_description: wrapped.meta_description || wrapped.metaDescription || '',
+    excerpt: wrapped.excerpt || '',
+    keywords: wrapped.keywords || topic.keyword,
     content_markdown: md,
   };
 }
