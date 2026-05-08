@@ -81,6 +81,49 @@ The gate warns (draft still posted, but the report flags it) on:
 
 Refine `lib/seo-quality-gate.js` if you want different thresholds.
 
+## Re-generating a poor-quality post
+
+If an existing post is weak (low H2 count, short meta, corrupted Tamil, etc.) and you want the generator to replace it:
+
+### 1. Identify which post(s) to replace
+
+Quick audit script: paste a slug into the search at the top of GSC's **URL Inspection** tool, or run this from the repo root to scan every backend post:
+
+```bash
+python3 -c "
+import re, urllib.request
+slugs = ['tamil-uraigalil-pothuvaana-pizhaigal']  # your list
+for slug in slugs:
+    html = urllib.request.urlopen(f'https://www.prooftamil.com/blog/{slug}', timeout=15).read().decode('utf-8','replace')
+    h2 = len(re.findall(r'<h2[ >]', html))
+    print(f'{slug}: H2={h2}')
+"
+```
+
+Posts with `H2 < 4` are candidates.
+
+### 2. Delete the existing post
+- **Via admin UI:** go to `/my-blogs`, find the post, click delete.
+- **Via API:**
+  ```bash
+  curl -X DELETE \
+    -H "Cookie: access_token=$ADMIN_TOKEN" \
+    https://www.prooftamil.com/api/blog/posts/<id>
+  ```
+  (get `<id>` from the post listing or admin UI)
+
+This frees the slug. Without deleting first, the regenerated post will hit a unique-slug constraint at the backend and fail.
+
+### 3. Run the generator
+The next `queued` topic in `data/blog-queue.yaml` will be picked up. If you want to regenerate a SPECIFIC topic, make sure that topic is the next `queued` entry (move it up by editing the file, or use `--topic-index N` to force-pick).
+
+```bash
+ADMIN_TOKEN='<jwt>' node express-frontend/scripts/generate-scheduled-blog.js
+```
+
+### 4. Review the new draft + publish
+Open `/my-blogs`, find the new draft, edit anything that needs polish, click Publish. The fresh post inherits all the SEO improvements (5+ H2s, ≥2 internal links, 140-160 char meta description, etc.) that current Stage 1 enforces.
+
 ## Stage 2 (next PR)
 
 A GitHub Action will run this script on a Mon/Wed/Fri 6am IST cron and create a GitHub issue with the review link, so you don't have to remember to run it manually.

@@ -235,5 +235,68 @@ queue:
       - common-tamil-grammar-mistakes
     status: queued
 
+  # ── Re-generation queue ──────────────────────────────────────────────────
+  # The 5 posts below were created by an earlier version of the AI prompt
+  # that didn't enforce markdown headings; they ended up with only 1 H2 each
+  # (vs the 5+ that current Stage 1 produces). Workflow:
+  #   1. Delete the existing post via admin UI at /my-blogs (or DELETE
+  #      /api/blog/posts/<id>), which frees the slug.
+  #   2. Run the generator: it picks the next queued topic in this file.
+  #   3. The new post lands as a draft; review at /my-blogs and publish.
+  # These topics intentionally repeat existing slugs so the regenerated post
+  # keeps the same canonical URL and any backlinks Google may have already
+  # crawled. Remove an entry from here once its corresponding old post has
+  # been deleted + regenerated.
+
+  - topic: "Common Errors in Tamil Texts and How to Correct Them — A Practical Guide"
+    keyword: "tamil text common errors"
+    language: tamil
+    tier: 3
+    min_words: 1500
+    suggested_internal_links:
+      - common-tamil-grammar-mistakes
+      - tamil-grammar-checker-online-free
+    status: queued
+
+  - topic: "Tamil Handwriting to Text — Complete OCR Guide for 2026"
+    keyword: "tamil handwriting ocr"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - handwritten-tamil-to-text
+      - tamil-ocr-online-free
+    status: queued
+
+  - topic: "Tanglish to Tamil — Phonetic Typing Guide for Bloggers"
+    keyword: "tanglish to tamil typing"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tanglish-to-tamil-typing
+      - tamil-grammar-checker-online-free
+    status: queued
+
+  - topic: "Tamil Grammar Basics — Foundation Rules Every Writer Should Know"
+    keyword: "tamil grammar basics"
+    language: tamil
+    tier: 2
+    min_words: 1500
+    suggested_internal_links:
+      - tholkappiyam-introduction
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  - topic: "Tamil Sandhi Rules Explained — When and How Letters Combine"
+    keyword: "tamil sandhi rules"
+    language: tamil
+    tier: 2
+    min_words: 1500
+    suggested_internal_links:
+      - tholkappiyam-introduction
+      - common-tamil-grammar-mistakes
+    status: queued
+
 # ── Generated topics (script appends here, do not hand-edit) ────────────
 generated: []
