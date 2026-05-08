@@ -233,7 +233,8 @@ function buildPrompt(topic) {
 async function generateContent(topic) {
   // Use the existing AI Content Writer endpoint. Wraps the configured
   // Gemini key on the backend, so the script doesn't need API keys directly.
-  const res = await httpRequest('POST', '/api/v1/ai-content-writer/generate-content', {
+  // Mount path is /api (not /api/v1) — apiRouter is mounted at /api in create-app.js.
+  const res = await httpRequest('POST', '/api/ai-content-writer/generate-content', {
     prompt: buildPrompt(topic),
     language: topic.language,
     contentType: 'blog',
