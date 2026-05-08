@@ -235,15 +235,45 @@ function buildPrompt(topic) {
     `- Open with a 3-4 sentence TL;DR/summary paragraph.`,
     `- End with a "## Conclusion" section that includes a markdown link to https://www.prooftamil.com/`,
     `- Reference real, verifiable facts. Do not invent statistics or quotes.`,
-    `- Avoid filler phrases ("In today's world...", "It is no secret that...", "delve into", "unlock the potential", "game-changer", "in this comprehensive guide").`,
     `- Embed at least 2 of these internal links naturally in body text using markdown link syntax [text](url):`,
     `  - ${linksList}`,
     `- Add 1-2 outbound links to authoritative sources (Wikipedia, university sites, .gov/.edu) where they support a claim.`,
     `- No emojis. Use bullet lists only where they genuinely help scanning.`,
     ``,
+    `STRICTLY FORBIDDEN PHRASES (do NOT use any of these — they are AI-cliché tells that hurt SEO and reader trust):`,
+    `  - "game-changer" / "game-changing" / "game changer"`,
+    `  - "in today's world" / "in today's fast-paced world" / "in today's digital world"`,
+    `  - "it is no secret that"`,
+    `  - "in this comprehensive guide" / "in this article we will"`,
+    `  - "delve into" / "delve deeper into"`,
+    `  - "unlock the potential" / "unlock the full potential"`,
+    `  - "navigate the complexities"`,
+    `  - "the landscape of X has rapidly evolved"`,
+    `If you instinctively reach for one of these phrases, REWRITE the sentence with a concrete, specific verb instead. Example: "AI is a game-changer for Tamil writers" → "AI cuts Tamil proofreading time from 30 minutes to 30 seconds for most writers".`,
+    ``,
     `Override any wrapper instruction about "plain paragraphs" — markdown headings are MANDATORY.`,
     `The "meta_description" field MUST be 140-160 characters and include the primary keyword.`,
   ].join('\n');
+}
+
+// Last-resort scrubber: if the AI still slips a banned cliché through despite
+// the strict prompt, replace it with a neutral equivalent. Doesn't try to
+// be clever about grammar — the human reviewer will catch any awkwardness
+// during the /my-blogs review step. Only catches the cliches we've actually
+// observed Gemini using; expand as more emerge.
+function scrubClichés(md) {
+  if (!md) return md;
+  return md
+    .replace(/\bgame[- ]chang(ers?|ing)\b/gi, (m) => m.toLowerCase().includes('ing') ? 'transformative' : 'shift')
+    .replace(/\bdelve (deeper )?into\b/gi, 'examine')
+    .replace(/\bunlock(?:ing)? the (?:full )?potential of\b/gi, 'get more out of')
+    .replace(/\bnavigate the complexit(?:y|ies) of\b/gi, 'work through')
+    .replace(/\bin today'?s (?:fast-paced |digital |modern )?world,?\s*/gi, '')
+    .replace(/\bit is no secret that\s*/gi, '')
+    .replace(/\bin this comprehensive guide,?\s*/gi, '')
+    // Capitalise the first letter of any sentence we may have decapitalised by
+    // stripping the leading clause.
+    .replace(/(^|\.\s+)([a-z])/g, (_, sep, c) => sep + c.toUpperCase());
 }
 
 async function generateContent(topic) {
@@ -277,14 +307,23 @@ async function generateContent(topic) {
   // transport regressions.
   assertNoReplacementChars('content_markdown', md);
   assertNoReplacementChars('title', wrapped.title || '');
+
+  // Strip any AI clichés that survived the prompt (Gemini is unreliable about
+  // following negative instructions). Done before the quality gate so the
+  // gate's own cliché check sees the cleaned text.
+  const cleanMd = scrubClichés(md);
+  if (cleanMd !== md) {
+    const removed = (md.match(/game[- ]chang(?:er|ing)|delve (?:deeper )?into|unlock(?:ing)? the (?:full )?potential|navigate the complexit/gi) || []).length;
+    console.log(`✂️  Scrubbed ${removed} AI-cliché phrase(s) from generated content`);
+  }
   assertNoReplacementChars('meta_description', wrapped.meta_description || '');
   return {
     title: wrapped.title || topic.topic,
     slug: wrapped.slug || slugifyAscii(topic.keyword),
-    meta_description: wrapped.meta_description || wrapped.metaDescription || '',
-    excerpt: wrapped.excerpt || '',
+    meta_description: scrubClichés(wrapped.meta_description || wrapped.metaDescription || ''),
+    excerpt: scrubClichés(wrapped.excerpt || ''),
     keywords: wrapped.keywords || topic.keyword,
-    content_markdown: md,
+    content_markdown: cleanMd,
   };
 }
 
