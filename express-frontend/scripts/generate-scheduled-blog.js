@@ -415,6 +415,17 @@ async function main() {
   if (publishRes.status < 200 || publishRes.status >= 300) {
     console.error(`❌ Publish failed: ${publishRes.status}`);
     console.error(JSON.stringify(publishRes.body, null, 2).slice(0, 500));
+    if (publishRes.status === 403) {
+      console.error('');
+      console.error('💡 403 usually means one of:');
+      console.error('   1. ADMIN_TOKEN is expired (JWTs typically last ~1h). Get a fresh one:');
+      console.error('      Open https://www.prooftamil.com/my-blogs in a logged-in browser, then');
+      console.error('      DevTools → Application → Cookies → copy the access_token value.');
+      console.error('   2. Token belongs to a non-admin account. Allowlist: palkani.r@gmail.com,');
+      console.error('      prooftamil@gmail.com, banu.palkani@gmail.com');
+      console.error('   3. Vercel logs show "[BLOG-PUBLISH] Unauthorized publish attempt: <email>"');
+      console.error('      — that\'s the actual email the auth middleware saw. "no user" = expired.');
+    }
     process.exit(5);
   }
 
