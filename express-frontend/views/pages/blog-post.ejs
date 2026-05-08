@@ -125,6 +125,38 @@
       <!-- Keywords moved to meta tags for SEO - not displayed on page -->
     </article>
   <% } %>
+
+  <% if (typeof relatedPosts !== 'undefined' && relatedPosts && relatedPosts.length) { %>
+  <!-- Related posts: 4 sibling posts ranked by language match + keyword overlap.
+       Each blog page now contributes 4 inbound links to other posts, which
+       multiplies internal link graph density and unblocks "Discovered - not
+       indexed" pages in Search Console. -->
+  <section class="py-16 sm:py-20 bg-gray-50 border-t border-gray-200" aria-label="Related posts">
+    <div class="max-w-6xl mx-auto px-6 sm:px-8">
+      <div class="mb-10">
+        <h2 style="font-size:clamp(1.5rem,3vw,2rem);font-weight:800;color:#111827;letter-spacing:-0.02em;margin:0 0 0.5rem;">Related posts</h2>
+        <p style="color:#4B5563;font-size:1rem;margin:0;">More from the ProofTamil blog you might find useful.</p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <% relatedPosts.forEach(function(rp) { %>
+        <a href="/blog/<%= rp.slug %>" class="block p-5 rounded-xl bg-white border border-gray-200 hover:border-indigo-300 hover:shadow-md transition" style="text-decoration:none;">
+          <div style="font-size:0.7rem;font-weight:600;color:#6366F1;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
+            <%= (rp.language || 'tamil') === 'tamil' ? 'தமிழில்' : 'In English' %>
+          </div>
+          <h3 style="font-size:1rem;font-weight:700;color:#111827;line-height:1.4;margin:0 0 0.625rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">
+            <%= rp.title %>
+          </h3>
+          <% if (rp.excerpt) { %>
+          <p style="color:#6B7280;font-size:0.875rem;line-height:1.55;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+            <%= rp.excerpt %>
+          </p>
+          <% } %>
+        </a>
+        <% }); %>
+      </div>
+    </div>
+  </section>
+  <% } %>
 </main>
 
 <%- include('../partials/footer') %>

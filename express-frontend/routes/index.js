@@ -379,6 +379,75 @@ function buildPostSeo(post, slug, seoBase) {
   };
 }
 
+// Pick up to 4 sibling posts to show in a "Related posts" block at the bottom
+// of each blog page. Boosts internal link graph density (every blog post now
+// links to 4 others), which is the single biggest unblocker for "Discovered -
+// currently not indexed" pages in Search Console.
+//
+// Ranking: same language (+10) > keyword/title token overlap (+2 per shared
+// meaningful word). File posts always considered; backend posts fetched with
+// a 3s timeout and gracefully skipped on failure (the page still renders
+// with file-only related posts even if the backend is cold-starting).
+async function getRelatedPosts(currentPost, backendUrl) {
+  const filePosts = fileBlog.getAllPosts();
+  let backendPosts = [];
+  try {
+    const res = await getWithColdStartRetry(`${backendUrl}/blog/posts`, {
+      params: { page: 1, limit: 12 },
+      timeout: 3000,
+    });
+    if (res && res.status >= 200 && res.status < 300) {
+      backendPosts = res.data?.posts || [];
+    }
+  } catch (e) {
+    // Best-effort — file posts alone are still a useful related set.
+  }
+
+  const fileSlugs = new Set(filePosts.map((p) => p.slug));
+  const candidates = [
+    ...filePosts,
+    ...backendPosts.filter((p) => p && p.slug && !fileSlugs.has(p.slug)),
+  ].filter((p) => p && p.slug && p.slug !== currentPost.slug && p.title);
+
+  if (!candidates.length) return [];
+
+  // Stop-words: domain-specific noise that would over-weight every post.
+  const STOP = new Set([
+    'tamil', 'english', 'prooftamil', 'com', 'www', 'https', 'http',
+    'with', 'that', 'from', 'have', 'this', 'they', 'will', 'what',
+    'your', 'into', 'using', 'guide', 'online', 'free', 'best',
+    'how', 'the', 'and', 'for', 'are', 'you',
+  ]);
+  const tokens = (s) =>
+    String(s || '')
+      .toLowerCase()
+      .split(/[^a-z஀-௿]+/)
+      .filter((t) => t.length > 3 && !STOP.has(t));
+
+  const currentTokens = new Set([
+    ...tokens(currentPost.title),
+    ...tokens(currentPost.keywords),
+    ...tokens(currentPost.meta_description),
+  ]);
+  const currentLang = currentPost.language || 'tamil';
+
+  const scored = candidates.map((p) => {
+    let score = 0;
+    if ((p.language || 'tamil') === currentLang) score += 10;
+    const otherTokens = new Set([
+      ...tokens(p.title),
+      ...tokens(p.keywords),
+      ...tokens(p.meta_description),
+    ]);
+    let overlap = 0;
+    for (const t of currentTokens) if (otherTokens.has(t)) overlap++;
+    score += overlap * 2;
+    return { post: p, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 4).map((s) => s.post);
+}
+
 router.get('/blog/:slug', async (req, res) => {
   const user = getCurrentUser(req);
   const seoBase = getSeoData('blogPost') || getSeoData('home');
@@ -388,11 +457,13 @@ router.get('/blog/:slug', async (req, res) => {
   // Short-circuit so file posts never depend on the backend being reachable.
   const filePost = fileBlog.getPostBySlug(slug);
   if (filePost) {
+    const relatedPosts = await getRelatedPosts(filePost, req._backendUrl);
     return res.render('pages/blog-post', {
       title: `${filePost.title} | ProofTamil`,
       seo: buildPostSeo(filePost, slug, seoBase),
       user,
       post: filePost,
+      relatedPosts,
       error: null,
     });
   }
@@ -418,6 +489,7 @@ router.get('/blog/:slug', async (req, res) => {
         seo: seoBase,
         user,
         post: null,
+        relatedPosts: [],
         error: msg,
       });
     }
@@ -428,6 +500,7 @@ router.get('/blog/:slug', async (req, res) => {
         seo: seoBase,
         user,
         post: null,
+        relatedPosts: [],
         error: 'Invalid backend response',
       });
     }
@@ -436,11 +509,14 @@ router.get('/blog/:slug', async (req, res) => {
       'content_html length:', post.content_html?.length || 0,
       'content_text length:', post.content_text?.length || 0);
 
+    const relatedPosts = await getRelatedPosts(post, req._backendUrl);
+
     return res.render('pages/blog-post', {
       title: `${post.title} | ProofTamil`,
       seo: buildPostSeo(post, slug, seoBase),
       user,
       post,
+      relatedPosts,
       error: null,
     });
   } catch (e) {
@@ -449,6 +525,7 @@ router.get('/blog/:slug', async (req, res) => {
       seo: seoBase,
       user,
       post: null,
+      relatedPosts: [],
       error: e.message || 'Failed to load post',
     });
   }
