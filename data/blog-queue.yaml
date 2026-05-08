@@ -1,0 +1,239 @@
+# Blog topic queue for the scheduled publishing system.
+#
+# How it works:
+#   1. The generator script (`express-frontend/scripts/generate-scheduled-blog.js`)
+#      picks the FIRST topic with `status: queued`.
+#   2. It calls the AI Content Writer with the topic, target keyword, and
+#      suggested internal links to produce a draft.
+#   3. A quality gate validates word count, keyword presence, internal-link
+#      count, and heading structure.
+#   4. If it passes, the draft is posted to the backend with `status: draft`
+#      so you can review in the admin UI before publishing.
+#   5. The topic's status here is updated to `generated` with a timestamp.
+#
+# Topic order matters — the script processes top-to-bottom. Tier 2
+# (Tholkappiyam) and Tier 1 (commercial intent) are interleaved so the
+# alternating cadence the user requested falls out naturally.
+#
+# To add a topic: append a block at the bottom of the `queue:` list with
+# `status: queued`. To pause one: change its status to `paused`. To remove
+# one: delete it.
+#
+# Tiers:
+#   1 = commercial intent (high value, drives conversions)
+#   2 = Tholkappiyam series (topical authority)
+#   3 = tutorials / how-to / comparisons (long-tail traffic)
+
+queue:
+  # ── Tholkappiyam #1 ───────────────────────────────────────────────────
+  - topic: "தொல்காப்பியம் எழுத்ததிகாரம் — அறிமுகம் (Letters Chapter Introduction)"
+    keyword: "தொல்காப்பியம் எழுத்ததிகாரம்"
+    language: tamil
+    tier: 2
+    min_words: 1500
+    suggested_internal_links:
+      - tholkappiyam-introduction
+      - tamil-ilakkana-adipadaigal-valikatdi
+    status: queued
+
+  # ── Commercial intent #1 ──────────────────────────────────────────────
+  - topic: "Will AI Replace Tamil Writers? An Honest 2026 Take"
+    keyword: "AI replace tamil writer"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  # ── Tholkappiyam #2 ───────────────────────────────────────────────────
+  - topic: "தொல்காப்பியம் சொல்லதிகாரம் — விளக்கமான பாடம் (Words Chapter Explained)"
+    keyword: "தொல்காப்பியம் சொல்லதிகாரம்"
+    language: tamil
+    tier: 2
+    min_words: 1500
+    suggested_internal_links:
+      - tholkappiyam-introduction
+    status: queued
+
+  # ── Commercial intent #2 ──────────────────────────────────────────────
+  - topic: "Best AI Tamil Grammar Checker — Unbiased 2026 Comparison"
+    keyword: "best tamil grammar checker"
+    language: english
+    tier: 1
+    min_words: 1800
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  # ── Tholkappiyam #3 ───────────────────────────────────────────────────
+  - topic: "தொல்காப்பியம் பொருளதிகாரம் — அகம் & புறம் திணைகள் (Meaning Chapter: Akam & Puram)"
+    keyword: "தொல்காப்பியம் பொருளதிகாரம்"
+    language: tamil
+    tier: 2
+    min_words: 1500
+    suggested_internal_links:
+      - tholkappiyam-introduction
+    status: queued
+
+  # ── Commercial intent #3 ──────────────────────────────────────────────
+  - topic: "ChatGPT for Tamil — Limitations and What Works Better in 2026"
+    keyword: "chatgpt tamil"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  # ── Tholkappiyam #4 ───────────────────────────────────────────────────
+  - topic: "தொல்காப்பியம் vs நன்னூல் — இரு இலக்கண நூல்களின் ஒப்பீடு"
+    keyword: "தொல்காப்பியம் நன்னூல் ஒப்பீடு"
+    language: tamil
+    tier: 2
+    min_words: 1500
+    suggested_internal_links:
+      - tholkappiyam-introduction
+    status: queued
+
+  # ── Commercial intent #4 ──────────────────────────────────────────────
+  - topic: "AI Tamil Proofreading vs Human Editor — When Each One Wins"
+    keyword: "ai tamil proofreading"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  # ── Tholkappiyam #5 ───────────────────────────────────────────────────
+  - topic: "தொல்காப்பியர் காலமும் வாழ்க்கையும் — வரலாற்று ஆய்வு"
+    keyword: "தொல்காப்பியர் வரலாறு"
+    language: tamil
+    tier: 2
+    min_words: 1500
+    suggested_internal_links:
+      - tholkappiyam-introduction
+    status: queued
+
+  # ── Commercial intent #5 ──────────────────────────────────────────────
+  - topic: "Free AI Tamil Writing Tools — Which Actually Work in 2026"
+    keyword: "free ai tamil writing"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - tanglish-to-tamil-typing
+    status: queued
+
+  # ── Tholkappiyam #6 ───────────────────────────────────────────────────
+  - topic: "தொல்காப்பியத்தில் காதல் — அகத்திணை விளக்கம்"
+    keyword: "தொல்காப்பியத்தில் காதல்"
+    language: tamil
+    tier: 2
+    min_words: 1500
+    suggested_internal_links:
+      - tholkappiyam-introduction
+    status: queued
+
+  # ── Commercial intent #6 ──────────────────────────────────────────────
+  - topic: "How AI Helps Tamil Journalists Work Faster — 3 Real Workflows"
+    keyword: "ai tamil journalism"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  # ── Tholkappiyam #7 ───────────────────────────────────────────────────
+  - topic: "தொல்காப்பியத்தில் வீரம் — புறத்திணை பாடல்களின் சிறப்பு"
+    keyword: "தொல்காப்பியத்தில் வீரம்"
+    language: tamil
+    tier: 2
+    min_words: 1500
+    suggested_internal_links:
+      - tholkappiyam-introduction
+    status: queued
+
+  # ── Commercial intent #7 ──────────────────────────────────────────────
+  - topic: "AI for Tamil Bloggers — Complete 2026 Workflow Guide"
+    keyword: "ai tamil blogger"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - tanglish-to-tamil-typing
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  # ── Tholkappiyam #8 ───────────────────────────────────────────────────
+  - topic: "தொல்காப்பியம் இன்றைய தமிழ் இலக்கணத்தில் — தாக்கம் & பயன்பாடு"
+    keyword: "தொல்காப்பியம் தற்கால தமிழ்"
+    language: tamil
+    tier: 2
+    min_words: 1500
+    suggested_internal_links:
+      - tholkappiyam-introduction
+    status: queued
+
+  # ── Commercial intent #8 ──────────────────────────────────────────────
+  - topic: "Best AI Tamil Translation Tools — Accuracy Tested in 2026"
+    keyword: "ai tamil translation"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+    status: queued
+
+  # ── Tier 3 — Tutorials & how-tos (interleaved every 4 posts) ──────────
+  - topic: "How to Write Better Tamil Blog Posts in 2026 — A Practical Guide"
+    keyword: "write tamil blog posts"
+    language: english
+    tier: 3
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - tanglish-to-tamil-typing
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  - topic: "How to Use AI Without Losing Your Tamil Writing Voice"
+    keyword: "ai tamil writing voice"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  - topic: "Tamil Keyboard Layouts — Which Is Fastest for Bloggers?"
+    keyword: "tamil keyboard layout"
+    language: english
+    tier: 3
+    min_words: 1500
+    suggested_internal_links:
+      - tanglish-to-tamil-typing
+    status: queued
+
+  - topic: "AI Writing Assistant for Tamil Students — What to Use, What to Avoid"
+    keyword: "ai writing tool tamil students"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - common-tamil-grammar-mistakes
+    status: queued
+
+# ── Generated topics (script appends here, do not hand-edit) ────────────
+generated: []
