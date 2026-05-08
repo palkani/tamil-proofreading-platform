@@ -24,13 +24,30 @@ function runQualityGate({
   const lcText = text.toLowerCase();
   const lcKeyword = keywordStr.toLowerCase();
 
+  // Word presence (order-agnostic) is how Google actually scores titles for
+  // a query — exact substring match is too strict and rejects perfectly good
+  // titles like "Top Tamil Grammar Checker Tools — Unbiased 2026 Comparison"
+  // when the keyword is "best tamil grammar checker". Check that all
+  // significant keyword words appear; substring is a stronger preference
+  // surfaced as a warning, not a failure.
+  const keywordWords = lcKeyword.split(/\s+/).filter((w) => w.length > 0);
+  const wordsMissing = (haystack) => {
+    const lc = haystack.toLowerCase();
+    return keywordWords.filter((w) => !lc.includes(w));
+  };
+
   // ── Title ──────────────────────────────────────────────────────────
   if (!titleStr) failures.push('Missing title.');
   else {
     if (titleStr.length < 30) warnings.push(`Title is short (${titleStr.length} chars; ideal 50-65).`);
     if (titleStr.length > 70) warnings.push(`Title is long (${titleStr.length} chars; ideal 50-65, max ~65 for SERP).`);
-    if (keywordStr && !titleStr.toLowerCase().includes(lcKeyword)) {
-      failures.push(`Title does not contain primary keyword "${keywordStr}".`);
+    if (keywordStr) {
+      const missing = wordsMissing(titleStr);
+      if (missing.length > 0) {
+        failures.push(`Title is missing keyword word(s): "${missing.join('", "')}" (full keyword: "${keywordStr}").`);
+      } else if (!titleStr.toLowerCase().includes(lcKeyword)) {
+        warnings.push(`Title contains all keyword words but not the exact phrase "${keywordStr}". Acceptable but exact match ranks slightly stronger.`);
+      }
     }
   }
 
@@ -39,8 +56,11 @@ function runQualityGate({
   else {
     if (metaStr.length < 100) warnings.push(`Meta description is short (${metaStr.length} chars; ideal 140-160).`);
     if (metaStr.length > 170) warnings.push(`Meta description is long (${metaStr.length} chars; SERP truncates ~160).`);
-    if (keywordStr && !metaStr.toLowerCase().includes(lcKeyword)) {
-      warnings.push(`Meta description does not contain primary keyword "${keywordStr}".`);
+    if (keywordStr) {
+      const missing = wordsMissing(metaStr);
+      if (missing.length > 0) {
+        warnings.push(`Meta description is missing keyword word(s): "${missing.join('", "')}".`);
+      }
     }
   }
 
