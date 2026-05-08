@@ -177,9 +177,15 @@ function httpRequest(method, urlPath, body, extraHeaders = {}) {
         headers,
       },
       (res) => {
-        let raw = '';
-        res.on('data', (c) => (raw += c));
+        // Collect raw bytes and decode AFTER the full response arrives.
+        // The naive `raw += chunk` pattern decodes each chunk as UTF-8
+        // independently — if a multi-byte char (Tamil = 3 bytes) spans a
+        // chunk boundary, the partial bytes become U+FFFD (��) replacement
+        // chars in the parsed body. Concat-then-decode avoids this entirely.
+        const chunks = [];
+        res.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
         res.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf8');
           try {
             resolve({ status: res.statusCode, body: JSON.parse(raw) });
           } catch {
@@ -189,9 +195,20 @@ function httpRequest(method, urlPath, body, extraHeaders = {}) {
       }
     );
     req.on('error', reject);
-    if (data != null) req.write(data);
+    if (data != null) req.write(data, 'utf8');
     req.end();
   });
+}
+
+// Reject AI output that already contains U+FFFD — means upstream (the AI
+// service or its transport) corrupted the response. Better to fail fast
+// than persist corrupted Tamil to the database.
+function assertNoReplacementChars(label, value) {
+  const REPL = '�';
+  if (typeof value === 'string' && value.includes(REPL)) {
+    const count = (value.match(/�/g) || []).length;
+    throw new Error(`${label} contains ${count} U+FFFD replacement character(s) — UTF-8 corruption upstream. Aborting before publish.`);
+  }
 }
 
 // ── AI generation ──────────────────────────────────────────────────────
@@ -255,6 +272,12 @@ async function generateContent(topic) {
   if (!md || md.length < 500) {
     throw new Error(`AI generation returned empty/short content (${md.length} chars). Response keys: ${Object.keys(data).join(', ')}`);
   }
+  // Belt-and-braces: even after the buffer-concat fix, validate no U+FFFD
+  // leaked through. Catches AI-side corruption (rare) and any future
+  // transport regressions.
+  assertNoReplacementChars('content_markdown', md);
+  assertNoReplacementChars('title', wrapped.title || '');
+  assertNoReplacementChars('meta_description', wrapped.meta_description || '');
   return {
     title: wrapped.title || topic.topic,
     slug: wrapped.slug || slugifyAscii(topic.keyword),
@@ -415,6 +438,17 @@ async function main() {
   if (publishRes.status < 200 || publishRes.status >= 300) {
     console.error(`❌ Publish failed: ${publishRes.status}`);
     console.error(JSON.stringify(publishRes.body, null, 2).slice(0, 500));
+    if (publishRes.status === 403) {
+      console.error('');
+      console.error('💡 403 usually means one of:');
+      console.error('   1. ADMIN_TOKEN is expired (JWTs typically last ~1h). Get a fresh one:');
+      console.error('      Open https://www.prooftamil.com/my-blogs in a logged-in browser, then');
+      console.error('      DevTools → Application → Cookies → copy the access_token value.');
+      console.error('   2. Token belongs to a non-admin account. Allowlist: palkani.r@gmail.com,');
+      console.error('      prooftamil@gmail.com, banu.palkani@gmail.com');
+      console.error('   3. Vercel logs show "[BLOG-PUBLISH] Unauthorized publish attempt: <email>"');
+      console.error('      — that\'s the actual email the auth middleware saw. "no user" = expired.');
+    }
     process.exit(5);
   }
 
