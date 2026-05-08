@@ -6,6 +6,18 @@
  *   - server.js → load .env then call app.listen()
  */
 
+// Silence Node's DEP0169 (`url.parse()` deprecation). The warning comes from
+// Express 4's internal request handler, not our code. Harmless for us — the
+// CVE language is about people building security checks on top of url.parse(),
+// not Express's internal use. All other warnings stay visible.
+// Remove this when we migrate to Express 5 (which uses the WHATWG URL API).
+process.removeAllListeners('warning');
+process.on('warning', (w) => {
+  if (w.code === 'DEP0169') return;
+  const code = w.code ? `[${w.code}] ` : '';
+  console.warn(`(node:${process.pid}) ${code}${w.name}: ${w.message}`);
+});
+
 const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
