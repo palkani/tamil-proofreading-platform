@@ -33,12 +33,24 @@ const { runQualityGate } = require('./lib/seo-quality-gate');
 const BASE_URL = process.env.BASE_URL || 'https://www.prooftamil.com';
 const TOKEN = process.env.ADMIN_TOKEN || '';
 const DRY_RUN = process.argv.includes('--dry-run');
+const IGNORE_PAUSE = process.argv.includes('--ignore-pause');
 const FORCED_INDEX = (() => {
   const i = process.argv.indexOf('--topic-index');
   if (i === -1) return null;
   const n = parseInt(process.argv[i + 1], 10);
   return Number.isInteger(n) && n >= 0 ? n : null;
 })();
+
+// Detect a top-level `paused: true` line in the queue file (not indented,
+// not inside the queue list). Lets us halt generation without deleting the
+// queue. Honored unless --ignore-pause is passed.
+function isQueuePaused(raw) {
+  for (const line of String(raw).split(/\r?\n/)) {
+    const m = line.match(/^paused:\s*(true|false)\s*$/i);
+    if (m) return m[1].toLowerCase() === 'true';
+  }
+  return false;
+}
 
 const QUEUE_PATH = path.join(__dirname, '..', '..', 'data', 'blog-queue.yaml');
 const STATE_PATH = path.join(__dirname, '..', '..', 'data', 'blog-queue-state.json');
@@ -388,7 +400,16 @@ async function main() {
     console.error(`❌ Queue file not found: ${QUEUE_PATH}`);
     process.exit(3);
   }
-  const queue = parseQueueYaml(fs.readFileSync(QUEUE_PATH, 'utf8'));
+  const rawQueue = fs.readFileSync(QUEUE_PATH, 'utf8');
+
+  if (isQueuePaused(rawQueue) && !IGNORE_PAUSE) {
+    console.log('⏸  Generator is PAUSED (paused: true in data/blog-queue.yaml).');
+    console.log('   No draft generated. To resume: set paused: false in the queue file,');
+    console.log('   or run with --ignore-pause for a one-off generation.');
+    process.exit(0);
+  }
+
+  const queue = parseQueueYaml(rawQueue);
   if (!queue.length) {
     console.error('❌ Queue is empty — nothing to generate.');
     process.exit(2);

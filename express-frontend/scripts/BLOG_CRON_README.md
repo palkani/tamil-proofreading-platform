@@ -44,6 +44,30 @@ The script will:
 
 Open `/my-blogs`. Find the new draft. Read it, edit anything that feels off (especially: add 2-3 paragraphs in your own voice — that's the human-in-loop part of Option B). Click **Publish** when you're satisfied.
 
+## Pausing / resuming generation
+
+The queue file has a top-level `paused:` flag. When `paused: true`, the
+generator exits immediately without producing anything — even if run
+manually or by a future cron. This is the safe way to halt generation
+without deleting the queue.
+
+**Currently PAUSED** (since 2026-05-17) while Google's indexation catches
+up — generating more content while the existing backlog sits in
+"Discovered - not indexed" dilutes crawl signals.
+
+**To resume:**
+1. Edit `data/blog-queue.yaml`, change `paused: true` → `paused: false`
+2. Run the generator normally — it continues from the next `status: queued` topic
+
+**One-off generation while paused** (for testing, doesn't change the flag):
+```bash
+ADMIN_TOKEN=<jwt> node express-frontend/scripts/generate-scheduled-blog.js --ignore-pause
+```
+
+**When to resume:** indexed-count ≈ 60-70% of total sitemap URLs, OR after
+2-3 quality backlinks have landed (whichever comes first). Check Search
+Console → Pages before resuming.
+
 ## Adding new topics
 
 Append to the `queue:` list in `data/blog-queue.yaml`:

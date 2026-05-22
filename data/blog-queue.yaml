@@ -1,3 +1,23 @@
+# ──────────────────────────────────────────────────────────────────────────
+# ⏸  GENERATOR PAUSED  (as of 2026-05-17)
+# ──────────────────────────────────────────────────────────────────────────
+# We're holding off on new generation until Google's indexation catches up.
+# Currently 12 of 53 known URLs are indexed (~23%). Generating more content
+# while the existing backlog sits in "Discovered - not indexed" dilutes the
+# crawl signal further. Pause is honored by the script (exits cleanly with
+# a message; safe to run by accident).
+#
+# To RESUME:
+#   1. Change `paused: true` → `paused: false` below
+#   2. Run the generator as usual
+#   3. The script will pick up from the next `status: queued` topic
+#
+# When to resume: when indexed-count is ~60-70% of total sitemap URLs, OR
+# after 2-3 quality backlinks have landed (whichever is sooner). See
+# `BLOG_CRON_README.md` for the resume checklist.
+# ──────────────────────────────────────────────────────────────────────────
+paused: true
+
 # Blog topic queue for the scheduled publishing system.
 #
 # How it works:
