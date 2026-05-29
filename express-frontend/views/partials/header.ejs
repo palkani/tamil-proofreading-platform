@@ -131,13 +131,19 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
   <link rel="dns-prefetch" href="https://www.googletagmanager.com">
-  <!-- Inter font (non-render-blocking async load) -->
-  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"></noscript>
-  
-  <!-- Preload critical assets -->
-  <link rel="preload" href="/css/output.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="/css/output.css"></noscript>
+  <!-- Inter font: render-blocking on purpose. ?display=swap prevents FOIT (text
+       renders in a fallback font until Inter loads, then swaps). The previous
+       preload+onload async pattern caused FOUC + reflow that contributed to CLS. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap">
+
+  <!-- Critical CSS: render-blocking on purpose. ~62KB minified (~12KB gzip),
+       CDN-cached. The previous preload+onload async pattern caused CLS 1.1 in
+       real-user data (Microsoft Clarity, 2026-05-22) — the page rendered with
+       NO main stylesheet, painted unstyled defaults, then reflowed the entire
+       layout when Tailwind applied. Render-blocking critical CSS is the
+       correct pattern; the "non-render-blocking" optimization was premature
+       and traded a real CLS catastrophe for a marginal first-paint gain. -->
+  <link rel="stylesheet" href="/css/output.css">
   <link rel="preload" href="/images/tamil-logo.svg" as="image">
 
   <!-- Console logger wrapper (keeps production console clean) -->
