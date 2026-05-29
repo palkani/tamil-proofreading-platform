@@ -25,6 +25,45 @@
 #   3 = tutorials / how-to / comparisons (long-tail traffic)
 
 queue:
+  # ── Use-case templates (priority: highest converting per 2026-05-28 audit) ──
+  # These three target "document I need to produce NOW" intent — readers
+  # searching "tamil resignation letter format" need a ready template, not an
+  # informational essay. Each post should end with a clear "Open this template
+  # in the ProofTamil editor" CTA so reading converts directly into tool use.
+  # Tier 1 because the conversion path is unusually short (search → template →
+  # editor draft → grammar check → save → signup prompt).
+
+  - topic: "Tamil Resignation Letter Format — Free Template + Examples"
+    keyword: "tamil resignation letter format"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - common-tamil-grammar-mistakes
+      - tanglish-to-tamil-typing
+    status: queued
+
+  - topic: "Tamil Leave Letter — School, Office, and Permission Letter Templates"
+    keyword: "tamil leave letter"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  - topic: "Tamil Wedding Invitation Wording — Modern, Traditional, and Bilingual Templates"
+    keyword: "tamil wedding invitation wording"
+    language: english
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tamil-grammar-checker-online-free
+      - tanglish-to-tamil-typing
+    status: queued
+
   # ── Tholkappiyam #1 ───────────────────────────────────────────────────
   - topic: "தொல்காப்பியம் எழுத்ததிகாரம் — அறிமுகம் (Letters Chapter Introduction)"
     keyword: "தொல்காப்பியம் எழுத்ததிகாரம்"
