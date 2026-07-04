@@ -137,7 +137,59 @@ jobs:
             --update-secrets DODO_PRODUCT_ID_INDIA=DODO_PRODUCT_ID_INDIA:latest \
             --update-secrets DODO_PRODUCT_ID_GLOBAL=DODO_PRODUCT_ID_GLOBAL:latest || echo "US deployment skipped - may need setup"
 
-      - name: Verify Backend Health (Both Regions)
+      # ─────────────────────────────────────────────────────────────────────────
+      # us-west1 (Oregon) — colocated with Supabase (us-west-2 Oregon).
+      # Deployed in parallel to the existing asia-south1 + us-central1 services.
+      # Becomes the primary backend after the Vercel env-var cutover documented
+      # in BACKEND_USWEST_CUTOVER.md. The other two services stay live during
+      # the monitoring window and are deleted only after the new one is proven.
+      # min-instances=1 because this is the eventual sole backend — the
+      # ~$5-10/mo buys elimination of cold starts (the recurring pain point).
+      # ─────────────────────────────────────────────────────────────────────────
+      - name: Deploy Backend to Cloud Run (US-West / Oregon — Supabase-colocated)
+        run: |
+          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
+            us-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }}
+
+          # First push will fail if the us-west1 Artifact Registry repo doesn't
+          # exist yet — create it idempotently (no-op if it already exists).
+          gcloud artifacts repositories create docker-repo \
+            --location=us-west1 \
+            --repository-format=docker \
+            --description="Docker images for ProofTamil (us-west1)" 2>/dev/null || true
+          gcloud auth configure-docker us-west1-docker.pkg.dev --quiet
+          docker push us-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
+            || echo "us-west1 push skipped - registry may not be reachable"
+
+          # Clear any pre-existing secret binding for SENDGRID_SMTP_PASSWORD.
+          gcloud run services update prooftamil-backend-uswest \
+            --region=us-west1 \
+            --remove-secrets=SENDGRID_SMTP_PASSWORD 2>/dev/null || true
+
+          gcloud run deploy prooftamil-backend-uswest \
+            --image=us-west1-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/backend:${{ github.sha }} \
+            --region=us-west1 \
+            --platform=managed \
+            --allow-unauthenticated \
+            --memory=2Gi \
+            --cpu=2 \
+            --timeout=300 \
+            --min-instances=1 \
+            --max-instances=100 \
+            --port=8080 \
+            --set-env-vars=GIN_MODE=release,GOOGLE_OAUTH_REDIRECT_DOMAIN=${{ env.GOOGLE_OAUTH_REDIRECT_DOMAIN }},SUPABASE_URL=https://cnyrqookmazccatnwvkf.supabase.co,SUGGEST_MIN_LEN=1,SUGGEST_TOP_K=5,SUGGEST_CACHE_ENTRIES=200,SUGGEST_CACHE_TTL_MS=120000,SUGGEST_VOWEL_COLLAPSE=false,SUGGEST_USE_DB=true,RUN_MIGRATIONS=false,REDIS_URL=${{ secrets.REDIS_URL }},RESEND_API_KEY=${{ secrets.RESEND_API_KEY }},SENDGRID_SMTP_HOST=smtp.sendgrid.net,SENDGRID_SMTP_PORT=587,SENDGRID_SMTP_USER=apikey,SENDGRID_SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }},EMAIL_FROM_ADDRESS=contact@prooftamil.com,CONTACT_TO_EMAIL=contact@prooftamil.com,STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }},STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }},PAYMENTS_ENABLED=true,DODO_ENVIRONMENT=production \
+            --update-secrets DATABASE_URL=DATABASE_URL:latest \
+            --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest \
+            --update-secrets OPENAI_API_KEY=OPENAI_API_KEY:latest \
+            --update-secrets GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest \
+            --update-secrets GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest \
+            --update-secrets JWT_SECRET=JWT_SECRET:latest \
+            --update-secrets DODO_PAYMENTS_API_KEY=DODO_PAYMENTS_API_KEY:latest \
+            --update-secrets DODO_PAYMENTS_WEBHOOK_SECRET=DODO_PAYMENTS_WEBHOOK_SECRET:latest \
+            --update-secrets DODO_PRODUCT_ID_INDIA=DODO_PRODUCT_ID_INDIA:latest \
+            --update-secrets DODO_PRODUCT_ID_GLOBAL=DODO_PRODUCT_ID_GLOBAL:latest || echo "us-west1 deployment failed - check logs"
+
+      - name: Verify Backend Health (All Regions)
         run: |
           sleep 10
           echo "=== Asia South (Mumbai) ==="
@@ -146,11 +198,20 @@ jobs:
           curl -f "$BACKEND_URL/health" || echo "Health check pending..."
 
           echo ""
-          echo "=== US Central ==="
-          BACKEND_URL_US=$(gcloud run services describe prooftamil-backend-us --region=us-central1 --format='value(status.url)' 2>/dev/null) || echo "US backend not yet deployed"
+          echo "=== US Central (Iowa) ==="
+          BACKEND_URL_US=$(gcloud run services describe prooftamil-backend-us --region=us-central1 --format='value(status.url)' 2>/dev/null) || echo "US-central backend not yet deployed"
           if [ -n "$BACKEND_URL_US" ]; then
             echo "Backend URL (US): $BACKEND_URL_US"
             curl -f "$BACKEND_URL_US/health" || echo "US health check pending..."
+          fi
+
+          echo ""
+          echo "=== US West (Oregon — Supabase-colocated, future primary) ==="
+          BACKEND_URL_USWEST=$(gcloud run services describe prooftamil-backend-uswest --region=us-west1 --format='value(status.url)' 2>/dev/null) || echo "us-west1 backend not yet deployed"
+          if [ -n "$BACKEND_URL_USWEST" ]; then
+            echo "Backend URL (us-west1): $BACKEND_URL_USWEST"
+            echo ">>> Copy this URL for the Vercel cutover (see BACKEND_USWEST_CUTOVER.md)"
+            curl -f "$BACKEND_URL_USWEST/health" || echo "us-west1 health check pending..."
           fi
 
       - name: Set up Node.js
