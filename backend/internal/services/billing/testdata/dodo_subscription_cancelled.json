@@ -1,0 +1,23 @@
+{
+  "business_id": "bus_TESTBusinessId1",
+  "type": "subscription.cancelled",
+  "timestamp": "2026-07-15T10:00:00.000000Z",
+  "data": {
+    "customer": {
+      "customer_id": "cus_TESTCustomerId",
+      "email": "testcustomer@example.com",
+      "name": "Test Customer"
+    },
+    "metadata": {
+      "country_code": "NO",
+      "plan_code": "PRO_MONTHLY",
+      "user_id": "100"
+    },
+    "cancelled_at": "2026-07-15T10:00:00.000000Z",
+    "previous_billing_date": "2026-07-03T16:37:24.913882Z",
+    "next_billing_date": "2026-08-03T16:43:46.709199Z",
+    "product_id": "pdt_TESTProductId",
+    "status": "cancelled",
+    "subscription_id": "sub_TESTSubscriptionId"
+  }
+}

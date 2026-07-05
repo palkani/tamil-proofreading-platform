@@ -373,7 +373,8 @@ type DodoWebhookEvent struct {
 // still works, but prefer the Dodo-native names.
 type DodoSubscriptionEventData struct {
 	SubscriptionID       string            `json:"subscription_id"`
-	CustomerID           string            `json:"customer_id"`
+	CustomerID           string            `json:"customer_id"`             // top-level fallback
+	Customer             dodoCustomerObject `json:"customer"`               // Dodo's real payload nests customer here
 	ProductID            string            `json:"product_id"`
 	Status               string            `json:"status"`
 	CurrentPeriodStart   string            `json:"current_period_start"`
@@ -382,6 +383,18 @@ type DodoSubscriptionEventData struct {
 	NextBillingDate      string            `json:"next_billing_date"`
 	CancelledAt          *string           `json:"cancelled_at,omitempty"`
 	Metadata             map[string]string `json:"metadata,omitempty"`
+}
+
+// EffectiveCustomerID returns the Dodo customer ID, preferring the top-level
+// field (for future Dodo changes or other Standard-Webhooks providers) and
+// falling back to the nested customer.customer_id that Dodo actually sends
+// today. Prior to this helper, ProviderCustomerID was silently empty on
+// every real subscription webhook because we only read the top-level field.
+func (d DodoSubscriptionEventData) EffectiveCustomerID() string {
+	if d.CustomerID != "" {
+		return d.CustomerID
+	}
+	return d.Customer.CustomerID
 }
 
 // PeriodBounds returns the effective (start, end) strings for the current

@@ -105,11 +105,13 @@ func (s *WebhookService) handleDodoSubscriptionActive(event DodoWebhookEvent) er
 	startStr, endStr := data.PeriodBounds()
 	periodStart, periodEnd := parseDodoPeriod(startStr, endStr)
 
+	customerID := data.EffectiveCustomerID()
+
 	sub := &models.Subscription{
 		UserID:                 userID,
 		PlanCode:               planCode,
 		Provider:               models.PaymentProviderDodo,
-		ProviderCustomerID:     data.CustomerID,
+		ProviderCustomerID:     customerID,
 		ProviderSubscriptionID: data.SubscriptionID,
 		Status:                 s.dodoAdapter.MapSubscriptionStatus(data.Status),
 		CountryCode:            countryCode,
@@ -127,7 +129,7 @@ func (s *WebhookService) handleDodoSubscriptionActive(event DodoWebhookEvent) er
 	}
 
 	// Store Dodo customer ID on user record
-	if err := s.billingService.UpdateUserDodoCustomerID(userID, data.CustomerID); err != nil {
+	if err := s.billingService.UpdateUserDodoCustomerID(userID, customerID); err != nil {
 		log.Printf("[WEBHOOK/DODO] Warning: failed to store dodo customer id: %v", err)
 	}
 

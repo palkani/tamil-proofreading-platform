@@ -1,0 +1,18 @@
+{
+  "business_id": "bus_TESTBusinessId1",
+  "type": "payment.succeeded",
+  "timestamp": "2026-07-03T16:43:47.100000Z",
+  "data": {
+    "payment_id": "pay_TESTPaymentId",
+    "subscription_id": "sub_TESTSubscriptionId",
+    "customer_id": "cus_TESTCustomerId",
+    "status": "succeeded",
+    "total_amount": 12266,
+    "currency": "NOK",
+    "metadata": {
+      "country_code": "NO",
+      "plan_code": "PRO_MONTHLY",
+      "user_id": "100"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "business_id": "bus_TESTBusinessId1",
+  "type": "subscription.renewed",
+  "timestamp": "2026-08-03T16:43:47.100000Z",
+  "data": {
+    "customer": {
+      "customer_id": "cus_TESTCustomerId",
+      "email": "testcustomer@example.com",
+      "name": "Test Customer"
+    },
+    "metadata": {
+      "country_code": "NO",
+      "plan_code": "PRO_MONTHLY",
+      "user_id": "100"
+    },
+    "next_billing_date": "2026-09-03T16:43:47.100000Z",
+    "previous_billing_date": "2026-08-03T16:43:47.100000Z",
+    "product_id": "pdt_TESTProductId",
+    "status": "active",
+    "subscription_id": "sub_TESTSubscriptionId"
+  }
+}
