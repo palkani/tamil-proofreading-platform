@@ -365,15 +365,39 @@ type DodoWebhookEvent struct {
 }
 
 // DodoSubscriptionEventData is the "data" object for subscription.* events.
+//
+// Note on period fields: Dodo's actual payload uses `previous_billing_date`
+// and `next_billing_date`, NOT `current_period_start` / `current_period_end`.
+// We keep the CurrentPeriod* fields as fallbacks so that any future Dodo
+// change (or a different Standard-Webhooks provider) that does send them
+// still works, but prefer the Dodo-native names.
 type DodoSubscriptionEventData struct {
-	SubscriptionID    string            `json:"subscription_id"`
-	CustomerID        string            `json:"customer_id"`
-	ProductID         string            `json:"product_id"`
-	Status            string            `json:"status"`
-	CurrentPeriodStart string           `json:"current_period_start"`
-	CurrentPeriodEnd   string           `json:"current_period_end"`
-	CancelledAt        *string          `json:"cancelled_at,omitempty"`
-	Metadata           map[string]string `json:"metadata,omitempty"`
+	SubscriptionID       string            `json:"subscription_id"`
+	CustomerID           string            `json:"customer_id"`
+	ProductID            string            `json:"product_id"`
+	Status               string            `json:"status"`
+	CurrentPeriodStart   string            `json:"current_period_start"`
+	CurrentPeriodEnd     string            `json:"current_period_end"`
+	PreviousBillingDate  string            `json:"previous_billing_date"`
+	NextBillingDate      string            `json:"next_billing_date"`
+	CancelledAt          *string           `json:"cancelled_at,omitempty"`
+	Metadata             map[string]string `json:"metadata,omitempty"`
+}
+
+// PeriodBounds returns the effective (start, end) strings for the current
+// billing period. Prefers Dodo's native previous/next_billing_date fields
+// and falls back to current_period_start/end for other providers or future
+// payload changes.
+func (d DodoSubscriptionEventData) PeriodBounds() (string, string) {
+	start := d.CurrentPeriodStart
+	if start == "" {
+		start = d.PreviousBillingDate
+	}
+	end := d.CurrentPeriodEnd
+	if end == "" {
+		end = d.NextBillingDate
+	}
+	return start, end
 }
 
 // DodoPaymentEventData is the "data" object for payment.* events.

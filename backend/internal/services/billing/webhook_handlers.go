@@ -102,7 +102,8 @@ func (s *WebhookService) handleDodoSubscriptionActive(event DodoWebhookEvent) er
 		return err
 	}
 
-	periodStart, periodEnd := parseDodoPeriod(data.CurrentPeriodStart, data.CurrentPeriodEnd)
+	startStr, endStr := data.PeriodBounds()
+	periodStart, periodEnd := parseDodoPeriod(startStr, endStr)
 
 	sub := &models.Subscription{
 		UserID:                 userID,
@@ -159,7 +160,8 @@ func (s *WebhookService) handleDodoSubscriptionRenewed(event DodoWebhookEvent) e
 		return err
 	}
 
-	periodStart, periodEnd := parseDodoPeriod(data.CurrentPeriodStart, data.CurrentPeriodEnd)
+	startStr, endStr := data.PeriodBounds()
+	periodStart, periodEnd := parseDodoPeriod(startStr, endStr)
 	sub.Status = s.dodoAdapter.MapSubscriptionStatus(data.Status)
 	sub.CurrentPeriodStart = periodStart
 	sub.CurrentPeriodEnd = periodEnd
