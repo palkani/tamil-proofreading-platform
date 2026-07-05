@@ -95,6 +95,13 @@ func (r *ReconciliationService) CheckAndAlert() DriftReport {
 	return report
 }
 
+// CheckAndAlertPreview runs the same three queries as CheckAndAlert but
+// never sends the alert email. Used by the admin console's Issues page
+// so hitting refresh doesn't spam the alert inbox.
+func (r *ReconciliationService) CheckAndAlertPreview() DriftReport {
+	return r.check()
+}
+
 // check runs the three drift queries.
 func (r *ReconciliationService) check() DriftReport {
 	report := DriftReport{CheckedAt: time.Now()}

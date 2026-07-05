@@ -482,6 +482,7 @@ func main() {
 			admin.GET("/users", h.AdminGetUsers)
 			admin.GET("/users/:id", h.AdminGetUserDetail)
 			admin.GET("/overview", h.AdminGetOverview)
+			admin.GET("/issues", h.AdminGetIssues)
 			admin.GET("/analytics", h.AdminGetAnalytics)
 			admin.GET("/analytics-dashboard", h.GetAnalyticsDashboard)
 			admin.GET("/dashboard", h.GetDashboardStats)
