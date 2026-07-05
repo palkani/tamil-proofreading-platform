@@ -141,6 +141,34 @@ type Invoice struct {
 	Subscription *Subscription `gorm:"foreignKey:SubscriptionID" json:"subscription,omitempty"`
 }
 
+// CheckoutAttempt records a user's start of a Dodo checkout so we can
+// detect abandoned sessions and follow up with a reminder email.
+//
+// Lifecycle:
+//
+//	CreateCheckoutSession    → insert row with StartedAt=now(), CompletedAt=nil
+//	subscription.active hook → mark CompletedAt=now() by ProviderSubscriptionID
+//	hourly cron              → send reminder for rows StartedAt 1-24h ago
+//	                           where CompletedAt IS NULL and FollowUpSentAt IS NULL
+//	                           then set FollowUpSentAt=now() so we only email once
+//
+// After 24h the payment link Dodo issued has usually expired anyway,
+// so we stop trying — a stale link would frustrate the user more than
+// silence.
+type CheckoutAttempt struct {
+	ID                     uint       `gorm:"primaryKey" json:"id"`
+	UserID                 uint       `gorm:"not null;index" json:"user_id"`
+	ProviderSubscriptionID string     `gorm:"size:100;uniqueIndex" json:"provider_subscription_id"`
+	PlanCode               string     `gorm:"size:50;not null" json:"plan_code"`
+	CountryCode            string     `gorm:"size:2" json:"country_code,omitempty"`
+	StartedAt              time.Time  `gorm:"not null;index" json:"started_at"`
+	CompletedAt            *time.Time `gorm:"index" json:"completed_at,omitempty"`
+	FollowUpSentAt         *time.Time `json:"follow_up_sent_at,omitempty"`
+	CreatedAt              time.Time  `json:"created_at"`
+
+	User User `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
 // PaymentEvent tracks webhook events for idempotency
 type PaymentEvent struct {
 	ID              uint               `gorm:"primaryKey" json:"id"`

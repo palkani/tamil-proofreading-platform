@@ -310,6 +310,19 @@ func main() {
 		log.Println("[BILLING] Reconciliation service: disabled (set RECONCILIATION_ENABLED=true on exactly one region)")
 	}
 
+	// Abandoned-checkout follow-up cron. Same gating pattern as
+	// reconciliation — must run on exactly one region to avoid sending
+	// duplicate reminder emails. Reuses RECONCILIATION_ENABLED so
+	// operators only manage one env var; both jobs share the "leader"
+	// designation semantically.
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("RECONCILIATION_ENABLED")), "true") {
+		followUpSvc := billing.NewCheckoutFollowUpService(db)
+		go followUpSvc.RunHourlyLoop()
+		log.Println("[BILLING] Checkout follow-up service: enabled (hourly)")
+	} else {
+		log.Println("[BILLING] Checkout follow-up service: disabled (gated by RECONCILIATION_ENABLED)")
+	}
+
 	// Ensure billing seed data exists even when RUN_MIGRATIONS=false.
 	// seedBillingDataIfNeeded is idempotent: it only inserts missing rows.
 	go seedBillingDataIfNeeded(db)

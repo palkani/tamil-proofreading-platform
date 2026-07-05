@@ -144,6 +144,12 @@ func (s *WebhookService) handleDodoSubscriptionActive(event DodoWebhookEvent) er
 	if err := s.billingService.UpdateUserSubscriptionEnd(userID, periodEnd); err != nil {
 		log.Printf("[WEBHOOK/DODO] Warning: failed to set subscription_end for user %d: %v", userID, err)
 	}
+
+	// Mark the corresponding CheckoutAttempt as completed so the
+	// abandoned-checkout follow-up cron won't nag a user who finished.
+	if err := s.billingService.MarkCheckoutCompleted(data.SubscriptionID); err != nil {
+		log.Printf("[WEBHOOK/DODO] Warning: failed to mark checkout attempt completed for sub=%s: %v", data.SubscriptionID, err)
+	}
 	return nil
 }
 

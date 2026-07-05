@@ -90,11 +90,38 @@ func (s *BillingService) CreateCheckoutSession(userID uint, req CheckoutRequest)
 	log.Printf("[BILLING] Dodo checkout created: user=%d plan=%s country=%s sub=%s",
 		userID, req.PlanCode, countryCode, dodoResp.SubscriptionID)
 
+	// Persist the attempt so the abandoned-checkout follow-up cron can find
+	// it later. Non-fatal — if we fail to insert here, the user still gets
+	// their payment link. The follow-up email is best-effort marketing.
+	attempt := &models.CheckoutAttempt{
+		UserID:                 userID,
+		ProviderSubscriptionID: dodoResp.SubscriptionID,
+		PlanCode:               req.PlanCode,
+		CountryCode:            countryCode,
+		StartedAt:              time.Now(),
+	}
+	if err := s.db.Create(attempt).Error; err != nil {
+		log.Printf("[BILLING] Warning: failed to record checkout attempt (user=%d sub=%s): %v", userID, dodoResp.SubscriptionID, err)
+	}
+
 	return &CheckoutResponse{
 		Provider:    string(models.PaymentProviderDodo),
 		CheckoutURL: dodoResp.CheckoutURL,
 		Quote:       quote,
 	}, nil
+}
+
+// MarkCheckoutCompleted stamps the CheckoutAttempt for a given Dodo
+// subscription as completed. Called from handleDodoSubscriptionActive
+// so the abandoned-checkout cron won't email a user who finished.
+func (s *BillingService) MarkCheckoutCompleted(providerSubscriptionID string) error {
+	if providerSubscriptionID == "" {
+		return nil
+	}
+	now := time.Now()
+	return s.db.Model(&models.CheckoutAttempt{}).
+		Where("provider_subscription_id = ? AND completed_at IS NULL", providerSubscriptionID).
+		Update("completed_at", now).Error
 }
 
 // GetBillingStatus returns the user's current billing status

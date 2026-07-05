@@ -74,6 +74,12 @@ func MigrateBilling(db *gorm.DB) error {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate BillingAuditLog table: %v", err)
 		return err
 	}
+
+	if err := db.AutoMigrate(&models.CheckoutAttempt{}); err != nil && !isAlreadyExistsOrBind(err) {
+		log.Printf("[MIGRATIONS] Warning: Failed to migrate CheckoutAttempt table: %v", err)
+		return err
+	}
+	log.Println("[MIGRATIONS] CheckoutAttempt table migrated successfully")
 	log.Println("[MIGRATIONS] BillingAuditLog table migrated successfully")
 
 	// Create indexes
