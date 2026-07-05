@@ -10,39 +10,101 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// AdminGetUsers retrieves all users (admin only)
-// Supports optional ?email=... query param to search by email (partial, case-insensitive).
+// AdminGetUsers returns a paginated, filterable list of users for the
+// admin console. Never leaks password_hash or verification tokens.
+//
+// Query params:
+//
+//	email        partial, case-insensitive email match
+//	subscription 'pro' | 'free' — exact match on users.subscription
+//	country      ISO-2 country code, exact match
+//	sort         'created_desc' (default) | 'created_asc' | 'email' | 'last_active'
+//	limit        default 25, capped at 100
+//	offset       default 0
+//
+// Rich response includes the fields the admin console needs to filter
+// and act on a row without a follow-up request (subscription state,
+// end date, country, active flag, verification, admin flag).
 func (h *Handlers) AdminGetUsers(c *gin.Context) {
-	limitStr := c.DefaultQuery("limit", "20")
-	offsetStr := c.DefaultQuery("offset", "0")
-	emailFilter := c.Query("email")
-
-	limit, _ := strconv.Atoi(limitStr)
-	offset, _ := strconv.Atoi(offsetStr)
-
-	var users []models.User
-	var total int64
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "25"))
+	if limit < 1 {
+		limit = 25
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if offset < 0 {
+		offset = 0
+	}
 
 	query := h.db.Model(&models.User{})
-	if emailFilter != "" {
-		query = query.Where("LOWER(email) LIKE LOWER(?)", "%"+emailFilter+"%")
+	if v := c.Query("email"); v != "" {
+		query = query.Where("LOWER(email) LIKE LOWER(?)", "%"+v+"%")
 	}
+	if v := c.Query("subscription"); v != "" {
+		query = query.Where("subscription = ?", v)
+	}
+	if v := c.Query("country"); v != "" {
+		query = query.Where("country_code = ?", v)
+	}
+
+	var total int64
 	query.Count(&total)
+
+	switch c.DefaultQuery("sort", "created_desc") {
+	case "created_asc":
+		query = query.Order("created_at ASC")
+	case "email":
+		query = query.Order("email ASC")
+	case "last_active":
+		// Left-join derived table would be more correct, but for now sort
+		// by updated_at as a reasonable proxy (it moves on any user change,
+		// including login token bumps).
+		query = query.Order("updated_at DESC")
+	default:
+		query = query.Order("created_at DESC")
+	}
+
+	var users []models.User
 	query.Limit(limit).Offset(offset).Find(&users)
 
-	// Return only safe fields when doing email lookup (never expose password hashes)
-	type SafeUser struct {
-		ID    uint   `json:"id"`
-		Email string `json:"email"`
-		Name  string `json:"name"`
+	// Explicit response shape so we never accidentally serialize a new
+	// sensitive field added to User later.
+	type row struct {
+		ID              uint      `json:"id"`
+		Email           string    `json:"email"`
+		Name            string    `json:"name"`
+		Role            string    `json:"role"`
+		Subscription    string    `json:"subscription"`
+		SubscriptionEnd *time.Time `json:"subscription_end,omitempty"`
+		CountryCode     string    `json:"country_code,omitempty"`
+		IsActive        bool      `json:"is_active"`
+		EmailVerified   bool      `json:"email_verified"`
+		PremiumOverride bool      `json:"premium_override"`
+		CreatedAt       time.Time `json:"created_at"`
 	}
-	safe := make([]SafeUser, len(users))
+	out := make([]row, len(users))
 	for i, u := range users {
-		safe[i] = SafeUser{ID: u.ID, Email: u.Email, Name: u.Name}
+		out[i] = row{
+			ID:              u.ID,
+			Email:           u.Email,
+			Name:            u.Name,
+			Role:            string(u.Role),
+			Subscription:    string(u.Subscription),
+			SubscriptionEnd: u.SubscriptionEnd,
+			IsActive:        u.IsActive,
+			EmailVerified:   u.EmailVerified,
+			PremiumOverride: u.PremiumOverride,
+			CreatedAt:       u.CreatedAt,
+		}
+		if u.CountryCode != nil {
+			out[i].CountryCode = *u.CountryCode
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"users":  safe,
+		"users":  out,
 		"total":  total,
 		"limit":  limit,
 		"offset": offset,
