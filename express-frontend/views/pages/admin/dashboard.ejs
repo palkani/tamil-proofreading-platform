@@ -1,39 +1,164 @@
 <%- include('../../partials/admin/layout-header') %>
 
-<div class="mx-auto max-w-6xl space-y-6">
-  <!-- Empty-state welcome banner shown when no stats are loaded yet. PR C
-       replaces this with real metric tiles. -->
-  <section class="rounded-lg border border-blue-200 bg-blue-50 p-6">
-    <h2 class="text-base font-semibold text-blue-900">Welcome to the ProofTamil admin console</h2>
-    <p class="mt-1 text-sm text-blue-800">
-      This is the skeleton view. Dashboard metrics (users, Pro count, MRR, recent activity, recent issues)
-      will populate here after the dashboard endpoint ships.
-    </p>
-  </section>
-
-  <!-- Placeholder grid so the layout doesn't collapse to a single line. Real
-       KPI tiles arrive in PR C — same 4-column grid, same tile height, so
-       the shell doesn't jump when data lands. -->
+<div class="mx-auto max-w-6xl space-y-6" id="admin-dashboard">
+  <!-- Metric tiles. Populated by /admin/api/overview fetch below. Skeleton
+       values are em dashes so a slow network doesn't show "0" (misleading). -->
   <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-    <% ['Total users', 'Pro users', 'Monthly revenue', 'Active (24h)'].forEach(function(label) { %>
-      <div class="rounded-lg border border-slate-200 bg-white p-5">
-        <div class="text-xs font-medium uppercase tracking-wide text-slate-500"><%= label %></div>
-        <div class="mt-2 text-2xl font-semibold text-slate-400">—</div>
-        <div class="mt-1 text-xs text-slate-400">Data pending</div>
-      </div>
-    <% }); %>
+    <div class="rounded-lg border border-slate-200 bg-white p-5" data-tile="total-users">
+      <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Total users</div>
+      <div class="mt-2 text-2xl font-semibold text-slate-900" data-value>—</div>
+      <div class="mt-1 text-xs text-slate-500" data-sub>All time</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-5" data-tile="pro-users">
+      <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Pro users</div>
+      <div class="mt-2 text-2xl font-semibold text-slate-900" data-value>—</div>
+      <div class="mt-1 text-xs text-slate-500" data-sub>Currently subscribed</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-5" data-tile="monthly-revenue">
+      <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Revenue this month</div>
+      <div class="mt-2 text-2xl font-semibold text-slate-900" data-value>—</div>
+      <div class="mt-1 text-xs text-slate-500" data-sub>USD equivalent, paid invoices</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-5" data-tile="active-24h">
+      <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Active (24h)</div>
+      <div class="mt-2 text-2xl font-semibold text-slate-900" data-value>—</div>
+      <div class="mt-1 text-xs text-slate-500" data-sub>Distinct users</div>
+    </div>
   </section>
 
-  <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-    <div class="rounded-lg border border-slate-200 bg-white p-5">
-      <h3 class="text-sm font-semibold text-slate-900">Recent activity</h3>
-      <p class="mt-2 text-sm text-slate-500">No data yet.</p>
+  <!-- Secondary metrics: signup momentum + issues counter -->
+  <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="rounded-lg border border-slate-200 bg-white p-4" data-tile="signups-7d">
+      <div class="text-xs font-medium text-slate-500">Signups · 7d</div>
+      <div class="mt-1 text-lg font-semibold text-slate-900" data-value>—</div>
     </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4" data-tile="signups-30d">
+      <div class="text-xs font-medium text-slate-500">Signups · 30d</div>
+      <div class="mt-1 text-lg font-semibold text-slate-900" data-value>—</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4" data-tile="active-30d">
+      <div class="text-xs font-medium text-slate-500">Active users · 30d</div>
+      <div class="mt-1 text-lg font-semibold text-slate-900" data-value>—</div>
+    </div>
+    <a href="/admin/issues" class="rounded-lg border border-slate-200 bg-white p-4 hover:border-red-300 hover:bg-red-50" data-tile="issues-total">
+      <div class="text-xs font-medium text-slate-500">Open issues</div>
+      <div class="mt-1 text-lg font-semibold text-slate-900" data-value>—</div>
+      <div class="mt-0.5 text-xs text-slate-400">Failed webhooks + drift</div>
+    </a>
+  </section>
+
+  <!-- Recent activity + quick actions -->
+  <section class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <div class="rounded-lg border border-slate-200 bg-white p-5 lg:col-span-2">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-slate-900">Recent activity</h3>
+        <a href="/admin/activity" class="text-xs font-medium text-blue-600 hover:underline">View all →</a>
+      </div>
+      <div class="mt-3 divide-y divide-slate-100" data-recent-activity>
+        <div class="py-3 text-sm text-slate-400">Loading…</div>
+      </div>
+    </div>
+
     <div class="rounded-lg border border-slate-200 bg-white p-5">
-      <h3 class="text-sm font-semibold text-slate-900">Recent issues</h3>
-      <p class="mt-2 text-sm text-slate-500">No data yet.</p>
+      <h3 class="text-sm font-semibold text-slate-900">Quick actions</h3>
+      <ul class="mt-3 space-y-2 text-sm">
+        <li><a href="/admin/users" class="text-blue-600 hover:underline">Search users</a></li>
+        <li><a href="/admin/communications" class="text-blue-600 hover:underline">Send a broadcast email</a></li>
+        <li><a href="/admin/issues" class="text-blue-600 hover:underline">Review open issues</a></li>
+      </ul>
+      <hr class="my-4 border-slate-100" />
+      <h3 class="text-sm font-semibold text-slate-900">System health</h3>
+      <ul class="mt-3 space-y-1 text-xs text-slate-500">
+        <li>Reconciliation cron: <span data-recon-status>—</span></li>
+        <li>Backend: <span data-backend-status>—</span></li>
+      </ul>
     </div>
   </section>
 </div>
+
+<script>
+// Fetch dashboard overview and hydrate tiles. Kept inline (small enough,
+// avoids a build step) but namespaced via data-attributes so a future
+// refactor to an external file is a straight lift.
+(function () {
+  const $$ = (sel, root) => (root || document).querySelectorAll(sel);
+  const setTile = (name, value, sub) => {
+    const tile = document.querySelector('[data-tile="' + name + '"]');
+    if (!tile) return;
+    const v = tile.querySelector('[data-value]');
+    if (v) v.textContent = value;
+    if (sub) {
+      const s = tile.querySelector('[data-sub]');
+      if (s) s.textContent = sub;
+    }
+  };
+  const fmtNumber = (n) => new Intl.NumberFormat('en-US').format(n);
+  const fmtUsdCents = (cents) => {
+    const dollars = (cents || 0) / 100;
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(dollars);
+  };
+  const fmtRelative = (ts) => {
+    const diff = (Date.now() - new Date(ts).getTime()) / 1000;
+    if (diff < 60) return Math.round(diff) + 's ago';
+    if (diff < 3600) return Math.round(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.round(diff / 3600) + 'h ago';
+    return Math.round(diff / 86400) + 'd ago';
+  };
+
+  fetch('/admin/api/overview', { credentials: 'include' })
+    .then((r) => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then((data) => {
+      setTile('total-users', fmtNumber(data.users.total));
+      setTile('pro-users', fmtNumber(data.users.pro),
+        data.users.total > 0
+          ? ((data.users.pro / data.users.total) * 100).toFixed(1) + '% of total'
+          : 'Currently subscribed');
+      setTile('monthly-revenue', fmtUsdCents(data.revenue.monthly_completed_usd_cents));
+      setTile('active-24h', fmtNumber(data.users.active_24h));
+      setTile('signups-7d', fmtNumber(data.users.signups_7d));
+      setTile('signups-30d', fmtNumber(data.users.signups_30d));
+      setTile('active-30d', fmtNumber(data.users.active_30d));
+
+      const issuesTotal =
+        (data.issues.failed_webhooks || 0) +
+        (data.issues.active_pro_without_end || 0) +
+        (data.issues.checkouts_abandoned_24h || 0);
+      setTile('issues-total', fmtNumber(issuesTotal));
+
+      const recent = document.querySelector('[data-recent-activity]');
+      if (recent) {
+        if (!data.recent_activity || data.recent_activity.length === 0) {
+          recent.innerHTML = '<div class="py-3 text-sm text-slate-400">No activity in the recent window.</div>';
+        } else {
+          recent.innerHTML = data.recent_activity
+            .map(function (row) {
+              return (
+                '<div class="flex items-baseline justify-between py-2">' +
+                '<div><div class="text-sm text-slate-900">' + (row.email || 'user #' + row.user_id) +
+                '</div><div class="text-xs text-slate-500">' + row.event_type + '</div></div>' +
+                '<div class="text-xs text-slate-400">' + fmtRelative(row.occurred_at) + '</div>' +
+                '</div>'
+              );
+            })
+            .join('');
+        }
+      }
+
+      const backendStatus = document.querySelector('[data-backend-status]');
+      if (backendStatus) backendStatus.textContent = 'OK';
+      const reconStatus = document.querySelector('[data-recon-status]');
+      if (reconStatus) reconStatus.textContent = issuesTotal > 0 ? 'flagging ' + issuesTotal + ' issues' : 'clean';
+    })
+    .catch(function (err) {
+      console.error('[ADMIN] overview fetch failed', err);
+      $$('[data-value]').forEach(function (el) { el.textContent = '?'; });
+      const recent = document.querySelector('[data-recent-activity]');
+      if (recent) recent.innerHTML = '<div class="py-3 text-sm text-red-600">Failed to load: ' + err.message + '</div>';
+    });
+})();
+</script>
 
 <%- include('../../partials/admin/layout-footer') %>

@@ -480,6 +480,7 @@ func main() {
 		admin.Use(middleware.AdminMiddleware(db))
 		{
 			admin.GET("/users", h.AdminGetUsers)
+			admin.GET("/overview", h.AdminGetOverview)
 			admin.GET("/analytics", h.AdminGetAnalytics)
 			admin.GET("/analytics-dashboard", h.GetAnalyticsDashboard)
 			admin.GET("/dashboard", h.GetDashboardStats)
