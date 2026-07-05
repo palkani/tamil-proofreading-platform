@@ -64,6 +64,14 @@ router.get('/users', requireAdmin, (req, res) => {
   });
 });
 
+router.get('/users/:id', requireAdmin, (req, res) => {
+  res.render('pages/admin/user-detail', {
+    title: 'Admin · User #' + req.params.id,
+    ...commonLocals(req, 'users'),
+    userId: req.params.id,
+  });
+});
+
 router.get('/activity', requireAdmin, (req, res) => {
   res.render('pages/admin/activity', {
     title: 'Admin · Activity',

@@ -1,0 +1,188 @@
+<%- include('../../partials/admin/layout-header') %>
+
+<div class="mx-auto max-w-6xl space-y-6" id="admin-user-detail" data-user-id="<%= userId %>">
+  <div class="flex items-center justify-between">
+    <a href="/admin/users" class="text-sm text-blue-600 hover:underline">← Back to users</a>
+    <div class="space-x-2">
+      <button type="button" data-action="send-email"
+              class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Send email</button>
+      <button type="button" data-action="toggle-pro"
+              class="rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Grant Pro</button>
+      <button type="button" data-action="impersonate"
+              class="rounded-md border border-amber-500 bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600">Impersonate</button>
+    </div>
+  </div>
+
+  <!-- Profile card -->
+  <section class="rounded-lg border border-slate-200 bg-white p-6" data-panel="profile">
+    <div class="text-sm text-slate-400">Loading profile…</div>
+  </section>
+
+  <!-- Panels row 1: subscriptions + invoices -->
+  <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div class="rounded-lg border border-slate-200 bg-white p-5">
+      <h3 class="text-sm font-semibold text-slate-900">Subscriptions</h3>
+      <div class="mt-3 divide-y divide-slate-100" data-panel="subscriptions">
+        <div class="py-3 text-sm text-slate-400">Loading…</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-5">
+      <h3 class="text-sm font-semibold text-slate-900">Invoices</h3>
+      <div class="mt-3 divide-y divide-slate-100" data-panel="invoices">
+        <div class="py-3 text-sm text-slate-400">Loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Panels row 2: activity + audit -->
+  <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div class="rounded-lg border border-slate-200 bg-white p-5">
+      <h3 class="text-sm font-semibold text-slate-900">Activity <span class="ml-1 text-xs font-normal text-slate-400">last 50</span></h3>
+      <div class="mt-3 space-y-2" data-panel="activity">
+        <div class="text-sm text-slate-400">Loading…</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-5">
+      <h3 class="text-sm font-semibold text-slate-900">Audit <span class="ml-1 text-xs font-normal text-slate-400">actions on this account</span></h3>
+      <div class="mt-3 space-y-2" data-panel="audit">
+        <div class="text-sm text-slate-400">Loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Checkouts (usually short) -->
+  <section class="rounded-lg border border-slate-200 bg-white p-5">
+    <h3 class="text-sm font-semibold text-slate-900">Checkout attempts</h3>
+    <div class="mt-3 divide-y divide-slate-100" data-panel="checkouts">
+      <div class="py-3 text-sm text-slate-400">Loading…</div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const userId = document.getElementById('admin-user-detail').dataset.userId;
+  const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+  const fmtCents = (cents, currency) => {
+    if (cents == null) return '—';
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 2 }).format((cents || 0) / 100);
+    } catch (e) {
+      return (currency || '') + ' ' + ((cents || 0) / 100).toFixed(2);
+    }
+  };
+  const escape = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const badge = (text, tone) => {
+    const tones = {
+      green: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+      slate: 'bg-slate-100 text-slate-700 ring-slate-200',
+      red: 'bg-red-50 text-red-700 ring-red-200',
+      blue: 'bg-blue-50 text-blue-700 ring-blue-200',
+      amber: 'bg-amber-50 text-amber-700 ring-amber-200',
+    };
+    return '<span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ' + (tones[tone] || tones.slate) + '">' + escape(text) + '</span>';
+  };
+
+  function renderProfile(p, isProActive) {
+    const rows = [
+      ['ID', p.id],
+      ['Email', p.email],
+      ['Name', p.name || '—'],
+      ['Role', p.role],
+      ['Plan', p.subscription + (isProActive ? ' ' : ' (inactive) ') + (p.premium_override ? ' [override]' : '')],
+      ['Plan ends', fmtDate(p.subscription_end)],
+      ['Country', p.country_code || '—'],
+      ['Dodo customer', p.dodo_customer_id || '—'],
+      ['Signed up', fmtDate(p.created_at)],
+      ['Last updated', fmtDate(p.updated_at)],
+      ['Active', p.is_active ? 'yes' : 'no'],
+      ['Email verified', p.email_verified ? 'yes' : 'no'],
+    ];
+    const html = '<div class="flex items-baseline justify-between"><h2 class="text-lg font-semibold text-slate-900">' + escape(p.email) + '</h2>' +
+      (isProActive ? badge('Pro active', 'green') : (p.subscription === 'pro' ? badge('Pro expired', 'amber') : badge('Free', 'slate'))) +
+      '</div>' +
+      '<dl class="mt-4 grid grid-cols-2 gap-y-3 text-sm">' +
+      rows.map(function (r) {
+        return '<dt class="text-slate-500">' + escape(r[0]) + '</dt><dd class="text-slate-900">' + escape(r[1]) + '</dd>';
+      }).join('') +
+      '</dl>';
+    document.querySelector('[data-panel="profile"]').innerHTML = html;
+
+    // Update action button labels based on current state
+    const proBtn = document.querySelector('[data-action="toggle-pro"]');
+    if (isProActive) {
+      proBtn.textContent = 'Revoke Pro';
+      proBtn.dataset.currentState = 'pro';
+    } else {
+      proBtn.textContent = 'Grant Pro';
+      proBtn.dataset.currentState = 'not-pro';
+    }
+  }
+
+  function renderList(sel, rows, fmt, emptyText) {
+    const el = document.querySelector('[data-panel="' + sel + '"]');
+    if (!rows || rows.length === 0) {
+      el.innerHTML = '<div class="py-3 text-sm text-slate-400">' + emptyText + '</div>';
+      return;
+    }
+    el.innerHTML = rows.map(fmt).join('');
+  }
+
+  fetch('/admin/api/users/' + encodeURIComponent(userId), { credentials: 'include' })
+    .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then((data) => {
+      renderProfile(data.profile, data.is_pro_active);
+      renderList('subscriptions', data.subscriptions,
+        (s) => '<div class="py-2 text-sm"><div class="flex items-baseline justify-between"><span class="font-medium">' + escape(s.plan_code) + '</span>' + badge(s.status, s.status === 'active' ? 'green' : 'slate') + '</div>' +
+               '<div class="mt-1 text-xs text-slate-500">' + escape(s.provider) + ' · ' + escape(s.provider_subscription_id || '—') + '</div>' +
+               '<div class="text-xs text-slate-500">Period: ' + fmtDate(s.current_period_start) + ' → ' + fmtDate(s.current_period_end) + '</div></div>',
+        'No subscriptions on record.');
+      renderList('invoices', data.invoices,
+        (i) => '<div class="py-2 text-sm"><div class="flex items-baseline justify-between"><span class="font-medium">' + fmtCents(i.amount_cents, i.currency) + '</span>' + badge(i.status, i.status === 'paid' ? 'green' : 'amber') + '</div>' +
+               '<div class="mt-1 text-xs text-slate-500">' + escape(i.provider) + ' · ' + escape(i.provider_invoice_id || '—') + '</div>' +
+               '<div class="text-xs text-slate-500">Paid: ' + fmtDate(i.paid_at) + '</div></div>',
+        'No invoices on record.');
+      renderList('activity', data.activity,
+        (a) => '<div class="flex items-baseline justify-between text-sm"><span class="text-slate-700">' + escape(a.event_type) + '</span><span class="text-xs text-slate-400">' + fmtDate(a.occurred_at) + '</span></div>',
+        'No activity recorded.');
+      renderList('audit', data.audit,
+        (a) => '<div class="text-sm"><div class="flex items-baseline justify-between"><span class="text-slate-700">' + escape(a.action) + '</span><span class="text-xs text-slate-400">' + fmtDate(a.created_at) + '</span></div>' +
+               '<div class="text-xs text-slate-500">by user #' + escape(a.actor_user_id) + ' on ' + escape(a.resource_type || '—') + '</div></div>',
+        'No admin actions taken on this account.');
+      renderList('checkouts', data.checkouts,
+        (c) => '<div class="py-2 text-sm"><div class="flex items-baseline justify-between"><span class="font-medium">' + escape(c.plan_code) + '</span>' +
+               (c.completed_at ? badge('completed', 'green') : (c.follow_up_sent_at ? badge('reminded', 'amber') : badge('abandoned', 'slate'))) + '</div>' +
+               '<div class="text-xs text-slate-500">' + escape(c.provider_subscription_id || '—') + '</div>' +
+               '<div class="text-xs text-slate-500">Started ' + fmtDate(c.started_at) + '</div></div>',
+        'No checkout attempts recorded.');
+    })
+    .catch((err) => {
+      document.querySelector('[data-panel="profile"]').innerHTML =
+        '<div class="text-sm text-red-600">Failed to load user: ' + escape(err.message) + '</div>';
+    });
+
+  // ---- Action buttons (wired in PR G/I) ----
+  document.querySelector('[data-action="send-email"]').addEventListener('click', () => {
+    alert('Send-email UI ships in PR G. Endpoint /admin/users/' + userId + '/email will be wired then.');
+  });
+  document.querySelector('[data-action="toggle-pro"]').addEventListener('click', function () {
+    const enable = this.dataset.currentState !== 'pro';
+    const reason = prompt(enable ? 'Reason for granting Pro (visible in audit log):' : 'Reason for revoking Pro (visible in audit log):');
+    if (reason == null) return;
+    fetch('/admin/api/users/' + encodeURIComponent(userId) + '/premium_override', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: enable, reason: reason }),
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then(() => location.reload())
+      .catch((err) => alert('Failed: ' + err.message));
+  });
+  document.querySelector('[data-action="impersonate"]').addEventListener('click', () => {
+    alert('Impersonation ships in PR I.');
+  });
+})();
+</script>
+
+<%- include('../../partials/admin/layout-footer') %>
