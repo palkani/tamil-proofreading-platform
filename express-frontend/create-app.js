@@ -31,6 +31,7 @@ const indexRouter = require('./routes/index');
 const apiRouter = require('./routes/api');
 const processRouter = require('./routes/process');
 const workspaceRouter = require('./routes/workspace');
+const adminRouter = require('./routes/admin');
 
 // JS files that must never be served from cache
 const NO_CACHE_JS = [
@@ -203,6 +204,7 @@ function createApp() {
 
   // Routes
   app.use('/auth', authRoutes);
+  app.use('/admin', adminRouter);
   app.use('/workspace', workspaceRouter);
   app.use('/', indexRouter);
   app.use('/api', apiRouter);

@@ -1,0 +1,39 @@
+<%- include('../../partials/admin/layout-header') %>
+
+<div class="mx-auto max-w-6xl space-y-6">
+  <!-- Empty-state welcome banner shown when no stats are loaded yet. PR C
+       replaces this with real metric tiles. -->
+  <section class="rounded-lg border border-blue-200 bg-blue-50 p-6">
+    <h2 class="text-base font-semibold text-blue-900">Welcome to the ProofTamil admin console</h2>
+    <p class="mt-1 text-sm text-blue-800">
+      This is the skeleton view. Dashboard metrics (users, Pro count, MRR, recent activity, recent issues)
+      will populate here after the dashboard endpoint ships.
+    </p>
+  </section>
+
+  <!-- Placeholder grid so the layout doesn't collapse to a single line. Real
+       KPI tiles arrive in PR C — same 4-column grid, same tile height, so
+       the shell doesn't jump when data lands. -->
+  <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <% ['Total users', 'Pro users', 'Monthly revenue', 'Active (24h)'].forEach(function(label) { %>
+      <div class="rounded-lg border border-slate-200 bg-white p-5">
+        <div class="text-xs font-medium uppercase tracking-wide text-slate-500"><%= label %></div>
+        <div class="mt-2 text-2xl font-semibold text-slate-400">—</div>
+        <div class="mt-1 text-xs text-slate-400">Data pending</div>
+      </div>
+    <% }); %>
+  </section>
+
+  <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div class="rounded-lg border border-slate-200 bg-white p-5">
+      <h3 class="text-sm font-semibold text-slate-900">Recent activity</h3>
+      <p class="mt-2 text-sm text-slate-500">No data yet.</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-5">
+      <h3 class="text-sm font-semibold text-slate-900">Recent issues</h3>
+      <p class="mt-2 text-sm text-slate-500">No data yet.</p>
+    </div>
+  </section>
+</div>
+
+<%- include('../../partials/admin/layout-footer') %>
