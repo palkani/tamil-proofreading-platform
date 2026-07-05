@@ -113,6 +113,18 @@ type Subscription struct {
 	Invoices []Invoice `gorm:"foreignKey:SubscriptionID" json:"invoices,omitempty"`
 }
 
+// BeforeSave normalizes empty jsonb fields to "{}" so Postgres doesn't reject
+// the INSERT with SQLSTATE 22P02 ("invalid input syntax for type json"). The
+// Metadata field is `string` mapped to jsonb; Go's zero value "" is not valid
+// JSON. Handlers that build a Subscription without touching Metadata (the
+// common Dodo webhook path) would otherwise send `metadata = ''` and fail.
+func (s *Subscription) BeforeSave(tx *gorm.DB) error {
+	if s.Metadata == "" {
+		s.Metadata = "{}"
+	}
+	return nil
+}
+
 // Invoice represents a billing invoice (immutable ledger)
 type Invoice struct {
 	ID                      uint            `gorm:"primaryKey" json:"id"`
@@ -138,6 +150,14 @@ type Invoice struct {
 	// Relationships
 	User         User          `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Subscription *Subscription `gorm:"foreignKey:SubscriptionID" json:"subscription,omitempty"`
+}
+
+// BeforeSave — see the note on Subscription.BeforeSave.
+func (i *Invoice) BeforeSave(tx *gorm.DB) error {
+	if i.Metadata == "" {
+		i.Metadata = "{}"
+	}
+	return nil
 }
 
 // PaymentEvent tracks webhook events for idempotency
@@ -180,6 +200,21 @@ type BillingAuditLog struct {
 	IPAddress    string    `gorm:"size:45" json:"ip_address,omitempty"`
 	UserAgent    string    `gorm:"size:255" json:"user_agent,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
+}
+
+// BeforeSave — see the note on Subscription.BeforeSave. OldValue/NewValue are
+// also jsonb, so normalize all three.
+func (b *BillingAuditLog) BeforeSave(tx *gorm.DB) error {
+	if b.Metadata == "" {
+		b.Metadata = "{}"
+	}
+	if b.OldValue == "" {
+		b.OldValue = "{}"
+	}
+	if b.NewValue == "" {
+		b.NewValue = "{}"
+	}
+	return nil
 }
 
 // ==================== HELPER TYPES ====================

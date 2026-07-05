@@ -52,3 +52,12 @@ type Payment struct {
 	User              User          `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
+// BeforeSave normalizes empty jsonb Metadata to "{}" so Postgres doesn't reject
+// the INSERT with SQLSTATE 22P02 — same fix pattern as models/billing.go.
+func (p *Payment) BeforeSave(tx *gorm.DB) error {
+	if p.Metadata == "" {
+		p.Metadata = "{}"
+	}
+	return nil
+}
+
