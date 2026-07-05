@@ -284,6 +284,21 @@ func (s *BillingService) UpdateUserPremiumStatus(userID uint, isPremium bool) er
 	return nil
 }
 
+// GetUserByID fetches a user by primary key. Returns ErrUserNotFound if the
+// row doesn't exist, without leaking the underlying GORM error to callers.
+// Used by the receipt email path in the payment webhook, which needs the
+// recipient's email and display name.
+func (s *BillingService) GetUserByID(userID uint) (*models.User, error) {
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
 // UpdateUserSubscriptionEnd stores or clears the subscription end date on the user.
 // Pass a non-nil *time.Time on activation/renewal; pass nil on cancellation/expiry.
 func (s *BillingService) UpdateUserSubscriptionEnd(userID uint, end *time.Time) error {

@@ -320,6 +320,27 @@ func (s *WebhookService) handleDodoPaymentSucceeded(event DodoWebhookEvent) erro
 
 	log.Printf("[WEBHOOK/DODO] Payment succeeded: payment_id=%s sub=%s user=%d amount=%d %s",
 		data.PaymentID, data.SubscriptionID, sub.UserID, data.AmountTotal, data.Currency)
+
+	// Send the receipt email. Non-fatal — a missing receipt is cosmetic; the
+	// user's Pro is already active by this point and the outer webhook
+	// idempotency check guarantees we only reach here once per Dodo message.
+	if user, uerr := s.billingService.GetUserByID(sub.UserID); uerr != nil {
+		log.Printf("[WEBHOOK/DODO] Warning: cannot send receipt — user lookup failed (user=%d): %v", sub.UserID, uerr)
+	} else {
+		if err := SendPaymentReceipt(user.Email, PaymentReceiptData{
+			RecipientName:   user.Name,
+			PlanCode:        sub.PlanCode,
+			AmountCents:     data.AmountTotal,
+			Currency:        data.Currency,
+			PaymentID:       data.PaymentID,
+			SubscriptionID:  data.SubscriptionID,
+			NextBillingDate: sub.CurrentPeriodEnd,
+			PaidAt:          now,
+		}); err != nil {
+			log.Printf("[WEBHOOK/DODO] Warning: receipt email failed for user=%d payment=%s: %v", sub.UserID, data.PaymentID, err)
+		}
+	}
+
 	return nil
 }
 
