@@ -481,6 +481,7 @@ func main() {
 		{
 			admin.GET("/users", h.AdminGetUsers)
 			admin.GET("/users/:id", h.AdminGetUserDetail)
+			admin.POST("/users/:id/email", h.AdminSendUserEmail)
 			admin.GET("/overview", h.AdminGetOverview)
 			admin.GET("/issues", h.AdminGetIssues)
 			admin.GET("/analytics", h.AdminGetAnalytics)

@@ -59,6 +59,47 @@
   </section>
 </div>
 
+<!-- Send-email modal (hidden by default). Rendered inline so no JS bundle
+     needed. Opens via [data-action="send-email"]; closes on backdrop click
+     or Escape. -->
+<div id="email-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4">
+  <div class="w-full max-w-2xl rounded-lg bg-white shadow-xl">
+    <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+      <h2 class="text-lg font-semibold text-slate-900">Send email</h2>
+      <button type="button" data-close-modal
+              class="text-slate-400 hover:text-slate-600" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+      </button>
+    </div>
+    <form id="email-form" class="space-y-4 px-6 py-5">
+      <div>
+        <label class="block text-xs font-medium text-slate-600">To</label>
+        <input type="text" data-recipient readonly
+               class="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600">Subject</label>
+        <input type="text" name="subject" required maxlength="120"
+               class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600">Body (HTML supported)</label>
+        <textarea name="html" required rows="8"
+                  class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 font-mono text-xs focus:border-blue-500 focus:outline-none"
+                  placeholder="<p>Hi there,</p><p>Your message…</p>"></textarea>
+        <p class="mt-1 text-xs text-slate-500">The email will be sent from contact@prooftamil.com via Resend, matching the branding of transactional emails.</p>
+      </div>
+      <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+        <button type="button" data-close-modal
+                class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+        <button type="submit" data-send
+                class="rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Send</button>
+      </div>
+      <div data-status class="text-sm"></div>
+    </form>
+  </div>
+</div>
+
 <script>
 (function () {
   const userId = document.getElementById('admin-user-detail').dataset.userId;
@@ -84,6 +125,8 @@
   };
 
   function renderProfile(p, isProActive) {
+    // Capture recipient email for the email-send modal
+    recipientEmail = p.email || '';
     const rows = [
       ['ID', p.id],
       ['Email', p.email],
@@ -161,9 +204,61 @@
         '<div class="text-sm text-red-600">Failed to load user: ' + escape(err.message) + '</div>';
     });
 
-  // ---- Action buttons (wired in PR G/I) ----
-  document.querySelector('[data-action="send-email"]').addEventListener('click', () => {
-    alert('Send-email UI ships in PR G. Endpoint /admin/users/' + userId + '/email will be wired then.');
+  // ---- Send-email modal ----
+  const modal = document.getElementById('email-modal');
+  const emailForm = document.getElementById('email-form');
+  let recipientEmail = '';
+  function openModal() {
+    document.querySelector('[data-recipient]').value = recipientEmail || 'user #' + userId;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    emailForm.querySelector('[name="subject"]').focus();
+  }
+  function closeModal() {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    emailForm.reset();
+    emailForm.querySelector('[data-status]').innerHTML = '';
+  }
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+  });
+  modal.querySelectorAll('[data-close-modal]').forEach((btn) => btn.addEventListener('click', closeModal));
+
+  document.querySelector('[data-action="send-email"]').addEventListener('click', openModal);
+
+  emailForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const btn = emailForm.querySelector('[data-send]');
+    const status = emailForm.querySelector('[data-status]');
+    const subject = emailForm.querySelector('[name="subject"]').value.trim();
+    const html = emailForm.querySelector('[name="html"]').value;
+    if (!subject || !html.trim()) {
+      status.innerHTML = '<span class="text-amber-700">Subject and body are required.</span>';
+      return;
+    }
+    btn.disabled = true;
+    status.innerHTML = '<span class="text-slate-500">Sending…</span>';
+    fetch('/admin/api/users/' + encodeURIComponent(userId) + '/email', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject: subject, html: html }),
+    })
+      .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error(j.error || 'HTTP ' + r.status))))
+      .then(() => {
+        status.innerHTML = '<span class="text-emerald-700">✓ Sent. Modal will close in 2 seconds.</span>';
+        setTimeout(closeModal, 2000);
+      })
+      .catch((err) => {
+        status.innerHTML = '<span class="text-red-700">Failed: ' + escape(err.message) + '</span>';
+      })
+      .finally(() => {
+        btn.disabled = false;
+      });
   });
   document.querySelector('[data-action="toggle-pro"]').addEventListener('click', function () {
     const enable = this.dataset.currentState !== 'pro';
