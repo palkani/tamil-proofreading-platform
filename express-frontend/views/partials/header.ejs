@@ -624,6 +624,46 @@
   </style>
 </head>
 <body class="bg-gray-50">
+  <!-- Impersonation banner. Rendered via inline JS that reads the
+       admin_original_token cookie (set by the admin console when
+       impersonation begins). If the cookie is absent, nothing renders.
+       End button swaps cookies back and reloads. -->
+  <script>
+    (function () {
+      const cookies = document.cookie.split(';').reduce(function (a, c) {
+        var kv = c.trim().split('=');
+        a[kv[0]] = kv[1];
+        return a;
+      }, {});
+      if (!cookies.admin_original_token) return;
+      var banner = document.createElement('div');
+      banner.style.cssText = 'position:sticky;top:0;z-index:9999;background:#f59e0b;color:#111;padding:8px 16px;font-family:system-ui,-apple-system,sans-serif;font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,0.2);';
+      banner.innerHTML =
+        '<span><strong>Impersonation active</strong> — you are browsing as another user. All actions are audit-logged.</span>' +
+        '<button type="button" id="end-impersonation" style="background:#111;color:#fff;border:0;padding:4px 12px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;">End impersonation</button>';
+      document.body.insertBefore(banner, document.body.firstChild);
+      document.getElementById('end-impersonation').addEventListener('click', function () {
+        // Grab the target user id from the current JWT for the audit
+        // endpoint, then swap the tokens back.
+        var currentToken = cookies.access_token;
+        var targetId = 0;
+        try {
+          var payload = JSON.parse(atob(currentToken.split('.')[1]));
+          targetId = payload.user_id || 0;
+        } catch (e) {}
+        // Restore admin cookie
+        document.cookie = 'access_token=' + cookies.admin_original_token + '; path=/; max-age=86400; SameSite=Lax';
+        document.cookie = 'admin_original_token=; path=/; max-age=0; SameSite=Lax';
+        fetch('/admin/api/impersonation/end', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target_id: targetId }),
+        }).finally(function () {
+          window.location.href = '/admin/users/' + targetId;
+        });
+      });
+    })();
+  </script>
   <!-- REMOVED: Global LTR CSS was CAUSING reverse text in contenteditable!
        Browser's default bidirectional text handling is correct.
        Workspace works perfectly with NO direction CSS at all. -->

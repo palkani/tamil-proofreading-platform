@@ -274,8 +274,30 @@
       .then(() => location.reload())
       .catch((err) => alert('Failed: ' + err.message));
   });
-  document.querySelector('[data-action="impersonate"]').addEventListener('click', () => {
-    alert('Impersonation ships in PR I.');
+  document.querySelector('[data-action="impersonate"]').addEventListener('click', function () {
+    if (!confirm('Start impersonation session as ' + (recipientEmail || 'user #' + userId) + '?\n\n' +
+                 'You will browse the site AS this user for 30 minutes. Every action is audit-logged.\n' +
+                 'End the session with the banner shown at the top of every page.')) return;
+    fetch('/admin/api/users/' + encodeURIComponent(userId) + '/impersonate', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    })
+      .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error(j.error || 'HTTP ' + r.status))))
+      .then((data) => {
+        // Preserve the admin's original token so "End impersonation" can
+        // restore it. We stash it in a cookie; it's marked path=/ so any
+        // page in the app can read it and inject the banner.
+        const cookies = document.cookie.split(';').reduce((a, c) => { const [k, v] = c.trim().split('='); a[k] = v; return a; }, {});
+        const originalToken = cookies['access_token'];
+        if (originalToken) {
+          document.cookie = 'admin_original_token=' + originalToken + '; path=/; max-age=1800; SameSite=Lax';
+        }
+        // Swap access_token to the impersonation token.
+        document.cookie = 'access_token=' + data.access_token + '; path=/; max-age=1800; SameSite=Lax';
+        // Redirect to homepage as the impersonated user.
+        window.location.href = '/';
+      })
+      .catch((err) => alert('Impersonation failed: ' + err.message));
   });
 })();
 </script>
