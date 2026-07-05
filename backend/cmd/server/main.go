@@ -470,9 +470,13 @@ func main() {
 			protected.POST("/transliterate/accept", h.TransliterateAccept)
 		}
 
-		// Admin routes
+		// Admin routes — 60 requests/minute per admin user. Enough headroom
+		// for interactive UI browsing (list refreshes, autocomplete) but
+		// stops any single admin session from being a runaway load source
+		// (e.g. a stuck spinner hammering the endpoint).
 		admin := v1.Group("/admin")
 		admin.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+		admin.Use(middleware.RateLimitMiddleware(60, time.Minute))
 		admin.Use(middleware.AdminMiddleware(db))
 		{
 			admin.GET("/users", h.AdminGetUsers)
