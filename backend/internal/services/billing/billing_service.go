@@ -236,21 +236,52 @@ func (s *BillingService) UpdateInvoiceStatus(providerInvoiceID string, status mo
 		Updates(updates).Error
 }
 
-// UpdateUserPremiumStatus updates a user's premium status after payment
+// UpdateUserPremiumStatus updates a user's premium status after payment.
+//
+// Fails LOUDLY when:
+//   - userID is 0 (unset / bad metadata from checkout — surfaces the caller bug)
+//   - No user row matches the given id (returns ErrUserNotFound so the webhook
+//     handler can return the error to Dodo, which triggers Dodo's automatic
+//     retry per the Standard Webhooks spec)
+//   - Either the Updates or the UpdateColumn call errors at the DB level
+//
+// Previously this silently returned nil on the "0 rows affected" case, which
+// meant a webhook with bad metadata would be marked "processed successfully"
+// even though the user's Pro flag never actually flipped. That produced the
+// class of incidents where Dodo sends a payment-confirmation email but the
+// user's account remains free until manual intervention.
 func (s *BillingService) UpdateUserPremiumStatus(userID uint, isPremium bool) error {
+	if userID == 0 {
+		return fmt.Errorf("UpdateUserPremiumStatus: refusing to update with userID=0 (likely missing/bad metadata at checkout)")
+	}
+
 	updates := map[string]interface{}{}
-	
 	if isPremium {
 		updates["subscription"] = models.PlanPro
 	} else {
 		updates["subscription"] = models.PlanFree
 	}
-	
-	// Increment token version to force token refresh
-	return s.db.Model(&models.User{}).
+
+	result := s.db.Model(&models.User{}).
 		Where("id = ?", userID).
-		Updates(updates).
-		UpdateColumn("token_version", gorm.Expr("token_version + 1")).Error
+		Updates(updates)
+	if result.Error != nil {
+		return fmt.Errorf("UpdateUserPremiumStatus: updating user %d failed: %w", userID, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("UpdateUserPremiumStatus: user id=%d: %w", userID, ErrUserNotFound)
+	}
+
+	// Increment token version to force refresh of any active JWTs (they cache
+	// the subscription plan). Runs in a separate statement — its result is
+	// distinct from the Updates() above, whereas the previous chained form
+	// masked the Updates error with the UpdateColumn error.
+	if err := s.db.Model(&models.User{}).
+		Where("id = ?", userID).
+		UpdateColumn("token_version", gorm.Expr("token_version + 1")).Error; err != nil {
+		return fmt.Errorf("UpdateUserPremiumStatus: bumping token_version for user %d failed: %w", userID, err)
+	}
+	return nil
 }
 
 // UpdateUserSubscriptionEnd stores or clears the subscription end date on the user.

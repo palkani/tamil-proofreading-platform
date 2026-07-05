@@ -3,6 +3,7 @@ package billing
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -129,11 +130,14 @@ func (s *WebhookService) handleDodoSubscriptionActive(event DodoWebhookEvent) er
 		log.Printf("[WEBHOOK/DODO] Warning: failed to store dodo customer id: %v", err)
 	}
 
+	// Fail LOUDLY on Pro activation failure so Dodo retries — this is the
+	// paying-user path and the whole reason the webhook exists.
 	if err := s.billingService.UpdateUserPremiumStatus(userID, true); err != nil {
-		log.Printf("[WEBHOOK/DODO] Warning: failed to activate Pro for user %d: %v", userID, err)
-	} else {
-		log.Printf("[WEBHOOK/DODO] Pro activated: user=%d sub=%s", userID, data.SubscriptionID)
+		log.Printf("[WEBHOOK/DODO] ERROR: failed to activate Pro for user %d (sub=%s): %v", userID, data.SubscriptionID, err)
+		return fmt.Errorf("activate Pro for user %d: %w", userID, err)
 	}
+	log.Printf("[WEBHOOK/DODO] Pro activated: user=%d sub=%s", userID, data.SubscriptionID)
+
 	if err := s.billingService.UpdateUserSubscriptionEnd(userID, periodEnd); err != nil {
 		log.Printf("[WEBHOOK/DODO] Warning: failed to set subscription_end for user %d: %v", userID, err)
 	}
@@ -164,9 +168,11 @@ func (s *WebhookService) handleDodoSubscriptionRenewed(event DodoWebhookEvent) e
 		return err
 	}
 
-	// Keep user premium (renewal = still active)
+	// Renewal is also a "paying customer" event — Pro must stay on. Fail
+	// loudly so Dodo retries if the update didn't take.
 	if err := s.billingService.UpdateUserPremiumStatus(sub.UserID, true); err != nil {
-		log.Printf("[WEBHOOK/DODO] Warning: failed to keep Pro on renewal for user %d: %v", sub.UserID, err)
+		log.Printf("[WEBHOOK/DODO] ERROR: failed to keep Pro on renewal for user %d (sub=%s): %v", sub.UserID, data.SubscriptionID, err)
+		return fmt.Errorf("keep Pro on renewal for user %d: %w", sub.UserID, err)
 	}
 	if err := s.billingService.UpdateUserSubscriptionEnd(sub.UserID, periodEnd); err != nil {
 		log.Printf("[WEBHOOK/DODO] Warning: failed to set subscription_end for user %d: %v", sub.UserID, err)
@@ -197,8 +203,13 @@ func (s *WebhookService) handleDodoSubscriptionCancelled(event DodoWebhookEvent)
 	if err := s.billingService.CreateOrUpdateSubscription(sub); err != nil {
 		return err
 	}
+	// Deactivation: log at ERROR if it fails, but don't return an error —
+	// a stuck cancellation shouldn't cause Dodo to retry-storm on us. The
+	// operator sees the ERROR log and reconciles manually if needed. Pro
+	// staying on slightly too long is a smaller wound than a paying user
+	// missing Pro entirely (which is why activation IS fatal above).
 	if err := s.billingService.UpdateUserPremiumStatus(sub.UserID, false); err != nil {
-		log.Printf("[WEBHOOK/DODO] Warning: failed to revoke Pro for user %d: %v", sub.UserID, err)
+		log.Printf("[WEBHOOK/DODO] ERROR: failed to revoke Pro for user %d (sub=%s): %v", sub.UserID, data.SubscriptionID, err)
 	}
 	if err := s.billingService.UpdateUserSubscriptionEnd(sub.UserID, nil); err != nil {
 		log.Printf("[WEBHOOK/DODO] Warning: failed to clear subscription_end for user %d: %v", sub.UserID, err)
@@ -226,8 +237,9 @@ func (s *WebhookService) handleDodoSubscriptionExpired(event DodoWebhookEvent) e
 	if err := s.billingService.CreateOrUpdateSubscription(sub); err != nil {
 		return err
 	}
+	// Same deactivation-not-fatal rationale as cancelled path above.
 	if err := s.billingService.UpdateUserPremiumStatus(sub.UserID, false); err != nil {
-		log.Printf("[WEBHOOK/DODO] Warning: failed to revoke Pro on expiry for user %d: %v", sub.UserID, err)
+		log.Printf("[WEBHOOK/DODO] ERROR: failed to revoke Pro on expiry for user %d (sub=%s): %v", sub.UserID, data.SubscriptionID, err)
 	}
 	if err := s.billingService.UpdateUserSubscriptionEnd(sub.UserID, nil); err != nil {
 		log.Printf("[WEBHOOK/DODO] Warning: failed to clear subscription_end for user %d: %v", sub.UserID, err)
@@ -295,8 +307,13 @@ func (s *WebhookService) handleDodoPaymentSucceeded(event DodoWebhookEvent) erro
 	}
 
 	// Backup activation path (subscription.active should have fired first).
+	// Fail loudly here too — if payment succeeded but Pro didn't activate,
+	// we need Dodo to retry and the operator to see an ERROR log, not a
+	// silently-buried Warning.
 	if err := s.billingService.UpdateUserPremiumStatus(sub.UserID, true); err != nil {
-		log.Printf("[WEBHOOK/DODO] Warning: failed to ensure Pro on payment.succeeded: %v", err)
+		log.Printf("[WEBHOOK/DODO] ERROR: failed to ensure Pro on payment.succeeded (payment_id=%s, sub=%s, user=%d): %v",
+			data.PaymentID, data.SubscriptionID, sub.UserID, err)
+		return fmt.Errorf("ensure Pro on payment.succeeded (user %d): %w", sub.UserID, err)
 	}
 
 	log.Printf("[WEBHOOK/DODO] Payment succeeded: payment_id=%s sub=%s user=%d amount=%d %s",
