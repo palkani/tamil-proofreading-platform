@@ -141,6 +141,28 @@ type Invoice struct {
 	Subscription *Subscription `gorm:"foreignKey:SubscriptionID" json:"subscription,omitempty"`
 }
 
+// AdminBroadcast records a bulk email sent from the admin console.
+// Preserves the subject + filter + counters so ops can review history
+// and answer "why is this user upset about a marketing email".
+//
+// Body is stored so ops can re-check what actually went out (and
+// re-send to a wider audience if needed). Small blast radius — only
+// admins can write, only admins can read.
+type AdminBroadcast struct {
+	ID              uint           `gorm:"primaryKey" json:"id"`
+	SenderUserID    uint           `gorm:"not null;index" json:"sender_user_id"`
+	Subject         string         `gorm:"size:255;not null" json:"subject"`
+	BodyHTML        string         `gorm:"type:text;not null" json:"body_html"`
+	FilterCriteria  datatypes.JSON `gorm:"type:jsonb" json:"filter_criteria,omitempty"`
+	RecipientCount  int            `gorm:"not null" json:"recipient_count"`
+	SentCount       int            `gorm:"not null;default:0" json:"sent_count"`
+	FailedCount     int            `gorm:"not null;default:0" json:"failed_count"`
+	Status          string         `gorm:"size:20;not null;default:'sending';index" json:"status"` // sending | complete | failed
+	StartedAt       time.Time      `json:"started_at"`
+	CompletedAt     *time.Time     `json:"completed_at,omitempty"`
+	CreatedAt       time.Time      `json:"created_at"`
+}
+
 // CheckoutAttempt records a user's start of a Dodo checkout so we can
 // detect abandoned sessions and follow up with a reminder email.
 //

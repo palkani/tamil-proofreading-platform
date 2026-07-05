@@ -1,7 +1,238 @@
 <%- include('../../partials/admin/layout-header') %>
-<div class="mx-auto max-w-6xl">
-  <div class="rounded-lg border border-slate-200 bg-white p-8 text-center">
-    <p class="text-sm text-slate-500">Communications ships in PR G (direct user email) and PR H (broadcast). Send a receipt-style message to a specific user, or filter-and-broadcast to a segment (all users, Pro only, by country, etc.).</p>
+
+<div class="mx-auto max-w-5xl space-y-6" id="admin-communications">
+  <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+    <!-- Composer -->
+    <section class="lg:col-span-2 rounded-lg border border-slate-200 bg-white p-6">
+      <h2 class="text-base font-semibold text-slate-900">Compose broadcast</h2>
+      <p class="mt-1 text-sm text-slate-500">
+        Sends via Resend from <code>contact@prooftamil.com</code>. All broadcasts are logged with subject, filter, and counters.
+      </p>
+
+      <form id="broadcast-form" class="mt-4 space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-600">Subject</label>
+          <input type="text" name="subject" required maxlength="140"
+                 class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-600">HTML body</label>
+          <textarea name="html" required rows="10"
+                    class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 font-mono text-xs focus:border-blue-500 focus:outline-none"
+                    placeholder="<p>Dear <strong>reader</strong>,</p>&#10;<p>Your message here…</p>"></textarea>
+        </div>
+
+        <div class="rounded-md border border-slate-200 bg-slate-50 p-4">
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-600">Recipient filter</h3>
+          <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <label class="block text-xs text-slate-600">Subscription</label>
+              <select data-filter="subscription" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm">
+                <option value="">Any (all users)</option>
+                <option value="pro">Pro users only</option>
+                <option value="free">Free users only</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-600">Country (ISO-2)</label>
+              <input type="text" data-filter="country" maxlength="2" placeholder="e.g. IN"
+                     class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm uppercase" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-600">Signed up within</label>
+              <select data-filter="signup_within" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm">
+                <option value="">Any</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="90d">Last 90 days</option>
+              </select>
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-slate-500">
+            Broadcasts only reach <strong>active + email-verified</strong> users with a valid email. Unverified and deactivated accounts are always excluded.
+          </p>
+          <div class="mt-3 flex items-center justify-between rounded-md bg-white px-3 py-2 text-sm">
+            <span class="text-slate-700">Recipient count</span>
+            <span class="text-lg font-semibold text-slate-900" data-recipient-count>—</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+          <button type="button" data-preview
+                  class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Preview</button>
+          <button type="submit"
+                  class="rounded-md border border-red-600 bg-red-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50" data-send>Send broadcast</button>
+        </div>
+        <div data-status class="text-sm"></div>
+      </form>
+    </section>
+
+    <!-- History -->
+    <section class="rounded-lg border border-slate-200 bg-white p-5">
+      <h3 class="text-sm font-semibold text-slate-900">Recent broadcasts</h3>
+      <div class="mt-3 divide-y divide-slate-100" data-history>
+        <div class="py-3 text-sm text-slate-400">Loading…</div>
+      </div>
+    </section>
   </div>
 </div>
+
+<!-- Preview modal (also used for confirmation before send) -->
+<div id="preview-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4">
+  <div class="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-lg bg-white shadow-xl">
+    <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+      <h2 class="text-lg font-semibold text-slate-900" data-preview-title>Preview</h2>
+      <button type="button" data-close-preview class="text-slate-400 hover:text-slate-600" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+      </button>
+    </div>
+    <div class="max-h-[65vh] overflow-y-auto border-b border-slate-100 p-6">
+      <iframe data-preview-frame sandbox="allow-same-origin" class="h-[500px] w-full rounded border border-slate-200"></iframe>
+    </div>
+    <div class="flex items-center justify-end gap-2 px-6 py-4">
+      <button type="button" data-close-preview class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const form = document.getElementById('broadcast-form');
+  const preview = document.getElementById('preview-modal');
+  const debounced = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+  const escape = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+
+  function currentFilter() {
+    return {
+      subscription: document.querySelector('[data-filter="subscription"]').value,
+      country: document.querySelector('[data-filter="country"]').value.trim().toUpperCase(),
+      signup_within: document.querySelector('[data-filter="signup_within"]').value,
+    };
+  }
+
+  function refreshDryRun() {
+    const el = document.querySelector('[data-recipient-count]');
+    el.textContent = '…';
+    fetch('/admin/api/broadcasts/dry-run', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filter: currentFilter() }),
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then((data) => (el.textContent = new Intl.NumberFormat('en-US').format(data.recipient_count || 0)))
+      .catch((err) => (el.textContent = '?'));
+  }
+  const runDryRun = debounced(refreshDryRun, 250);
+  document.querySelectorAll('[data-filter]').forEach((el) => {
+    el.addEventListener('input', runDryRun);
+    el.addEventListener('change', refreshDryRun);
+  });
+  refreshDryRun();
+
+  // ---- Preview ----
+  function openPreview() {
+    const html = form.querySelector('[name="html"]').value;
+    const subject = form.querySelector('[name="subject"]').value.trim();
+    preview.querySelector('[data-preview-title]').textContent = 'Preview · ' + (subject || '(no subject)');
+    const frame = preview.querySelector('[data-preview-frame]');
+    frame.srcdoc = html || '<p style="color:#888;font-family:sans-serif;">(no body)</p>';
+    preview.classList.remove('hidden');
+    preview.classList.add('flex');
+  }
+  function closePreview() {
+    preview.classList.add('hidden');
+    preview.classList.remove('flex');
+  }
+  document.querySelector('[data-preview]').addEventListener('click', openPreview);
+  preview.querySelectorAll('[data-close-preview]').forEach((btn) => btn.addEventListener('click', closePreview));
+  preview.addEventListener('click', (e) => { if (e.target === preview) closePreview(); });
+
+  // ---- Send ----
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const subject = form.querySelector('[name="subject"]').value.trim();
+    const html = form.querySelector('[name="html"]').value;
+    const filter = currentFilter();
+    const recipientText = document.querySelector('[data-recipient-count]').textContent;
+    if (!subject || !html.trim()) return;
+    if (!confirm('Send broadcast "' + subject + '" to ' + recipientText + ' recipient(s)? This cannot be undone.')) return;
+    const btn = form.querySelector('[data-send]');
+    const status = form.querySelector('[data-status]');
+    btn.disabled = true;
+    status.innerHTML = '<span class="text-slate-500">Queueing…</span>';
+
+    fetch('/admin/api/broadcasts', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject: subject, html: html, filter: filter }),
+    })
+      .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error(j.error || 'HTTP ' + r.status))))
+      .then((data) => {
+        status.innerHTML = '<span class="text-emerald-700">✓ Queued as broadcast #' + data.broadcast_id + ' — polling for progress…</span>';
+        pollProgress(data.broadcast_id);
+      })
+      .catch((err) => {
+        status.innerHTML = '<span class="text-red-700">Failed: ' + escape(err.message) + '</span>';
+        btn.disabled = false;
+      });
+  });
+
+  function pollProgress(id) {
+    const status = form.querySelector('[data-status]');
+    const btn = form.querySelector('[data-send]');
+    const tick = () => {
+      fetch('/admin/api/broadcasts/' + id, { credentials: 'include' })
+        .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+        .then((b) => {
+          const pct = b.recipient_count > 0 ? Math.round(((b.sent_count + b.failed_count) / b.recipient_count) * 100) : 0;
+          status.innerHTML = '<span class="text-slate-700">Broadcast #' + id + ': ' +
+            b.sent_count + '/' + b.recipient_count + ' sent (' + pct + '%). ' +
+            'Failures: ' + b.failed_count + '.</span>';
+          if (b.status === 'complete' || b.status === 'failed') {
+            status.innerHTML = '<span class="' + (b.status === 'complete' ? 'text-emerald-700' : 'text-red-700') + '">' +
+              (b.status === 'complete' ? '✓ Complete' : 'Failed') +
+              ' — sent ' + b.sent_count + ' / ' + b.recipient_count + ' (failures: ' + b.failed_count + ')</span>';
+            btn.disabled = false;
+            loadHistory();
+            return;
+          }
+          setTimeout(tick, 3000);
+        })
+        .catch((err) => {
+          status.innerHTML = '<span class="text-red-700">Poll failed: ' + escape(err.message) + '</span>';
+          btn.disabled = false;
+        });
+    };
+    setTimeout(tick, 1500);
+  }
+
+  function loadHistory() {
+    const el = document.querySelector('[data-history]');
+    fetch('/admin/api/broadcasts', { credentials: 'include' })
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then((data) => {
+        const rows = data.broadcasts || [];
+        if (!rows.length) {
+          el.innerHTML = '<div class="py-3 text-sm text-slate-400">No broadcasts yet.</div>';
+          return;
+        }
+        el.innerHTML = rows.map(function (b) {
+          const tone = b.status === 'complete' ? 'text-emerald-700' : b.status === 'sending' ? 'text-blue-700' : 'text-red-700';
+          return '<div class="py-2 text-sm">' +
+            '<div class="font-medium text-slate-900">' + escape(b.subject) + '</div>' +
+            '<div class="mt-0.5 text-xs text-slate-500">' + fmtDate(b.created_at) + ' · ' +
+            'sent ' + b.sent_count + '/' + b.recipient_count + ' · ' +
+            '<span class="' + tone + '">' + escape(b.status) + '</span></div></div>';
+        }).join('');
+      })
+      .catch((err) => {
+        el.innerHTML = '<div class="py-3 text-sm text-red-600">Failed: ' + escape(err.message) + '</div>';
+      });
+  }
+  loadHistory();
+})();
+</script>
+
 <%- include('../../partials/admin/layout-footer') %>

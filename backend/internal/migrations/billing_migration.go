@@ -80,6 +80,12 @@ func MigrateBilling(db *gorm.DB) error {
 		return err
 	}
 	log.Println("[MIGRATIONS] CheckoutAttempt table migrated successfully")
+
+	if err := db.AutoMigrate(&models.AdminBroadcast{}); err != nil && !isAlreadyExistsOrBind(err) {
+		log.Printf("[MIGRATIONS] Warning: Failed to migrate AdminBroadcast table: %v", err)
+		return err
+	}
+	log.Println("[MIGRATIONS] AdminBroadcast table migrated successfully")
 	log.Println("[MIGRATIONS] BillingAuditLog table migrated successfully")
 
 	// Create indexes
