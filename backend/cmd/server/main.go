@@ -297,6 +297,19 @@ func main() {
 	renewalSvc := billing.NewRenewalService(db)
 	go renewalSvc.RunDailyLoop()
 
+	// Billing reconciliation cron — diffs users vs subscriptions hourly and
+	// emails contact@prooftamil.com on any drift. Gated by an env var so it
+	// only runs on one region (leader), preventing duplicate alerts when we
+	// deploy the same image to asia + us. Set RECONCILIATION_ENABLED=true
+	// on exactly one region.
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("RECONCILIATION_ENABLED")), "true") {
+		reconcileSvc := billing.NewReconciliationService(db)
+		go reconcileSvc.RunHourlyLoop()
+		log.Println("[BILLING] Reconciliation service: enabled (hourly)")
+	} else {
+		log.Println("[BILLING] Reconciliation service: disabled (set RECONCILIATION_ENABLED=true on exactly one region)")
+	}
+
 	// Ensure billing seed data exists even when RUN_MIGRATIONS=false.
 	// seedBillingDataIfNeeded is idempotent: it only inserts missing rows.
 	go seedBillingDataIfNeeded(db)
