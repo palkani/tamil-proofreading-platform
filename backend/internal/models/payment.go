@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -43,21 +44,12 @@ type Payment struct {
 	InvoiceNumber     string        `gorm:"uniqueIndex" json:"invoice_number,omitempty"`
 	InvoiceURL        string        `json:"invoice_url,omitempty"`
 	Description       string        `gorm:"type:text" json:"description,omitempty"`
-	Metadata          string        `gorm:"type:jsonb" json:"metadata,omitempty"` // Additional data
+	Metadata          datatypes.JSON `gorm:"type:jsonb" json:"metadata,omitempty"` // Additional data
 	CreatedAt         time.Time     `json:"created_at"`
 	UpdatedAt         time.Time     `json:"updated_at"`
 	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
 	
 	// Relationships
 	User              User          `gorm:"foreignKey:UserID" json:"user,omitempty"`
-}
-
-// BeforeSave normalizes empty jsonb Metadata to "{}" so Postgres doesn't reject
-// the INSERT with SQLSTATE 22P02 — same fix pattern as models/billing.go.
-func (p *Payment) BeforeSave(tx *gorm.DB) error {
-	if p.Metadata == "" {
-		p.Metadata = "{}"
-	}
-	return nil
 }
 

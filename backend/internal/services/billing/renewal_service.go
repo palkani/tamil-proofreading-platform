@@ -9,6 +9,7 @@ import (
 	"tamil-proofreading-platform/backend/internal/models"
 	emailsvc "tamil-proofreading-platform/backend/internal/services/email"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -110,7 +111,7 @@ func (r *RenewalService) sendRenewalReminders() {
 			TargetUserID: &userID,
 			ResourceType: "subscription",
 			ResourceID:   &sub.ID,
-			NewValue:     fmt.Sprintf(`{"period_end":"%s","plan":"%s"}`, periodEnd.Format(time.RFC3339), sub.PlanCode),
+			NewValue:     datatypes.JSON(fmt.Sprintf(`{"period_end":"%s","plan":"%s"}`, periodEnd.Format(time.RFC3339), sub.PlanCode)),
 		}
 		if logErr := r.db.Create(auditEntry).Error; logErr != nil {
 			log.Printf("[RENEWAL] Warning: failed to write audit log for user %d: %v", userID, logErr)

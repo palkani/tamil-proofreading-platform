@@ -11,6 +11,7 @@ import (
 
 	"tamil-proofreading-platform/backend/internal/models"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -366,8 +367,8 @@ func (s *BillingService) SetAdminPremiumOverride(adminUserID, targetUserID uint,
 		TargetUserID: &targetUserID,
 		ResourceType: "user",
 		ResourceID:   &targetUserID,
-		OldValue:     string(oldValue),
-		NewValue:     string(newValue),
+		OldValue:     datatypes.JSON(oldValue),
+		NewValue:     datatypes.JSON(newValue),
 	}
 	if err := tx.Create(auditLog).Error; err != nil {
 		tx.Rollback()
@@ -418,8 +419,8 @@ func (s *BillingService) SetGlobalPremiumEnabled(adminUserID uint, enabled bool,
 			Action:       "global_premium_toggle",
 			ResourceType: "feature_flag",
 			ResourceID:   &flag.ID,
-			OldValue:     string(oldValue),
-			NewValue:     string(newValue),
+			OldValue:     datatypes.JSON(oldValue),
+			NewValue:     datatypes.JSON(newValue),
 		}
 		if err := tx.Create(auditLog).Error; err != nil {
 			tx.Rollback()

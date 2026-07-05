@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -102,7 +103,7 @@ type Subscription struct {
 	CanceledAt             *time.Time         `json:"canceled_at,omitempty"`
 	CancelReason           string             `gorm:"type:text" json:"cancel_reason,omitempty"`
 	TrialEndsAt            *time.Time         `json:"trial_ends_at,omitempty"`
-	Metadata               string             `gorm:"type:jsonb" json:"metadata,omitempty"`
+	Metadata               datatypes.JSON     `gorm:"type:jsonb" json:"metadata,omitempty"`
 	CreatedAt              time.Time          `json:"created_at"`
 	UpdatedAt              time.Time          `json:"updated_at"`
 	DeletedAt              gorm.DeletedAt     `gorm:"index" json:"-"`
@@ -111,18 +112,6 @@ type Subscription struct {
 	User     User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Plan     Plan      `gorm:"foreignKey:PlanCode;references:Code" json:"plan,omitempty"`
 	Invoices []Invoice `gorm:"foreignKey:SubscriptionID" json:"invoices,omitempty"`
-}
-
-// BeforeSave normalizes empty jsonb fields to "{}" so Postgres doesn't reject
-// the INSERT with SQLSTATE 22P02 ("invalid input syntax for type json"). The
-// Metadata field is `string` mapped to jsonb; Go's zero value "" is not valid
-// JSON. Handlers that build a Subscription without touching Metadata (the
-// common Dodo webhook path) would otherwise send `metadata = ''` and fail.
-func (s *Subscription) BeforeSave(tx *gorm.DB) error {
-	if s.Metadata == "" {
-		s.Metadata = "{}"
-	}
-	return nil
 }
 
 // Invoice represents a billing invoice (immutable ledger)
@@ -143,21 +132,13 @@ type Invoice struct {
 	RefundedAt              *time.Time      `json:"refunded_at,omitempty"`
 	RefundAmountCents       *int            `json:"refund_amount_cents,omitempty"`
 	FailureReason           string          `gorm:"type:text" json:"failure_reason,omitempty"`
-	Metadata                string          `gorm:"type:jsonb" json:"metadata,omitempty"`
+	Metadata                datatypes.JSON  `gorm:"type:jsonb" json:"metadata,omitempty"`
 	CreatedAt               time.Time       `json:"created_at"`
 	UpdatedAt               time.Time       `json:"updated_at"`
 
 	// Relationships
 	User         User          `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Subscription *Subscription `gorm:"foreignKey:SubscriptionID" json:"subscription,omitempty"`
-}
-
-// BeforeSave — see the note on Subscription.BeforeSave.
-func (i *Invoice) BeforeSave(tx *gorm.DB) error {
-	if i.Metadata == "" {
-		i.Metadata = "{}"
-	}
-	return nil
 }
 
 // PaymentEvent tracks webhook events for idempotency
@@ -194,27 +175,12 @@ type BillingAuditLog struct {
 	TargetUserID *uint     `gorm:"index" json:"target_user_id,omitempty"`
 	ResourceType string    `gorm:"size:50" json:"resource_type,omitempty"` // subscription, invoice, feature_flag, user
 	ResourceID   *uint     `json:"resource_id,omitempty"`
-	OldValue     string    `gorm:"type:jsonb" json:"old_value,omitempty"`
-	NewValue     string    `gorm:"type:jsonb" json:"new_value,omitempty"`
-	Metadata     string    `gorm:"type:jsonb" json:"metadata,omitempty"`
+	OldValue     datatypes.JSON `gorm:"type:jsonb" json:"old_value,omitempty"`
+	NewValue     datatypes.JSON `gorm:"type:jsonb" json:"new_value,omitempty"`
+	Metadata     datatypes.JSON `gorm:"type:jsonb" json:"metadata,omitempty"`
 	IPAddress    string    `gorm:"size:45" json:"ip_address,omitempty"`
 	UserAgent    string    `gorm:"size:255" json:"user_agent,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
-}
-
-// BeforeSave — see the note on Subscription.BeforeSave. OldValue/NewValue are
-// also jsonb, so normalize all three.
-func (b *BillingAuditLog) BeforeSave(tx *gorm.DB) error {
-	if b.Metadata == "" {
-		b.Metadata = "{}"
-	}
-	if b.OldValue == "" {
-		b.OldValue = "{}"
-	}
-	if b.NewValue == "" {
-		b.NewValue = "{}"
-	}
-	return nil
 }
 
 // ==================== HELPER TYPES ====================
