@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"hash/fnv"
@@ -18,10 +20,60 @@ import (
 	"tamil-proofreading-platform/backend/internal/middleware"
 	"tamil-proofreading-platform/backend/internal/models"
 	"tamil-proofreading-platform/backend/internal/util/auditlog"
+	"tamil-proofreading-platform/backend/internal/util/geo"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+// truncateIPv4 keeps only the first 3 octets of an IPv4 address so the row
+// doesn't identify the visitor uniquely. "1.2.3.4" → "1.2.3". Leaves
+// IPv6 addresses (with colons) unchanged since they're already hard to
+// deanonymise via the first N octets alone; the presence of an IPv6
+// address is signal enough.
+func truncateIPv4(ip string) string {
+	if strings.ContainsRune(ip, ':') {
+		return ip
+	}
+	parts := strings.SplitN(ip, ".", 4)
+	if len(parts) < 4 {
+		return ip
+	}
+	return strings.Join(parts[:3], ".")
+}
+
+// hashUserAgent returns the first 16 hex chars of a SHA-256 of the UA.
+// Enough to cluster distinct browsers over time without persisting the
+// full string.
+func hashUserAgent(ua string) string {
+	if ua == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(ua))
+	return hex.EncodeToString(sum[:8])
+}
+
+// recordAnonymousSubmission writes an AnonymousSubmissionEvent for a
+// completed inline demo submission. Non-fatal — failures log a warning
+// and never surface to the caller, so an analytics write never delays
+// or breaks the demo response.
+func (h *Handlers) recordAnonymousSubmission(c *gin.Context, requestID string, textLength, wordCount, correctionCount int, cacheHit bool) {
+	event := &models.AnonymousSubmissionEvent{
+		RequestID:       requestID,
+		TextLength:      textLength,
+		WordCount:       wordCount,
+		CorrectionCount: correctionCount,
+		CacheHit:        cacheHit,
+		CountryCode:     geo.CountryFromContext(c),
+		TruncatedIP:     truncateIPv4(c.ClientIP()),
+		UserAgentHash:   hashUserAgent(c.GetHeader("User-Agent")),
+		Referrer:        c.GetHeader("Referer"),
+		OccurredAt:      time.Now(),
+	}
+	if err := h.db.Create(event).Error; err != nil {
+		log.Printf("[ANALYTICS] Failed to record anonymous submission (request_id=%s): %v", requestID, err)
+	}
+}
 
 type SubmitTextRequest struct {
 	Text                string `json:"text"`
@@ -344,6 +396,12 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 				"request_id":  requestID,
 				"corrections": cached,
 			})
+			// Log to the anonymous-submission analytics table so the admin
+			// dashboard sees this attempt. Non-fatal; runs after the
+			// response is queued via the go routine so cache-hit latency
+			// stays sub-100ms.
+			go h.recordAnonymousSubmission(c.Copy(), requestID, len(req.Text),
+				h.nlpService.CountWords(req.Text), len(cached), true)
 			return
 		}
 
@@ -459,6 +517,10 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 			"request_id":  requestID,
 			"corrections": corrections,
 		})
+		// Record analytics after response is queued. Uses c.Copy() so the
+		// goroutine keeps the request headers (IP, User-Agent) even after
+		// the request context returns.
+		go h.recordAnonymousSubmission(c.Copy(), requestID, len(req.Text), wordCount, len(corrections), false)
 		return
 	}
 

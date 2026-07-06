@@ -66,6 +66,12 @@ func (h *Handlers) AdminGetOverview(c *gin.Context) {
 		Select("COALESCE(SUM(base_price_usd_cents), 0)").
 		Scan(&lifetimeRevenue)
 
+	// --- Demo activity (anonymous submissions from the homepage) ---
+	// Answers "is the demo getting traffic even when nobody signs up?"
+	var demo24h, demo7d int64
+	h.db.Model(&models.AnonymousSubmissionEvent{}).Where("occurred_at >= ?", last24h).Count(&demo24h)
+	h.db.Model(&models.AnonymousSubmissionEvent{}).Where("occurred_at >= ?", last7d).Count(&demo7d)
+
 	// --- Issues ---
 	var failedWebhooks, proMissingEnd, abandonedCheckouts int64
 	h.db.Model(&models.PaymentEvent{}).Where("status = ?", models.PaymentEventStatusFailed).Count(&failedWebhooks)
@@ -111,6 +117,10 @@ func (h *Handlers) AdminGetOverview(c *gin.Context) {
 			"failed_webhooks":         failedWebhooks,
 			"active_pro_without_end":  proMissingEnd,
 			"checkouts_abandoned_24h": abandonedCheckouts,
+		},
+		"demo": gin.H{
+			"submissions_24h": demo24h,
+			"submissions_7d":  demo7d,
 		},
 		"recent_activity": recent,
 	})

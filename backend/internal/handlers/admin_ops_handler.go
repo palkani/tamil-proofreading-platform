@@ -29,6 +29,7 @@ func (h *Handlers) AdminEnsureBillingTables(c *gin.Context) {
 	}{
 		{"checkout_attempts", &models.CheckoutAttempt{}},
 		{"admin_broadcasts", &models.AdminBroadcast{}},
+		{"anonymous_submission_events", &models.AnonymousSubmissionEvent{}},
 		{"subscriptions", &models.Subscription{}},
 		{"invoices", &models.Invoice{}},
 		{"payment_events", &models.PaymentEvent{}},

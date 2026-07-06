@@ -48,6 +48,30 @@ type ActivityEvent struct {
 	User User `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
+// AnonymousSubmissionEvent captures homepage/demo proofreading attempts.
+// Authenticated workspace autosaves land in the submissions table; this
+// table is specifically for the anonymous fast-path in SubmitText which
+// intentionally skips DB writes for performance.
+//
+// Without this table, homepage demo activity is invisible to product
+// analytics — the audit_log stream in Cloud Run is queryable but not
+// aggregatable in the admin dashboard. This lets us count demo attempts
+// per day, see word-count distribution, correction rates, and rough
+// geographic reach without changing the fast-path latency budget.
+type AnonymousSubmissionEvent struct {
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	RequestID       string    `gorm:"size:64;index" json:"request_id"`
+	TextLength      int       `gorm:"not null" json:"text_length"`      // raw byte length
+	WordCount       int       `gorm:"not null;index" json:"word_count"`
+	CorrectionCount int       `gorm:"not null" json:"correction_count"`
+	CacheHit        bool      `gorm:"not null;default:false;index" json:"cache_hit"`
+	CountryCode     string    `gorm:"size:2;index" json:"country_code,omitempty"`
+	TruncatedIP     string    `gorm:"size:20" json:"truncated_ip,omitempty"`   // first 3 octets, privacy
+	UserAgentHash   string    `gorm:"size:64" json:"user_agent_hash,omitempty"` // hashed for privacy
+	Referrer        string    `gorm:"size:500" json:"referrer,omitempty"`
+	OccurredAt      time.Time `gorm:"index;not null" json:"occurred_at"`
+}
+
 // DailyVisitStats stores aggregated daily visit metrics (materialized view)
 type DailyVisitStats struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`

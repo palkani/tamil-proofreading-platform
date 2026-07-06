@@ -47,6 +47,21 @@
     </a>
   </section>
 
+  <!-- Demo activity — anonymous submissions from the homepage. Answers
+       "is the demo getting traffic even when nobody signs up?" -->
+  <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="rounded-lg border border-slate-200 bg-white p-4" data-tile="demo-24h">
+      <div class="text-xs font-medium text-slate-500">Demo tries · 24h</div>
+      <div class="mt-1 text-lg font-semibold text-slate-900" data-value>—</div>
+      <div class="mt-0.5 text-xs text-slate-400">Anonymous homepage submits</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4" data-tile="demo-7d">
+      <div class="text-xs font-medium text-slate-500">Demo tries · 7d</div>
+      <div class="mt-1 text-lg font-semibold text-slate-900" data-value>—</div>
+      <div class="mt-0.5 text-xs text-slate-400">Anonymous homepage submits</div>
+    </div>
+  </section>
+
   <!-- Recent activity + quick actions -->
   <section class="grid grid-cols-1 gap-4 lg:grid-cols-3">
     <div class="rounded-lg border border-slate-200 bg-white p-5 lg:col-span-2">
@@ -121,6 +136,11 @@
       setTile('signups-7d', fmtNumber(data.users.signups_7d));
       setTile('signups-30d', fmtNumber(data.users.signups_30d));
       setTile('active-30d', fmtNumber(data.users.active_30d));
+
+      if (data.demo) {
+        setTile('demo-24h', fmtNumber(data.demo.submissions_24h || 0));
+        setTile('demo-7d', fmtNumber(data.demo.submissions_7d || 0));
+      }
 
       const issuesTotal =
         (data.issues.failed_webhooks || 0) +
