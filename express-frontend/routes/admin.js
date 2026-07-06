@@ -102,23 +102,31 @@ router.get('/communications', requireAdmin, (req, res) => {
 router.all('/api/*', requireAdmin, async (req, res) => {
   const upstreamPath = req.path.replace(/^\/api/, '');
   const url = `${backendBase()}/api/v1/admin${upstreamPath}`;
+  const method = req.method.toUpperCase();
 
   const token = req.cookies && req.cookies.access_token;
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  // Only include a body + Content-Type on methods that carry one.
+  // Sending Content-Type: application/json with no data on a GET
+  // request causes some backends (including our Gin setup) to 400
+  // out on JSON binding before the handler even runs.
+  const config = {
+    method,
+    url,
+    params: req.query,
+    headers,
+    validateStatus: () => true,
+    timeout: 30000,
+  };
+  if (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
+    config.data = req.body;
+    headers['Content-Type'] = req.get('Content-Type') || 'application/json';
+  }
+
   try {
-    const response = await axios({
-      method: req.method,
-      url,
-      params: req.query,
-      data: req.body,
-      headers: {
-        // Only forward the auth cookie's token; strip the browser's
-        // cookie header so we don't leak anything else to the backend.
-        Authorization: token ? `Bearer ${token}` : undefined,
-        'Content-Type': req.get('Content-Type') || 'application/json',
-      },
-      validateStatus: () => true, // pass through backend's status codes
-      timeout: 30000,
-    });
+    const response = await axios(config);
     res.status(response.status);
     if (response.headers['content-type']) {
       res.type(response.headers['content-type']);
