@@ -128,6 +128,60 @@ func (a *DodoAdapter) doPost(ctx context.Context, path string, body interface{})
 	return respBody, resp.StatusCode, err
 }
 
+// doGet reads a resource from the Dodo API. Used by admin backfill flows
+// where we need to reach into Dodo for fields that a historical webhook
+// dropped (e.g. customer_id when it was silently nested).
+func (a *DodoAdapter) doGet(ctx context.Context, path string) ([]byte, int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.baseURL+path, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+a.apiKey)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	return respBody, resp.StatusCode, err
+}
+
+// GetSubscription fetches a Dodo subscription by ID. Returns just the
+// fields the backfill needs so callers don't have to model the full
+// Dodo response. Used by the admin console's provider_customer_id
+// backfill endpoint.
+func (a *DodoAdapter) GetSubscription(subscriptionID string) (customerID, productID, status string, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	body, code, err := a.doGet(ctx, "/subscriptions/"+subscriptionID)
+	if err != nil {
+		return "", "", "", fmt.Errorf("dodo get subscription: %w", err)
+	}
+	if code >= 400 {
+		return "", "", "", fmt.Errorf("dodo get subscription failed (HTTP %d): %s", code, string(body))
+	}
+
+	// Dodo's subscription response has customer nested under `customer`.
+	// Match the same shape the webhook payload uses (see EffectiveCustomerID).
+	var out struct {
+		CustomerID string             `json:"customer_id"`
+		Customer   dodoCustomerObject `json:"customer"`
+		ProductID  string             `json:"product_id"`
+		Status     string             `json:"status"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return "", "", "", fmt.Errorf("dodo get subscription parse: %w", err)
+	}
+	cid := out.CustomerID
+	if cid == "" {
+		cid = out.Customer.CustomerID
+	}
+	return cid, out.ProductID, out.Status, nil
+}
+
 func (a *DodoAdapter) doPatch(ctx context.Context, path string, body interface{}) ([]byte, int, error) {
 	b, err := json.Marshal(body)
 	if err != nil {

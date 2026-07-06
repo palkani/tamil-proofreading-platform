@@ -14,6 +14,7 @@ import (
 	"tamil-proofreading-platform/backend/internal/models"
 	"tamil-proofreading-platform/backend/internal/repository"
 	"tamil-proofreading-platform/backend/internal/services/auth"
+	"tamil-proofreading-platform/backend/internal/services/billing"
 	"tamil-proofreading-platform/backend/internal/services/email"
 	"tamil-proofreading-platform/backend/internal/services/llm"
 	"tamil-proofreading-platform/backend/internal/services/nlp"
@@ -44,6 +45,26 @@ type Handlers struct {
 	// supabaseJWKS is lazily initialized for RS256/ES256 token verification (Supabase JWT Signing Keys)
 	supabaseJWKS   *keyfunc.JWKS
 	supabaseJWKSMu sync.Mutex
+
+	// dodoAdapter is optional — populated by SetDodoAdapter after billing
+	// services initialise. Only the admin backfill endpoint uses it today,
+	// so nil is a valid state (endpoint returns 500 with a clear message).
+	dodoAdapter *billing.DodoAdapter
+}
+
+// SetDodoAdapter wires the Dodo API client into the shared handlers so
+// admin endpoints (backfill, future reconciliation) can call Dodo REST.
+// Called from main.go once the billing wiring block has constructed the
+// adapter.
+func (h *Handlers) SetDodoAdapter(a *billing.DodoAdapter) {
+	h.dodoAdapter = a
+}
+
+func (h *Handlers) dodoAdapterAccessor() (*billing.DodoAdapter, bool) {
+	if h.dodoAdapter == nil {
+		return nil, false
+	}
+	return h.dodoAdapter, true
 }
 
 func New(db *gorm.DB, cfg *config.Config) *Handlers {

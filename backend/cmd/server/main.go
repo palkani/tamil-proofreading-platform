@@ -109,8 +109,11 @@ func seedBillingDataIfNeeded(db *gorm.DB) {
 	}
 }
 
-// initBillingHandlers initializes all billing-related services and handlers
-func initBillingHandlers(db *gorm.DB, cfg *config.Config) *handlers.BillingHandlers {
+// initBillingHandlers initializes all billing-related services and handlers.
+// Also returns the DodoAdapter so callers (main.go) can hand it to the
+// shared Handlers struct — the admin backfill endpoint needs Dodo REST
+// access and there's no other clean seam to inject it through.
+func initBillingHandlers(db *gorm.DB, cfg *config.Config) (*handlers.BillingHandlers, *billing.DodoAdapter) {
 	quoteSecret := os.Getenv("BILLING_QUOTE_SECRET")
 
 	// DodoPayments credentials
@@ -143,7 +146,7 @@ func initBillingHandlers(db *gorm.DB, cfg *config.Config) *handlers.BillingHandl
 	}
 	log.Println("[BILLING] Services initialized")
 
-	return handlers.NewBillingHandlers(billingService, webhookService, pricingService)
+	return handlers.NewBillingHandlers(billingService, webhookService, pricingService), dodoAdapter
 }
 
 func main() {
@@ -291,7 +294,10 @@ func main() {
 	h := handlers.New(db, cfg)
 	
 	// Initialize billing services
-	billingHandlers := initBillingHandlers(db, cfg)
+	billingHandlers, dodoAdapter := initBillingHandlers(db, cfg)
+	// Hand the Dodo REST client to the shared handlers so admin backfill
+	// endpoints can query Dodo directly (see AdminBackfillCustomerID).
+	h.SetDodoAdapter(dodoAdapter)
 
 	// Start renewal reminder service (sends 7-day pre-renewal emails daily).
 	renewalSvc := billing.NewRenewalService(db)
@@ -489,6 +495,7 @@ func main() {
 			admin.POST("/users/:id/email", h.AdminSendUserEmail)
 			admin.POST("/users/:id/impersonate", h.AdminStartImpersonation)
 			admin.POST("/impersonation/end", h.AdminEndImpersonation)
+			admin.POST("/subscriptions/backfill-customer-id", h.AdminBackfillCustomerID)
 			admin.GET("/overview", h.AdminGetOverview)
 			admin.GET("/issues", h.AdminGetIssues)
 			admin.GET("/activity", h.AdminGetActivity)
