@@ -5840,6 +5840,19 @@ class WorkspaceController {
       if (loadingEl) loadingEl.classList.add('hidden');
       
       if (this.drafts.length === 0) {
+        // Zero drafts is the canonical new-user state. If a homepage demo
+        // saved a pending draft in localStorage (user clicked "Save & sign
+        // up" on the marketing page), auto-open a new draft so the restore
+        // flow inside createNewDraft() fires. Otherwise fall through to
+        // the standard empty state.
+        let hasPending = false;
+        try {
+          hasPending = !!localStorage.getItem('prooftamil_pending_draft');
+        } catch (_) {}
+        if (hasPending) {
+          this.createNewDraft();
+          return;
+        }
         if (noDataEl) noDataEl.classList.remove('hidden');
       } else {
         this.renderDrafts();
@@ -6085,21 +6098,67 @@ class WorkspaceController {
     }
   }
 
+  // consumePendingDraft reads a demo→signup bridge payload from localStorage,
+  // restores the text into the editor, and cleans up. Returns true when a
+  // draft was restored so callers can skip the empty "welcome" flow.
+  //
+  // Payload shape (written by home-editor.js when the anonymous user clicks
+  // "Save & sign up"):
+  //   { text, html, savedAt, source }
+  //
+  // The key is single-use — we clear it after reading so a later signup or
+  // login doesn't accidentally restore the same draft weeks later.
+  consumePendingDraft() {
+    try {
+      const raw = localStorage.getItem('prooftamil_pending_draft');
+      if (!raw) return false;
+      localStorage.removeItem('prooftamil_pending_draft');
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.text !== 'string' || !parsed.text.trim()) return false;
+      // Freshness gate: ignore anything older than 24 hours. A stale key
+      // means the user bounced then came back much later — surprising them
+      // with old text they've forgotten is worse than starting fresh.
+      if (parsed.savedAt && (Date.now() - parsed.savedAt) > 24 * 60 * 60 * 1000) return false;
+      // Restore into editor. Use html if provided so formatting survives;
+      // fall back to text wrapped in a <p>.
+      const content = parsed.html || ('<p>' + parsed.text.replace(/</g, '&lt;').replace(/\n/g, '</p><p>') + '</p>');
+      this.setEditorContent(content);
+      // Small toast so the user knows what happened.
+      try {
+        const toast = document.createElement('div');
+        toast.className = 'fixed top-4 right-4 z-50 rounded-lg bg-emerald-600 text-white px-4 py-3 shadow-lg';
+        toast.textContent = '✓ Your draft from the homepage is here.';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 5000);
+      } catch (_) {}
+      console.log('[WorkspaceJS] Restored pending draft from', parsed.source || 'unknown source');
+      return true;
+    } catch (e) {
+      console.warn('[WorkspaceJS] consumePendingDraft failed:', e);
+      return false;
+    }
+  }
+
   createNewDraft() {
     // Clear editor
     this.currentDraft = null;
     this.editor.clear();
     this.suggestionsPanel.clearSuggestions();
-    
+
     // Reset title
     const titleInput = document.getElementById('draft-title');
     if (titleInput) {
       titleInput.value = 'Untitled Draft';
     }
-    
+
     // Switch to editor view
     this.showEditor();
-    
+
+    // If we arrived here from the homepage demo signup bridge, restore the
+    // draft the anonymous user typed. Runs after showEditor so the editor
+    // instance is fully mounted before setContent.
+    this.consumePendingDraft();
+
     // Update URL
     window.history.pushState({}, '', '/workspace');
   }

@@ -2116,17 +2116,80 @@ class HomeEditor {
       `;
     }).join('');
     
+    // Signup CTA — shown only to anonymous demo users (not signed in). The
+    // demo is otherwise a dead-end: user gets corrections, closes the tab,
+    // ProofTamil never sees them again. Adding the CTA + localStorage bridge
+    // turns a demo hit into a workspace signup lead.
+    const isSignedIn = (typeof localStorage !== 'undefined') && !!localStorage.getItem('access_token');
+    const signupCTA = isSignedIn ? '' : `
+      <div class="mt-4 rounded-xl border border-primary-200 bg-gradient-to-br from-primary-50 to-white p-4 shadow-sm" data-signup-cta>
+        <div class="flex items-start gap-3">
+          <div class="flex-shrink-0 w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-gray-900">Save this draft to your account</p>
+            <p class="text-xs text-gray-600 mt-1">Sign up free and get:</p>
+            <ul class="mt-2 text-xs text-gray-700 space-y-1">
+              <li class="flex items-center gap-2"><span class="text-primary-600">✓</span> Save this draft (we'll bring your text over)</li>
+              <li class="flex items-center gap-2"><span class="text-primary-600">✓</span> Draft history + longer documents</li>
+              <li class="flex items-center gap-2"><span class="text-primary-600">✓</span> AI Assistant with style + tone suggestions</li>
+            </ul>
+            <button type="button" data-save-and-signup
+                    class="mt-3 w-full inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors">
+              Save & sign up (free)
+              <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+              </svg>
+            </button>
+            <p class="mt-2 text-center text-xs text-gray-500">
+              Already have an account? <a href="/login?redirect=/workspace" class="text-primary-600 hover:underline">Log in</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+
     this.suggestionsContainer.innerHTML = `
       <div class="space-y-3">
         <p class="text-sm font-semibold text-gray-700 mb-3">
           ${suggestions.length} ${suggestions.length === 1 ? 'suggestion' : 'suggestions'} found
         </p>
         ${suggestionsHTML}
+        ${signupCTA}
       </div>
     `;
 
     // Attach event listeners for Apply and Ignore buttons
     this.attachSuggestionHandlers(suggestions);
+
+    // Wire the save-and-signup button. Persists the current editor text to
+    // localStorage under a namespaced key that the workspace looks for on
+    // load. Also tags a conversion source so we can see in analytics that
+    // the signup came from a demo bridge.
+    const saveBtn = this.suggestionsContainer.querySelector('[data-save-and-signup]');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => {
+        try {
+          const text = this.getPlainText().trim();
+          const html = (this.editor && typeof this.editor.getHTML === 'function') ? this.editor.getHTML() : '';
+          const payload = {
+            text,
+            html,
+            savedAt: Date.now(),
+            source: 'homepage_demo',
+          };
+          localStorage.setItem('prooftamil_pending_draft', JSON.stringify(payload));
+        } catch (e) {
+          // localStorage can throw in private mode; proceed with signup
+          // anyway so the user isn't blocked from converting.
+          console.warn('[HOME] Could not save pending draft:', e);
+        }
+        window.location.href = '/signup?redirect=/workspace&source=demo';
+      });
+    }
   }
 
   escapeHtml(text) {
