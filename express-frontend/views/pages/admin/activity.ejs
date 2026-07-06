@@ -1,7 +1,194 @@
 <%- include('../../partials/admin/layout-header') %>
-<div class="mx-auto max-w-6xl">
-  <div class="rounded-lg border border-slate-200 bg-white p-8 text-center">
-    <p class="text-sm text-slate-500">Activity feed ships in PR E. This page will show a live timeline of all user actions (logins, submissions, subscription changes, ai_requests).</p>
-  </div>
+
+<div class="mx-auto max-w-6xl space-y-6" id="admin-activity">
+  <!-- Filter bar -->
+  <section class="rounded-lg border border-slate-200 bg-white p-4">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-6">
+      <div class="sm:col-span-2">
+        <label class="block text-xs font-medium text-slate-600">Event type</label>
+        <input type="text" data-filter="event_type" placeholder="e.g. login, ai_"
+               class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+      </div>
+      <div class="sm:col-span-2">
+        <label class="block text-xs font-medium text-slate-600">User email</label>
+        <input type="text" data-filter="email" placeholder="e.g. jeya"
+               class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600">User ID</label>
+        <input type="number" data-filter="user_id" placeholder=""
+               class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600">Window</label>
+        <select data-filter="since_hours" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm">
+          <option value="24">Last 24 hours</option>
+          <option value="168" selected>Last 7 days</option>
+          <option value="720">Last 30 days</option>
+          <option value="2160">Last 90 days</option>
+        </select>
+      </div>
+    </div>
+    <div class="mt-3 flex items-center justify-between text-xs text-slate-500">
+      <div data-count>Loading…</div>
+      <div class="flex items-center gap-3">
+        <button type="button" data-clear class="text-blue-600 hover:underline">Clear filters</button>
+        <button type="button" data-refresh class="text-blue-600 hover:underline">Refresh</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feed table -->
+  <section class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <table class="min-w-full divide-y divide-slate-200 text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-2 text-left">When</th>
+          <th class="px-4 py-2 text-left">User</th>
+          <th class="px-4 py-2 text-left">Event</th>
+          <th class="px-4 py-2 text-left">Metadata</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100" data-body>
+        <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">Loading…</td></tr>
+      </tbody>
+    </table>
+    <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-600">
+      <div data-page-status>—</div>
+      <div class="space-x-2">
+        <button type="button" data-page-prev class="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-40 disabled:pointer-events-none">Prev</button>
+        <button type="button" data-page-next class="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-40 disabled:pointer-events-none">Next</button>
+      </div>
+    </div>
+  </section>
 </div>
+
+<script>
+(function () {
+  const pageSize = 50;
+  const state = { event_type: '', email: '', user_id: '', since_hours: '168', offset: 0, total: 0 };
+  const escape = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const debounced = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+  const fmtRelative = (iso) => {
+    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (diff < 60) return Math.round(diff) + 's';
+    if (diff < 3600) return Math.round(diff / 60) + 'm';
+    if (diff < 86400) return Math.round(diff / 3600) + 'h';
+    return Math.round(diff / 86400) + 'd';
+  };
+  const fmtDate = (iso) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  function eventBadge(type) {
+    const t = String(type || '').toLowerCase();
+    let tone = 'slate';
+    if (t.startsWith('login') || t === 'register') tone = 'green';
+    else if (t.startsWith('logout')) tone = 'slate';
+    else if (t.startsWith('ai_')) tone = 'blue';
+    else if (t.includes('subscription') || t.includes('payment') || t.includes('billing')) tone = 'amber';
+    else if (t.includes('delete') || t.includes('failed')) tone = 'red';
+    const tones = {
+      green: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+      slate: 'bg-slate-100 text-slate-700 ring-slate-200',
+      red: 'bg-red-50 text-red-700 ring-red-200',
+      blue: 'bg-blue-50 text-blue-700 ring-blue-200',
+      amber: 'bg-amber-50 text-amber-700 ring-amber-200',
+    };
+    return '<span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ' + tones[tone] + '">' + escape(type) + '</span>';
+  }
+
+  function renderMetadata(raw) {
+    if (!raw || raw === '{}' || raw === 'null') return '<span class="text-slate-400">—</span>';
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch (e) { return '<code class="text-xs text-slate-500">' + escape(String(raw).slice(0, 80)) + '</code>'; }
+    const pairs = Object.entries(parsed).slice(0, 3).map(function ([k, v]) {
+      const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
+      return '<span class="text-slate-500">' + escape(k) + ':</span>&nbsp;<span class="text-slate-700">' + escape(val.slice(0, 40)) + '</span>';
+    });
+    return '<span class="font-mono text-xs">' + pairs.join('&nbsp;&nbsp;') + '</span>';
+  }
+
+  function render(data) {
+    state.total = data.total;
+    const rows = data.activity || [];
+    const tbody = document.querySelector('[data-body]');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">No activity matches.</td></tr>';
+    } else {
+      tbody.innerHTML = rows.map(function (a) {
+        const userLabel = a.email
+          ? '<a href="/admin/users/' + encodeURIComponent(a.user_id) + '" class="text-blue-600 hover:underline">' + escape(a.email) + '</a>'
+          : '<span class="text-slate-500">user #' + a.user_id + '</span>';
+        return '<tr class="hover:bg-slate-50">' +
+          '<td class="px-4 py-2 whitespace-nowrap"><span class="text-slate-900">' + fmtRelative(a.occurred_at) + '</span> <span class="text-xs text-slate-400">' + fmtDate(a.occurred_at) + '</span></td>' +
+          '<td class="px-4 py-2">' + userLabel + '</td>' +
+          '<td class="px-4 py-2">' + eventBadge(a.event_type) + '</td>' +
+          '<td class="px-4 py-2">' + renderMetadata(a.metadata) + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+    const start = state.total === 0 ? 0 : state.offset + 1;
+    const end = Math.min(state.offset + pageSize, state.total);
+    document.querySelector('[data-page-status]').textContent = state.total === 0 ? '0 results' : (start + '–' + end + ' of ' + state.total);
+    document.querySelector('[data-count]').textContent = state.total + ' events in window';
+    document.querySelector('[data-page-prev]').disabled = state.offset === 0;
+    document.querySelector('[data-page-next]').disabled = end >= state.total;
+  }
+
+  function load() {
+    const params = new URLSearchParams({
+      event_type: state.event_type,
+      email: state.email,
+      user_id: state.user_id,
+      since_hours: state.since_hours,
+      limit: pageSize,
+      offset: state.offset,
+    });
+    fetch('/admin/api/activity?' + params.toString(), { credentials: 'include' })
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then(render)
+      .catch(function (err) {
+        console.error('[ADMIN/ACTIVITY] load failed', err);
+        document.querySelector('[data-body]').innerHTML =
+          '<tr><td colspan="4" class="px-4 py-6 text-center text-red-600">Failed to load: ' + escape(err.message) + '</td></tr>';
+      });
+  }
+
+  const runLoad = debounced(load, 250);
+  document.querySelectorAll('[data-filter]').forEach(function (el) {
+    el.addEventListener('input', function () {
+      state[el.dataset.filter] = el.value.trim();
+      state.offset = 0;
+      runLoad();
+    });
+    el.addEventListener('change', function () {
+      state[el.dataset.filter] = el.value.trim();
+      state.offset = 0;
+      load();
+    });
+  });
+  document.querySelector('[data-clear]').addEventListener('click', function () {
+    document.querySelectorAll('[data-filter]').forEach(function (el) {
+      if (el.tagName === 'SELECT') el.value = el.options[0].value;
+      else el.value = '';
+    });
+    state.event_type = state.email = state.user_id = '';
+    state.since_hours = '168';
+    document.querySelector('[data-filter="since_hours"]').value = '168';
+    state.offset = 0;
+    load();
+  });
+  document.querySelector('[data-refresh]').addEventListener('click', load);
+  document.querySelector('[data-page-prev]').addEventListener('click', function () {
+    state.offset = Math.max(0, state.offset - pageSize);
+    load();
+  });
+  document.querySelector('[data-page-next]').addEventListener('click', function () {
+    state.offset += pageSize;
+    load();
+  });
+
+  load();
+})();
+</script>
+
 <%- include('../../partials/admin/layout-footer') %>

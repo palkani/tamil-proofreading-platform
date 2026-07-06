@@ -491,6 +491,7 @@ func main() {
 			admin.POST("/impersonation/end", h.AdminEndImpersonation)
 			admin.GET("/overview", h.AdminGetOverview)
 			admin.GET("/issues", h.AdminGetIssues)
+			admin.GET("/activity", h.AdminGetActivity)
 			admin.POST("/broadcasts/dry-run", h.AdminBroadcastDryRun)
 			admin.POST("/broadcasts", h.AdminBroadcastSend)
 			admin.GET("/broadcasts", h.AdminBroadcastList)
