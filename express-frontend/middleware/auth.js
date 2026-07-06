@@ -69,15 +69,23 @@ const attachUser = (req, res, next) => {
     
     // Handle both Supabase format (sub) and backend format (user_id)
     const userId = payload.sub || payload.user_id;
-    req.user = userId
-      ? {
-          id: userId,
-          email: payload.email,
-          name: payload.name,
-          role: payload.role,
-          profile_picture: payload.picture,
-        }
-      : null;
+    if (userId) {
+      // Compute isAdmin here so every page render can gate on it without
+      // re-parsing the JWT or hitting the env var directly from EJS.
+      // Mirrors the backend AdminMiddleware's check: role must be admin
+      // AND email must be in ADMIN_ALLOWED_EMAILS. Cached at first use.
+      const { isAdminEmail } = require('./admin');
+      req.user = {
+        id: userId,
+        email: payload.email,
+        name: payload.name,
+        role: payload.role,
+        profile_picture: payload.picture,
+        isAdmin: payload.role === 'admin' && isAdminEmail(payload.email),
+      };
+    } else {
+      req.user = null;
+    }
   } catch (err) {
     // Non-fatal: never throw from attachUser
     req.user = null;

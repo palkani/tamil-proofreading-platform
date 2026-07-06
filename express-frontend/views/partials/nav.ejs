@@ -20,6 +20,11 @@
               My Blogs
             </a>
           <% } %>
+          <% if (user.isAdmin) { %>
+            <a href="/admin" class="nav-link <%= active === 'admin' ? 'active' : '' %> inline-flex items-center px-2.5 py-1.5 rounded-lg whitespace-nowrap text-amber-700 font-medium">
+              Admin
+            </a>
+          <% } %>
           <a href="/workspace" id="nav-workspace-link" class="nav-link <%= active === 'workspace' ? 'active' : '' %> inline-flex items-center px-2.5 py-1.5 rounded-lg whitespace-nowrap">
             Workspace
           </a>
@@ -149,6 +154,13 @@
          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
         <span class="w-4 h-4 flex-shrink-0 text-center text-base leading-none">✍️</span>
         My Blogs
+      </a>
+      <% } %>
+      <% if (user.isAdmin) { %>
+      <a href="/admin"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors">
+        <span class="w-4 h-4 flex-shrink-0 text-center text-base leading-none">🛡️</span>
+        Admin
       </a>
       <% } %>
     </div>
