@@ -522,6 +522,7 @@ func main() {
 			// Public billing endpoints
 			billingRoutes.GET("/plans", billingHandlers.GetPlans)
 			billingRoutes.GET("/pricing", billingHandlers.GetPricing)
+			billingRoutes.GET("/checkout-status", h.GetCheckoutStatus)
 			
 			// Authenticated billing endpoints
 			billingRoutes.POST("/checkout-session", middleware.AuthMiddleware(cfg.JWTSecret), billingHandlers.CreateCheckoutSession)

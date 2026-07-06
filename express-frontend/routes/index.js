@@ -888,23 +888,43 @@ router.get('/billing/success', async (req, res) => {
   const user = getCurrentUser(req);
   const seo = getSeoData('billingSuccess');
 
-  const status = String(req.query.status || '').toLowerCase();
+  const urlStatus = String(req.query.status || '').toLowerCase();
   const subscriptionId = String(req.query.subscription_id || '').slice(0, 200);
   const sessionId = String(req.query.session_id || '').slice(0, 200);
 
-  // URL-signal: Dodo says the session confirmed. Anything else (pending,
-  // failed, empty) is treated as unconfirmed.
-  const urlSaysActive = status === 'active';
+  const backendURL =
+    (process.env.BACKEND_URL_US || process.env.BACKEND_URL || 'https://api.prooftamil.com')
+      .replace(/\/$/, '');
 
-  // Backend-signal: if the user is logged in, verify their actual Pro state.
-  // Failure to call the backend never blocks the render — we just fall
-  // back to the URL signal so the page always shows something.
+  // Signal 1 — checkout_attempt freshness. Dodo's payment_link expires
+  // after 15 min on their side (their timer). We enforce the same
+  // window server-side so a user landing here AFTER Dodo's timer
+  // expired (via bookmark, back button, or a delayed redirect) sees
+  // the "session expired" state instead of any success/pending UI.
+  let checkoutStatus = null; // 'active' | 'pending' | 'expired' | 'not_found'
+  let secondsRemaining = 0;
+  if (subscriptionId) {
+    try {
+      const resp = await axios.get(
+        backendURL + '/api/v1/billing/checkout-status',
+        { params: { subscription_id: subscriptionId }, timeout: 5000, validateStatus: () => true }
+      );
+      if (resp.status === 200 && resp.data) {
+        checkoutStatus = resp.data.status;
+        secondsRemaining = resp.data.seconds_remaining || 0;
+      }
+    } catch (err) {
+      console.warn('[BILLING] checkout-status fetch failed:', err.message);
+    }
+  }
+
+  // Signal 2 — backend Pro state for the logged-in user. Belt and
+  // suspenders in case the checkout_attempt lookup missed (older
+  // checkouts pre-CheckoutAttempts table, or a Dodo webhook that
+  // arrived before we recorded the attempt for some reason).
   let verifiedByBackend = null;
   if (user && req.cookies && req.cookies.access_token) {
     try {
-      const backendURL =
-        (process.env.BACKEND_URL_US || process.env.BACKEND_URL || 'https://api.prooftamil.com')
-          .replace(/\/$/, '');
       const resp = await axios.get(backendURL + '/api/v1/billing/me', {
         headers: { Authorization: 'Bearer ' + req.cookies.access_token },
         timeout: 5000,
@@ -918,21 +938,29 @@ router.get('/billing/success', async (req, res) => {
     }
   }
 
-  // Only claim success when BOTH signals point that way (or when the URL
-  // is confirmed and no backend check was possible). Never claim success
-  // when the URL explicitly says pending/failed even if the backend
-  // hasn't caught up.
+  // Decide which state the page renders. Precedence:
+  //   1. If our checkout_attempt says 'active' OR the user's DB row says
+  //      Pro → success (the two source-of-truth signals we control).
+  //   2. If checkout_attempt says 'expired' → expired state, regardless
+  //      of what the URL says.
+  //   3. Otherwise → pending state (fresh session, awaiting confirmation).
   const paymentConfirmed =
-    urlSaysActive && (verifiedByBackend === null || verifiedByBackend === true);
+    checkoutStatus === 'active' || verifiedByBackend === true;
+  const sessionExpired =
+    !paymentConfirmed && checkoutStatus === 'expired';
 
   res.render('pages/billing-success', {
-    title: paymentConfirmed ? seo.title : 'Confirming your payment - ProofTamil',
+    title: paymentConfirmed
+      ? seo.title
+      : (sessionExpired ? 'Checkout session expired - ProofTamil' : 'Confirming your payment - ProofTamil'),
     seo,
     user,
     sessionId,
     subscriptionId,
-    status,
+    status: urlStatus,
     paymentConfirmed,
+    sessionExpired,
+    secondsRemaining,
     verifiedByBackend,
   });
 });
