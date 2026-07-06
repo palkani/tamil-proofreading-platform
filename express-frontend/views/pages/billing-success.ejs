@@ -4,48 +4,103 @@
 <div class="min-h-screen bg-gray-50 flex items-center justify-center py-16 px-4">
   <div class="max-w-lg w-full text-center">
 
-    <!-- Success icon -->
-    <div class="flex justify-center mb-6">
-      <div class="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
-        <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-        </svg>
+    <% if (paymentConfirmed) { %>
+      <!-- ===== CONFIRMED STATE ===== -->
+      <div class="flex justify-center mb-6">
+        <div class="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+          <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+          </svg>
+        </div>
       </div>
-    </div>
 
-    <h1 class="text-3xl font-bold text-gray-900 mb-3">Payment Successful!</h1>
-    <p class="text-lg text-gray-600 mb-2">
-      Welcome to <strong>ProofTamil Pro</strong>. Your subscription is now active.
-    </p>
-    <p class="text-sm text-gray-500 mb-8">
-      Subscription activation may take a few seconds. Refresh the page if features haven't updated yet.
-    </p>
+      <h1 class="text-3xl font-bold text-gray-900 mb-3">Payment Successful!</h1>
+      <p class="text-lg text-gray-600 mb-2">
+        Welcome to <strong>ProofTamil Pro</strong>. Your subscription is now active.
+      </p>
+      <p class="text-sm text-gray-500 mb-8">
+        A receipt is on its way to your inbox. Refresh the workspace if features haven't updated yet.
+      </p>
 
-    <!-- What's next -->
-    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 text-left mb-8">
-      <h2 class="font-semibold text-gray-900 mb-4">What you get with Pro</h2>
-      <ul class="space-y-3 text-sm text-gray-600">
-        <li class="flex items-start gap-3">
-          <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          Unlimited AI Tamil grammar &amp; style corrections
-        </li>
-        <li class="flex items-start gap-3">
-          <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          Advanced proofreading across long documents
-        </li>
-        <li class="flex items-start gap-3">
-          <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          Priority email support
-        </li>
-      </ul>
-    </div>
+      <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 text-left mb-8">
+        <h2 class="font-semibold text-gray-900 mb-4">What you get with Pro</h2>
+        <ul class="space-y-3 text-sm text-gray-600">
+          <li class="flex items-start gap-3">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Unlimited AI Tamil grammar &amp; style corrections
+          </li>
+          <li class="flex items-start gap-3">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Advanced proofreading across long documents
+          </li>
+          <li class="flex items-start gap-3">
+            <svg class="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            Priority email support
+          </li>
+        </ul>
+      </div>
 
-    <a href="/workspace" class="inline-flex items-center px-8 py-3 rounded-full bg-primary-600 text-white font-semibold hover:bg-primary-700 transition shadow-lg">
-      Open Workspace
-      <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-      </svg>
-    </a>
+      <a href="/workspace" class="inline-flex items-center px-8 py-3 rounded-full bg-primary-600 text-white font-semibold hover:bg-primary-700 transition shadow-lg">
+        Open Workspace
+        <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+        </svg>
+      </a>
+
+    <% } else { %>
+      <!-- ===== PENDING / UNCONFIRMED STATE ===== -->
+      <!-- Rendered when either the URL status is not 'active' OR the
+           backend check for the logged-in user says is_premium=false.
+           We deliberately do NOT show "Payment Successful" here — that
+           would repeat the exact bug this page was built to fix. -->
+      <div class="flex justify-center mb-6">
+        <div class="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center">
+          <svg class="w-10 h-10 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+      </div>
+
+      <h1 class="text-3xl font-bold text-gray-900 mb-3">We haven't confirmed your payment yet</h1>
+      <p class="text-lg text-gray-600 mb-3">
+        Dodo, our payment processor, hasn't reported a successful charge for this checkout.
+        <% if (status === 'pending') { %>The session status is currently <strong>pending</strong>.<% } else if (status === 'failed') { %>The session status is <strong>failed</strong>.<% } %>
+      </p>
+      <p class="text-sm text-gray-500 mb-8">
+        If you completed payment, this page will update within a few minutes as the confirmation reaches us.
+        If you closed the checkout without paying, you can start a new session from the pricing page.
+      </p>
+
+      <div class="bg-white rounded-2xl border border-amber-200 shadow-sm p-6 text-left mb-8">
+        <h2 class="font-semibold text-gray-900 mb-3">What to do next</h2>
+        <ul class="space-y-3 text-sm text-gray-700">
+          <li class="flex items-start gap-3">
+            <span class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">1</span>
+            <span>Check your email for a payment receipt from <code>contact@prooftamil.com</code>. If you have one, your account is being updated right now — just refresh this page.</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">2</span>
+            <span>If you didn't complete payment, no charge was made. You can restart from the <a href="/pricing" class="text-primary-600 underline">pricing page</a>.</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">3</span>
+            <span>If you paid but the page still says pending after 10 minutes, <a href="/contact" class="text-primary-600 underline">reach out</a> and include this reference:
+              <code class="ml-1 rounded bg-gray-100 px-1 text-xs"><%= subscriptionId || 'no-id' %></code>
+            </span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3 justify-center">
+        <a href="/pricing" class="inline-flex items-center justify-center px-6 py-3 rounded-full bg-primary-600 text-white font-semibold hover:bg-primary-700 transition shadow-lg">
+          Return to pricing
+        </a>
+        <button type="button" onclick="window.location.reload();"
+                class="inline-flex items-center justify-center px-6 py-3 rounded-full bg-white text-gray-800 font-semibold border border-gray-300 hover:bg-gray-50 transition">
+          I paid — check again
+        </button>
+      </div>
+    <% } %>
 
     <p class="mt-6 text-sm text-gray-500">
       Questions? <a href="/contact" class="text-primary-600 underline">Contact us</a>

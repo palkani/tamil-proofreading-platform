@@ -867,15 +867,73 @@ router.get('/pricing', async (req, res) => {
   }
 });
 
-// Billing success page — Stripe / Razorpay redirect here after payment
-router.get('/billing/success', (req, res) => {
+// Billing return URL — Dodo (and legacy Stripe/Razorpay) redirect here
+// AFTER the checkout flow, regardless of whether payment actually
+// succeeded. Dodo puts the outcome in the `status` query param:
+//   status=active   — payment confirmed
+//   status=pending  — payment not confirmed (user closed tab / abandoned)
+//   status=failed   — attempt was made and refused
+//
+// Previously this handler ignored the status and unconditionally
+// rendered "Payment Successful!" — so a user who abandoned checkout
+// and later hit the return URL saw a lie. Fix: read status +
+// subscription_id and let the template render the correct state.
+//
+// The template also gets `verifiedByBackend` when possible: if the user
+// is logged in, we call the backend to confirm their Pro flag actually
+// flipped. Two-signal check reduces the class of "URL says active but
+// DB says free" incidents (which would be an even sneakier version of
+// today's bug).
+router.get('/billing/success', async (req, res) => {
   const user = getCurrentUser(req);
   const seo = getSeoData('billingSuccess');
+
+  const status = String(req.query.status || '').toLowerCase();
+  const subscriptionId = String(req.query.subscription_id || '').slice(0, 200);
+  const sessionId = String(req.query.session_id || '').slice(0, 200);
+
+  // URL-signal: Dodo says the session confirmed. Anything else (pending,
+  // failed, empty) is treated as unconfirmed.
+  const urlSaysActive = status === 'active';
+
+  // Backend-signal: if the user is logged in, verify their actual Pro state.
+  // Failure to call the backend never blocks the render — we just fall
+  // back to the URL signal so the page always shows something.
+  let verifiedByBackend = null;
+  if (user && req.cookies && req.cookies.access_token) {
+    try {
+      const backendURL =
+        (process.env.BACKEND_URL_US || process.env.BACKEND_URL || 'https://api.prooftamil.com')
+          .replace(/\/$/, '');
+      const resp = await axios.get(backendURL + '/api/v1/billing/me', {
+        headers: { Authorization: 'Bearer ' + req.cookies.access_token },
+        timeout: 5000,
+        validateStatus: () => true,
+      });
+      if (resp.status === 200 && resp.data && resp.data.billing) {
+        verifiedByBackend = !!resp.data.billing.is_premium;
+      }
+    } catch (err) {
+      console.warn('[BILLING] verify failed:', err.message);
+    }
+  }
+
+  // Only claim success when BOTH signals point that way (or when the URL
+  // is confirmed and no backend check was possible). Never claim success
+  // when the URL explicitly says pending/failed even if the backend
+  // hasn't caught up.
+  const paymentConfirmed =
+    urlSaysActive && (verifiedByBackend === null || verifiedByBackend === true);
+
   res.render('pages/billing-success', {
-    title: seo.title,
+    title: paymentConfirmed ? seo.title : 'Confirming your payment - ProofTamil',
     seo,
     user,
-    sessionId: String(req.query.session_id || '').slice(0, 200)
+    sessionId,
+    subscriptionId,
+    status,
+    paymentConfirmed,
+    verifiedByBackend,
   });
 });
 
