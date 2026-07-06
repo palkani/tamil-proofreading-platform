@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -57,6 +58,18 @@ func (h *BillingHandlers) CreateCheckoutSession(c *gin.Context) {
 
 	response, err := h.billingService.CreateCheckoutSession(userID, req)
 	if err != nil {
+		if errors.Is(err, billing.ErrAlreadySubscribed) {
+			// 409 Conflict signals the frontend to route the user to
+			// their billing settings instead of retrying. Not a 500 —
+			// the request is well-formed, the state just doesn't allow
+			// this operation.
+			c.JSON(http.StatusConflict, gin.H{
+				"error":          err.Error(),
+				"code":           "already_subscribed",
+				"manage_url":     "/settings/billing",
+			})
+			return
+		}
 		log.Printf("[BILLING] CreateCheckoutSession failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create checkout session", "details": err.Error()})
 		return

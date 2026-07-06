@@ -52,6 +52,13 @@ type CheckoutResponse struct {
 	Quote       *models.PricingQuote `json:"quote"`
 }
 
+// ErrAlreadySubscribed is returned by CreateCheckoutSession when the caller
+// already has an active or trialing subscription on the same plan. Callers
+// map this to a 409 Conflict at the HTTP layer; the frontend uses the
+// error message to guide the user to their billing settings instead of
+// letting them accidentally pay twice for the same plan.
+var ErrAlreadySubscribed = errors.New("user already has an active subscription for this plan")
+
 // CreateCheckoutSession creates a checkout session via DodoPayments
 func (s *BillingService) CreateCheckoutSession(userID uint, req CheckoutRequest) (*CheckoutResponse, error) {
 	// Get user
@@ -61,6 +68,26 @@ func (s *BillingService) CreateCheckoutSession(userID uint, req CheckoutRequest)
 			return nil, ErrUserNotFound
 		}
 		return nil, err
+	}
+
+	// Refuse if the user already has an active/trialing subscription on
+	// this exact plan. Different plan_code is allowed so upgrades and
+	// downgrades still work (PRO_MONTHLY → PRO_YEARLY etc.), but a
+	// double-subscribe to the same plan would create a second Dodo
+	// subscription that Dodo would charge alongside the first every
+	// billing cycle. Blocking here prevents the class of "why am I
+	// being charged twice?" support ticket.
+	var existing models.Subscription
+	err := s.db.
+		Where("user_id = ? AND plan_code = ? AND provider = ? AND status IN (?, ?)",
+			userID, req.PlanCode, models.PaymentProviderDodo,
+			models.BillingSubStatusActive, models.BillingSubStatusTrialing).
+		First(&existing).Error
+	if err == nil {
+		return nil, ErrAlreadySubscribed
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("check existing subscription: %w", err)
 	}
 
 	// Determine country code
