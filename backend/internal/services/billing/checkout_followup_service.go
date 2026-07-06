@@ -45,6 +45,15 @@ func (s *CheckoutFollowUpService) RunHourlyLoop() {
 	}
 }
 
+// SendFollowUpsForAdmin runs one pass immediately and returns the
+// number of reminder emails actually sent. Exposed for the admin
+// console's "Run checkout follow-up now" button; delegates to the
+// same internal loop the hourly cron uses so behaviour stays
+// consistent between manual and scheduled runs.
+func (s *CheckoutFollowUpService) SendFollowUpsForAdmin() int {
+	return s.sendFollowUps()
+}
+
 // sendFollowUps runs one pass and returns the number sent. Exported name
 // only via the loop; called directly from a test would work too.
 func (s *CheckoutFollowUpService) sendFollowUps() int {

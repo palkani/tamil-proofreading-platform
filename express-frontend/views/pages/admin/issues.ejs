@@ -7,6 +7,43 @@
             class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Refresh</button>
   </div>
 
+  <!-- Ops panel — trigger crons on demand + fix missing schema. Rendered
+       collapsed by default; expands when a table is missing or when the
+       admin explicitly asks to see maintenance actions. -->
+  <section class="rounded-lg border border-slate-200 bg-white p-5" data-ops-panel>
+    <div class="flex items-center justify-between">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-900">Operations</h3>
+        <p class="mt-1 text-xs text-slate-500">Run background jobs on-demand and set up any missing billing tables.</p>
+      </div>
+      <button type="button" data-ops-toggle
+              class="text-xs font-medium text-blue-600 hover:underline">Show</button>
+    </div>
+
+    <!-- Health banner: shown when a critical table is missing -->
+    <div data-ops-schema-warning class="mt-3 hidden rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+      One or more billing tables are missing. Click <strong>Setup billing tables</strong> below to create them.
+    </div>
+
+    <div data-ops-body class="mt-4 hidden space-y-3">
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <button type="button" data-op="ensure-tables"
+                class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40">
+          Setup billing tables
+        </button>
+        <button type="button" data-op="checkout-followup"
+                class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40">
+          Run checkout follow-up now
+        </button>
+        <button type="button" data-op="reconciliation"
+                class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40">
+          Run reconciliation now
+        </button>
+      </div>
+      <div data-op-output class="text-xs font-mono text-slate-600"></div>
+    </div>
+  </section>
+
   <!-- Failed webhooks -->
   <section class="rounded-lg border border-slate-200 bg-white p-5">
     <div class="flex items-center justify-between">
@@ -158,6 +195,65 @@
 
   document.querySelector('[data-refresh]').addEventListener('click', load);
   load();
+
+  // ---- Ops panel ----
+  const opsToggle = document.querySelector('[data-ops-toggle]');
+  const opsBody = document.querySelector('[data-ops-body]');
+  const opsWarn = document.querySelector('[data-ops-schema-warning]');
+  const opsOut = document.querySelector('[data-op-output]');
+  let opsOpen = false;
+  function setOpsOpen(v) {
+    opsOpen = v;
+    opsBody.classList.toggle('hidden', !v);
+    opsToggle.textContent = v ? 'Hide' : 'Show';
+  }
+  opsToggle.addEventListener('click', function () { setOpsOpen(!opsOpen); });
+
+  function opsFetch(path, method) {
+    opsOut.textContent = 'Running…';
+    return fetch('/admin/api/ops/' + path, { method: method || 'POST', credentials: 'include' })
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b, status: r.status }; }); })
+      .then(function (res) {
+        opsOut.innerHTML = '<span class="' + (res.ok ? 'text-emerald-700' : 'text-red-700') + '">' +
+          (res.ok ? '✓ HTTP ' + res.status : '✗ HTTP ' + res.status) + '</span> ' +
+          '<pre class="mt-2 whitespace-pre-wrap break-words rounded bg-slate-50 p-2">' +
+          escape(JSON.stringify(res.body, null, 2)) + '</pre>';
+        // Health may have changed after an ensure-tables call — refresh
+        // the warning banner state.
+        checkHealth();
+        // A successful cron run may have cleared some issues — reload
+        // the visible feed so the page reflects the new state.
+        if (res.ok && (path === 'run-checkout-followup' || path === 'run-reconciliation')) load();
+      })
+      .catch(function (err) {
+        opsOut.innerHTML = '<span class="text-red-700">✗ ' + escape(err.message) + '</span>';
+      });
+  }
+
+  document.querySelector('[data-op="ensure-tables"]').addEventListener('click', function () {
+    opsFetch('ensure-billing-tables', 'POST');
+  });
+  document.querySelector('[data-op="checkout-followup"]').addEventListener('click', function () {
+    opsFetch('run-checkout-followup', 'POST');
+  });
+  document.querySelector('[data-op="reconciliation"]').addEventListener('click', function () {
+    opsFetch('run-reconciliation', 'POST');
+  });
+
+  function checkHealth() {
+    fetch('/admin/api/ops/health', { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+      .then(function (h) {
+        if (!h.all_ok) {
+          opsWarn.classList.remove('hidden');
+          setOpsOpen(true); // auto-expand when there's a problem
+        } else {
+          opsWarn.classList.add('hidden');
+        }
+      })
+      .catch(function () { /* non-fatal — panel still works via manual open */ });
+  }
+  checkHealth();
 })();
 </script>
 

@@ -496,6 +496,11 @@ func main() {
 			admin.POST("/users/:id/impersonate", h.AdminStartImpersonation)
 			admin.POST("/impersonation/end", h.AdminEndImpersonation)
 			admin.POST("/subscriptions/backfill-customer-id", h.AdminBackfillCustomerID)
+			// Ops utilities — trigger crons on demand and ensure DB schema.
+			admin.GET("/ops/health", h.AdminOpsHealth)
+			admin.POST("/ops/ensure-billing-tables", h.AdminEnsureBillingTables)
+			admin.POST("/ops/run-checkout-followup", h.AdminRunCheckoutFollowup)
+			admin.POST("/ops/run-reconciliation", h.AdminRunReconciliation)
 			admin.GET("/overview", h.AdminGetOverview)
 			admin.GET("/issues", h.AdminGetIssues)
 			admin.GET("/activity", h.AdminGetActivity)
