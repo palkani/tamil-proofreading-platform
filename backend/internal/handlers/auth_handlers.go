@@ -18,6 +18,7 @@ import (
 	"tamil-proofreading-platform/backend/internal/services/affiliate"
 	"tamil-proofreading-platform/backend/internal/services/auth"
 	"tamil-proofreading-platform/backend/internal/util/auditlog"
+	"tamil-proofreading-platform/backend/internal/util/geo"
 	"tamil-proofreading-platform/backend/internal/util/securecookie"
 
 	"github.com/MicahParks/keyfunc/v2"
@@ -324,10 +325,24 @@ func (h *Handlers) Register(c *gin.Context) {
                 }
         }
 
+        // Populate country_code from the CDN's IP geolocation header if
+        // the platform provided one. Non-fatal: registration succeeds even
+        // if we can't detect country. Never overwrites an already-set
+        // country (defensive — Register creates a fresh user so it should
+        // always be nil, but future-proof against callers that pre-set it).
+        if ipCountry := geo.CountryFromContext(c); ipCountry != "" && user.CountryCode == nil {
+                if err := h.db.Model(user).Update("country_code", ipCountry).Error; err != nil {
+                        slog.Warn("Failed to save detected country_code", "error", err, "user_id", user.ID, "country", ipCountry)
+                } else {
+                        user.CountryCode = &ipCountry
+                }
+        }
+
         auditlog.Info(c, "auth_register_success", map[string]any{
                 "user_email":    req.Email,
                 "user_id":       user.ID,
                 "referral_code": req.ReferralCode,
+                "ip_country":    geo.CountryFromContext(c),
         })
 
         // Create session and issue tokens

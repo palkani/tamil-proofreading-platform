@@ -417,6 +417,10 @@ func main() {
 		// When save_draft=true the handler requires user and returns 401 if not authenticated.
 		v1.POST("/submit", middleware.OptionalAuthMiddleware(cfg.JWTSecret), h.SubmitText)
 
+		// Public IP-country detection — read-only, no side effects.
+		// Used by the pricing page to render local currency before login.
+		v1.GET("/geo/country", h.DetectCountry)
+
 		// Protected routes (require authentication)
 		protected := v1.Group("")
 		protected.Use(middleware.AuthMiddleware(cfg.JWTSecret))
@@ -424,6 +428,7 @@ func main() {
 			// User profile
 			protected.GET("/me", h.GetCurrentUser)
 			protected.POST("/auth/change-password", h.ChangePassword)
+			protected.POST("/user/country", h.UpdateUserCountry)
 
 			// Submissions (draft list, get/update/delete) - submit is above with optional auth
 			protected.GET("/submissions", h.GetSubmissions)
