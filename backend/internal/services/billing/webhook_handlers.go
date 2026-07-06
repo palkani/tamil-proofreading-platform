@@ -107,17 +107,34 @@ func (s *WebhookService) handleDodoSubscriptionActive(event DodoWebhookEvent) er
 
 	customerID := data.EffectiveCustomerID()
 
-	sub := &models.Subscription{
-		UserID:                 userID,
-		PlanCode:               planCode,
-		Provider:               models.PaymentProviderDodo,
-		ProviderCustomerID:     customerID,
-		ProviderSubscriptionID: data.SubscriptionID,
-		Status:                 s.dodoAdapter.MapSubscriptionStatus(data.Status),
-		CountryCode:            countryCode,
-		CurrentPeriodStart:     periodStart,
-		CurrentPeriodEnd:       periodEnd,
+	// Look up an existing subscription for this provider_subscription_id
+	// FIRST. Without this check, a replayed subscription.active webhook
+	// would silently INSERT a second row for the same Dodo subscription
+	// (jeyachandran on 2026-07-05 had exactly this — a manual recovery
+	// INSERT + a webhook replay created two rows). Now: mutate the
+	// existing row when we find one; only insert when we don't.
+	sub, err := s.billingService.GetSubscriptionByProviderID(data.SubscriptionID)
+	if err != nil && !errors.Is(err, ErrSubscriptionNotFound) {
+		return err
 	}
+	if sub == nil {
+		sub = &models.Subscription{
+			ProviderSubscriptionID: data.SubscriptionID,
+			Provider:               models.PaymentProviderDodo,
+		}
+	}
+	sub.UserID = userID
+	sub.PlanCode = planCode
+	sub.ProviderCustomerID = customerID
+	sub.Status = s.dodoAdapter.MapSubscriptionStatus(data.Status)
+	sub.CountryCode = countryCode
+	sub.CurrentPeriodStart = periodStart
+	sub.CurrentPeriodEnd = periodEnd
+	// Clear cancellation fields on re-activation. A user who cancelled
+	// then resubscribed with the same subscription_id (rare but Dodo
+	// supports it) should not still show canceled_at set.
+	sub.CanceledAt = nil
+	sub.CancelReason = ""
 
 	if err := s.billingService.CreateOrUpdateSubscription(sub); err != nil {
 		return err

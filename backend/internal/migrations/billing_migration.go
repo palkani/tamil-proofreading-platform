@@ -21,7 +21,14 @@ func isAlreadyExistsOrBind(err error) bool {
 		strings.Contains(s, "bind message") ||
 		strings.Contains(s, "result format") ||
 		strings.Contains(s, "stmtcache_") ||
-		strings.Contains(s, "prepared statement")
+		strings.Contains(s, "prepared statement") ||
+		// 23505 = unique_violation — happens when AutoMigrate tries to
+		// add a new UNIQUE index to a column that has duplicate values
+		// in existing rows. We log the warning but do not crash startup;
+		// operators clean up duplicates and add the real constraint via
+		// manual SQL. Ignoring here keeps the server usable.
+		strings.Contains(s, "23505") ||
+		strings.Contains(s, "duplicate key")
 }
 
 // MigrateBilling creates/updates all billing-related tables

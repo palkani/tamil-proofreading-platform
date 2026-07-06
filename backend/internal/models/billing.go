@@ -95,7 +95,7 @@ type Subscription struct {
 	PlanCode               string                    `gorm:"size:50;not null" json:"plan_code"`
 	Provider               PaymentProvider           `gorm:"size:20;not null" json:"provider"`
 	ProviderCustomerID     string                    `gorm:"size:100" json:"provider_customer_id"`
-	ProviderSubscriptionID string                    `gorm:"size:100;index" json:"provider_subscription_id"`
+	ProviderSubscriptionID string                    `gorm:"size:100;uniqueIndex" json:"provider_subscription_id"`
 	Status                 BillingSubscriptionStatus `gorm:"size:20;not null;default:'incomplete'" json:"status"`
 	CountryCode            string             `gorm:"size:2" json:"country_code"`
 	CurrentPeriodStart     *time.Time         `json:"current_period_start,omitempty"`
