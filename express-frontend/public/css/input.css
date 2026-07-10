@@ -469,7 +469,12 @@
     #EEF2FF 100%
   );
   background-size: 300% 300%;
-  animation: aurora-shift 12s ease infinite;
+  /* Bounded loop count — 5 iterations at 12s = 60s of animation on load,
+     then the aurora settles. Removes ongoing compositor + paint work that
+     was competing with interaction latency (INP). The gradient at rest
+     still looks correct; users only notice motion for the first minute. */
+  animation: aurora-shift 12s ease 5;
+  animation-fill-mode: forwards;
   overflow: hidden;
 }
 .aurora-hero::before {
@@ -489,23 +494,31 @@
   pointer-events: none;
   filter: blur(1px);
 }
+/* Orb animations are bounded (6-7 loops = ~60-90s of motion) for the same
+   INP-friendliness reason as .aurora-hero. `will-change: transform` promotes
+   each orb to its own compositor layer so any residual movement stays off
+   the main thread. animation-fill-mode: forwards freezes them at their
+   final position rather than snapping back to the initial keyframe. */
 .orb-1 {
   width: 420px; height: 420px;
   background: radial-gradient(circle, rgba(99,102,241,0.13) 0%, transparent 70%);
   top: -120px; left: -80px;
-  animation: float-orb 9s ease-in-out infinite;
+  will-change: transform;
+  animation: float-orb 9s ease-in-out 7 forwards;
 }
 .orb-2 {
   width: 300px; height: 300px;
   background: radial-gradient(circle, rgba(167,139,250,0.10) 0%, transparent 70%);
   top: 30%; right: -60px;
-  animation: float-orb-slow 13s ease-in-out infinite;
+  will-change: transform;
+  animation: float-orb-slow 13s ease-in-out 6 forwards;
 }
 .orb-3 {
   width: 200px; height: 200px;
   background: radial-gradient(circle, rgba(245,158,11,0.09) 0%, transparent 70%);
   bottom: 60px; left: 30%;
-  animation: float-orb 11s ease-in-out infinite reverse;
+  will-change: transform;
+  animation: float-orb 11s ease-in-out 7 reverse forwards;
 }
 
 /* ── Gradient text utility ── */
