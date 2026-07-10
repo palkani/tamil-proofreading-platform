@@ -123,6 +123,7 @@ func migrateUserBillingColumns(db *gorm.DB) error {
 		{"premium_override_by_admin", `ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_override_by_admin bigint`},
 		{"premium_override_at", `ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_override_at timestamptz`},
 		{"token_version", `ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version integer NOT NULL DEFAULT 1`},
+		{"pro_welcomed_at", `ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_welcomed_at timestamptz`},
 	}
 
 	for _, col := range columns {

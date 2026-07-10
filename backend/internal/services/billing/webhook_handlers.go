@@ -167,6 +167,24 @@ func (s *WebhookService) handleDodoSubscriptionActive(event DodoWebhookEvent) er
 	if err := s.billingService.MarkCheckoutCompleted(data.SubscriptionID); err != nil {
 		log.Printf("[WEBHOOK/DODO] Warning: failed to mark checkout attempt completed for sub=%s: %v", data.SubscriptionID, err)
 	}
+
+	// Send the bilingual Pro welcome email — first time only. This is
+	// separate from the transactional receipt fired by payment.succeeded:
+	// the receipt is functional (amount, next billing date), the welcome
+	// is emotional (thank-you, invitation to reach out). We guard on
+	// user.pro_welcomed_at IS NULL so cancel-then-resubscribe doesn't
+	// send a second welcome — that user has already been welcomed.
+	if user, uerr := s.billingService.GetUserByID(userID); uerr == nil && user.ProWelcomedAt == nil {
+		go func(email, name string, uid uint) {
+			if err := SendProWelcomeEmail(email, WelcomeProEmailData{RecipientName: name}); err != nil {
+				log.Printf("[WEBHOOK/DODO] Warning: welcome email failed for user=%d: %v", uid, err)
+				return
+			}
+			if merr := s.billingService.MarkUserProWelcomed(uid); merr != nil {
+				log.Printf("[WEBHOOK/DODO] Warning: welcome email sent but flag not persisted for user=%d: %v", uid, merr)
+			}
+		}(user.Email, user.Name, userID)
+	}
 	return nil
 }
 

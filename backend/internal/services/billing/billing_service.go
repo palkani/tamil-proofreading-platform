@@ -362,6 +362,17 @@ func (s *BillingService) UpdateUserSubscriptionEnd(userID uint, end *time.Time) 
 		Update("subscription_end", end).Error
 }
 
+// MarkUserProWelcomed records that the first-time Pro welcome email has
+// been sent to this user. Idempotent: safe to call multiple times, though
+// only the first non-null write is meaningful. Guards against the
+// subscription.active handler dispatching multiple welcomes if a webhook
+// somehow processes twice past the payment_events idempotency layer.
+func (s *BillingService) MarkUserProWelcomed(userID uint) error {
+	return s.db.Model(&models.User{}).
+		Where("id = ? AND pro_welcomed_at IS NULL", userID).
+		Update("pro_welcomed_at", time.Now()).Error
+}
+
 // UpdateUserDodoCustomerID stores the Dodo customer ID on the user record.
 func (s *BillingService) UpdateUserDodoCustomerID(userID uint, dodoCustomerID string) error {
 	return s.db.Model(&models.User{}).

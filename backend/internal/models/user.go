@@ -50,6 +50,12 @@ type User struct {
         PremiumOverrideReason   *string    `gorm:"type:text" json:"premium_override_reason,omitempty"`
         PremiumOverrideByAdmin  *uint      `json:"premium_override_by_admin_id,omitempty"`
         PremiumOverrideAt       *time.Time `json:"premium_override_at,omitempty"`
+
+        // First-time Pro welcome. Set when the bilingual welcome email fires
+        // on the first subscription.active webhook. Null means "never welcomed
+        // to Pro yet" — a user who cancels and resubscribes years later still
+        // shows null here only if the first welcome never actually landed.
+        ProWelcomedAt           *time.Time `json:"pro_welcomed_at,omitempty"`
         
         // Token version for forcing token refresh on entitlement changes
         TokenVersion            int        `gorm:"default:1;not null" json:"token_version"`
