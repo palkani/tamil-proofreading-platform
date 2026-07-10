@@ -13,35 +13,45 @@
   'use strict';
 
   // ── Plan detection ────────────────────────────────────────────────────────
-  // Pro/Basic/Enterprise users get a clean export (no H1 title, no watermark).
-  // Free / anonymous users get a "prooftamil.com" watermark on each page.
-  // Resolved from window.USER_PLAN if available (workspace pre-injects it),
-  // otherwise from /api/v1/me on first export. Cached after first resolve.
+  // Truthy = user gets clean export + unlocked format buttons.
+  // Falsy  = watermark on DOCX + lock icons in the UI + Upgrade CTA.
+  //
+  // We use /api/v1/billing/usage/today because it returns a computed
+  // `is_pro` boolean that respects EVERY path to Pro status — a paid
+  // Dodo subscription, an admin PremiumOverride, the email allowlist,
+  // and the global-premium feature flag. The Pro pill in the header
+  // uses the same endpoint for the same reason: `data.user.subscription`
+  // from /api/v1/me returns the raw enum which is "free" for admins
+  // (they never pay), so reading that directly would gate them out of
+  // their own export feature. This mismatch was the visible bug —
+  // admins seeing lock icons while the Pro pill correctly said "Pro".
+  //
+  // Return value normalised to 'pro' | 'free' so the rest of the
+  // module keeps its simple ternary checks.
   let _planCache = null;
-
-  function _planFromString(s) {
-    const p = String(s || '').toLowerCase();
-    return ['pro', 'basic', 'enterprise'].includes(p) ? p : 'free';
-  }
 
   async function getUserPlan() {
     if (_planCache) return _planCache;
-    const fromGlobal = _planFromString(window.USER_PLAN);
-    if (fromGlobal !== 'free' || window.USER_LOGGED_IN === false) {
-      _planCache = fromGlobal;
+
+    // Logged-out visitors are unambiguously Free — skip the network call.
+    if (window.USER_LOGGED_IN === false) {
+      _planCache = 'free';
       return _planCache;
     }
-    // Either logged-out (free) or USER_PLAN not yet resolved — ask the backend.
+
     try {
-      const res = await fetch('/api/v1/me', { credentials: 'include' });
+      const res = await fetch('/api/v1/billing/usage/today', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        const plan = _planFromString(data && data.user && data.user.subscription);
+        const plan = data && data.is_pro ? 'pro' : 'free';
         window.USER_PLAN = plan;
         _planCache = plan;
         return plan;
       }
     } catch (_) {}
+
+    // On network / auth failure default to Free so a broken plan check
+    // never accidentally unlocks a paid feature for a free user.
     _planCache = 'free';
     return _planCache;
   }

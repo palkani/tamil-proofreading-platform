@@ -2174,15 +2174,27 @@ router.post('/document/export-docx', async (req, res) => {
     const planRaw = String(req.body?.plan || '').toLowerCase();
     const isPro = ['pro', 'basic', 'enterprise'].includes(planRaw);
 
-    // Server-side Pro gate: never trust the client-sent plan alone.
-    // We consult the authenticated user's session (req.user.subscription
-    // is populated by the auth middleware from the JWT). Anonymous /
-    // free-tier users get 402 Payment Required, which the client turns
-    // into a redirect to /pricing. This makes the client-side lock icons
-    // a UX affordance, not a security boundary.
+    // Server-side Pro gate — three ways to pass, matching the client
+    // pill's is_pro semantics:
+    //   1. Subscription enum ∈ {pro, basic, enterprise}  (paid users)
+    //   2. Email in the admin allowlist                  (support/ops)
+    //   3. TODO if needed: PremiumOverride flag          (currently only
+    //      accessible via a Go backend call — not worth an extra hop
+    //      just for this endpoint; admins already covered by #2)
+    //
+    // Client-sent `plan` is deliberately IGNORED — never trust the
+    // browser to declare its own tier. Every hit here re-derives status
+    // from the authenticated session.
     const sessionPlan = String(req.user?.subscription || '').toLowerCase();
-    const sessionIsPro = ['pro', 'basic', 'enterprise'].includes(sessionPlan);
-    if (!sessionIsPro) {
+    const isPaidTier = ['pro', 'basic', 'enterprise'].includes(sessionPlan);
+    const sessionEmail = String(req.user?.email || '').toLowerCase().trim();
+    // Kept in sync with the blog-publish allowlist. If a sixth admin
+    // email lands, this and the four other duplicates become worth
+    // consolidating into a shared module.
+    const adminAllowlist = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com', 'contact@prooftamil.com'];
+    const isAdmin = sessionEmail && adminAllowlist.includes(sessionEmail);
+
+    if (!isPaidTier && !isAdmin) {
       return res.status(402).json({
         error: 'pro_required',
         message: 'Document export is available on Pro plans. Upgrade at /pricing to unlock DOCX, PDF, and TXT downloads.',
