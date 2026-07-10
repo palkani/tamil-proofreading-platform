@@ -30,6 +30,27 @@
   // module keeps its simple ternary checks.
   let _planCache = null;
 
+  // Fetch that mirrors workspace.js's apiFetch — sends BOTH the auth
+  // cookie AND the Bearer token from localStorage. Some backend routes
+  // trust one or the other; sending both matches every other authed
+  // call in the workspace and avoids a silent 401 that would fall
+  // through to plan='free' (which is exactly the bug the user hit —
+  // Pro pill correct, Export locked, because my previous cookie-only
+  // fetch was refused by the backend and I swallowed the error).
+  async function authedFetch(url) {
+    // Prefer the app-wide auth helper if it's on the page — it already
+    // handles token refresh on 401.
+    if (window.authUtils && typeof window.authUtils.apiFetch === 'function') {
+      return window.authUtils.apiFetch(url, {}, true);
+    }
+    const headers = new Headers();
+    try {
+      const token = localStorage.getItem('access_token');
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+    } catch (_) { /* localStorage blocked (privacy mode) — cookie alone must suffice */ }
+    return fetch(url, { headers, credentials: 'include' });
+  }
+
   async function getUserPlan() {
     if (_planCache) return _planCache;
 
@@ -40,7 +61,7 @@
     }
 
     try {
-      const res = await fetch('/api/v1/billing/usage/today', { credentials: 'include' });
+      const res = await authedFetch('/api/v1/billing/usage/today');
       if (res.ok) {
         const data = await res.json();
         const plan = data && data.is_pro ? 'pro' : 'free';
@@ -48,12 +69,20 @@
         _planCache = plan;
         return plan;
       }
-    } catch (_) {}
+      // Loud log so the next time this bug shows up we spot it in DevTools
+      // console instead of guessing that "plan detection failed silently".
+      console.warn('[DocExport] Plan lookup HTTP', res.status, '— defaulting to free');
+    } catch (e) {
+      console.warn('[DocExport] Plan lookup threw', e && e.message, '— defaulting to free');
+    }
 
-    // On network / auth failure default to Free so a broken plan check
-    // never accidentally unlocks a paid feature for a free user.
-    _planCache = 'free';
-    return _planCache;
+    // On network / auth failure return 'free' WITHOUT caching, so the
+    // NEXT menu open retries. Caching a failure would lock a real Pro
+    // user out of exports forever if their very first lookup happened
+    // during a token refresh window. Free is a safe fallback (never
+    // accidentally unlocks a paid feature) but transient failures
+    // should self-heal.
+    return 'free';
   }
 
   // ── Editor helpers (mirrors doc-import.js) ────────────────────────────────
