@@ -2,6 +2,7 @@ package email
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -31,11 +32,31 @@ type EmailService struct {
 }
 
 type ResendEmailRequest struct {
-	From    string   `json:"from"`
-	To      []string `json:"to"`
-	Subject string   `json:"subject"`
-	HTML    string   `json:"html"`
-	ReplyTo []string `json:"reply_to,omitempty"`
+	From        string             `json:"from"`
+	To          []string           `json:"to"`
+	Subject     string             `json:"subject"`
+	HTML        string             `json:"html"`
+	ReplyTo     []string           `json:"reply_to,omitempty"`
+	Attachments []ResendAttachment `json:"attachments,omitempty"`
+}
+
+// ResendAttachment mirrors Resend's attachment shape. Content must be
+// base64-encoded bytes; Filename is what the recipient sees in their
+// mail client. ContentType is optional but strongly recommended so
+// PDFs preview inline rather than downloading as an unknown blob.
+type ResendAttachment struct {
+	Filename    string `json:"filename"`
+	Content     string `json:"content"`      // base64
+	ContentType string `json:"content_type,omitempty"`
+}
+
+// EmailAttachment is the caller-facing struct — raw bytes, base64 handled
+// internally by SendEmailWithAttachments so callers don't have to think
+// about encoding.
+type EmailAttachment struct {
+	Filename    string
+	Bytes       []byte
+	ContentType string // e.g. "application/pdf"
 }
 
 type ResendResponse struct {
@@ -241,17 +262,41 @@ func (s *EmailService) sendViaResend(payload ResendEmailRequest) error {
 }
 
 func (s *EmailService) SendEmail(to, subject, htmlBody string) error {
+	return s.SendEmailWithAttachments(to, subject, htmlBody, nil)
+}
+
+// SendEmailWithAttachments is the attachment-aware variant. Nil or empty
+// attachments slice is equivalent to SendEmail. Bytes are base64-encoded
+// internally before hand-off to Resend's API. Attachments over ~40MB
+// (Resend's per-email limit) will be rejected by the upstream — caller
+// should keep PDFs under that.
+func (s *EmailService) SendEmailWithAttachments(to, subject, htmlBody string, attachments []EmailAttachment) error {
 	if !s.IsConfigured() {
 		log.Printf("[EMAIL] Resend API not configured, skipping email to: %s", to)
 		return nil
 	}
 
-	err := s.sendViaResend(ResendEmailRequest{
+	req := ResendEmailRequest{
 		From:    fmt.Sprintf("%s <%s>", s.fromName, s.fromEmail),
 		To:      []string{to},
 		Subject: subject,
 		HTML:    htmlBody,
-	})
+	}
+	if len(attachments) > 0 {
+		req.Attachments = make([]ResendAttachment, 0, len(attachments))
+		for _, a := range attachments {
+			if len(a.Bytes) == 0 || a.Filename == "" {
+				continue
+			}
+			req.Attachments = append(req.Attachments, ResendAttachment{
+				Filename:    a.Filename,
+				Content:     base64.StdEncoding.EncodeToString(a.Bytes),
+				ContentType: a.ContentType,
+			})
+		}
+	}
+
+	err := s.sendViaResend(req)
 	if err != nil {
 		return err
 	}

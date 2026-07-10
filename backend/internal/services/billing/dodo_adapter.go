@@ -182,6 +182,60 @@ func (a *DodoAdapter) GetSubscription(subscriptionID string) (customerID, produc
 	return cid, out.ProductID, out.Status, nil
 }
 
+// FetchInvoicePDF retrieves the Dodo-generated invoice PDF for a given
+// payment_id. Dodo exposes invoice PDFs via `/invoices/payments/{id}`
+// which returns application/pdf bytes directly. Timeout is 20s so a
+// slow Dodo response doesn't hold the webhook goroutine for long —
+// this is best-effort; a missing attachment falls back to a welcome
+// email without one.
+//
+// Returns:
+//   - bytes: the PDF file content (nil on error)
+//   - filename: sensible default the recipient sees in their mail client
+//   - error: transport, HTTP status, or empty-body errors
+func (a *DodoAdapter) FetchInvoicePDF(paymentID string) ([]byte, string, error) {
+	if strings.TrimSpace(paymentID) == "" {
+		return nil, "", fmt.Errorf("dodo fetch invoice: empty payment_id")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	// Dodo's endpoint returns raw PDF bytes. We call doGet's underlying
+	// pattern directly so we can request application/pdf instead of json.
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.baseURL+"/invoices/payments/"+paymentID, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("dodo invoice request build: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+a.apiKey)
+	req.Header.Set("Accept", "application/pdf")
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("dodo invoice fetch: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", fmt.Errorf("dodo invoice read body: %w", err)
+	}
+	if resp.StatusCode >= 400 {
+		return nil, "", fmt.Errorf("dodo invoice fetch failed (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+	if len(body) == 0 {
+		return nil, "", fmt.Errorf("dodo invoice fetch: empty body")
+	}
+	// PDFs start with "%PDF" — sanity-check before shipping to Resend.
+	// If Dodo returned a JSON error body instead (shouldn't happen after
+	// the status check but defensively), we bail with a specific error
+	// so ops can see it in logs.
+	if len(body) >= 4 && string(body[:4]) != "%PDF" {
+		return nil, "", fmt.Errorf("dodo invoice fetch: unexpected content type (first 4 bytes: %q)", string(body[:4]))
+	}
+	filename := "ProofTamil-invoice-" + paymentID + ".pdf"
+	return body, filename, nil
+}
+
 func (a *DodoAdapter) doPatch(ctx context.Context, path string, body interface{}) ([]byte, int, error) {
 	b, err := json.Marshal(body)
 	if err != nil {

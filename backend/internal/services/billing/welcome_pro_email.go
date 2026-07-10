@@ -14,21 +14,30 @@ import (
 // Transactional receipt data (amount, next billing date) already ships
 // separately from the payment.succeeded webhook via receipt_email.go.
 type WelcomeProEmailData struct {
-	RecipientName string // may be empty; template handles both
-	AppURL        string // e.g. "https://www.prooftamil.com" — defaults if empty
+	RecipientName string             // may be empty; template handles both
+	AppURL        string             // e.g. "https://www.prooftamil.com" — defaults if empty
+	InvoicePDF    []byte             // optional: attached as PDF if present
+	InvoiceName   string             // optional: attachment filename; defaults if empty
 }
 
 // SendProWelcomeEmail sends the bilingual Tamil-first / English-second
 // welcome message to a user whose Pro subscription just activated for
-// the first time. Called from handleDodoSubscriptionActive after the
-// Pro flag is flipped. Non-fatal at the call site — a missed welcome
+// the first time. Called from handleDodoPaymentSucceeded on the first
+// successful payment. Non-fatal at the call site — a missed welcome
 // is cosmetic, not a billing incident.
+//
+// When InvoicePDF is provided, it's attached to the email and the copy
+// switches from "Dodo will send separately" to "Your invoice is
+// attached." When absent (Dodo fetch failed), the fallback copy
+// preserves accuracy — Dodo does still send the tax invoice from their
+// end regardless of whether we managed to attach it.
 func SendProWelcomeEmail(toEmail string, data WelcomeProEmailData) error {
 	appURL := strings.TrimRight(data.AppURL, "/")
 	if appURL == "" {
 		appURL = "https://www.prooftamil.com"
 	}
 	greetingName := strings.TrimSpace(data.RecipientName)
+	hasInvoice := len(data.InvoicePDF) > 0
 
 	svc := emailsvc.NewEmailService()
 	if !svc.IsConfigured() {
@@ -37,12 +46,25 @@ func SendProWelcomeEmail(toEmail string, data WelcomeProEmailData) error {
 	}
 
 	subject := "Welcome to ProofTamil Pro! 🎉"
-	body := renderWelcomeProHTML(html.EscapeString(greetingName), appURL)
+	body := renderWelcomeProHTML(html.EscapeString(greetingName), appURL, hasInvoice)
 
-	if err := svc.SendEmail(toEmail, subject, body); err != nil {
+	var attachments []emailsvc.EmailAttachment
+	if hasInvoice {
+		filename := strings.TrimSpace(data.InvoiceName)
+		if filename == "" {
+			filename = "ProofTamil-invoice.pdf"
+		}
+		attachments = []emailsvc.EmailAttachment{{
+			Filename:    filename,
+			Bytes:       data.InvoicePDF,
+			ContentType: "application/pdf",
+		}}
+	}
+
+	if err := svc.SendEmailWithAttachments(toEmail, subject, body, attachments); err != nil {
 		return fmt.Errorf("welcome-pro email to %s: %w", toEmail, err)
 	}
-	log.Printf("[EMAIL/WELCOME_PRO] Sent to %s", toEmail)
+	log.Printf("[EMAIL/WELCOME_PRO] Sent to %s (invoice_attached=%t)", toEmail, hasInvoice)
 	return nil
 }
 
@@ -51,13 +73,24 @@ func SendProWelcomeEmail(toEmail string, data WelcomeProEmailData) error {
 // for email-client compatibility. Both Tamil and English versions live
 // side by side; Tamil is presented first as a deliberate cultural signal
 // that Tamil is the product's primary language, not a translated afterthought.
-func renderWelcomeProHTML(escapedName string, appURL string) string {
+//
+// hasInvoice toggles the "Your invoice" callout copy between two accurate
+// variants: "attached to this email" when we succeeded in fetching the PDF
+// from Dodo, or "sent separately by Dodo" when we didn't. Either way the
+// billing page link is included so users have an in-app fallback.
+func renderWelcomeProHTML(escapedName string, appURL string, hasInvoice bool) string {
 	// Salutation: "அன்பான <name>" when we know the name, plain "அன்புடையீர்" otherwise.
 	tamilSalutation := "அன்புடையீர்,"
 	englishSalutation := "Hi,"
 	if escapedName != "" {
 		tamilSalutation = fmt.Sprintf("அன்பான %s,", escapedName)
 		englishSalutation = fmt.Sprintf("Hi %s,", escapedName)
+	}
+
+	// Invoice callout text depends on whether the PDF is riding along.
+	invoiceLine := fmt.Sprintf(`Dodo Payments (our payment processor) will send you the official tax invoice separately. You can also view all your invoices anytime at <a href="%s/account/billing" style="color:#E54B26;text-decoration:none;">your billing page</a>.`, appURL)
+	if hasInvoice {
+		invoiceLine = fmt.Sprintf(`Your official tax invoice is <strong>attached to this email</strong> as a PDF. You can also view all your invoices anytime at <a href="%s/account/billing" style="color:#E54B26;text-decoration:none;">your billing page</a>.`, appURL)
 	}
 
 	return fmt.Sprintf(`<!doctype html>
@@ -172,15 +205,13 @@ func renderWelcomeProHTML(escapedName string, appURL string) string {
             </td>
           </tr>
 
-          <!-- Invoice note -->
+          <!-- Invoice note — copy switches based on whether the PDF is attached -->
           <tr>
             <td style="padding:12px 40px 8px;">
               <div style="background:#F5EDD7;border:1px solid #E4D7B8;border-radius:10px;padding:14px 16px;font-family:-apple-system,'Segoe UI',sans-serif;font-size:0.84rem;color:#171C2C;">
                 <div style="font-weight:600;margin-bottom:4px;">📄 Your invoice</div>
                 <div style="line-height:1.55;color:rgba(23,28,44,0.75);">
-                  Dodo Payments (our payment processor) will send you the official tax invoice separately.
-                  You can also view all your invoices anytime at
-                  <a href="%s/account/billing" style="color:#E54B26;text-decoration:none;">your billing page</a>.
+                  %s
                 </div>
               </div>
             </td>
@@ -203,5 +234,5 @@ func renderWelcomeProHTML(escapedName string, appURL string) string {
     </tr>
   </table>
 </body>
-</html>`, tamilSalutation, appURL, englishSalutation, appURL, appURL)
+</html>`, tamilSalutation, appURL, englishSalutation, invoiceLine, appURL)
 }

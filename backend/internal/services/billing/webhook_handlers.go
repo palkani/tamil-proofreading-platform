@@ -168,23 +168,9 @@ func (s *WebhookService) handleDodoSubscriptionActive(event DodoWebhookEvent) er
 		log.Printf("[WEBHOOK/DODO] Warning: failed to mark checkout attempt completed for sub=%s: %v", data.SubscriptionID, err)
 	}
 
-	// Send the bilingual Pro welcome email — first time only. This is
-	// separate from the transactional receipt fired by payment.succeeded:
-	// the receipt is functional (amount, next billing date), the welcome
-	// is emotional (thank-you, invitation to reach out). We guard on
-	// user.pro_welcomed_at IS NULL so cancel-then-resubscribe doesn't
-	// send a second welcome — that user has already been welcomed.
-	if user, uerr := s.billingService.GetUserByID(userID); uerr == nil && user.ProWelcomedAt == nil {
-		go func(email, name string, uid uint) {
-			if err := SendProWelcomeEmail(email, WelcomeProEmailData{RecipientName: name}); err != nil {
-				log.Printf("[WEBHOOK/DODO] Warning: welcome email failed for user=%d: %v", uid, err)
-				return
-			}
-			if merr := s.billingService.MarkUserProWelcomed(uid); merr != nil {
-				log.Printf("[WEBHOOK/DODO] Warning: welcome email sent but flag not persisted for user=%d: %v", uid, merr)
-			}
-		}(user.Email, user.Name, userID)
-	}
+	// Welcome email fires from handleDodoPaymentSucceeded (not here) so
+	// we have the payment_id available for fetching the invoice PDF from
+	// Dodo's API and attaching it to the message.
 	return nil
 }
 
@@ -367,21 +353,64 @@ func (s *WebhookService) handleDodoPaymentSucceeded(event DodoWebhookEvent) erro
 	// Send the receipt email. Non-fatal — a missing receipt is cosmetic; the
 	// user's Pro is already active by this point and the outer webhook
 	// idempotency check guarantees we only reach here once per Dodo message.
-	if user, uerr := s.billingService.GetUserByID(sub.UserID); uerr != nil {
+	user, uerr := s.billingService.GetUserByID(sub.UserID)
+	if uerr != nil {
 		log.Printf("[WEBHOOK/DODO] Warning: cannot send receipt — user lookup failed (user=%d): %v", sub.UserID, uerr)
-	} else {
-		if err := SendPaymentReceipt(user.Email, PaymentReceiptData{
-			RecipientName:   user.Name,
-			PlanCode:        sub.PlanCode,
-			AmountCents:     data.AmountTotal,
-			Currency:        data.Currency,
-			PaymentID:       data.PaymentID,
-			SubscriptionID:  data.SubscriptionID,
-			NextBillingDate: sub.CurrentPeriodEnd,
-			PaidAt:          now,
-		}); err != nil {
-			log.Printf("[WEBHOOK/DODO] Warning: receipt email failed for user=%d payment=%s: %v", sub.UserID, data.PaymentID, err)
-		}
+		return nil
+	}
+
+	if err := SendPaymentReceipt(user.Email, PaymentReceiptData{
+		RecipientName:   user.Name,
+		PlanCode:        sub.PlanCode,
+		AmountCents:     data.AmountTotal,
+		Currency:        data.Currency,
+		PaymentID:       data.PaymentID,
+		SubscriptionID:  data.SubscriptionID,
+		NextBillingDate: sub.CurrentPeriodEnd,
+		PaidAt:          now,
+	}); err != nil {
+		log.Printf("[WEBHOOK/DODO] Warning: receipt email failed for user=%d payment=%s: %v", sub.UserID, data.PaymentID, err)
+	}
+
+	// Bilingual Pro welcome — first payment only, guarded by
+	// user.pro_welcomed_at. Fires from payment.succeeded (not
+	// subscription.active) so we have the payment_id available for
+	// fetching the tax invoice PDF from Dodo's API to attach.
+	//
+	// The whole thing runs in a goroutine because the invoice fetch adds
+	// up to 20s of latency (Dodo's HTTP round trip). Blocking the webhook
+	// goroutine for that would risk Dodo timing out and retrying. The
+	// pro_welcomed_at flag protects against duplicate sends if a webhook
+	// retry does slip past the idempotency layer.
+	if user.ProWelcomedAt == nil {
+		go func(email, recipientName string, uid uint, paymentID string) {
+			// Try to fetch the invoice PDF. Non-fatal: on any failure we
+			// send the welcome without an attachment so the user still
+			// gets the message.
+			var invoicePDF []byte
+			var invoiceFilename string
+			if paymentID != "" {
+				pdf, filename, fetchErr := s.dodoAdapter.FetchInvoicePDF(paymentID)
+				if fetchErr != nil {
+					log.Printf("[WEBHOOK/DODO] Warning: invoice PDF fetch failed for user=%d payment=%s: %v — sending welcome without attachment", uid, paymentID, fetchErr)
+				} else {
+					invoicePDF = pdf
+					invoiceFilename = filename
+				}
+			}
+
+			if err := SendProWelcomeEmail(email, WelcomeProEmailData{
+				RecipientName: recipientName,
+				InvoicePDF:    invoicePDF,
+				InvoiceName:   invoiceFilename,
+			}); err != nil {
+				log.Printf("[WEBHOOK/DODO] Warning: welcome email failed for user=%d: %v", uid, err)
+				return
+			}
+			if merr := s.billingService.MarkUserProWelcomed(uid); merr != nil {
+				log.Printf("[WEBHOOK/DODO] Warning: welcome email sent but flag not persisted for user=%d: %v", uid, merr)
+			}
+		}(user.Email, user.Name, sub.UserID, data.PaymentID)
 	}
 
 	return nil
