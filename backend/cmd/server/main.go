@@ -545,6 +545,7 @@ func main() {
 			// Authenticated billing endpoints
 			billingRoutes.POST("/checkout-session", middleware.AuthMiddleware(cfg.JWTSecret), billingHandlers.CreateCheckoutSession)
 			billingRoutes.GET("/me", middleware.AuthMiddleware(cfg.JWTSecret), billingHandlers.GetBillingStatus)
+			billingRoutes.GET("/usage/today", middleware.AuthMiddleware(cfg.JWTSecret), h.GetUsageToday)
 			billingRoutes.POST("/cancel", middleware.AuthMiddleware(cfg.JWTSecret), billingHandlers.CancelSubscription)
 
 			// DodoPayments webhook — matches the URL configured in the Dodo dashboard:

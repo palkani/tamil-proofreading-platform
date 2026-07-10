@@ -1833,16 +1833,18 @@ class WorkspaceController {
       }
     }
 
-    // New Draft button
+    // New Draft button — check daily quota BEFORE opening editor so a
+    // free user who's already used their 20 credits sees the upgrade
+    // modal instead of a fresh editor they can't submit from.
     const newDraftBtn = document.getElementById('new-draft-btn');
     if (newDraftBtn) {
-      newDraftBtn.addEventListener('click', () => this.createNewDraft());
+      newDraftBtn.addEventListener('click', () => this.gatedCreateNewDraft());
     }
 
-    // Create First Draft button
+    // Create First Draft button (empty state) — same gate applies.
     const createFirstDraftBtn = document.getElementById('create-first-draft-btn');
     if (createFirstDraftBtn) {
-      createFirstDraftBtn.addEventListener('click', () => this.createNewDraft());
+      createFirstDraftBtn.addEventListener('click', () => this.gatedCreateNewDraft());
     }
 
     // My Drafts link - use JS navigation so we can prevent default and ensure /drafts (element is now <a href="/drafts">)
@@ -6137,6 +6139,69 @@ class WorkspaceController {
       console.warn('[WorkspaceJS] consumePendingDraft failed:', e);
       return false;
     }
+  }
+
+  // gatedCreateNewDraft is the New Draft entry point. It fetches the
+  // caller's current-day quota before opening a fresh editor so a free
+  // user who's already used their 20 credits sees an upgrade prompt
+  // instead of an editor that will reject their submission. The gate
+  // does NOT run on pending-draft restoration (signup bridge) because
+  // that flow explicitly wants to bring the demo text over the fence.
+  async gatedCreateNewDraft() {
+    try {
+      const r = await this.apiFetch('/api/v1/billing/usage/today');
+      if (r.ok) {
+        const arr = await r.json();
+        const usage = Array.isArray(arr) ? arr[0] : arr;
+        if (usage && usage.is_exhausted) {
+          this.showQuotaExhaustedModal(usage);
+          return;
+        }
+        // Not exhausted — cache for header pill display
+        this.usageToday = usage;
+      }
+    } catch (e) {
+      // Non-fatal: if the quota check itself fails (network hiccup, backend
+      // deploy), fall through and let the editor open. The /submit endpoint
+      // has its own enforcement so the user won't sneak past the real limit.
+      console.warn('[QUOTA] usage/today check failed:', e);
+    }
+    this.createNewDraft();
+  }
+
+  // showQuotaExhaustedModal renders a lightweight upsell overlay when a
+  // free user has used all 20 credits today. Reuses body-level DOM so it
+  // works whether the user is on the empty state or the editor view. No
+  // external CSS dependency — inline styles keep this self-contained.
+  showQuotaExhaustedModal(usage) {
+    // Bail if one is already open
+    if (document.getElementById('quota-exhausted-modal')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'quota-exhausted-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(15,17,25,0.55);display:flex;align-items:center;justify-content:center;padding:20px;font-family:ui-sans-serif,-apple-system,system-ui,sans-serif;';
+    overlay.innerHTML = `
+      <div style="background:white;border-radius:14px;max-width:440px;width:100%;padding:28px 28px 24px;box-shadow:0 30px 60px -20px rgba(15,17,25,0.4);">
+        <div style="width:44px;height:44px;border-radius:50%;background:#FEF3C7;color:#B45309;display:grid;place-items:center;margin-bottom:16px;font-weight:700;font-size:20px;">!</div>
+        <h3 style="margin:0 0 8px;font-size:1.15rem;font-weight:600;color:#111827;">You've used your daily free credits</h3>
+        <p style="margin:0 0 16px;font-size:0.9rem;line-height:1.55;color:#6B7280;">
+          Free users get <strong>${usage.credits_limit} proofreads per day</strong>. Your credits reset at midnight UTC.
+          Upgrade to Pro for unlimited proofreads, longer documents, and voice + OCR features.
+        </p>
+        <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:12px 14px;font-size:0.82rem;color:#4B5563;margin-bottom:20px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Used today</span><strong>${usage.credits_used} / ${usage.credits_limit}</strong></div>
+          <div style="display:flex;justify-content:space-between;color:#9CA3AF;"><span>Resets on</span><span>${usage.usage_date} · 00:00 UTC</span></div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button id="quota-close-btn" type="button"
+                  style="flex:1;padding:10px 14px;border:1px solid #D1D5DB;border-radius:8px;background:white;color:#374151;font-size:0.9rem;font-weight:500;cursor:pointer;">Close</button>
+          <a href="/pricing"
+             style="flex:1;padding:10px 14px;border:none;border-radius:8px;background:#4F46E5;color:white;font-size:0.9rem;font-weight:600;text-align:center;text-decoration:none;">Upgrade to Pro →</a>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('quota-close-btn').addEventListener('click', () => overlay.remove());
   }
 
   createNewDraft() {
