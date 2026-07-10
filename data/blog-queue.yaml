@@ -298,5 +298,124 @@ queue:
       - common-tamil-grammar-mistakes
     status: queued
 
+  # ══════════════════════════════════════════════════════════════════════
+  # ADDED 2026-07-10 — sister posts to la-zha-la-veerupaadu-tamil
+  # (the "confusing Tamil letters" content cluster), plus underserved
+  # teacher-facing and writer-conversion angles. Alternating tiers so
+  # the generator produces mixed cadence.
+  # ══════════════════════════════════════════════════════════════════════
+
+  # ── Confusing letters series #1: ண/ன/ந ────────────────────────────────
+  - topic: "ண, ன, ந வேறுபாடு: மூன்று n ஒலிகள் எப்படி distinguish பண்றது"
+    keyword: "ண ன ந வேறுபாடு"
+    language: tamil
+    tier: 3
+    min_words: 1500
+    suggested_internal_links:
+      - la-zha-la-veerupaadu-tamil
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  # ── Confusing letters series #2: ர/ற ──────────────────────────────────
+  - topic: "ர, ற வேறுபாடு: எப்பொழுது எது use பண்றது — practical guide"
+    keyword: "ர ற வேறுபாடு"
+    language: tamil
+    tier: 3
+    min_words: 1500
+    suggested_internal_links:
+      - la-zha-la-veerupaadu-tamil
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  # ── Commercial: self-editing checklist for authors ────────────────────
+  - topic: "Self-editing your Tamil manuscript — 7-step checklist before publishing"
+    keyword: "tamil manuscript editing"
+    language: tamil
+    tier: 1
+    min_words: 1800
+    suggested_internal_links:
+      - la-zha-la-veerupaadu-tamil
+      - common-tamil-grammar-mistakes
+      - tamil-grammar-checker-online-free
+    status: queued
+
+  # ── Teacher-facing: Tamil punctuation ─────────────────────────────────
+  - topic: "தமிழ் நிறுத்தக் குறியீடுகள் — teachers-க்கான complete reference"
+    keyword: "தமிழ் நிறுத்தக் குறியீடுகள்"
+    language: tamil
+    tier: 3
+    min_words: 1500
+    suggested_internal_links:
+      - tholkappiyam-introduction
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  # ── Foundational: உயிர் எழுத்துகள் ─────────────────────────────────────
+  - topic: "உயிர் எழுத்துகள் 12 — complete guide with pronunciation"
+    keyword: "உயிர் எழுத்துகள்"
+    language: tamil
+    tier: 3
+    min_words: 1500
+    suggested_internal_links:
+      - la-zha-la-veerupaadu-tamil
+      - tholkappiyam-introduction
+    status: queued
+
+  # ── Foundational: மெய் எழுத்துகள் ──────────────────────────────────────
+  - topic: "மெய் எழுத்துகள் 18 — வகைகள், pronunciation, ordering"
+    keyword: "மெய் எழுத்துகள்"
+    language: tamil
+    tier: 3
+    min_words: 1500
+    suggested_internal_links:
+      - la-zha-la-veerupaadu-tamil
+      - tholkappiyam-introduction
+    status: queued
+
+  # ── Commercial: Tanglish → clean Tamil ────────────────────────────────
+  - topic: "Common Tanglish typing mistakes — clean Tamil-க்கு எப்படி convert பண்றது"
+    keyword: "tanglish tamil mistakes"
+    language: tamil
+    tier: 1
+    min_words: 1500
+    suggested_internal_links:
+      - tanglish-to-tamil-typing
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  # ── Writer-facing: verb tenses ────────────────────────────────────────
+  - topic: "Tamil verb tenses — writers-க்கான practical reference"
+    keyword: "tamil verb tenses"
+    language: tamil
+    tier: 3
+    min_words: 1500
+    suggested_internal_links:
+      - tholkappiyam-introduction
+      - common-tamil-grammar-mistakes
+    status: queued
+
+  # ── Student + writer: Tamil essay writing ─────────────────────────────
+  - topic: "தமிழ் கட்டுரை எழுதுவது எப்படி — structure, style, and self-editing"
+    keyword: "தமிழ் கட்டுரை எழுதுவது"
+    language: tamil
+    tier: 1
+    min_words: 1800
+    suggested_internal_links:
+      - la-zha-la-veerupaadu-tamil
+      - common-tamil-grammar-mistakes
+      - tamil-grammar-checker-online-free
+    status: queued
+
+  # ── Confusing letters series #3: single/double consonants ─────────────
+  - topic: "Single vs double consonants in Tamil (பள்ளி vs பளி) — ஒற்று எழுத்து rules"
+    keyword: "தமிழ் ஒற்று எழுத்து"
+    language: tamil
+    tier: 3
+    min_words: 1500
+    suggested_internal_links:
+      - la-zha-la-veerupaadu-tamil
+      - common-tamil-grammar-mistakes
+    status: queued
+
 # ── Generated topics (script appends here, do not hand-edit) ────────────
 generated: []
