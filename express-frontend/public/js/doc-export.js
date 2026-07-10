@@ -439,13 +439,42 @@
     pairs.forEach(({ menu }) => syncMenuPlanState(menu));
   }
 
-  if (document.readyState === 'loading') {
-    console.log('[DocExport] bootstrap deferred to DOMContentLoaded — readyState=loading');
-    document.addEventListener('DOMContentLoaded', () => { wireMenus(); syncAllMenus(); });
-  } else {
-    console.log('[DocExport] bootstrap running immediately — readyState=' + document.readyState);
-    wireMenus();
-    syncAllMenus();
+  // Bootstrap: run once immediately AND once on DOMContentLoaded as a
+  // belt-and-suspenders guard. Idempotent because both wireMenus and
+  // syncAllMenus operate on IDs that don't change (findMenuPairs
+  // returns the same {btn, menu} pairs each call). The previous
+  // readyState === 'loading' → wait-for-DOMContentLoaded pattern was
+  // silently failing on the workspace page (in the wild — reproducible
+  // in the user's incognito session) even though DOMContentLoaded
+  // should have fired. Running immediately works because doc-export.js
+  // is included AFTER the button in the DOM (script at workspace.ejs
+  // line 1521; button around line 933), so the querySelectorAll for
+  // "[id$='-export-btn']" always finds it. The second-pass wire on
+  // DOMContentLoaded is a no-op if the immediate pass already bound
+  // (addEventListener silently dedupes for the same listener function,
+  // but a fresh arrow function each call means we'd potentially
+  // double-bind — so we guard with a boolean).
+  let _wired = false;
+  function bootstrap(source) {
+    if (_wired) {
+      console.log('[DocExport] bootstrap skipped (already wired) — trigger=' + source);
+      return;
+    }
+    _wired = true;
+    console.log('[DocExport] bootstrap running — trigger=' + source + ' readyState=' + document.readyState);
+    try {
+      wireMenus();
+      syncAllMenus();
+    } catch (e) {
+      console.error('[DocExport] bootstrap threw', e && (e.message || e), e && e.stack);
+      // Reset so a later DOMContentLoaded pass can retry cleanly.
+      _wired = false;
+    }
+  }
+  bootstrap('immediate');
+  if (document.readyState !== 'complete') {
+    document.addEventListener('DOMContentLoaded', () => bootstrap('DOMContentLoaded'));
+    window.addEventListener('load', () => bootstrap('window.load'));
   }
 
   window.docExport = { exportPdf, exportDocx, exportTxt };
