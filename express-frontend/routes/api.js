@@ -2696,7 +2696,7 @@ router.post('/ai-content-writer/translate', async (req, res) => {
 
 // ============= BLOG PUBLISH API (Express -> Go backend) =============
 // Admin-only emails allowed to publish blogs
-const BLOG_PUBLISH_ALLOWED_EMAILS = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com'];
+const BLOG_PUBLISH_ALLOWED_EMAILS = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com', 'contact@prooftamil.com'];
 
 // Small helper — 403s if the request isn't from an allowlisted admin.
 // Returns true if the request should continue. Kept inline so we don't

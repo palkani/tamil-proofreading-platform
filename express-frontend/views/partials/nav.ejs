@@ -15,7 +15,7 @@
           <a href="/drafts" id="my-drafts-link" class="nav-link <%= active === 'drafts' ? 'active' : '' %> inline-flex items-center px-2.5 py-1.5 rounded-lg whitespace-nowrap">
             My Drafts
           </a>
-          <% if (['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com'].includes(String(user.email || '').toLowerCase())) { %>
+          <% if (['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com', 'contact@prooftamil.com'].includes(String(user.email || '').toLowerCase())) { %>
             <a href="/my-blogs" class="nav-link <%= active === 'myBlogs' ? 'active' : '' %> inline-flex items-center px-2.5 py-1.5 rounded-lg whitespace-nowrap">
               My Blogs
             </a>
@@ -149,7 +149,7 @@
         Pro Access
       </a>
       <% } %>
-      <% if (['palkani.r@gmail.com','prooftamil@gmail.com','banu.palkani@gmail.com'].includes(String(user.email || '').toLowerCase())) { %>
+      <% if (['palkani.r@gmail.com','prooftamil@gmail.com','banu.palkani@gmail.com','contact@prooftamil.com'].includes(String(user.email || '').toLowerCase())) { %>
       <a href="/my-blogs"
          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
         <span class="w-4 h-4 flex-shrink-0 text-center text-base leading-none">✍️</span>

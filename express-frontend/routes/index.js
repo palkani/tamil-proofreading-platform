@@ -536,7 +536,7 @@ router.get('/my-blogs', requireAuth, async (req, res) => {
   const user = getCurrentUser(req);
   // Restrict My Blogs to admin-only as requested.
   // Only allow the specified admin email (and prooftamil@gmail.com as a safe fallback).
-  const allowed = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com'];
+  const allowed = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com', 'contact@prooftamil.com'];
   if (!user || !user.email || !allowed.includes(String(user.email).toLowerCase())) {
     return res.redirect(302, '/drafts');
   }
