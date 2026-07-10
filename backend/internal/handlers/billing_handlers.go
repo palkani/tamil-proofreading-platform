@@ -29,6 +29,14 @@ func NewBillingHandlers(billingService *billing.BillingService, webhookService *
 	}
 }
 
+// BillingService exposes the underlying billing service for callers
+// that need to reuse it — currently only the dunning/resume-checkout
+// handler, which creates a fresh Dodo session on behalf of the user
+// clicking a drip-email CTA.
+func (h *BillingHandlers) BillingService() *billing.BillingService {
+	return h.billingService
+}
+
 // ==================== BILLING ENDPOINTS ====================
 
 // CreateCheckoutSession creates a checkout session for subscription

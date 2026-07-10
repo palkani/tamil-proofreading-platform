@@ -40,6 +40,13 @@ func MigrateBilling(db *gorm.DB) error {
 		log.Printf("[MIGRATIONS] Warning: Failed to add user billing columns: %v", err)
 	}
 
+	// Add drip stamps to an existing checkout_attempts table. Idempotent
+	// via IF NOT EXISTS so it's safe to re-run and safe on environments
+	// where the table doesn't exist yet (will no-op and log a warning).
+	if err := migrateCheckoutAttemptDripColumns(db); err != nil {
+		log.Printf("[MIGRATIONS] Warning: Failed to add checkout_attempts drip columns: %v", err)
+	}
+
 	// Create plans table (ignore already-exists / bind format errors with pooler)
 	if err := db.AutoMigrate(&models.Plan{}); err != nil && !isAlreadyExistsOrBind(err) {
 		log.Printf("[MIGRATIONS] Warning: Failed to migrate Plan table: %v", err)
@@ -124,6 +131,7 @@ func migrateUserBillingColumns(db *gorm.DB) error {
 		{"premium_override_at", `ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_override_at timestamptz`},
 		{"token_version", `ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version integer NOT NULL DEFAULT 1`},
 		{"pro_welcomed_at", `ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_welcomed_at timestamptz`},
+		{"marketing_unsubscribed_at", `ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_unsubscribed_at timestamptz`},
 	}
 
 	for _, col := range columns {
@@ -134,6 +142,31 @@ func migrateUserBillingColumns(db *gorm.DB) error {
 		}
 	}
 
+	return nil
+}
+
+// migrateCheckoutAttemptDripColumns adds the 3-touch drip stamps to
+// checkout_attempts. Idempotent — each ALTER uses IF NOT EXISTS so a
+// re-run on an already-migrated table is a no-op. Safe when the table
+// itself is missing: the ALTER errors will be logged as warnings and
+// swallowed here (the ops-panel "Setup tables" button creates the
+// table separately via AutoMigrate).
+func migrateCheckoutAttemptDripColumns(db *gorm.DB) error {
+	stmts := []struct {
+		name string
+		ddl  string
+	}{
+		{"reminder1_sent_at", `ALTER TABLE checkout_attempts ADD COLUMN IF NOT EXISTS reminder1_sent_at timestamptz`},
+		{"reminder2_sent_at", `ALTER TABLE checkout_attempts ADD COLUMN IF NOT EXISTS reminder2_sent_at timestamptz`},
+		{"reminder3_sent_at", `ALTER TABLE checkout_attempts ADD COLUMN IF NOT EXISTS reminder3_sent_at timestamptz`},
+	}
+	for _, s := range stmts {
+		if err := db.Exec(s.ddl).Error; err != nil {
+			log.Printf("[MIGRATIONS] Warning: Failed to add checkout_attempts.%s: %v", s.name, err)
+		} else {
+			log.Printf("[MIGRATIONS] Column checkout_attempts.%s OK", s.name)
+		}
+	}
 	return nil
 }
 

@@ -557,6 +557,24 @@ func main() {
 			// https://prooftamil.com/api/v1/billing/webhook
 			billingRoutes.POST("/webhook", billingHandlers.DodoWebhook)
 		}
+
+		// Abandoned-checkout drip email endpoints. Public (unauth) —
+		// identity comes from the signed token in the URL. Both live
+		// off /api/v1/ but are also exposed at the root so email links
+		// can be shortened later without a breaking migration.
+		dunning := handlers.NewDunningHandler(db, billingHandlers.BillingService())
+		v1.GET("/checkout/resume", dunning.ResumeCheckout)
+		v1.GET("/email/unsubscribe", dunning.Unsubscribe)
+	}
+
+	// Same dunning endpoints exposed at the root so drip-email CTA
+	// URLs can be short and stable (api.prooftamil.com/checkout/resume
+	// rather than /api/v1/checkout/resume). Duplicating the mount is
+	// cheaper than a redirect and keeps CTAs one hop away from Dodo.
+	{
+		dunning := handlers.NewDunningHandler(db, billingHandlers.BillingService())
+		r.GET("/checkout/resume", dunning.ResumeCheckout)
+		r.GET("/email/unsubscribe", dunning.Unsubscribe)
 	}
 
 	// OCR proxy routes (if configured)

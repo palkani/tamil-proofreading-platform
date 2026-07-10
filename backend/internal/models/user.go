@@ -56,6 +56,14 @@ type User struct {
         // to Pro yet" — a user who cancels and resubscribes years later still
         // shows null here only if the first welcome never actually landed.
         ProWelcomedAt           *time.Time `json:"pro_welcomed_at,omitempty"`
+
+        // Marketing unsubscribe. Set by the one-click unsubscribe link at
+        // the bottom of drip emails. When present, ALL marketing/lifecycle
+        // sends must skip this user — dunning reminders, feature-launch
+        // announcements, renewal-nurture, etc. Transactional emails
+        // (receipts, password resets, invoices) are NEVER gated by this;
+        // they're required by the transaction the user initiated.
+        MarketingUnsubscribedAt *time.Time `gorm:"index" json:"marketing_unsubscribed_at,omitempty"`
         
         // Token version for forcing token refresh on entitlement changes
         TokenVersion            int        `gorm:"default:1;not null" json:"token_version"`

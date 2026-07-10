@@ -185,8 +185,23 @@ type CheckoutAttempt struct {
 	CountryCode            string     `gorm:"size:2" json:"country_code,omitempty"`
 	StartedAt              time.Time  `gorm:"not null;index" json:"started_at"`
 	CompletedAt            *time.Time `gorm:"index" json:"completed_at,omitempty"`
-	FollowUpSentAt         *time.Time `json:"follow_up_sent_at,omitempty"`
-	CreatedAt              time.Time  `json:"created_at"`
+
+	// Legacy single-touch stamp. Kept for backwards-compatibility with
+	// rows written before the 3-touch drip landed. New sends only touch
+	// Reminder{1,2,3}SentAt; this column is never written again but
+	// isn't dropped so historical rows still tell the story.
+	FollowUpSentAt *time.Time `json:"follow_up_sent_at,omitempty"`
+
+	// Drip stamps for the three-touch abandoned-checkout sequence.
+	// Cadence: touch 1 fires ~1h after StartedAt, touch 2 at ~24h,
+	// touch 3 at ~72h. Each is set exactly once. NULL means "not
+	// sent yet"; presence of an earlier stamp is a precondition for
+	// the next touch so we never skip ahead when touch 1 failed.
+	Reminder1SentAt *time.Time `json:"reminder1_sent_at,omitempty"`
+	Reminder2SentAt *time.Time `json:"reminder2_sent_at,omitempty"`
+	Reminder3SentAt *time.Time `json:"reminder3_sent_at,omitempty"`
+
+	CreatedAt time.Time `json:"created_at"`
 
 	User User `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }

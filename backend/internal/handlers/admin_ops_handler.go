@@ -69,8 +69,15 @@ func (h *Handlers) AdminEnsureBillingTables(c *gin.Context) {
 // POST /api/v1/admin/ops/run-checkout-followup
 func (h *Handlers) AdminRunCheckoutFollowup(c *gin.Context) {
 	svc := billing.NewCheckoutFollowUpService(h.db)
-	sent := svc.SendFollowUpsForAdmin()
-	c.JSON(http.StatusOK, gin.H{"sent": sent})
+	counts := svc.SendFollowUpsForAdmin()
+	total := 0
+	for _, n := range counts {
+		total += n
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"sent":    total,
+		"touches": counts,
+	})
 }
 
 // AdminRunReconciliation triggers one reconciliation pass on demand,
