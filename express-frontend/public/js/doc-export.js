@@ -12,6 +12,11 @@
 (function () {
   'use strict';
 
+  // Startup log — presence in the browser console is the fast way to
+  // verify the deploy took. If you don't see this line on a fresh
+  // reload, the built asset for THIS commit isn't being served yet.
+  console.log('[DocExport] init v20260710a — plan-source = /api/v1/billing/usage/today (is_pro)');
+
   // ── Plan detection ────────────────────────────────────────────────────────
   // Truthy = user gets clean export + unlocked format buttons.
   // Falsy  = watermark on DOCX + lock icons in the UI + Upgrade CTA.
@@ -65,6 +70,11 @@
       if (res.ok) {
         const data = await res.json();
         const plan = data && data.is_pro ? 'pro' : 'free';
+        // Always log — success case is currently invisible in DevTools
+        // and that made the previous bug hard to diagnose. `is_pro`
+        // and the plan verdict are the two values that determine what
+        // the export dropdown shows.
+        console.log('[DocExport] Plan lookup OK — is_pro=' + (data && data.is_pro) + ' plan=' + plan);
         window.USER_PLAN = plan;
         _planCache = plan;
         return plan;
