@@ -2174,6 +2174,22 @@ router.post('/document/export-docx', async (req, res) => {
     const planRaw = String(req.body?.plan || '').toLowerCase();
     const isPro = ['pro', 'basic', 'enterprise'].includes(planRaw);
 
+    // Server-side Pro gate: never trust the client-sent plan alone.
+    // We consult the authenticated user's session (req.user.subscription
+    // is populated by the auth middleware from the JWT). Anonymous /
+    // free-tier users get 402 Payment Required, which the client turns
+    // into a redirect to /pricing. This makes the client-side lock icons
+    // a UX affordance, not a security boundary.
+    const sessionPlan = String(req.user?.subscription || '').toLowerCase();
+    const sessionIsPro = ['pro', 'basic', 'enterprise'].includes(sessionPlan);
+    if (!sessionIsPro) {
+      return res.status(402).json({
+        error: 'pro_required',
+        message: 'Document export is available on Pro plans. Upgrade at /pricing to unlock DOCX, PDF, and TXT downloads.',
+        upgrade_url: '/pricing',
+      });
+    }
+
     // Pick source: prefer plain text, else strip HTML to text.
     let bodyText = text;
     if (!bodyText && html) {

@@ -1064,10 +1064,14 @@
             <span class="text-xs font-medium leading-none hidden sm:inline">Import</span>
           </button>
 
-          <!-- Export Document (PDF / Word) -->
+          <!-- Export Document — DOCX / PDF / TXT with Pro gating.
+               Data plan-state is set to 'unknown' at page load and updated
+               by doc-export.js once /api/v1/me resolves. The free-only
+               Pro-feature banner + Upgrade CTA hide themselves when
+               [data-plan="pro"], and the format rows drop their lock icons. -->
           <div class="relative inline-block" id="ws-export-wrap">
             <button class="toolbar-btn flex items-center gap-1 px-2" id="ws-export-btn" type="button"
-                    title="Export to PDF or Word" aria-label="Export document">
+                    title="Export document (Pro)" aria-label="Export document">
               <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
@@ -1075,15 +1079,128 @@
               </svg>
               <span class="text-xs font-medium leading-none hidden sm:inline">Export</span>
             </button>
-            <div id="ws-export-menu" class="hidden absolute left-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-30 py-1">
-              <button type="button" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50" onclick="window.docExport && window.docExport.exportPdf()">
-                <span class="font-medium text-gray-900">Export as PDF</span>
-              </button>
-              <button type="button" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50" onclick="window.docExport && window.docExport.exportDocx()">
-                <span class="font-medium text-gray-900">Export as Word</span>
-              </button>
+
+            <div id="ws-export-menu"
+                 data-plan="unknown"
+                 class="hidden absolute left-0 mt-1 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-4">
+
+              <!-- Header -->
+              <div class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Export as</div>
+
+              <!-- Pro-feature banner (Free tier only) -->
+              <div class="pro-only mb-4 rounded-lg bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-100 p-3">
+                <div class="flex items-start gap-2">
+                  <svg class="w-4 h-4 flex-shrink-0 text-violet-600 mt-0.5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2zM19 14l.75 2.25L22 17l-2.25.75L19 20l-.75-2.25L16 17l2.25-.75L19 14zM5 15l.5 1.5L7 17l-1.5.5L5 19l-.5-1.5L3 17l1.5-.5L5 15z"/>
+                  </svg>
+                  <div>
+                    <div class="text-sm font-semibold text-slate-900">Pro Feature</div>
+                    <div class="text-xs text-slate-600 mt-0.5">Export your draft as Word, text, or PDF.</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Format rows -->
+              <div class="space-y-1.5">
+
+                <!-- Word / DOCX -->
+                <button type="button" data-export-format="docx"
+                        class="export-format-btn w-full flex items-center gap-3 rounded-lg px-3 py-2.5 transition hover:bg-slate-50 disabled:cursor-not-allowed">
+                  <span class="flex-shrink-0 w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                  </span>
+                  <span class="flex-1 text-left">
+                    <span class="block text-sm font-semibold export-label">Word Document</span>
+                    <span class="block text-xs text-slate-500">.docx</span>
+                  </span>
+                  <svg class="lock-icon w-4 h-4 text-slate-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </button>
+
+                <!-- PDF -->
+                <button type="button" data-export-format="pdf"
+                        class="export-format-btn w-full flex items-center gap-3 rounded-lg px-3 py-2.5 transition hover:bg-slate-50 disabled:cursor-not-allowed">
+                  <span class="flex-shrink-0 w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <path d="M9 15h.01M15 15h.01M9 18l6-3"/>
+                    </svg>
+                  </span>
+                  <span class="flex-1 text-left">
+                    <span class="block text-sm font-semibold export-label">PDF Document</span>
+                    <span class="block text-xs text-slate-500">.pdf</span>
+                  </span>
+                  <svg class="lock-icon w-4 h-4 text-slate-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </button>
+
+                <!-- Plain text -->
+                <button type="button" data-export-format="txt"
+                        class="export-format-btn w-full flex items-center gap-3 rounded-lg px-3 py-2.5 transition hover:bg-slate-50 disabled:cursor-not-allowed">
+                  <span class="flex-shrink-0 w-9 h-9 rounded-lg bg-slate-200 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 7V4h16v3"/>
+                      <path d="M9 20h6"/>
+                      <path d="M12 4v16"/>
+                    </svg>
+                  </span>
+                  <span class="flex-1 text-left">
+                    <span class="block text-sm font-semibold export-label">Plain Text</span>
+                    <span class="block text-xs text-slate-500">.txt</span>
+                  </span>
+                  <svg class="lock-icon w-4 h-4 text-slate-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Upgrade CTA (Free tier only) -->
+              <a href="/pricing"
+                 class="pro-only mt-4 flex items-center justify-center gap-2 w-full rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-semibold py-3 text-sm shadow-sm transition">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z"/>
+                </svg>
+                <span>Upgrade to Pro</span>
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                  <polyline points="12 5 19 12 12 19"/>
+                </svg>
+              </a>
             </div>
           </div>
+
+          <!-- Style rules for the export menu's plan-conditional states.
+               Kept co-located so the DOM + CSS live in the same file — the
+               dropdown is complex enough that a stylesheet split would
+               obscure the pro/free toggle logic. -->
+          <style>
+            /* Free-tier default: lock icons visible, labels muted, buttons non-interactive
+               (JS still intercepts and redirects to /pricing as a safety net). */
+            #ws-export-menu[data-plan="free"]     .export-label,
+            #ws-export-menu[data-plan="unknown"]  .export-label {
+              color: rgb(148 163 184); /* slate-400 */
+            }
+            #ws-export-menu[data-plan="free"]     .export-format-btn:hover,
+            #ws-export-menu[data-plan="unknown"]  .export-format-btn:hover {
+              background: transparent;
+              cursor: not-allowed;
+            }
+
+            /* Pro: hide the upsell card + upgrade CTA, hide lock icons, activate labels. */
+            #ws-export-menu[data-plan="pro"] .pro-only { display: none; }
+            #ws-export-menu[data-plan="pro"] .lock-icon { display: none; }
+            #ws-export-menu[data-plan="pro"] .export-label { color: rgb(15 23 42); /* slate-900 */ }
+            #ws-export-menu[data-plan="pro"] .export-format-btn:hover .export-label { color: rgb(79 70 229); /* indigo-600 */ }
+          </style>
 
           <div class="toolbar-divider"></div>
 

@@ -209,6 +209,33 @@
     }
   }
 
+  // ── TXT export — client-side Blob download ────────────────────────────────
+  // Plain-text export is the simplest of the three formats: grab the
+  // editor's plain text, wrap it in a Blob, trigger a download. No
+  // backend, no library, no watermark rendering step. Preserves
+  // paragraph breaks by keeping the newlines that .innerText / TipTap
+  // .getText() already emit.
+  async function exportTxt() {
+    const { text } = getEditorContent();
+    if (!text.trim()) {
+      window.alert('Editor is empty — type or import some text before exporting.');
+      return;
+    }
+    closeAllMenus();
+    const title = getDocumentTitle();
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${sanitizeFilename(title)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      try { document.body.removeChild(a); } catch (_) {}
+      URL.revokeObjectURL(url);
+    }, 100);
+  }
+
   function sanitizeFilename(s) {
     return String(s || 'document')
       .replace(/[^\w஀-௿.\-]+/g, '-')
@@ -283,7 +310,11 @@
         e.stopPropagation();
         const isOpen = !menu.classList.contains('hidden');
         closeAllMenus();
-        if (!isOpen) positionMenu(btn, menu);
+        if (!isOpen) {
+          positionMenu(btn, menu);
+          // Re-sync plan state each open — user may have upgraded mid-session.
+          syncMenuPlanState(menu);
+        }
       });
     });
     // Close on outside click / Escape
@@ -294,13 +325,64 @@
     // Reposition or close on viewport changes (avoid stale floating menu)
     window.addEventListener('resize', closeAllMenus);
     window.addEventListener('scroll', closeAllMenus, true);
+
+    // Delegate clicks on the per-format buttons inside the new dropdown UI
+    // (data-export-format attribute). Free users are redirected to /pricing;
+    // Pro users trigger the matching export function. Kept as a delegated
+    // listener so we don't need to re-bind if the DOM is re-rendered.
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-export-format]');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const format = btn.getAttribute('data-export-format');
+      handleFormatClick(format);
+    });
+  }
+
+  // Trigger the appropriate export function AFTER checking the plan.
+  // We already refreshed the plan when the menu opened, so this is a
+  // fast in-memory check. Free / unknown → send to /pricing.
+  async function handleFormatClick(format) {
+    const plan = await getUserPlan();
+    if (plan === 'free') {
+      // Redirect to pricing. Keeping the destination local (same domain,
+      // simple href) avoids fighting the top-nav's own upgrade behaviour.
+      window.location.href = '/pricing';
+      return;
+    }
+    if (format === 'docx') return exportDocx();
+    if (format === 'pdf')  return exportPdf();
+    if (format === 'txt')  return exportTxt();
+  }
+
+  // Reflect the current plan on the dropdown element itself so the
+  // co-located CSS in workspace.ejs can hide/show the Pro-feature banner
+  // and lock icons purely via [data-plan="…"] attribute selectors — no
+  // per-element class toggling. Runs async once the plan resolves.
+  async function syncMenuPlanState(menu) {
+    if (!menu) return;
+    // Instantly reflect any cached plan.
+    if (_planCache) {
+      menu.setAttribute('data-plan', _planCache === 'free' ? 'free' : 'pro');
+    }
+    // Then confirm via a full lookup (may hit /api/v1/me).
+    const plan = await getUserPlan();
+    menu.setAttribute('data-plan', plan === 'free' ? 'free' : 'pro');
+  }
+
+  // Run one plan sync at load time so any already-open menu (unlikely)
+  // and the initial DOM reflect the correct state before the first click.
+  function syncAllMenus() {
+    findMenuPairs().forEach(({ menu }) => syncMenuPlanState(menu));
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', wireMenus);
+    document.addEventListener('DOMContentLoaded', () => { wireMenus(); syncAllMenus(); });
   } else {
     wireMenus();
+    syncAllMenus();
   }
 
-  window.docExport = { exportPdf, exportDocx };
+  window.docExport = { exportPdf, exportDocx, exportTxt };
 })();
