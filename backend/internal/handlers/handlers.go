@@ -56,6 +56,11 @@ type Handlers struct {
 	// Non-blocking: Log() fires a goroutine so the request path is
 	// never slowed by DB writes. Nil-safe — a nil logger drops the log.
 	aiLogger *observability.AILogger
+
+	// activityLogger writes user-action events (login, register,
+	// draft_create, ai_request, etc.) to the activity_events table.
+	// Feeds the admin Activity page's timeline. Also async + nil-safe.
+	activityLogger *observability.ActivityLogger
 }
 
 // SetDodoAdapter wires the Dodo API client into the shared handlers so
@@ -121,7 +126,8 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 		imeEnabled:     cfg.IMEEnabled,
 		// AI request observability. Nil-safe on the call sites; Log()
 		// itself checks for a nil logger before doing anything.
-		aiLogger: observability.NewAILogger(db),
+		aiLogger:       observability.NewAILogger(db),
+		activityLogger: observability.NewActivityLogger(db),
 	}
 
 	// Suggest engine: empty trie only. Suggest uses DB path (SuggestRepo + HotCache when SUGGEST_USE_DB=true) or IME/translit fallbacks.

@@ -817,6 +817,8 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	// Save submission to database
 	if err := h.db.Create(submission).Error; err != nil {
 		log.Printf("Error creating submission: %v", err)
+		// Still log the ai_request activity below in the fallback path, but
+		// draft_create doesn't get logged when the persistent write failed.
 		// If we can't save the draft, fall back to inline proofread so the user still gets suggestions.
 		ctx, cancel := context.WithTimeout(c.Request.Context(), proofreadTimeoutFor(wordCount, len(req.Text)))
 		defer cancel()
@@ -868,6 +870,16 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		"submission_id": submission.ID,
 		"request_id":    requestID,
 		"word_count":    wordCount,
+	})
+
+	// Admin activity timeline: draft was successfully saved. The AI
+	// call is logged separately from processSubmission once Gemini
+	// returns, so the two rows tell the operator "user created a
+	// draft AND we ran an AI request against it".
+	h.activityLogger.Log(userID, models.EventDraftCreate, map[string]any{
+		"submission_id": submission.ID,
+		"word_count":    wordCount,
+		"model":         string(modelType),
 	})
 
 	// Reserve tokens up-front so quota enforcement is strict and consistent.
@@ -1026,6 +1038,19 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, req
 		TotalTokens:  result.TotalTokens,
 		LatencyMS:    llmLatencyMS,
 	})
+
+	// Admin activity timeline: the AI ran successfully for this draft.
+	// Only recorded when we have a real owner — the anonymous demo path
+	// never reaches processSubmission, but this guard keeps the row's
+	// user_id NOT NULL guarantee safe.
+	if submissionOwnerID > 0 {
+		h.activityLogger.Log(submissionOwnerID, models.EventAIRequest, map[string]any{
+			"submission_id": submissionID,
+			"model":         string(modelType),
+			"total_tokens":  result.TotalTokens,
+			"latency_ms":    llmLatencyMS,
+		})
+	}
 
 	// Serialize suggestions to JSON
 	suggestionsJSON := "[]"
@@ -1301,6 +1326,15 @@ func (h *Handlers) UpdateSubmission(c *gin.Context) {
 		}
 	}
 	log.Printf("[SUBMISSION] Updated submission %d for user %d", submission.ID, userID)
+
+	// Activity timeline: metadata edits (title, group) count as
+	// draft_update events. Body edits go through a different path
+	// (draft autosave via submission stream) — instrument there
+	// separately when we surface that flow.
+	h.activityLogger.Log(userID, models.EventDraftUpdate, map[string]any{
+		"submission_id": submission.ID,
+		"changed":       len(updates),
+	})
 	c.JSON(http.StatusOK, gin.H{"success": true, "submission": submission})
 }
 
@@ -1432,6 +1466,15 @@ func (h *Handlers) ArchiveSubmission(c *gin.Context) {
 		return
 	}
 
+	// Activity timeline: archive is the soft-delete path (7-day
+	// retention), so it maps to draft_delete for the admin feed. Hard
+	// deletes fire the same event type — the reader doesn't need to
+	// distinguish.
+	h.activityLogger.Log(userID, models.EventDraftDelete, map[string]any{
+		"submission_id": submission.ID,
+		"kind":          "archive",
+	})
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":       "archived",
 		"archived_at":  now,
@@ -1531,6 +1574,14 @@ func (h *Handlers) DeleteSubmission(c *gin.Context) {
 	}
 
 	log.Printf("[SUBMISSION] Deleted submission %d for user %d", submissionID, userID)
+
+	// Activity timeline: hard delete after archive (or a direct
+	// delete on an unarchived draft). Kept distinct from archive
+	// via the "kind" tag so admin reports can split soft vs hard.
+	h.activityLogger.Log(userID, models.EventDraftDelete, map[string]any{
+		"submission_id": submissionID,
+		"kind":          "hard",
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

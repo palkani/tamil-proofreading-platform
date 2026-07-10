@@ -345,6 +345,13 @@ func (h *Handlers) Register(c *gin.Context) {
                 "ip_country":    geo.CountryFromContext(c),
         })
 
+        // Feed the admin activity timeline. Metadata is intentionally
+        // small — we already have the audit log for full detail.
+        h.activityLogger.Log(user.ID, models.EventRegister, map[string]any{
+                "referral_code": req.ReferralCode,
+                "country":       geo.CountryFromContext(c),
+        })
+
         // Create session and issue tokens
         tokenPair, err := h.authService.IssueSession(user, sessionMetadataFromContext(c))
         if err != nil {
@@ -381,6 +388,11 @@ func (h *Handlers) Login(c *gin.Context) {
         auditlog.Info(c, "auth_login_success", map[string]any{
                 "user_email": req.Email,
                 "user_id":    user.ID,
+        })
+
+        h.activityLogger.Log(user.ID, models.EventLogin, map[string]any{
+                "method":  "password",
+                "country": geo.CountryFromContext(c),
         })
 
         tokenPair, err := h.authService.IssueSession(user, sessionMetadataFromContext(c))
@@ -433,6 +445,15 @@ func (h *Handlers) RefreshAccessToken(c *gin.Context) {
 
 // Logout revokes the current refresh token and clears the cookie
 func (h *Handlers) Logout(c *gin.Context) {
+        // Capture user ID before we clear cookies so the activity event
+        // can still be attributed to them. Nil-safe: if the token was
+        // already invalid, we skip the log rather than write an event
+        // for user 0.
+        var logoutUserID uint
+        if uid, err := middleware.GetUserFromContext(c); err == nil && uid > 0 {
+                logoutUserID = uid
+        }
+
         refreshToken, err := c.Cookie(refreshTokenCookieName)
         if err == nil && strings.TrimSpace(refreshToken) != "" {
                 if raw, decErr := h.decryptRefreshToken(refreshToken); decErr == nil {
@@ -442,6 +463,10 @@ func (h *Handlers) Logout(c *gin.Context) {
 
         h.clearRefreshCookie(c)
 	h.clearAccessTokenCookie(c)
+
+        if logoutUserID > 0 {
+                h.activityLogger.Log(logoutUserID, models.EventLogout, nil)
+        }
         c.Status(http.StatusNoContent)
 }
 
@@ -826,6 +851,13 @@ func (h *Handlers) GoogleCallback(c *gin.Context) {
 		c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/login?error=session_creation_failed")
                 return
         }
+
+        // Activity timeline: Google OAuth completions read as login events.
+        // Method annotation lets ops distinguish social from password.
+        h.activityLogger.Log(user.ID, models.EventLogin, map[string]any{
+                "method":  "google",
+                "country": geo.CountryFromContext(c),
+        })
 
         // Set refresh token cookie
         h.setRefreshCookie(c, tokenPair.RefreshToken, tokenPair.RefreshExpiresAt)
