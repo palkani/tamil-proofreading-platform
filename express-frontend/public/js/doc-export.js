@@ -57,10 +57,16 @@
   }
 
   async function getUserPlan() {
-    if (_planCache) return _planCache;
+    console.log('[DocExport] getUserPlan() called — cache=' + _planCache + ' USER_LOGGED_IN=' + window.USER_LOGGED_IN);
+
+    if (_planCache) {
+      console.log('[DocExport] getUserPlan() returning cached=' + _planCache);
+      return _planCache;
+    }
 
     // Logged-out visitors are unambiguously Free — skip the network call.
     if (window.USER_LOGGED_IN === false) {
+      console.log('[DocExport] getUserPlan() skipping fetch — USER_LOGGED_IN=false');
       _planCache = 'free';
       return _planCache;
     }
@@ -354,8 +360,11 @@
 
   function wireMenus() {
     const pairs = findMenuPairs();
+    console.log('[DocExport] wireMenus() — binding ' + pairs.length + ' pair(s)');
     pairs.forEach(({ btn, menu }) => {
+      console.log('[DocExport] wireMenus() — binding button #' + btn.id + ' → menu #' + menu.id);
       btn.addEventListener('click', (e) => {
+        console.log('[DocExport] click on #' + btn.id);
         e.stopPropagation();
         const isOpen = !menu.classList.contains('hidden');
         closeAllMenus();
@@ -410,6 +419,7 @@
   // and lock icons purely via [data-plan="…"] attribute selectors — no
   // per-element class toggling. Runs async once the plan resolves.
   async function syncMenuPlanState(menu) {
+    console.log('[DocExport] syncMenuPlanState() called — menu=' + (menu && menu.id));
     if (!menu) return;
     // Instantly reflect any cached plan.
     if (_planCache) {
@@ -417,18 +427,23 @@
     }
     // Then confirm via a full lookup (may hit /api/v1/me).
     const plan = await getUserPlan();
+    console.log('[DocExport] syncMenuPlanState() setting data-plan=' + (plan === 'free' ? 'free' : 'pro'));
     menu.setAttribute('data-plan', plan === 'free' ? 'free' : 'pro');
   }
 
   // Run one plan sync at load time so any already-open menu (unlikely)
   // and the initial DOM reflect the correct state before the first click.
   function syncAllMenus() {
-    findMenuPairs().forEach(({ menu }) => syncMenuPlanState(menu));
+    const pairs = findMenuPairs();
+    console.log('[DocExport] syncAllMenus() — found ' + pairs.length + ' export menu pair(s)');
+    pairs.forEach(({ menu }) => syncMenuPlanState(menu));
   }
 
   if (document.readyState === 'loading') {
+    console.log('[DocExport] bootstrap deferred to DOMContentLoaded — readyState=loading');
     document.addEventListener('DOMContentLoaded', () => { wireMenus(); syncAllMenus(); });
   } else {
+    console.log('[DocExport] bootstrap running immediately — readyState=' + document.readyState);
     wireMenus();
     syncAllMenus();
   }
