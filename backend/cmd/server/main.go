@@ -263,12 +263,13 @@ func main() {
 				log.Printf("Warning: AutoMigrate failed: %v", err)
 			}
 		}
-		var newsletterErr, affiliateErr, billingErr error
-		doneCh := make(chan struct{}, 3)
+		var newsletterErr, affiliateErr, billingErr, aiReqErr error
+		doneCh := make(chan struct{}, 4)
 		go func() { newsletterErr = migrations.MigrateNewsletterSubscribers(db); doneCh <- struct{}{} }()
 		go func() { affiliateErr = migrations.MigrateAffiliates(db); doneCh <- struct{}{} }()
 		go func() { billingErr = migrations.MigrateBilling(db); doneCh <- struct{}{} }()
-		for i := 0; i < 3; i++ {
+		go func() { aiReqErr = migrations.MigrateAIRequests(db); doneCh <- struct{}{} }()
+		for i := 0; i < 4; i++ {
 			<-doneCh
 		}
 		if newsletterErr != nil {
@@ -276,6 +277,9 @@ func main() {
 		}
 		if affiliateErr != nil {
 			log.Printf("Warning: Affiliate migration failed: %v", affiliateErr)
+		}
+		if aiReqErr != nil {
+			log.Printf("Warning: AI requests migration failed: %v", aiReqErr)
 		}
 		if billingErr != nil {
 			log.Printf("Warning: Billing migration failed: %v", billingErr)
@@ -502,6 +506,7 @@ func main() {
 			admin.POST("/ops/run-checkout-followup", h.AdminRunCheckoutFollowup)
 			admin.POST("/ops/run-reconciliation", h.AdminRunReconciliation)
 			admin.GET("/overview", h.AdminGetOverview)
+			admin.GET("/ai-requests/summary", h.AdminGetAIRequestsSummary)
 			admin.GET("/issues", h.AdminGetIssues)
 			admin.GET("/activity", h.AdminGetActivity)
 			admin.POST("/broadcasts/dry-run", h.AdminBroadcastDryRun)

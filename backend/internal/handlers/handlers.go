@@ -18,6 +18,7 @@ import (
 	"tamil-proofreading-platform/backend/internal/services/email"
 	"tamil-proofreading-platform/backend/internal/services/llm"
 	"tamil-proofreading-platform/backend/internal/services/nlp"
+	"tamil-proofreading-platform/backend/internal/services/observability"
 	"tamil-proofreading-platform/backend/internal/services/payment"
 	"tamil-proofreading-platform/backend/internal/suggest"
 
@@ -50,6 +51,11 @@ type Handlers struct {
 	// services initialise. Only the admin backfill endpoint uses it today,
 	// so nil is a valid state (endpoint returns 500 with a clear message).
 	dodoAdapter *billing.DodoAdapter
+
+	// aiLogger writes per-invocation AI request observability rows.
+	// Non-blocking: Log() fires a goroutine so the request path is
+	// never slowed by DB writes. Nil-safe — a nil logger drops the log.
+	aiLogger *observability.AILogger
 }
 
 // SetDodoAdapter wires the Dodo API client into the shared handlers so
@@ -103,16 +109,19 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	imeSvc := ime.NewServiceWithDB(".", cfg.AksharaURL, sqlDB, cfg.IMEEnabled, cfg.IMECacheEnabled)
 
 	h := &Handlers{
-		db:            db,
-		cfg:           cfg,
-		authService:   authService,
-		emailService:  emailService,
-		nlpService:    nlpService,
-		llmService:    llmService,
+		db:             db,
+		cfg:            cfg,
+		authService:    authService,
+		emailService:   emailService,
+		nlpService:     nlpService,
+		llmService:     llmService,
 		paymentService: paymentService,
-		streamHub:     newSubmissionStreamHub(),
-		imeSvc:        imeSvc,
-		imeEnabled:    cfg.IMEEnabled,
+		streamHub:      newSubmissionStreamHub(),
+		imeSvc:         imeSvc,
+		imeEnabled:     cfg.IMEEnabled,
+		// AI request observability. Nil-safe on the call sites; Log()
+		// itself checks for a nil logger before doing anything.
+		aiLogger: observability.NewAILogger(db),
 	}
 
 	// Suggest engine: empty trie only. Suggest uses DB path (SuggestRepo + HotCache when SUGGEST_USE_DB=true) or IME/translit fallbacks.

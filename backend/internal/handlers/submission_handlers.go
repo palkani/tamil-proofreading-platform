@@ -19,12 +19,59 @@ import (
 
 	"tamil-proofreading-platform/backend/internal/middleware"
 	"tamil-proofreading-platform/backend/internal/models"
+	"tamil-proofreading-platform/backend/internal/services/observability"
 	"tamil-proofreading-platform/backend/internal/util/auditlog"
 	"tamil-proofreading-platform/backend/internal/util/geo"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+// optionalUserID returns a *uint of the authenticated user or nil when
+// the request came in anonymously (homepage demo path). Used by the
+// AI observability logger so the ai_requests row's user_id is nullable
+// and correctly distinguishes "no user" from "user 0".
+func optionalUserID(c *gin.Context) *uint {
+	uid, err := middleware.GetUserFromContext(c)
+	if err != nil || uid == 0 {
+		return nil
+	}
+	return &uid
+}
+
+// ptrIfNonZero returns &v when v != 0, else nil. Used to pack a
+// discovered user_id or submission_id into an optional pointer for
+// AI-request logging so a zero value doesn't get mistaken for a
+// legitimate ID.
+func ptrIfNonZero(v uint) *uint {
+	if v == 0 {
+		return nil
+	}
+	return &v
+}
+
+// classifyAIError maps a raw LLM-service error to one of the AIRequest
+// status constants so admin dashboards can filter by failure class
+// (timeout vs rate-limit vs generic API error). String-matching on the
+// error message is brittle, but the llm package doesn't yet expose a
+// typed error hierarchy — good candidate for a follow-up refactor when
+// we add a second provider (OpenAI, Anthropic) and need the taxonomy.
+func classifyAIError(err error) string {
+	if err == nil {
+		return models.AIStatusOK
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "context canceled") || strings.Contains(msg, "context deadline exceeded") || strings.Contains(msg, "timeout"):
+		return models.AIStatusTimeout
+	case strings.Contains(msg, "429") || strings.Contains(msg, "rate limit") || strings.Contains(msg, "quota"):
+		return models.AIStatusRateLimited
+	case strings.Contains(msg, "invalid") && strings.Contains(msg, "response"):
+		return models.AIStatusInvalidResponse
+	default:
+		return models.AIStatusAPIError
+	}
+}
 
 // truncateIPv4 keeps only the first 3 octets of an IPv4 address so the row
 // doesn't identify the visitor uniquely. "1.2.3.4" → "1.2.3". Leaves
@@ -402,6 +449,18 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 			// stays sub-100ms.
 			go h.recordAnonymousSubmission(c.Copy(), requestID, len(req.Text),
 				h.nlpService.CountWords(req.Text), len(cached), true)
+			// AI observability: cache hit is a class of AI request too —
+			// zero tokens, zero latency, but it still represents demand
+			// so cache-hit-rate dashboards can measure how much LLM spend
+			// the cache is saving us.
+			h.aiLogger.Log(observability.AIRequestLog{
+				RequestID:   requestID,
+				UserID:      optionalUserID(c),
+				Model:       "cache",
+				Status:      models.AIStatusCacheHit,
+				CacheHit:    true,
+				CountryCode: geo.CountryFromContext(c),
+			})
 			return
 		}
 
@@ -452,8 +511,23 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), proofreadTimeoutFor(wordCount, len(req.Text)))
 		defer cancel()
+		llmStart := time.Now()
 		result, err := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID, 0)
+		llmLatencyMS := int(time.Since(llmStart) / time.Millisecond)
 		if err != nil {
+			// AI observability: log the failure with a classified error type
+			// so the admin dashboard can distinguish rate limits, timeouts,
+			// and API errors. Fires before the success-shaped response so
+			// even the "graceful fallback" is measurable.
+			h.aiLogger.Log(observability.AIRequestLog{
+				RequestID:   requestID,
+				UserID:      optionalUserID(c),
+				Model:       "gemini-flash",
+				Status:      classifyAIError(err),
+				LatencyMS:   llmLatencyMS,
+				ErrorType:   err.Error(),
+				CountryCode: geo.CountryFromContext(c),
+			})
 			// NEVER hard-fail inline submit due to AI/provider errors.
 			// Keep a stable, success-shaped response so the UI can continue gracefully.
 			c.Header("Cache-Control", "no-store, max-age=0")
@@ -470,6 +544,21 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		auditlog.Info(c, "submission.inline_completed", map[string]any{
 			"request_id": requestID,
 			"word_count": wordCount,
+		})
+		// AI observability: successful inline (anonymous demo) request.
+		// Tokens come from result.PromptTokens/OutputTokens which
+		// mirror the Gemini usageMetadata block; cost is derived
+		// inside the logger.
+		h.aiLogger.Log(observability.AIRequestLog{
+			RequestID:    requestID,
+			UserID:       optionalUserID(c),
+			Model:        "gemini-flash",
+			Status:       models.AIStatusOK,
+			InputTokens:  result.PromptTokens,
+			OutputTokens: result.OutputTokens,
+			TotalTokens:  result.TotalTokens,
+			LatencyMS:    llmLatencyMS,
+			CountryCode:  geo.CountryFromContext(c),
 		})
 
 		// Map to required corrections format. Include every occurrence of each (original, corrected)
@@ -840,11 +929,35 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, req
 		Data:  gin.H{"status": models.StatusProcessing},
 	})
 
+	// Look up submission owner once so we can attribute the AI request
+	// log entry to a user. Not fatal — a missing user_id in the log row
+	// just means we lose per-user attribution for this one call.
+	var submissionOwnerID uint
+	{
+		var s models.Submission
+		if lookupErr := h.db.Select("user_id").First(&s, submissionID).Error; lookupErr == nil {
+			submissionOwnerID = s.UserID
+		}
+	}
+
 	// Process with LLM service (hard timeout so the job can't hang indefinitely)
 	ctx2, cancel := context.WithTimeout(ctx, proofreadTimeoutFor(wordCount, len(text)))
 	defer cancel()
+	llmStart := time.Now()
 	result, err := h.llmService.ProofreadText(ctx2, text, wordCount, includeAlternatives, requestID, maxOutputTokensCap)
+	llmLatencyMS := int(time.Since(llmStart) / time.Millisecond)
 	if err != nil {
+		// AI observability: authenticated draft path failed. Classify
+		// the error and log tokens=0 since Gemini didn't return usage.
+		h.aiLogger.Log(observability.AIRequestLog{
+			RequestID:    requestID,
+			UserID:       ptrIfNonZero(submissionOwnerID),
+			SubmissionID: &submissionID,
+			Model:        string(modelType),
+			Status:       classifyAIError(err),
+			LatencyMS:    llmLatencyMS,
+			ErrorType:    err.Error(),
+		})
 		log.Printf("Error processing submission %d (request_id=%s): %v", submissionID, requestID, err)
 		auditlog.LogStandalone(auditlog.LevelWarn, "submission.processing_failed", requestID, map[string]any{
 			"submission_id": submissionID,
@@ -897,6 +1010,22 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, req
 			log.Printf("Error updating usage token_count: %v", err)
 		}
 	}
+
+	// AI observability: successful authenticated draft. Same shape as
+	// the inline path — tokens + latency + status, cost derived inside
+	// the logger from the model string. SubmissionID is populated so
+	// operators can drill from a cost row back to the actual draft.
+	h.aiLogger.Log(observability.AIRequestLog{
+		RequestID:    requestID,
+		UserID:       ptrIfNonZero(submissionOwnerID),
+		SubmissionID: &submissionID,
+		Model:        string(modelType),
+		Status:       models.AIStatusOK,
+		InputTokens:  result.PromptTokens,
+		OutputTokens: result.OutputTokens,
+		TotalTokens:  result.TotalTokens,
+		LatencyMS:    llmLatencyMS,
+	})
 
 	// Serialize suggestions to JSON
 	suggestionsJSON := "[]"

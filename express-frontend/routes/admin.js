@@ -39,6 +39,7 @@ function commonLocals(req, activeTab) {
       { key: 'users', label: 'Users', href: '/admin/users', icon: 'users' },
       { key: 'activity', label: 'Activity', href: '/admin/activity', icon: 'clock' },
       { key: 'issues', label: 'Issues', href: '/admin/issues', icon: 'alert' },
+      { key: 'ai-requests', label: 'AI requests', href: '/admin/ai-requests', icon: 'chart' },
       { key: 'communications', label: 'Communications', href: '/admin/communications', icon: 'mail' },
     ],
   };
@@ -83,6 +84,13 @@ router.get('/issues', requireAdmin, (req, res) => {
   res.render('pages/admin/issues', {
     title: 'Admin · Issues',
     ...commonLocals(req, 'issues'),
+  });
+});
+
+router.get('/ai-requests', requireAdmin, (req, res) => {
+  res.render('pages/admin/ai-requests', {
+    title: 'Admin · AI requests',
+    ...commonLocals(req, 'ai-requests'),
   });
 });
 

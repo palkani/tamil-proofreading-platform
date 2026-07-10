@@ -1,0 +1,266 @@
+<%- include('../../partials/admin/layout-header') %>
+
+<div class="mx-auto max-w-6xl space-y-6" id="admin-ai-requests">
+
+  <!-- Window switcher + refresh -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-900">AI request observability</h2>
+      <p class="text-sm text-slate-500">Per-call Gemini cost, latency, and error rate. Data written asynchronously from each proofread request.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="flex rounded-md border border-slate-300 overflow-hidden text-xs" role="tablist">
+        <button type="button" class="px-3 py-1.5 font-medium border-r border-slate-300 bg-white hover:bg-slate-50" data-window="1h">1h</button>
+        <button type="button" class="px-3 py-1.5 font-medium border-r border-slate-300 bg-slate-900 text-white" data-window="24h">24h</button>
+        <button type="button" class="px-3 py-1.5 font-medium border-r border-slate-300 bg-white hover:bg-slate-50" data-window="7d">7d</button>
+        <button type="button" class="px-3 py-1.5 font-medium bg-white hover:bg-slate-50" data-window="30d">30d</button>
+      </div>
+      <button type="button" data-refresh
+              class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Refresh</button>
+    </div>
+  </div>
+
+  <!-- KPI tiles -->
+  <section class="grid grid-cols-2 gap-4 lg:grid-cols-5">
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <div class="text-xs uppercase tracking-wide text-slate-500 font-medium">Cost</div>
+      <div class="mt-1 text-2xl font-semibold text-slate-900" data-tile="cost">—</div>
+      <div class="text-xs text-slate-400 mt-1" data-tile-sub="cost">USD spend in window</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <div class="text-xs uppercase tracking-wide text-slate-500 font-medium">Requests</div>
+      <div class="mt-1 text-2xl font-semibold text-slate-900" data-tile="requests">—</div>
+      <div class="text-xs text-slate-400 mt-1" data-tile-sub="requests">including cache hits</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <div class="text-xs uppercase tracking-wide text-slate-500 font-medium">Cache hit rate</div>
+      <div class="mt-1 text-2xl font-semibold text-slate-900" data-tile="cache">—</div>
+      <div class="text-xs text-slate-400 mt-1">saves proportional cost</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <div class="text-xs uppercase tracking-wide text-slate-500 font-medium">Error rate</div>
+      <div class="mt-1 text-2xl font-semibold text-slate-900" data-tile="errors">—</div>
+      <div class="text-xs text-slate-400 mt-1">of billed (non-cache) requests</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <div class="text-xs uppercase tracking-wide text-slate-500 font-medium">Latency p95</div>
+      <div class="mt-1 text-2xl font-semibold text-slate-900" data-tile="p95">—</div>
+      <div class="text-xs text-slate-400 mt-1"><span data-tile="p50">—</span> p50 · <span data-tile="p99">—</span> p99</div>
+    </div>
+  </section>
+
+  <!-- By day sparkline (SVG, no charting library) -->
+  <section class="rounded-lg border border-slate-200 bg-white p-5">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-sm font-semibold text-slate-900">Cost per day</h3>
+      <span class="text-xs text-slate-400">USD, latest window</span>
+    </div>
+    <svg id="cost-spark" viewBox="0 0 720 120" class="w-full h-32">
+      <text x="360" y="60" text-anchor="middle" class="fill-slate-300 text-xs">Loading…</text>
+    </svg>
+  </section>
+
+  <!-- Two-column split: Top users + By model -->
+  <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div class="rounded-lg border border-slate-200 bg-white p-5">
+      <h3 class="text-sm font-semibold text-slate-900">Top users by spend</h3>
+      <p class="text-xs text-slate-500 mt-1">Authenticated only; anonymous demo hits omitted.</p>
+      <div class="mt-3 divide-y divide-slate-100" data-panel="top-users">
+        <div class="py-3 text-sm text-slate-400">Loading…</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-5">
+      <h3 class="text-sm font-semibold text-slate-900">By model</h3>
+      <p class="text-xs text-slate-500 mt-1">Volume and cost breakdown for A/B comparisons.</p>
+      <div class="mt-3 divide-y divide-slate-100" data-panel="by-model">
+        <div class="py-3 text-sm text-slate-400">Loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Recent failures -->
+  <section class="rounded-lg border border-slate-200 bg-white p-5">
+    <div class="flex items-center justify-between">
+      <h3 class="text-sm font-semibold text-slate-900">Recent failures</h3>
+      <span class="text-xs text-slate-500" data-count="failures">—</span>
+    </div>
+    <p class="text-xs text-slate-500 mt-1">Timeouts, rate limits, invalid responses, and API errors in the current window.</p>
+    <div class="mt-3 divide-y divide-slate-100" data-panel="failures">
+      <div class="py-3 text-sm text-slate-400">Loading…</div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  let currentWindow = '24h';
+
+  const fmt = (n) => new Intl.NumberFormat('en-US').format(n);
+  const escape = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+
+  function activateWindow(win) {
+    currentWindow = win;
+    document.querySelectorAll('[data-window]').forEach(b => {
+      const on = b.dataset.window === win;
+      b.classList.toggle('bg-slate-900', on);
+      b.classList.toggle('text-white', on);
+      b.classList.toggle('bg-white', !on);
+      b.classList.toggle('hover:bg-slate-50', !on);
+    });
+    load();
+  }
+
+  function paintTile(name, value, sub) {
+    const el = document.querySelector('[data-tile="' + name + '"]');
+    if (el) el.textContent = value;
+    if (sub != null) {
+      const s = document.querySelector('[data-tile-sub="' + name + '"]');
+      if (s) s.textContent = sub;
+    }
+  }
+
+  function paintTopUsers(rows) {
+    const el = document.querySelector('[data-panel="top-users"]');
+    if (!rows || rows.length === 0) {
+      el.innerHTML = '<div class="py-3 text-sm text-slate-400">No authenticated AI requests in this window.</div>';
+      return;
+    }
+    const max = Math.max.apply(null, rows.map(r => r.cost_micros));
+    el.innerHTML = rows.map(r => {
+      const pct = Math.round((r.cost_micros / (max || 1)) * 100);
+      const cost = (r.cost_micros / 1_000_000).toFixed(4);
+      return '<div class="py-2 text-sm">' +
+        '<div class="flex items-baseline justify-between">' +
+          '<a href="/admin/users/' + r.user_id + '" class="font-medium text-slate-900 hover:underline">' + escape(r.email || ('user #' + r.user_id)) + '</a>' +
+          '<span class="text-slate-600 tabular-nums">$' + cost + '</span>' +
+        '</div>' +
+        '<div class="mt-1 flex items-center gap-2">' +
+          '<div class="flex-1 h-1.5 rounded-full bg-slate-100"><div class="h-full rounded-full bg-indigo-500" style="width:' + pct + '%"></div></div>' +
+          '<span class="text-xs text-slate-500 tabular-nums">' + fmt(r.requests) + ' req</span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function paintByModel(rows) {
+    const el = document.querySelector('[data-panel="by-model"]');
+    if (!rows || rows.length === 0) {
+      el.innerHTML = '<div class="py-3 text-sm text-slate-400">No data.</div>';
+      return;
+    }
+    const total = rows.reduce((s, r) => s + r.requests, 0) || 1;
+    el.innerHTML = rows.map(r => {
+      const pct = Math.round(r.requests / total * 100);
+      const cost = (r.cost_micros / 1_000_000).toFixed(4);
+      return '<div class="py-2 text-sm">' +
+        '<div class="flex items-baseline justify-between">' +
+          '<span class="font-medium text-slate-900">' + escape(r.model) + '</span>' +
+          '<span class="text-slate-600 tabular-nums">$' + cost + '</span>' +
+        '</div>' +
+        '<div class="mt-1 flex items-center gap-2">' +
+          '<div class="flex-1 h-1.5 rounded-full bg-slate-100"><div class="h-full rounded-full bg-emerald-500" style="width:' + pct + '%"></div></div>' +
+          '<span class="text-xs text-slate-500 tabular-nums">' + fmt(r.requests) + ' req · ' + pct + '%</span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function paintFailures(rows) {
+    const el = document.querySelector('[data-panel="failures"]');
+    document.querySelector('[data-count="failures"]').textContent = rows.length + ' row(s)';
+    if (!rows || rows.length === 0) {
+      el.innerHTML = '<div class="py-3 text-sm text-emerald-600">✓ No failures in this window.</div>';
+      return;
+    }
+    const statusColor = {
+      timeout: 'bg-amber-50 text-amber-700 ring-amber-200',
+      rate_limited: 'bg-orange-50 text-orange-700 ring-orange-200',
+      api_error: 'bg-red-50 text-red-700 ring-red-200',
+      invalid_response: 'bg-red-50 text-red-700 ring-red-200',
+    };
+    el.innerHTML = rows.map(r => {
+      const tone = statusColor[r.status] || 'bg-slate-100 text-slate-700 ring-slate-200';
+      const userLink = r.user_id ? '<a href="/admin/users/' + r.user_id + '" class="text-indigo-600 hover:underline">user #' + r.user_id + '</a>' : '<span class="text-slate-400">anonymous</span>';
+      return '<div class="py-2 text-sm">' +
+        '<div class="flex items-baseline justify-between gap-2">' +
+          '<div class="min-w-0">' +
+            '<span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ' + tone + '">' + escape(r.status) + '</span> ' +
+            userLink + ' · ' + escape(r.model) +
+          '</div>' +
+          '<span class="text-xs text-slate-400 whitespace-nowrap">' + fmtDate(r.occurred_at) + ' · ' + r.latency_ms + 'ms</span>' +
+        '</div>' +
+        (r.error_type ? '<div class="mt-1 text-xs text-red-700 truncate">' + escape(r.error_type.slice(0, 220)) + '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+
+  function paintCostSpark(rows) {
+    const svg = document.getElementById('cost-spark');
+    if (!svg) return;
+    svg.innerHTML = '';
+    const W = 720, H = 120, PAD = 20;
+    if (!rows || rows.length === 0) {
+      svg.innerHTML = '<text x="' + (W/2) + '" y="' + (H/2) + '" text-anchor="middle" class="fill-slate-300" font-size="12">No data</text>';
+      return;
+    }
+    const max = Math.max.apply(null, rows.map(r => r.cost_micros)) || 1;
+    const step = (W - PAD * 2) / Math.max(rows.length - 1, 1);
+    let path = '';
+    rows.forEach((r, i) => {
+      const x = PAD + i * step;
+      const y = H - PAD - (r.cost_micros / max) * (H - PAD * 2);
+      path += (i === 0 ? 'M' : 'L') + x + ',' + y;
+    });
+    // Fill under the line
+    const areaPath = path + ' L ' + (PAD + (rows.length - 1) * step) + ',' + (H - PAD) + ' L ' + PAD + ',' + (H - PAD) + ' Z';
+    svg.innerHTML =
+      '<path d="' + areaPath + '" fill="#6366F1" opacity="0.1"/>' +
+      '<path d="' + path + '" stroke="#4F46E5" stroke-width="2" fill="none"/>' +
+      rows.map((r, i) => {
+        const x = PAD + i * step;
+        const y = H - PAD - (r.cost_micros / max) * (H - PAD * 2);
+        const cost = (r.cost_micros / 1_000_000).toFixed(4);
+        return '<g><circle cx="' + x + '" cy="' + y + '" r="3" fill="#4F46E5"/>' +
+               '<title>' + r.day + ': $' + cost + ' (' + r.requests + ' req)</title></g>';
+      }).join('');
+  }
+
+  async function load() {
+    document.querySelectorAll('[data-tile]').forEach(el => el.textContent = '…');
+    try {
+      const r = await fetch('/admin/api/ai-requests/summary?window=' + currentWindow, { credentials: 'include' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+
+      paintTile('cost', d.cost_usd || '$0.00');
+      paintTile('requests', fmt(d.totals?.total || 0));
+      paintTile('cache', (d.cache_hit_rate || 0) + '%');
+      paintTile('errors', (d.error_rate || 0) + '%');
+      paintTile('p50', (d.latency_p50_ms || 0) + 'ms');
+      paintTile('p95', (d.latency_p95_ms || 0) + 'ms');
+      paintTile('p99', (d.latency_p99_ms || 0) + 'ms');
+
+      paintTopUsers(d.top_users_by_cost || []);
+      paintByModel(d.by_model || []);
+      paintFailures(d.recent_failures || []);
+      paintCostSpark(d.by_day || []);
+    } catch (e) {
+      console.error('[AI_REQUESTS] load failed', e);
+      document.querySelectorAll('[data-tile]').forEach(el => el.textContent = '?');
+      document.querySelectorAll('[data-panel]').forEach(el => {
+        el.innerHTML = '<div class="py-3 text-sm text-red-600">Failed to load: ' + escape(e.message) + '</div>';
+      });
+    }
+  }
+
+  document.querySelectorAll('[data-window]').forEach(b => {
+    b.addEventListener('click', () => activateWindow(b.dataset.window));
+  });
+  document.querySelector('[data-refresh]').addEventListener('click', load);
+  load();
+})();
+</script>
+
+<%- include('../../partials/admin/layout-footer') %>
