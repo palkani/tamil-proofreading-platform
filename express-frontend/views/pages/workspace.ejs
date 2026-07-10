@@ -906,8 +906,17 @@
         />
       </div>
 
-      <!-- Right: Save Status & Actions -->
+      <!-- Right: Plan pill + Save Status & Actions -->
       <div class="flex items-center gap-4">
+        <!-- Plan pill: populated by usage/today fetch. Hidden until data lands so
+             we don't flash a stale/empty pill. Colors mapped in workspace.js.
+             Clicking navigates to /pricing so users can upgrade in one hop. -->
+        <a id="plan-pill" href="/pricing"
+           class="hidden items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium no-underline transition-colors"
+           style="background:#F3F4F6;border-color:#E5E7EB;color:#374151;">
+          <span id="plan-pill-dot" class="inline-block w-1.5 h-1.5 rounded-full" style="background:#9CA3AF;"></span>
+          <span id="plan-pill-text">Loading…</span>
+        </a>
         <span id="save-status" class="text-sm text-gray-500">
           <span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>
           Saved

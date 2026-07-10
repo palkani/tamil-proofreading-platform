@@ -1726,6 +1726,12 @@ class WorkspaceController {
         this.autosave();
       }, 30_000);
     }
+
+    // Header plan-status pill: paints Pro / Free / Expiring / Past-due
+    // based on usage/today. Refreshes on tab focus + every 60s so an
+    // upgrade or a payment failure surfaces in the header without a
+    // page reload.
+    this.startPlanPillLifecycle();
   }
   
   checkUrlHash() {
@@ -6139,6 +6145,92 @@ class WorkspaceController {
       console.warn('[WorkspaceJS] consumePendingDraft failed:', e);
       return false;
     }
+  }
+
+  // startPlanPillLifecycle owns the header plan-status pill. Runs on
+  // workspace init: fetches usage/today, paints the pill in one of four
+  // states (Pro active / Free with counter / Pro expiring soon / Payment
+  // past due), then re-fetches on tab focus and every 60 seconds. That
+  // covers the two scenarios where subscription state changes silently:
+  // the user just paid in another tab, or their card was just declined.
+  startPlanPillLifecycle() {
+    if (this._planPillStarted) return;
+    this._planPillStarted = true;
+    this.refreshPlanPill();
+    // Poll every 60s while the tab is visible. Cheap: single indexed count query.
+    this._planPillInterval = setInterval(() => {
+      if (!document.hidden) this.refreshPlanPill();
+    }, 60_000);
+    // Instant refresh when the user returns from another tab — this is
+    // the moment they most likely just upgraded, so react fast.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) this.refreshPlanPill();
+    });
+  }
+
+  async refreshPlanPill() {
+    try {
+      const r = await this.apiFetch('/api/v1/billing/usage/today');
+      if (!r.ok) return;
+      const arr = await r.json();
+      const usage = Array.isArray(arr) ? arr[0] : arr;
+      if (!usage) return;
+      this.usageToday = usage;
+      this.paintPlanPill(usage);
+    } catch (e) {
+      console.warn('[PLAN PILL] fetch failed', e);
+    }
+  }
+
+  paintPlanPill(usage) {
+    const el = document.getElementById('plan-pill');
+    const dot = document.getElementById('plan-pill-dot');
+    const text = document.getElementById('plan-pill-text');
+    if (!el || !dot || !text) return;
+
+    // Decide state — order matters, first match wins.
+    // 1. past_due (RED) beats everything: money problem, act now
+    // 2. expires soon (AMBER): still Pro but about to lose it
+    // 3. Pro active (GREEN)
+    // 4. Free (GREY, with counter)
+    let bg, border, color, dotColor, label, href = '/pricing';
+
+    const rawStatus = (usage.raw_provider_status || '').toLowerCase();
+    const isPastDue = rawStatus === 'past_due';
+
+    // Compute days until expiry (only meaningful for Pro users)
+    let daysUntilExpiry = null;
+    if (usage.is_pro && usage.subscription_end_date) {
+      const end = new Date(usage.subscription_end_date);
+      const now = new Date();
+      daysUntilExpiry = Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
+    }
+
+    if (isPastDue) {
+      bg = '#FEE2E2'; border = '#FCA5A5'; color = '#991B1B'; dotColor = '#DC2626';
+      label = 'Payment past due';
+    } else if (usage.is_pro && daysUntilExpiry !== null && daysUntilExpiry <= 7) {
+      bg = '#FEF3C7'; border = '#FCD34D'; color = '#92400E'; dotColor = '#D97706';
+      label = daysUntilExpiry === 0
+        ? 'Pro expires today'
+        : `Pro expires in ${daysUntilExpiry} day${daysUntilExpiry === 1 ? '' : 's'}`;
+    } else if (usage.is_pro) {
+      bg = '#DCFCE7'; border = '#86EFAC'; color = '#166534'; dotColor = '#16A34A';
+      label = 'Pro';
+      href = '/account'; // Pro users go to account instead of pricing
+    } else {
+      bg = '#F3F4F6'; border = '#E5E7EB'; color = '#374151'; dotColor = '#9CA3AF';
+      label = `Free · ${usage.credits_used}/${usage.credits_limit} used today`;
+    }
+
+    el.style.background = bg;
+    el.style.borderColor = border;
+    el.style.color = color;
+    dot.style.background = dotColor;
+    text.textContent = label;
+    el.href = href;
+    el.classList.remove('hidden');
+    el.classList.add('inline-flex');
   }
 
   // gatedCreateNewDraft is the New Draft entry point. It fetches the
