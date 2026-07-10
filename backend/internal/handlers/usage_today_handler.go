@@ -59,10 +59,27 @@ func (h *Handlers) GetUsageToday(c *gin.Context) {
 		return
 	}
 
-	// Resolve plan state. Pro = personal subscription is Pro AND not expired,
-	// OR premium_override is set. Team plan inheritance will land here later
-	// when the org membership + subscription tables ship.
+	// Resolve plan state. Pro = personal subscription is Pro AND not
+	// expired, OR premium_override, OR the user is an admin / on the
+	// hard-coded operator email list. The admin bypass mirrors the
+	// same check submission_handlers.go uses at write time so the pill
+	// the workspace shows and the limits the submit endpoint enforces
+	// agree — otherwise an admin sees "Free · 0/20 used today" while
+	// their submissions are actually unlimited, which is confusing.
 	isPro := user.PremiumOverride
+	if !isPro {
+		if user.Role == models.RoleAdmin {
+			isPro = true
+		} else {
+			emailLower := strings.ToLower(strings.TrimSpace(user.Email))
+			if emailLower == "palkani.r@gmail.com" ||
+				emailLower == "prooftamil@gmail.com" ||
+				emailLower == "banu.palkani@gmail.com" ||
+				emailLower == "contact@prooftamil.com" {
+				isPro = true
+			}
+		}
+	}
 	if !isPro && user.Subscription == models.PlanPro {
 		if user.SubscriptionEnd == nil || user.SubscriptionEnd.After(time.Now()) {
 			isPro = true
