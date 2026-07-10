@@ -2698,6 +2698,130 @@ router.post('/ai-content-writer/translate', async (req, res) => {
 // Admin-only emails allowed to publish blogs
 const BLOG_PUBLISH_ALLOWED_EMAILS = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com'];
 
+// Small helper — 403s if the request isn't from an allowlisted admin.
+// Returns true if the request should continue. Kept inline so we don't
+// spread admin-check logic across the file.
+function guardBlogAdmin(req, res) {
+  const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : '';
+  if (!userEmail || !BLOG_PUBLISH_ALLOWED_EMAILS.includes(userEmail)) {
+    res.status(403).json({ error: 'Admin-only endpoint.' });
+    return false;
+  }
+  return true;
+}
+
+// ─── Blog Generator (admin UI-driven pipeline) ────────────────────────
+//
+// The /admin/blog-generator page fetches the queue from
+// GET  /api/blog-generator/queue and drives per-topic generation via
+// POST /api/blog-generator/generate. Same logic as the CLI cron
+// (scripts/generate-scheduled-blog.js) via a shared lib.
+
+const blogGenerator = require('../lib/blog-generator');
+
+router.get('/blog-generator/queue', (req, res) => {
+  if (!guardBlogAdmin(req, res)) return;
+  try {
+    const queue = blogGenerator.loadQueue();
+    const state = blogGenerator.loadState();
+    const generatedTopics = new Set((state.generated || []).map((g) => g.topic));
+
+    // Enrich each queue item with its generation state so the UI can
+    // show "queued" / "generated" badges + the resulting slug.
+    const enriched = queue.map((t, idx) => {
+      const state_entry = (state.generated || []).find((g) => g.topic === t.topic) || null;
+      return {
+        index: idx,
+        topic: t.topic,
+        keyword: t.keyword,
+        language: t.language || 'tamil',
+        tier: t.tier || null,
+        min_words: t.min_words || 1500,
+        status: t.status || 'queued',
+        already_generated: generatedTopics.has(t.topic),
+        suggested_internal_links: t.suggested_internal_links || [],
+        state: state_entry,
+      };
+    });
+
+    res.json({
+      total: enriched.length,
+      queued: enriched.filter((t) => t.status === 'queued' && !t.already_generated).length,
+      already_generated: enriched.filter((t) => t.already_generated).length,
+      topics: enriched,
+    });
+  } catch (err) {
+    console.error('[BLOG-GENERATOR/queue] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/blog-generator/generate', async (req, res) => {
+  if (!guardBlogAdmin(req, res)) return;
+
+  const topicIndex = Number.isInteger(req.body?.topic_index) ? req.body.topic_index : null;
+  const publishFlag = req.body?.publish !== false; // default true — user asked for one-click publish
+  const skipQualityGate = req.body?.skip_quality_gate === true;
+
+  if (topicIndex == null || topicIndex < 0) {
+    return res.status(400).json({ error: 'topic_index (integer >=0) is required' });
+  }
+
+  let topic;
+  try {
+    const queue = blogGenerator.loadQueue();
+    topic = queue[topicIndex];
+    if (!topic) {
+      return res.status(400).json({ error: `topic_index ${topicIndex} out of range (queue has ${queue.length} topics)` });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: `Failed to load queue: ${err.message}` });
+  }
+
+  // Extract the admin's JWT from the incoming cookie so we can forward
+  // it to the backend's /blog/posts and /ai-content-writer endpoints.
+  // Same identity, no privilege escalation.
+  const adminToken = req.cookies?.access_token;
+  if (!adminToken) {
+    return res.status(401).json({ error: 'access_token cookie missing — please re-login as admin' });
+  }
+
+  const baseURL = (process.env.SELF_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+
+  console.log(`[BLOG-GENERATOR/generate] admin=${req.user?.email} topic="${topic.topic}" publish=${publishFlag}`);
+  try {
+    const result = await blogGenerator.generateAndPublish(topic, {
+      baseURL,
+      adminToken,
+      status: publishFlag ? 'published' : 'draft',
+      skipQualityGate,
+      // Blog-generation is slow — bump timeout so a 60-90s Gemini call
+      // can complete before the socket dies.
+      timeoutMs: 180000,
+    });
+
+    if (!result.ok) {
+      console.error('[BLOG-GENERATOR/generate] failed:', result.error);
+      return res.status(422).json(result);
+    }
+
+    // Fire the sitemap ping now that a live post exists — matches what
+    // /api/blog/publish does on the "published" path.
+    if (publishFlag) {
+      seoAutomation.pingSitemapToSearchEngines()
+        .then((r) => console.log('[SEO] Sitemap ping:', JSON.stringify(r)))
+        .catch((e) => console.error('[SEO] Sitemap ping failed:', e.message));
+    }
+
+    console.log(`[BLOG-GENERATOR/generate] OK: ${result.slug} status=${result.status} draft_id=${result.draft_id}`);
+    res.json(result);
+  } catch (err) {
+    console.error('[BLOG-GENERATOR/generate] exception:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+
 // Create a blog post in the backend (requires auth - ADMIN ONLY)
 router.post('/blog/publish', async (req, res) => {
   try {
