@@ -5421,6 +5421,101 @@ class WorkspaceController {
     }, 2000);
   }
 
+  // Render corrections returned INLINE from /api/submit (not the SSE
+  // stream). The backend's fallback path — hit when the DB draft-save
+  // fails but Gemini succeeds — returns
+  //   { success: true, corrections: [...], message: "Draft save
+  //     temporarily unavailable. Showing inline suggestions." }
+  // The main autoAnalyze pipeline expects data from /api/corrections/
+  // stream and won't process what autosave() gets back. This helper
+  // is the minimal mapping needed to surface those inline corrections
+  // in the AI Assistant panel so they don't get silently dropped
+  // (the exact bug the user hit — Network tab showed 4 corrections
+  // in the submit response, panel showed only the 1 from stream).
+  //
+  // Deliberately simpler than the full autoAnalyze render (no artifact
+  // stripping, no free-tier filter, no occurrence counting). Correct-
+  // ness > completeness — users would rather see all suggestions with
+  // basic mapping than see none due to an aggressive filter that
+  // dropped everything. If autoAnalyze later succeeds on the same
+  // text via SSE, it will clearSuggestions() and re-render.
+  _renderInlineCorrections(corrections) {
+    if (!Array.isArray(corrections) || corrections.length === 0) return;
+
+    // Lazy-init the panel if the user opened Export before typing.
+    if (!this.suggestionsPanel) {
+      const container = document.getElementById('suggestions-container');
+      const summary = document.getElementById('suggestions-summary');
+      const acceptAllBtn = document.getElementById('accept-all-btn');
+      if (container && summary && acceptAllBtn && typeof SuggestionsPanel === 'function') {
+        this.suggestionsPanel = new SuggestionsPanel(container, summary, acceptAllBtn);
+        if (typeof this.handleSuggestionAccepted === 'function') {
+          this.suggestionsPanel.onAcceptSuggestion = () => this.handleSuggestionAccepted();
+        }
+      } else {
+        console.warn('[AI] _renderInlineCorrections: SuggestionsPanel not available');
+        return;
+      }
+    }
+
+    const now = Date.now();
+    const mapped = corrections
+      .map((c, idx) => {
+        // Accept both frontend and backend field-name conventions —
+        // backend uses (originalText, correction, reason, type);
+        // SSE stream uses (original, corrected, reason, type).
+        const original  = c.originalText || c.original || '';
+        const corrected = c.correction   || c.corrected || '';
+        const reason    = c.reason || c.description || '';
+        const type      = String(c.type || 'grammar').toLowerCase();
+        return { original, corrected, reason, type, idx };
+      })
+      .filter(c => c.original && c.corrected && c.original !== c.corrected)
+      .map(c => ({
+        id: `submit-${c.idx}-${now}`,
+        title: c.reason || 'Suggestion',
+        description: c.reason || '',
+        type: c.type,
+        preview: `${c.original} → ${c.corrected}`,
+        sourceText: c.original,
+        // Apply the correction to the live editor and trigger a save.
+        // Mirrors the apply handler in autoAnalyze's render pipeline
+        // so the user's Accept-flow feels the same regardless of
+        // whether the suggestion came from stream or submit.
+        onApply: () => {
+          const currentText = this.getEditorText();
+          if (!currentText.includes(c.original)) return;
+          const newText = currentText.split(c.original).join(c.corrected);
+          if (this.editor && typeof this.editor.setText === 'function') {
+            this.editor.setText(newText);
+          } else if (this.editorElement) {
+            this.editorElement.textContent = newText;
+          }
+          if (this._applySaveTimeout) clearTimeout(this._applySaveTimeout);
+          this._applySaveTimeout = setTimeout(() => this.autosave(), 500);
+        },
+        onIgnore: () => {},
+      }));
+
+    // Dedup on the preview key — same correction from two backend
+    // paths (fallback + stream) should surface once.
+    const seen = new Set();
+    const deduped = mapped.filter(s => {
+      if (seen.has(s.preview)) return false;
+      seen.add(s.preview);
+      return true;
+    });
+
+    if (deduped.length === 0) return;
+
+    this.suggestionsPanel.clearSuggestions();
+    this.suggestionsPanel.addSuggestions(deduped);
+    if (typeof this.updateAnalysisStatus === 'function') {
+      this.updateAnalysisStatus('complete', deduped.length);
+    }
+    console.log('[AI] _renderInlineCorrections rendered', deduped.length, 'suggestion(s) from /api/submit response');
+  }
+
   // Save-status state machine. Centralised because we now surface a
   // truthful state from every early-return path in autosave() — the
   // previous behaviour was to skip the update entirely, leaving the
@@ -5537,19 +5632,59 @@ class WorkspaceController {
       }
 
       const data = await response.json();
-      
+
+      // Backend fallback signal: HTTP is 200 and `success:true`, but the
+      // `message` says "Draft save temporarily unavailable. Showing
+      // inline suggestions." — meaning the DB row was NOT created but
+      // Gemini ran inline and returned corrections. Detect that state
+      // so we (a) don't lie by setting save-status green and (b)
+      // surface the inline corrections in the AI Assistant panel that
+      // would otherwise be dropped on the floor.
+      const backendMessage = typeof data.message === 'string' ? data.message : '';
+      const backendSaveFailed = /save temporarily unavailable/i.test(backendMessage);
+
+      if (backendSaveFailed) {
+        // Honest state — the server acknowledged our request but the
+        // draft didn't land. User can retry, or export knowing it's
+        // not in /drafts. The state-machine helper also flips
+        // data-state so doc-export.js's ensureDraftPersisted() picks
+        // up the failure and prompts on next export click.
+        this._setSaveState('error', 'Save failed (server)');
+        // Even though save failed, backend returned inline
+        // corrections — render them so the user isn't left staring at
+        // an empty AI Assistant despite Gemini having done the work.
+        if (Array.isArray(data.corrections) && data.corrections.length > 0) {
+          this._renderInlineCorrections(data.corrections);
+        }
+        // Structured log so this is greppable in Cloud Run logs if we
+        // ever need to correlate frontend failures with backend errors.
+        console.warn('[AUTOSAVE] Backend returned fallback (save failed, inline corrections):', {
+          message: backendMessage,
+          corrections: (data.corrections || []).length,
+          request_id: data.request_id,
+        });
+        return;
+      }
+
       // Update current draft with the saved submission
       if (data.submission) {
         this.currentDraft = data.submission;
-        
+
         // Update title if it's still "Untitled Draft"
         const titleInput = document.getElementById('draft-title');
         if (titleInput && titleInput.value === 'Untitled Draft') {
           titleInput.value = `Draft #${data.submission.id}`;
         }
       }
-      
+
       this._setSaveState(wasTruncated ? 'partial' : 'saved', wasTruncated ? 'Saved (partial)' : 'Saved');
+
+      // Some backend paths return inline corrections alongside a
+      // successful save (rare — mostly the synchronous inline path).
+      // Render them here too so they don't get dropped.
+      if (Array.isArray(data.corrections) && data.corrections.length > 0) {
+        this._renderInlineCorrections(data.corrections);
+      }
       if (autosaveTimeEl) {
         const now = new Date();
         autosaveTimeEl.textContent = `Last saved: ${now.toLocaleTimeString()}`;
