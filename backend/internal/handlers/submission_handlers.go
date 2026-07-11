@@ -818,8 +818,30 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	if req.SubmissionID != nil && *req.SubmissionID > 0 {
 		var existing models.Submission
 		if err := h.db.First(&existing, *req.SubmissionID).Error; err == nil && existing.UserID == userID {
-			existing.OriginalText = req.Text
-			existing.OriginalHTML = req.HTML
+			// DEFENSIVE: never clobber existing non-empty content with empty
+			// text. Reported bug: original_text was getting emptied after a
+			// user applied a Gemini suggestion — root cause is likely a
+			// frontend race between the editor DOM update and getEditorText()
+			// firing on the autosave debounce. Rather than let that
+			// destroy the user's draft, refuse the write and return the
+			// current row unchanged. Logged so we can spot recurrences.
+			// NUL byte strip mirrors the CREATE path — Postgres TEXT
+			// columns reject U+0000 with SQLSTATE 22021.
+			const nul = "\x00"
+			sanitizedText := strings.ReplaceAll(req.Text, nul, "")
+			sanitizedHTML := strings.ReplaceAll(req.HTML, nul, "")
+			if strings.TrimSpace(sanitizedText) == "" && strings.TrimSpace(existing.OriginalText) != "" {
+				log.Printf("[SUBMIT] Refusing to overwrite non-empty existing draft %d with empty text (user=%d, request_id=%s)",
+					*req.SubmissionID, userID, requestID)
+				c.JSON(http.StatusOK, gin.H{
+					"success":    true,
+					"submission": existing,
+					"message":    "No content in update; existing draft preserved",
+				})
+				return
+			}
+			existing.OriginalText = sanitizedText
+			existing.OriginalHTML = sanitizedHTML
 			existing.WordCount = wordCount
 			existing.ModelUsed = modelType
 			existing.Status = models.StatusPending
