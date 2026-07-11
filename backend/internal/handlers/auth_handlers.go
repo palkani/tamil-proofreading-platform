@@ -82,7 +82,41 @@ func (h *Handlers) GoogleAuthStart(c *gin.Context) {
 const refreshTokenCookieName = "proof_refresh_token"
 const refreshTokenCookiePath = "/"
 
-func (h *Handlers) refreshCookieSecure() bool {
+// refreshCookieSecure decides the Secure flag for the refresh_token
+// cookie. Chrome rejects SameSite=None cookies that aren't Secure, so
+// getting this wrong causes silent cookie drops → every 15 minutes the
+// access token expires, the refresh endpoint gets a cookie-less
+// request, and the user is kicked back to /login.
+//
+// The historical implementation trusted h.cfg.FrontendURL — if that
+// env var starts with "https://", return true. Problem: the default
+// value in config.go is "http://localhost:3000". Any prod deploy that
+// forgot to set FRONTEND_URL fell through to that default and got
+// Secure=false, breaking auth silently. That was the exact bug in
+// the user's Cloud Run log:
+//   [AUTH] set refresh_token cookie domain= secure=false samesite=None
+//
+// New logic reads the ACTUAL request scheme. Cloud Run terminates TLS
+// at its load balancer and forwards X-Forwarded-Proto: https on every
+// request; Vercel does the same. If either of those signals says
+// HTTPS, we know the browser reached us securely and Secure=true is
+// the right call. FrontendURL remains as a last-ditch check for
+// contexts that don't have a live request (background jobs). Local
+// dev over plain HTTP is the only false path.
+func (h *Handlers) refreshCookieSecure(c *gin.Context) bool {
+        // Direct TLS (rare — Cloud Run always terminates upstream)
+        if c != nil && c.Request != nil && c.Request.TLS != nil {
+                return true
+        }
+        // Standard proxy header. Cloud Run, Vercel, most load balancers set this.
+        if c != nil && c.Request != nil {
+                if strings.EqualFold(c.Request.Header.Get("X-Forwarded-Proto"), "https") {
+                        return true
+                }
+        }
+        // Fallback: trust the configured frontend URL. Kept for background
+        // jobs / non-request contexts, and as a signal on dev machines
+        // that explicitly point at an HTTPS frontend.
         if strings.HasPrefix(strings.ToLower(h.cfg.FrontendURL), "https://") {
                 return true
         }
@@ -136,13 +170,13 @@ func (h *Handlers) setRefreshCookie(c *gin.Context, token string, expiresAt time
                 Path:     refreshTokenCookiePath,
                 Domain:   domain,
                 HttpOnly: true,
-                Secure:   h.refreshCookieSecure(),
+                Secure:   h.refreshCookieSecure(c),
                 SameSite: http.SameSiteNoneMode, // Changed from StrictMode to NoneMode for cross-site support
                 MaxAge:   maxAge,
                 Expires:  expiresAt,
         })
         
-        log.Printf("[AUTH] set refresh_token cookie domain=%s secure=%v samesite=None expires=%s", domain, h.refreshCookieSecure(), expiresAt.UTC().Format(time.RFC3339))
+        log.Printf("[AUTH] set refresh_token cookie domain=%s secure=%v samesite=None expires=%s", domain, h.refreshCookieSecure(c), expiresAt.UTC().Format(time.RFC3339))
 }
 
 func (h *Handlers) setAccessTokenCookie(c *gin.Context, token string, expiresAt time.Time) {
@@ -185,7 +219,7 @@ func (h *Handlers) clearRefreshCookie(c *gin.Context) {
                 Path:     refreshTokenCookiePath,
                 Domain:   domain,
                 HttpOnly: true,
-                Secure:   h.refreshCookieSecure(),
+                Secure:   h.refreshCookieSecure(c),
                 SameSite: http.SameSiteNoneMode, // Changed from LaxMode to NoneMode for cross-site support
                 MaxAge:   -1,
                 Expires:  time.Unix(0, 0),
@@ -197,7 +231,7 @@ func (h *Handlers) clearRefreshCookie(c *gin.Context) {
                 Value:    "",
                 Path:     refreshTokenCookiePath,
                 HttpOnly: true,
-                Secure:   h.refreshCookieSecure(),
+                Secure:   h.refreshCookieSecure(c),
                 SameSite: http.SameSiteNoneMode,
                 MaxAge:   -1,
                 Expires:  time.Unix(0, 0),
