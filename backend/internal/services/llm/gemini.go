@@ -46,13 +46,30 @@ YOUR JOB
 Review the Tamil text below. Return every real defect. Preserve the writer's meaning, tone, register, and vocabulary — never rewrite for style. Fix only what a competent editor would fix.
 
 WHAT COUNTS AS A REAL DEFECT
-Only mark items in these five categories, and only when the corrected form actually reads better:
+Only mark items in these seven categories, and only when the corrected form actually reads better:
 
-  spelling      — misspelled Tamil words (bad grapheme, missing/extra letter, wrong vowel sign)
-  grammar       — subject-verb agreement, tense consistency, case marker (vēṟṟumai uruppu)
+  spelling      — misspelled Tamil words. Actively look for these HIGH-FREQUENCY confusion pairs:
+                    • ல / ழ / ள          (மலை vs மழை vs மளை — completely different meanings)
+                    • ர / ற              (வர vs வற — different meanings)
+                    • ண / ன / ந          (three "n" sounds; வேண்டும் vs வேன்டும் vs வேந்டும்)
+                    • Mei-ezhuttu doubling errors: ற்ற, க்க, த்த, ப்ப, ன்ற
+                      (வெற்றி vs வெறி, இல்லை vs இலை)
+                    • Wrong vowel-sign length: கு/கூ, பெ/பே, மொ/மோ
+                  Also: missing / extra letters, wrong grapheme choice.
+  semantic      — the word is spelled correctly but is the WRONG word for the context.
+                  Example: வலி (pain) written where வழி (path) was meant.
+                  Example: அலகு (unit) written where அழகு (beauty) was meant.
+                  This requires reasoning about MEANING, not just letters.
+                  Only mark when the intended meaning is unambiguous from context.
+  grammar       — subject-verb agreement, person-verb agreement, tense consistency,
+                  case marker (vēṟṟumai uruppu) missing or wrong
   punctuation   — missing/misplaced . , ? or " " that changes meaning or breaks a sentence
-  space         — missing space (avaṉvantāṉ → avaṉ vantāṉ), or extra space inside a word
+  space         — missing space (avaṉvantāṉ → avaṉ vantāṉ), or extra space inside a word.
+                  Also: initials spacing (மு.க. ஸ்டாலின், not மு.க.ஸ்டாலின்)
   sandhi        — wrong or missing puṇarcci at word joins (only when it materially changes reading)
+  compound      — compound word wrongly split or wrongly joined.
+                  Example: தமிழ்நாடு (one word for the state) vs தமிழ் நாடு
+                  Different from the "space" type — compound-word convention, not word spacing.
 
 DO NOT MARK
   - Legitimate stylistic choices (formal vs informal, journalistic vs literary)
@@ -103,10 +120,22 @@ GOLD EXAMPLES (all real diffs)
     type:      spelling
     reason:    "பொருள் நோக்கில் 'மழை' சரி; 'மலை' ≠ rain"
 
+  Semantic — right spelling, wrong word for meaning:
+    original:  "நான் வலி பார்த்தேன்"   (context: walking down a road)
+    corrected: "நான் வழி பார்த்தேன்"
+    type:      semantic
+    reason:    "சூழலில் 'வழி' (path) சரி; 'வலி' (pain) பொருந்தாது"
+
+  Compound word wrongly split:
+    original:  "தமிழ் நாடு அரசு"       (referring to the state, not two nouns)
+    corrected: "தமிழ்நாடு அரசு"
+    type:      compound
+    reason:    "மாநிலப் பெயர் ஒரே சொல்லாக எழுத வேண்டும்"
+
 OUTPUT SHAPE
 Return valid JSON only. No prose, no markdown, no code fences.
 
-  { "corrections": [ { "original": "...", "corrected": "...", "reason": "...", "type": "spelling|grammar|punctuation|space|sandhi" } ] }
+  { "corrections": [ { "original": "...", "corrected": "...", "reason": "...", "type": "spelling|semantic|grammar|punctuation|space|sandhi|compound" } ] }
 
 Every "original" MUST be an exact substring of the input text.
 Every ("original","corrected") pair MUST differ. Never emit an item where they are equal.
