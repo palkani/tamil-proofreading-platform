@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"tamil-proofreading-platform/backend/internal/migrations"
 	"tamil-proofreading-platform/backend/internal/models"
 	"tamil-proofreading-platform/backend/internal/services/billing"
 
@@ -34,6 +35,15 @@ func (h *Handlers) AdminEnsureBillingTables(c *gin.Context) {
 		{"invoices", &models.Invoice{}},
 		{"payment_events", &models.PaymentEvent{}},
 		{"billing_audit_logs", &models.BillingAuditLog{}},
+		// submissions is a hot-path table — new fields sometimes land
+		// on the Go model without a corresponding ALTER in prod (since
+		// RUN_MIGRATIONS=false), which surfaces as SQLSTATE 42703
+		// "column ... does not exist" on every autosave. AutoMigrate
+		// with the model here backfills any missing columns without
+		// touching existing data. EnsureCoreSchema now also handles
+		// this on every startup — this button remains as a safety
+		// net for one-off ops interventions.
+		{"submissions", &models.Submission{}},
 	}
 
 	results := make([]gin.H, 0, len(targets))
@@ -51,6 +61,15 @@ func (h *Handlers) AdminEnsureBillingTables(c *gin.Context) {
 			"error":  errMsg,
 		})
 	}
+
+	// Also run the same defensive column ensure that startup runs, so
+	// an ops button click is equivalent to a fresh backend deploy.
+	migrations.EnsureCoreSchema(h.db)
+	results = append(results, gin.H{
+		"table":  "submissions (columns)",
+		"status": "ok",
+		"error":  "ran EnsureCoreSchema (ALTER TABLE ... IF NOT EXISTS)",
+	})
 
 	c.JSON(http.StatusOK, gin.H{"results": results})
 }

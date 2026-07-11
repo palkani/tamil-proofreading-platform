@@ -93,7 +93,15 @@ func classifyDBError(err error) string {
 		return "fk_violation"
 	case strings.Contains(msg, "23502") || strings.Contains(msg, "not-null"):
 		return "not_null_violation"
-	case strings.Contains(msg, "42p01") || strings.Contains(msg, "does not exist"):
+	case strings.Contains(msg, "42703") || (strings.Contains(msg, "column") && strings.Contains(msg, "does not exist")):
+		// Postgres SQLSTATE 42703 - "undefined_column". Column named
+		// in the query does not exist on the table. Almost always a
+		// migration-not-run situation: a new field was added to the
+		// GORM model but AutoMigrate never touched production because
+		// RUN_MIGRATIONS=false. Fix by adding the column via
+		// migrateSubmissionColumns() at startup, not retry.
+		return "missing_column"
+	case strings.Contains(msg, "42p01") || (strings.Contains(msg, "relation") && strings.Contains(msg, "does not exist")):
 		return "missing_table"
 	case strings.Contains(msg, "connection") || strings.Contains(msg, "eof") || strings.Contains(msg, "reset by peer"):
 		return "connection"

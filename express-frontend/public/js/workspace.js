@@ -1428,26 +1428,6 @@ class WorkspaceController {
     }
     this._initCalled = true;
 
-    // Delegated click handler for the "Retry" affordance embedded in
-    // the save-status pill when autosave fails. Delegated (not
-    // per-render) because _setSaveState replaces innerHTML each call,
-    // which would blow away any bound listeners on the anchor. Kept
-    // simple: click → clear pending auto-retry → re-fire autosave.
-    document.addEventListener('click', (e) => {
-      const trigger = e.target.closest('[data-retry-save]');
-      if (!trigger) return;
-      e.preventDefault();
-      if (this._pendingAutosaveRetry) {
-        clearTimeout(this._pendingAutosaveRetry);
-        this._pendingAutosaveRetry = null;
-      }
-      // Show immediate feedback so the click doesn't feel dead while
-      // the request is in flight; autosave() itself will overwrite
-      // this in ~100ms with the real "Saving…" state.
-      this._setSaveState('saving', 'Retrying save…');
-      this.autosave().catch(() => {});
-    });
-
     // CRITICAL: Check USE_TIPTAP_EDITOR flag - ensure it's actually false
     console.log('[WorkspaceJS] Initializing - USE_TIPTAP_EDITOR:', window.USE_TIPTAP_EDITOR);
     
@@ -5667,9 +5647,11 @@ class WorkspaceController {
         // Honest state — the server acknowledged our request but the
         // draft didn't land. State machine helper flips data-state so
         // doc-export.js's ensureDraftPersisted() picks up the failure
-        // and prompts on next export click. Label includes an inline
-        // "retry" affordance so the user isn't stuck at a dead end.
-        this._setSaveState('error', 'Save failed <a href="#" data-retry-save class="ml-2 underline text-red-700 hover:text-red-900">Retry</a>');
+        // and prompts on next export click. No user-facing "Retry"
+        // link — the client-side timer below re-fires the save
+        // automatically. Saves should just work; asking the user to
+        // click Retry is a symptom, not a fix.
+        this._setSaveState('error', 'Save failed — retrying…');
         // Even though save failed, backend returned inline
         // corrections — render them so the user isn't left staring at
         // an empty AI Assistant despite Gemini having done the work.

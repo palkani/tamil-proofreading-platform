@@ -294,6 +294,15 @@ func main() {
 		log.Println("Skipping migrations (RUN_MIGRATIONS=false)")
 	}
 
+	// Unconditionally ensure the hot-path columns exist. This closes
+	// the gap that RUN_MIGRATIONS=false leaves open — a new field
+	// lands on a Go model, the corresponding ALTER never runs in
+	// production, every insert fails with SQLSTATE 42703 until
+	// someone manually clicks Setup tables. EnsureCoreSchema uses
+	// only ADD COLUMN IF NOT EXISTS + CREATE INDEX IF NOT EXISTS,
+	// so it's safe on every startup regardless of the flag above.
+	migrations.EnsureCoreSchema(db)
+
 	// Initialize handlers (do not block on index migration — run it after server is ready)
 	h := handlers.New(db, cfg)
 	
