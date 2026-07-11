@@ -414,23 +414,56 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
         if err != nil {
                 // Gemini overload is common; do a tiny backoff + retry once before falling back providers.
                 var pe *ProviderError
-                if errors.As(err, &pe) && pe.Provider == "gemini" && pe.StatusCode == 503 {
-                        log.Printf("[GEMINI-503] Model overloaded; retrying once after short backoff (request_id=%s)", requestID)
-                        // Respect ctx cancellation.
-                        select {
-                        case <-ctx.Done():
-                                // fallthrough to fallback decision below
-                        case <-time.After(350 * time.Millisecond):
-                        }
-                        // Retry with a slightly smaller output budget to increase chance of fast completion.
+                // Transient failures — retry with exponential backoff before falling
+                // back to another provider. Two failure modes we cover:
+                //   1. 503 "model overloaded"        — StatusCode 503, Google says try again
+                //   2. Network-layer errors          — StatusCode 0, Retryable=true:
+                //      "unexpected EOF", "connection reset", "TLS handshake failure",
+                //      "context deadline exceeded". Google's fleet occasionally drops
+                //      the TCP connection mid-response; this was the exact failure the
+                //      user saw persisted in the submissions.error column.
+                //
+                // Two attempts with 350ms then 800ms backoff (~1.15s worst-case extra
+                // latency). If both retries also fail, err propagates to
+                // shouldFallbackOn() → OpenAI/Anthropic fallback if configured,
+                // otherwise the user gets the "Draft save temporarily unavailable"
+                // response so we never store a raw stack in the DB.
+                if errors.As(err, &pe) && pe.Provider == "gemini" && (pe.StatusCode == 503 || (pe.StatusCode == 0 && pe.Retryable)) {
                         retryMax := maxTokens
                         if retryMax > 2048 {
                                 retryMax = 2048
                         }
-                        if c2, r2, e2 := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey, retryMax); e2 == nil && strings.TrimSpace(c2) != "" {
-                                content, geminiResp, err = c2, r2, nil
-                        } else if e2 != nil {
-                                err = e2
+                        backoffs := []time.Duration{350 * time.Millisecond, 800 * time.Millisecond}
+                        for attempt, backoff := range backoffs {
+                                log.Printf("[GEMINI-RETRY] attempt=%d code=%d retryable=%v msg=%q backoff=%v request_id=%s",
+                                        attempt+1, pe.StatusCode, pe.Retryable, pe.Message, backoff, requestID)
+                                select {
+                                case <-ctx.Done():
+                                        err = ctx.Err()
+                                        break
+                                case <-time.After(backoff):
+                                }
+                                if ctx.Err() != nil {
+                                        break
+                                }
+                                c2, r2, e2 := CallGeminiProofread(cleaned, string(selectedModel), s.googleAPIKey, retryMax)
+                                if e2 == nil && strings.TrimSpace(c2) != "" {
+                                        log.Printf("[GEMINI-RETRY] recovered on attempt=%d request_id=%s", attempt+1, requestID)
+                                        content, geminiResp, err = c2, r2, nil
+                                        break
+                                }
+                                if e2 != nil {
+                                        err = e2
+                                        // If the new error is NOT transient (e.g. 400 auth-arg
+                                        // problem), stop retrying and let fallback logic decide.
+                                        var pe2 *ProviderError
+                                        if errors.As(err, &pe2) {
+                                                pe = pe2
+                                                if !(pe.StatusCode == 503 || (pe.StatusCode == 0 && pe.Retryable)) {
+                                                        break
+                                                }
+                                        }
+                                }
                         }
                 }
                 // On 429 (quota exceeded), wait for suggested retry time then retry once before falling back.
