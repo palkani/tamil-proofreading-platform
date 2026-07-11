@@ -2414,8 +2414,15 @@ router.post('/submit', async (req, res) => {
     // Logged-in path should behave exactly like Workspace.
     // If backend returns 401 here, surface it (client should re-login).
     
-    // Only log errors, not success (performance optimization)
-    if (response.status !== 200 && response.status !== 201 && ENABLE_PROXY_LOGS) {
+    // Only log actual errors (non-2xx). The previous check treated
+    // ANY status besides 200/201 as an error, so the workspace's
+    // legitimate 202 "Accepted for async processing" returns showed
+    // up in Vercel logs as `[SUBMIT] Error 202: Unknown error`. That
+    // was cosmetic — the response was forwarded to the client
+    // correctly on the next line — but scared operators reading the
+    // logs. 202 (Accepted) and 204 (No Content) are both valid
+    // success paths; treat every 2xx as success.
+    if ((response.status < 200 || response.status >= 300) && ENABLE_PROXY_LOGS) {
       console.log(`[SUBMIT] Error ${response.status}:`, response.data?.error || 'Unknown error');
     }
     
