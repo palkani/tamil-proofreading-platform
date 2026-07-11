@@ -151,22 +151,53 @@ var promptInjectionPhrases = []string{
         "forget the previous",
 }
 
-// selectOptimalModel chooses the best model based on text characteristics
-// - flash-lite: Faster for short texts (<200 chars or <50 words)
-// - flash: More accurate for longer or complex texts
-func (s *LLMService) selectOptimalModel(text string, wordCount int) models.ModelType {
-        charCount := len(text)
-        
-	// Latency-first: most interactive submits are short/medium.
-	// Use flash-lite for <= ~200 words, or generally small payloads.
-	if wordCount <= 250 || charCount <= 1500 {
-                log.Printf("[MODEL-SELECT] Using flash-lite (chars=%d, words=%d)", charCount, wordCount)
-                return models.ModelType(models.ModelGeminiFlashLite)
-        }
-        
-        // Use full flash for longer texts (better accuracy)
-        log.Printf("[MODEL-SELECT] Using flash (chars=%d, words=%d)", charCount, wordCount)
-        return models.ModelType(models.ModelGeminiFlash)
+// selectOptimalModel chooses the Gemini model tier based on text
+// characteristics AND the user's plan. Two orthogonal ladders — text
+// size (short/long) × user tier (free/pro) → four cells:
+//
+//                 Free tier              Pro tier
+//   short (<250w) gemini-2.5-flash-lite  gemini-2.5-flash
+//   long  (≥250w) gemini-2.5-flash       gemini-2.5-pro
+//
+// Rationale:
+//   - flash-lite: cheapest + fastest (~5-15s). Fine for short casual text.
+//   - flash: ~5x cost of flash-lite, materially better on subtle grammar.
+//     Free-tier long text stays on flash for the accuracy bump.
+//   - pro: ~4x cost of flash, ~20x cost of flash-lite. Best-in-class for
+//     complex compound sentences + context-aware semantic corrections
+//     (the wrong-word-right-spelling errors that are our Pro moat).
+//     Reserved for Pro users on genuinely complex text — free-tier
+//     users don't get access at any length because pro is materially
+//     slower (up to ~60s for large docs) and much more expensive.
+//
+// Cost math: a Pro user typing 500 words ≈ 2K input tokens + 500 output
+// tokens per call. pro pricing = $1.25/M input + $10/M output ≈
+// $0.0075 per call. At 20 calls/day → $4.50/month/user against $12
+// Pro plan revenue = comfortable ~60% gross margin.
+//
+// Called from ProofreadWithGoogle. Pass isProUser=false for anonymous
+// and free-tier requests; true for logged-in Pro/Basic/Enterprise/admin
+// (see billing.IsUserPro).
+func (s *LLMService) selectOptimalModel(text string, wordCount int, isProUser bool) models.ModelType {
+	charCount := len(text)
+	isShort := wordCount <= 250 || charCount <= 1500
+
+	if isProUser {
+		if isShort {
+			log.Printf("[MODEL-SELECT] Pro/short → flash (chars=%d, words=%d)", charCount, wordCount)
+			return models.ModelType(models.ModelGeminiFlash)
+		}
+		log.Printf("[MODEL-SELECT] Pro/long → pro (chars=%d, words=%d)", charCount, wordCount)
+		return models.ModelType(models.ModelGeminiPro)
+	}
+
+	// Free tier
+	if isShort {
+		log.Printf("[MODEL-SELECT] Free/short → flash-lite (chars=%d, words=%d)", charCount, wordCount)
+		return models.ModelType(models.ModelGeminiFlashLite)
+	}
+	log.Printf("[MODEL-SELECT] Free/long → flash (chars=%d, words=%d)", charCount, wordCount)
+	return models.ModelType(models.ModelGeminiFlash)
 }
 
 func maxOutputTokensForProofread(wordCount int, charCount int) int {
@@ -375,7 +406,11 @@ func detectChangesFromText(original, corrected string) []Suggestion {
         return suggestions
 }
 
-func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, requestID string, includeAlternatives bool, maxOutputTokensCap int) (*ProofreadResult, error) {
+// ProofreadWithGoogle runs Gemini for a given text. isProUser routes the
+// request to a higher-tier model (see selectOptimalModel for the mapping).
+// Callers on the anonymous / free-tier path pass false; authenticated
+// Pro-tier callers pass true after resolving via billing.IsUserPro.
+func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, requestID string, includeAlternatives bool, maxOutputTokensCap int, isProUser bool) (*ProofreadResult, error) {
         start := time.Now()
 
         if text == "" {
@@ -393,10 +428,10 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
 
         cleaned := s.nlpService.Preprocess(text)
         cleaned = sanitizeUserInput(cleaned)
-        
-        // Smart model selection based on text length
+
+        // Smart model selection based on text length + user tier
         wordCount := s.nlpService.CountWords(cleaned)
-        selectedModel := s.selectOptimalModel(cleaned, wordCount)
+        selectedModel := s.selectOptimalModel(cleaned, wordCount, isProUser)
         maxTokens := maxOutputTokensForProofread(wordCount, len(cleaned))
         if maxOutputTokensCap > 0 && maxOutputTokensCap < maxTokens {
                 maxTokens = maxOutputTokensCap
@@ -613,7 +648,13 @@ func (s *LLMService) ProofreadWithGoogle(ctx context.Context, text string, reque
 	return out, nil
 }
 
-func (s *LLMService) BuildGeminiTokenPlan(ctx context.Context, text string, wordCount int, includeAlternatives bool, requestID string) (*GeminiTokenPlan, error) {
+// BuildGeminiTokenPlan estimates tokens + cost for a submission before the
+// actual Gemini call runs — used by /api/v1/submit to reserve quota
+// against the user's daily allowance. isProUser routes to the same model
+// tier the real ProofreadWithGoogle call will use, so the reservation
+// matches actual cost. Mis-routing here would over- or under-charge
+// the quota bucket.
+func (s *LLMService) BuildGeminiTokenPlan(ctx context.Context, text string, wordCount int, includeAlternatives bool, requestID string, isProUser bool) (*GeminiTokenPlan, error) {
 	if strings.TrimSpace(s.googleAPIKey) == "" {
 		return nil, fmt.Errorf("Gemini AI not configured: missing GOOGLE_GENAI_API_KEY (or AI_INTEGRATIONS_GEMINI_API_KEY)")
 	}
@@ -623,7 +664,7 @@ func (s *LLMService) BuildGeminiTokenPlan(ctx context.Context, text string, word
 	if wordCount2 > 0 {
 		wordCount = wordCount2
 	}
-	selectedModel := s.selectOptimalModel(cleaned, wordCount)
+	selectedModel := s.selectOptimalModel(cleaned, wordCount, isProUser)
 	maxTokens := maxOutputTokensForProofread(wordCount, len(cleaned))
 	prompt := buildProofreadPrompt(cleaned)
 	// CountTokens is typically very fast; still respect ctx by early abort if cancelled.
@@ -677,10 +718,12 @@ func (s *LLMService) Proofread(ctx context.Context, text string, requestID strin
 
         cleaned := s.nlpService.Preprocess(text)
         cleaned = sanitizeUserInput(cleaned)
-        
-        // Smart model selection based on text length
+
+        // Legacy path — no user-tier context available here. Default to
+        // free-tier model selection. If this function ever gets a live
+        // caller again, add an isProUser param.
         wordCount := s.nlpService.CountWords(cleaned)
-        _ = s.selectOptimalModel(cleaned, wordCount)
+        _ = s.selectOptimalModel(cleaned, wordCount, false)
         maxTokens := maxOutputTokensForProofread(wordCount, len(cleaned))
 
         // Try Google Gemini first
@@ -1475,9 +1518,14 @@ func (s *LLMService) proofreadWithAnthropic(ctx context.Context, cleaned string,
         }, nil
 }
 
-// ProofreadText is the main method called by handlers - wraps Proofread for backward compatibility
-func (s *LLMService) ProofreadText(ctx context.Context, text string, wordCount int, includeAlternatives bool, requestID string, maxOutputTokensCap int) (*ProofreadResult, error) {
+// ProofreadText is the main method called by handlers. isProUser drives
+// the model-tier ladder — Pro users get gemini-2.5-flash / gemini-2.5-pro,
+// free users get gemini-2.5-flash-lite / gemini-2.5-flash.
+// Callers should resolve isProUser via billing.IsUserPro(db, userID) once
+// per request, then pass here. For anonymous requests (no logged-in user)
+// pass false.
+func (s *LLMService) ProofreadText(ctx context.Context, text string, wordCount int, includeAlternatives bool, requestID string, maxOutputTokensCap int, isProUser bool) (*ProofreadResult, error) {
 	// Latency-first path used by the homepage/demo submit (save_draft=false).
 	// Avoid the multi-provider fallback pipeline here; it's better to be fast.
-	return s.ProofreadWithGoogle(ctx, text, requestID, includeAlternatives, maxOutputTokensCap)
+	return s.ProofreadWithGoogle(ctx, text, requestID, includeAlternatives, maxOutputTokensCap, isProUser)
 }

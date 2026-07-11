@@ -19,6 +19,7 @@ import (
 
 	"tamil-proofreading-platform/backend/internal/middleware"
 	"tamil-proofreading-platform/backend/internal/models"
+	"tamil-proofreading-platform/backend/internal/services/billing"
 	"tamil-proofreading-platform/backend/internal/services/observability"
 	"tamil-proofreading-platform/backend/internal/util/auditlog"
 	"tamil-proofreading-platform/backend/internal/util/geo"
@@ -568,7 +569,11 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), proofreadTimeoutFor(wordCount, len(req.Text)))
 		defer cancel()
 		llmStart := time.Now()
-		result, err := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID, 0)
+		// Anonymous / demo path — no logged-in user to look up. Free-tier
+		// model routing always. If we later want anonymous demo users to
+		// briefly experience the Pro model (marketing hook), gate by
+		// a feature flag here.
+		result, err := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID, 0, false)
 		llmLatencyMS := int(time.Since(llmStart) / time.Millisecond)
 		if err != nil {
 			// AI observability: log the failure with a classified error type
@@ -676,6 +681,13 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		return
 	}
 
+	// Resolve Pro status ONCE per request, then pass to every LLM call
+	// in this handler so model-tier decisions agree (token planner,
+	// fallback proofread, async processSubmission). Same helper the Pro
+	// pill in the workspace consults, so the UI + model routing can
+	// never disagree.
+	isPro := billing.IsUserPro(h.db, userID)
+
 	wordCount := h.nlpService.CountWords(req.Text)
 	if wordCount == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No valid words found in text"})
@@ -761,7 +773,7 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		// and guarantee we never exceed the remaining daily quota.
 		ctxPlan, cancelPlan := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancelPlan()
-		plan, planErr := h.llmService.BuildGeminiTokenPlan(ctxPlan, req.Text, wordCount, req.IncludeAlternatives, requestID)
+		plan, planErr := h.llmService.BuildGeminiTokenPlan(ctxPlan, req.Text, wordCount, req.IncludeAlternatives, requestID, isPro)
 		// Fallback: if countTokens fails, use a conservative estimate so we still enforce a limit.
 		promptTokens := 0
 		maxOutputTokens := 768
@@ -908,7 +920,7 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		// If we can't save the draft, fall back to inline proofread so the user still gets suggestions.
 		ctx, cancel := context.WithTimeout(c.Request.Context(), proofreadTimeoutFor(wordCount, len(req.Text)))
 		defer cancel()
-		result, perr := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID, capOutput)
+		result, perr := h.llmService.ProofreadText(ctx, req.Text, wordCount, req.IncludeAlternatives, requestID, capOutput, isPro)
 		if perr != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success":     true,
@@ -1038,11 +1050,17 @@ func (h *Handlers) processSubmission(ctx context.Context, submissionID uint, req
 		}
 	}
 
+	// Resolve Pro status once for this background job. If the lookup
+	// failed above (submissionOwnerID == 0), default to free-tier
+	// routing — safer than accidentally billing pro-tier model calls
+	// to an orphaned submission.
+	isPro := submissionOwnerID > 0 && billing.IsUserPro(h.db, submissionOwnerID)
+
 	// Process with LLM service (hard timeout so the job can't hang indefinitely)
 	ctx2, cancel := context.WithTimeout(ctx, proofreadTimeoutFor(wordCount, len(text)))
 	defer cancel()
 	llmStart := time.Now()
-	result, err := h.llmService.ProofreadText(ctx2, text, wordCount, includeAlternatives, requestID, maxOutputTokensCap)
+	result, err := h.llmService.ProofreadText(ctx2, text, wordCount, includeAlternatives, requestID, maxOutputTokensCap, isPro)
 	llmLatencyMS := int(time.Since(llmStart) / time.Millisecond)
 	if err != nil {
 		// AI observability: authenticated draft path failed. Classify
