@@ -907,9 +907,13 @@ class WorkspaceController {
   queuePasteAnalyze(source = 'paste') {
     try {
       const now = Date.now();
-      // Suppress duplicate triggers for a short window
+      // Suppress duplicate paste-triggered autoAnalyze for a short window.
+      // NOTE: we DELIBERATELY no longer set this.suppressSubmitUntil here.
+      // That flag also gates autosave() (line ~5418), so setting it meant
+      // paste triggered analyze but silently blocked the save that was
+      // supposed to run first — resulting in the exact bug the user hit
+      // ("pasted content, got suggestions, but /drafts is empty").
       this.pasteSuppressUntil = now + 1500;
-      this.suppressSubmitUntil = now + 1500;
 
       // Cancel any pending timers that could trigger extra submits
       if (this.analysisTimeout) {
@@ -924,10 +928,37 @@ class WorkspaceController {
         clearTimeout(this.pasteAnalyzeTimeout);
       }
 
-      // Give the editor a moment to finish inserting pasted content
-      this.pasteAnalyzeTimeout = setTimeout(() => {
+      // Save-first-then-analyze pipeline.
+      //   1. Wait 300ms for the editor to finish inserting pasted content
+      //   2. autosave() → /api/submit save_draft:true → row in `submissions`
+      //   3. Only THEN autoAnalyze() → /api/corrections/stream (Gemini SSE)
+      //
+      // Awaiting the save before starting Gemini has three benefits:
+      //   - guaranteed row in /drafts before the user can export
+      //   - Gemini streams against the exact text we just persisted, so
+      //     applied suggestions map cleanly back to submission id
+      //   - if the SSE stream is later aborted by a subsequent edit,
+      //     the user still has a saved draft to return to.
+      this.pasteAnalyzeTimeout = setTimeout(async () => {
         this.pasteAnalyzeTimeout = null;
-        console.log('[AI] 📋 Paste detected; running single autoAnalyze()', { source });
+        console.log('[AI] 📋 Paste detected; running save-then-analyze', { source });
+        try {
+          // The save is best-effort. autosave() has its own gates
+          // (< 5 words, < 5 chars) and updates #save-status accordingly.
+          await this.autosave();
+        } catch (e) {
+          console.warn('[AI] Paste pre-analyze save failed:', e && e.message);
+        }
+        // Extend the paste-suppress window so any handleEditorChange
+        // debounce (2s) triggered by the paste DOM insertion doesn't
+        // preempt the autoAnalyze we're about to start. Without this
+        // guard, the SSE stream could be aborted mid-flight, leaving
+        // the AI Assistant sidebar empty even though Gemini returned
+        // suggestions — the exact secondary bug the user reported.
+        this.pasteSuppressUntil = Date.now() + 3000;
+        // Regardless of save outcome (empty / gated / failed), still
+        // fire the analyze — the user pasted content and expects
+        // suggestions. autoAnalyze has its own text/threshold gates.
         this.autoAnalyze({ silent: true });
       }, 300);
     } catch (e) {
@@ -5377,8 +5408,15 @@ class WorkspaceController {
     }
 
     this.saveTimeout = setTimeout(() => {
-      // Unify "save" with proofreading submit to avoid double /api/submit calls.
-      // This will only run when text meets MIN_SUBMIT_WORDS and contains Tamil.
+      // Persist the draft AND fire proofreading. These are two different
+      // endpoints (/api/submit save_draft:true → Go backend row insert;
+      // /api/corrections/stream → Express Gemini SSE). The old code fired
+      // only autoAnalyze() with a misleading comment claiming it was
+      // "unified" — that was wrong and the reason typing+export within
+      // 30s (before the periodic 30s save timer) produced empty /drafts.
+      // Both calls internally gate on MIN_SUBMIT_WORDS so short content
+      // is still skipped by both.
+      this.autosave().catch(() => {});
       this.autoAnalyze({ silent: true });
     }, 2000);
   }
@@ -5413,11 +5451,16 @@ class WorkspaceController {
     if (this.autosaveAuthBlocked) {
       return;
     }
-    // If a paste just happened, avoid immediately doing a second /api/submit (save_draft)
-    // Paste should trigger ONE analysis submit; autosave can happen on the next edit.
-    if (this.suppressSubmitUntil && Date.now() < this.suppressSubmitUntil) {
-      return;
-    }
+    // Historically this method skipped when suppressSubmitUntil was set
+    // (paste-guard window). But autosave() writes to /api/submit
+    // save_draft:true (Go backend persistence), while the flag was set
+    // for the paste flow which fires autoAnalyze() → /api/corrections/stream
+    // (Express Gemini SSE) — TWO DIFFERENT ENDPOINTS. Blocking a save
+    // because an analyze was about to run was a category error and the
+    // direct cause of "paste, get suggestions, /drafts is empty".
+    // Kept as a comment on purpose so a future reader doesn't
+    // reintroduce it. Deduping duplicate saves is handled at the
+    // request-in-flight level via /api/submit itself, not client timers.
 
     const text = this.getEditorText().trim();
 
