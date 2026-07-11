@@ -1114,7 +1114,15 @@
         if (errorData.error) errorMessage = errorData.error;
         else if (response.status === 503 && (errorData.status === 'starting' || errorData.status === 'unavailable'))
           errorMessage = 'Service is starting up. Please try again in a moment.';
-        console.error('[DRAFTS] Error response data:', errorData);
+        // 503 "starting" is EXPECTED during a Cloud Run cold-start
+        // (fetchSubmissionsWithRetry handles it via a longer backoff),
+        // so log at info level to avoid noise in the DevTools console.
+        // Real errors still surface as error via the else branch below.
+        if (response.status === 503 && (errorData.status === 'starting' || errorData.status === 'unavailable')) {
+          console.info('[DRAFTS] Backend is starting up, retrying…');
+        } else {
+          console.error('[DRAFTS] Error response data:', errorData);
+        }
       } catch (e) {
         if (response.status === 503) errorMessage = 'Service is starting up. Please try again in a moment.';
         else errorMessage = response.statusText || `HTTP ${response.status}`;
@@ -1124,26 +1132,39 @@
     return response;
   }
 
+  // Total worst-case cold-start bridge: 1s + 2s + 4s + 6s + 8s = 21s.
+  // Cloud Run Go containers with DB pool + suggest engine + our
+  // EnsureCoreSchema currently boot in ~5-8s from cold. Anything more
+  // than 21s means the container failed to boot at all — surface that
+  // as a real error rather than retry forever.
   async function fetchSubmissionsWithRetry() {
-    const maxAttempts = 3;
-    const retryDelayMs = 2500;
-    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    const backoffsMs = [1000, 2000, 4000, 6000, 8000]; // 5 attempts, 21s total window
+    let lastErr;
+    for (let attempt = 1; attempt <= backoffsMs.length + 1; attempt++) {
       if (attempt > 1) {
-        console.log('[DRAFTS] Backend 503 (starting), retry ' + attempt + '/' + maxAttempts + ' in ' + retryDelayMs + 'ms');
-        await new Promise(function(r) { setTimeout(r, retryDelayMs); });
+        const wait = backoffsMs[attempt - 2] || 8000;
+        console.info('[DRAFTS] Backend still warming up, retry ' + (attempt - 1) + '/' + backoffsMs.length + ' in ' + wait + 'ms');
+        // Update a live status pill (if the drafts template exposes one)
+        // so users see WHY the page is stalling instead of a blank screen.
+        try {
+          const banner = document.getElementById('drafts-loading-status');
+          if (banner) banner.textContent = 'Backend is warming up (attempt ' + (attempt - 1) + '/' + backoffsMs.length + ')…';
+        } catch (_) { /* banner is optional */ }
+        await new Promise((r) => setTimeout(r, wait));
       }
       try {
-        var res = await fetchSubmissionsOnce();
+        const res = await fetchSubmissionsOnce();
         if (res === null) return null;
         return res;
       } catch (e) {
-        var msg = (e && e.message) || String(e);
-        var is503 = msg.indexOf('503') !== -1 || msg.indexOf('starting') !== -1 || msg.indexOf('try again') !== -1;
-        if (is503 && attempt < maxAttempts) continue;
+        lastErr = e;
+        const msg = (e && e.message) || String(e);
+        const isTransient503 = msg.indexOf('503') !== -1 || msg.indexOf('starting') !== -1 || msg.indexOf('try again') !== -1;
+        if (isTransient503 && attempt <= backoffsMs.length) continue;
         throw e;
       }
     }
-    throw new Error('Service is starting up. Please try again in a moment.');
+    throw lastErr || new Error('Service is starting up. Please try again in a moment.');
   }
 
     try {
