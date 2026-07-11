@@ -73,6 +73,54 @@ func classifyAIError(err error) string {
 	}
 }
 
+// classifyDBError sorts a raw DB error into a short label useful for
+// grep-friendly Cloud Run log lines. Same brittle string-matching
+// pattern as classifyAIError — Postgres error codes (SQLSTATE) are
+// the "right" way, but pgx/GORM surface them inconsistently across
+// versions. Kept simple; extend when a new class of failure shows up
+// in production logs.
+func classifyDBError(err error) string {
+	if err == nil {
+		return "ok"
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "22021") || strings.Contains(msg, "0x00") || strings.Contains(msg, "invalid byte sequence"):
+		return "nul_byte"
+	case strings.Contains(msg, "23505") || strings.Contains(msg, "unique constraint"):
+		return "unique_violation"
+	case strings.Contains(msg, "23503") || strings.Contains(msg, "foreign key"):
+		return "fk_violation"
+	case strings.Contains(msg, "23502") || strings.Contains(msg, "not-null"):
+		return "not_null_violation"
+	case strings.Contains(msg, "42p01") || strings.Contains(msg, "does not exist"):
+		return "missing_table"
+	case strings.Contains(msg, "connection") || strings.Contains(msg, "eof") || strings.Contains(msg, "reset by peer"):
+		return "connection"
+	case strings.Contains(msg, "timeout") || strings.Contains(msg, "deadline exceeded"):
+		return "timeout"
+	case strings.Contains(msg, "prepared statement") || strings.Contains(msg, "42p05"):
+		// pgBouncer / Supabase pooler prepared-statement quirk — first
+		// hit after a pooled connection is recycled. Transient.
+		return "prepared_stmt"
+	case strings.Contains(msg, "40001") || strings.Contains(msg, "deadlock") || strings.Contains(msg, "serialization"):
+		return "deadlock"
+	}
+	return "unknown"
+}
+
+// isTransientDBError says "retry this once with a short delay". Applies
+// to errors that are typically caused by connection recycling in the
+// Supabase pgBouncer pool or short-lived contention — never to
+// constraint / schema errors, which will fail the same way on retry.
+func isTransientDBError(err error) bool {
+	switch classifyDBError(err) {
+	case "connection", "timeout", "prepared_stmt", "deadlock":
+		return true
+	}
+	return false
+}
+
 // truncateIPv4 keeps only the first 3 octets of an IPv4 address so the row
 // doesn't identify the visitor uniquely. "1.2.3.4" → "1.2.3". Leaves
 // IPv6 addresses (with colons) unchanged since they're already hard to
@@ -799,12 +847,23 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		}
 	}
 
+	// Sanitize text before persistence. Postgres TEXT columns reject
+	// NULL bytes () with error 22021 "invalid byte sequence for
+	// encoding UTF8: 0x00", which surfaces as a generic write error at
+	// the GORM layer. Rich text pastes from Word / PDF / OCR outputs
+	// occasionally contain them and produce a save failure with no
+	// obvious cause from the client's perspective. Stripping here is
+	// safe: no legitimate Tamil grapheme contains U+0000, and the
+	// live editor never sees the sanitized copy — only the DB copy.
+	sanitizedText := strings.ReplaceAll(req.Text, "\x00", "")
+	sanitizedHTML := strings.ReplaceAll(req.HTML, "\x00", "")
+
 	// Create submission record with pending status first (draft name stored in DB)
 	submission := &models.Submission{
 		UserID:              userID,
 		Title:               "Untitled draft", // user can rename on drafts page
-		OriginalText:        req.Text,
-		OriginalHTML:        req.HTML,
+		OriginalText:        sanitizedText,
+		OriginalHTML:        sanitizedHTML,
 		RequestID:           requestID,
 		WordCount:           wordCount,
 		ModelUsed:           modelType,
@@ -815,9 +874,27 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		IncludeAlternatives: req.IncludeAlternatives,
 	}
 
-	// Save submission to database
-	if err := h.db.Create(submission).Error; err != nil {
-		log.Printf("Error creating submission: %v", err)
+	// Save submission to database. Retry ONCE on transient failure so a
+	// pgBouncer prepared-statement blip or a brief connection drop
+	// doesn't force the whole request into the "draft save temporarily
+	// unavailable" fallback. Non-transient errors (constraint / not-null
+	// / unique-violation) will fail on both attempts and drop to
+	// fallback the same way.
+	createErr := h.db.Create(submission).Error
+	if createErr != nil && isTransientDBError(createErr) {
+		log.Printf("[SUBMIT] transient DB error on Create, retrying once: %v", createErr)
+		time.Sleep(300 * time.Millisecond)
+		// GORM populates the ID on the previous failed attempt in some
+		// versions; reset it so the retry is a clean insert, not an update.
+		submission.ID = 0
+		createErr = h.db.Create(submission).Error
+	}
+	if err := createErr; err != nil {
+		// Log with more structure than the previous single-line entry
+		// so future Cloud Run logs are grep-friendly. Class helps
+		// distinguish a temporary hiccup from a schema regression.
+		log.Printf("[SUBMIT] Error creating submission: user_id=%d word_count=%d text_bytes=%d model=%s err_class=%s err=%v",
+			userID, wordCount, len(sanitizedText), modelType, classifyDBError(err), err)
 		// Still log the ai_request activity below in the fallback path, but
 		// draft_create doesn't get logged when the persistent write failed.
 		// If we can't save the draft, fall back to inline proofread so the user still gets suggestions.
