@@ -11,6 +11,14 @@
 // Track link clicks to prevent redirects during navigation
 let lastLinkClickTime = 0;
 let pageLoadTime = Date.now();
+// Set true only when the browser has fired a real unload signal
+// (beforeunload / pagehide). Distinct from document.visibilityState ===
+// 'hidden' which just means the tab isn't in focus — background tabs
+// still need to fire autosave() successfully. Previously apiFetch was
+// aborting ANY authed fetch when the tab was backgrounded, throwing
+// "Navigation in progress" — which manifested as autosave failures
+// the moment a user switched to another tab.
+let _isActuallyUnloading = false;
 const NAVIGATION_GRACE_PERIOD = 3000; // 3 seconds after link click
 const PAGE_LOAD_GRACE_PERIOD = 2000; // 2 seconds after page load
 
@@ -35,14 +43,14 @@ if (typeof document !== 'undefined') {
         console.log('[AUTH] Link clicked, setting navigation grace period:', link.href, 'at', lastLinkClickTime);
       }
     }
-    
+
     // Attach immediately if possible
     if (document.addEventListener) {
       document.addEventListener('click', trackLinkClick, true); // Capture phase
     } else if (document.attachEvent) {
       document.attachEvent('onclick', trackLinkClick); // IE fallback
     }
-    
+
     // Also try to attach on DOM ready as backup
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', function() {
@@ -50,6 +58,16 @@ if (typeof document !== 'undefined') {
       });
     }
   })();
+
+  // Real "page is unloading" signals — beforeunload fires when the
+  // user is actively navigating away (link click, back button, close
+  // tab), pagehide fires as the last DOM event before the page is
+  // destroyed. Setting the flag here (and NOT on visibilitychange)
+  // means apiFetch's guard correctly aborts in-flight requests only
+  // when the browser is actually going away, not when the tab is
+  // simply backgrounded.
+  window.addEventListener('beforeunload', function () { _isActuallyUnloading = true; });
+  window.addEventListener('pagehide', function () { _isActuallyUnloading = true; });
 }
 
 /**
@@ -374,9 +392,13 @@ async function apiFetch(url, options = {}, requireAuth = true) {
   const timeSinceLinkClick = now - lastLinkClickTime;
   const timeSincePageLoad = now - pageLoadTime;
   
-  // Treat "hidden" as hard navigation (tab switch/back/close). "loading" is normal during initial page load,
-  // so we wait for DOMContentLoaded instead of throwing.
-  const isHardNavigating = document.visibilityState === 'hidden';
+  // Only treat as "hard navigating" if the browser fired a real unload
+  // signal (beforeunload / pagehide). The previous check used
+  // `document.visibilityState === 'hidden'`, which false-positived on
+  // every tab-background — meaning users who switched tabs briefly
+  // saw autosave throw "Navigation in progress" and the workspace
+  // marked "Save failed". Now: tab-background = fine, real unload = abort.
+  const isHardNavigating = _isActuallyUnloading;
   const inGraceWindow =
     timeSinceLinkClick < NAVIGATION_GRACE_PERIOD ||
     timeSincePageLoad < PAGE_LOAD_GRACE_PERIOD ||
