@@ -635,7 +635,8 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 			isAdminEmail := planUser.Role == models.RoleAdmin ||
 				strings.EqualFold(planUser.Email, "palkani.r@gmail.com") ||
 				strings.EqualFold(planUser.Email, "prooftamil@gmail.com") ||
-				strings.EqualFold(planUser.Email, "banu.palkani@gmail.com")
+				strings.EqualFold(planUser.Email, "banu.palkani@gmail.com") ||
+				strings.EqualFold(planUser.Email, "contact@prooftamil.com")
 			if isFree && !isAdminEmail && wordCount > 200 {
 				c.JSON(http.StatusUnprocessableEntity, gin.H{
 					"error":      "word_limit_exceeded",
@@ -661,7 +662,7 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 		var u models.User
 		if err := h.db.Select("email", "role").First(&u, userID).Error; err == nil {
 			email := strings.ToLower(strings.TrimSpace(u.Email))
-			if u.Role == models.RoleAdmin || email == "palkani.r@gmail.com" || email == "prooftamil@gmail.com" || email == "banu.palkani@gmail.com" {
+			if u.Role == models.RoleAdmin || email == "palkani.r@gmail.com" || email == "prooftamil@gmail.com" || email == "banu.palkani@gmail.com" || email == "contact@prooftamil.com" {
 				isAdminBypass = true
 			}
 		}

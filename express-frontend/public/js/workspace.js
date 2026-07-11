@@ -5383,6 +5383,32 @@ class WorkspaceController {
     }, 2000);
   }
 
+  // Save-status state machine. Centralised because we now surface a
+  // truthful state from every early-return path in autosave() — the
+  // previous behaviour was to skip the update entirely, leaving the
+  // static green "Saved" from workspace.ejs on screen and misleading
+  // users into thinking their tiny drafts were persisted.
+  //
+  // states: 'initial' | 'draft' | 'gated' | 'saving' | 'saved' |
+  //         'partial' | 'error' | 'session-expired' | 'login-required'
+  _setSaveState(state, label) {
+    const el = document.getElementById('save-status');
+    if (!el) return;
+    const dotColor = {
+      'initial':          'bg-gray-300',
+      'draft':            'bg-gray-300',
+      'gated':            'bg-amber-400',
+      'saving':           'bg-gray-400',
+      'saved':            'bg-green-500',
+      'partial':          'bg-yellow-500',
+      'error':            'bg-red-500',
+      'session-expired':  'bg-red-500',
+      'login-required':   'bg-red-500',
+    }[state] || 'bg-gray-300';
+    el.setAttribute('data-state', state);
+    el.innerHTML = `<span class="inline-block w-2 h-2 ${dotColor} rounded-full mr-2"></span>${label}`;
+  }
+
   async autosave() {
     if (this.autosaveAuthBlocked) {
       return;
@@ -5394,25 +5420,27 @@ class WorkspaceController {
     }
 
     const text = this.getEditorText().trim();
-    
-    // Don't save empty drafts
+
+    // Nothing to save yet — return to the neutral "Draft" state so the
+    // pill doesn't sit on a stale "Saved" from a previous session.
     if (!text || text.length < 5) {
+      this._setSaveState('draft', 'Draft');
       return;
     }
 
-    // Don't autosave via /api/submit until user has typed enough content
-    // (prevents submit spam on every small edit)
+    // Below the autosave threshold. Tell the user WHY nothing is being
+    // saved so they don't hit Export expecting a persisted draft that
+    // doesn't exist. Amber dot signals attention required.
     const wc = countWords(text);
     if (wc < MIN_SUBMIT_WORDS) {
+      const need = MIN_SUBMIT_WORDS - wc;
+      this._setSaveState('gated', `Type ${need} more word${need === 1 ? '' : 's'} to save`);
       return;
     }
-    
+
     const saveStatusEl = document.getElementById('save-status');
     const autosaveTimeEl = document.getElementById('autosave-time');
-    
-    if (saveStatusEl) {
-      saveStatusEl.innerHTML = '<span class="inline-block w-2 h-2 bg-gray-400 rounded-full mr-2"></span>Saving...';
-    }
+    this._setSaveState('saving', 'Saving…');
 
     try {
       // Backend hard limit: ~100 KB raw bytes ≈ 33,333 Tamil chars (3 bytes/char UTF-8).
@@ -5478,11 +5506,7 @@ class WorkspaceController {
         }
       }
       
-      if (saveStatusEl) {
-        saveStatusEl.innerHTML = wasTruncated
-          ? '<span class="inline-block w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>Saved (partial)'
-          : '<span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>Saved';
-      }
+      this._setSaveState(wasTruncated ? 'partial' : 'saved', wasTruncated ? 'Saved (partial)' : 'Saved');
       if (autosaveTimeEl) {
         const now = new Date();
         autosaveTimeEl.textContent = `Last saved: ${now.toLocaleTimeString()}`;
@@ -5497,23 +5521,17 @@ class WorkspaceController {
     } catch (error) {
       if (error.message === 'unauthorized') {
         this.autosaveAuthBlocked = true;
-        if (saveStatusEl) {
-          saveStatusEl.innerHTML = '<span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>Session expired';
-        }
+        this._setSaveState('session-expired', 'Session expired');
         this.showNotification('Autosave paused: please log in again.', 'warning');
         return;
       }
       if (error.message === 'login_required' || error.message === 'unauthorized') {
-        if (saveStatusEl) {
-          saveStatusEl.innerHTML = '<span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>Login required';
-        }
+        this._setSaveState('login-required', 'Login required');
         this.showNotification('Please log in to save drafts.', 'warning');
         return;
       }
       console.error('Autosave error:', error);
-      if (saveStatusEl) {
-        saveStatusEl.innerHTML = '<span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>Save failed';
-      }
+      this._setSaveState('error', 'Save failed');
     }
   }
 

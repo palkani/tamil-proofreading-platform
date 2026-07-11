@@ -173,6 +173,53 @@
     return 'ProofTamil-Document';
   }
 
+  // Ensure the draft is persisted to the server before we hand the user
+  // a downloaded file. Without this, a user could type < 5 words, see
+  // the (old, lying) "Saved" indicator, download PDF/DOCX/TXT, then
+  // navigate to /drafts and find nothing — the download was purely
+  // client-side. That was the exact bug reported.
+  //
+  // Strategy:
+  //   1. If we're not on the workspace page (no workspaceController),
+  //      return true — home/free-editor exports don't have a My Drafts
+  //      surface and never claimed to persist.
+  //   2. Force one autosave attempt (idempotent — if content already
+  //      matches the last save, backend is a no-op).
+  //   3. After the autosave, read the save-status pill's data-state to
+  //      decide what to tell the user.
+  //   4. If the state is anything other than 'saved' / 'partial', show
+  //      a confirm() explaining that the draft won't be in My Drafts.
+  //      User can still proceed with the download.
+  //
+  // Returns Promise<boolean> — true = proceed with export, false = abort.
+  async function ensureDraftPersisted() {
+    const wc = window.workspaceController;
+    if (!wc || typeof wc.autosave !== 'function') {
+      return true; // not on workspace — no drafts concept
+    }
+    try {
+      await wc.autosave();
+    } catch (e) {
+      console.warn('[DocExport] pre-export autosave threw:', e);
+    }
+    const pill = document.getElementById('save-status');
+    const state = pill && pill.getAttribute('data-state');
+    if (state === 'saved' || state === 'partial') return true;
+    // Craft a state-specific warning so the user understands WHY the
+    // download won't be backed by a saved draft.
+    let msg;
+    if (state === 'gated' || state === 'draft' || state === 'initial') {
+      msg = "This draft isn't saved to My Drafts yet — it's below the auto-save threshold (need at least 5 words of Tamil). Download the file anyway?";
+    } else if (state === 'session-expired' || state === 'login-required') {
+      msg = 'Your session expired, so the draft could not be saved to My Drafts. Download the file anyway?';
+    } else if (state === 'error') {
+      msg = "Auto-save failed, so this draft isn't in My Drafts. Download the file anyway?";
+    } else {
+      msg = "Draft may not be saved to My Drafts. Download the file anyway?";
+    }
+    return window.confirm(msg);
+  }
+
   // ── PDF export via Print dialog ───────────────────────────────────────────
   async function exportPdf() {
     const { html, text } = getEditorContent();
@@ -181,6 +228,7 @@
       return;
     }
 
+    if (!(await ensureDraftPersisted())) return;
     closeAllMenus();
     const plan = await getUserPlan();
     const isPro = plan !== 'free';
@@ -271,6 +319,7 @@
       return;
     }
 
+    if (!(await ensureDraftPersisted())) return;
     closeAllMenus();
     const title = getDocumentTitle();
     const plan = await getUserPlan();
@@ -315,6 +364,7 @@
       window.alert('Editor is empty — type or import some text before exporting.');
       return;
     }
+    if (!(await ensureDraftPersisted())) return;
     closeAllMenus();
     const title = getDocumentTitle();
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });

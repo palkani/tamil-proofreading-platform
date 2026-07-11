@@ -917,9 +917,24 @@
           <span id="plan-pill-dot" class="inline-block w-1.5 h-1.5 rounded-full" style="background:#9CA3AF;"></span>
           <span id="plan-pill-text">Loading…</span>
         </a>
-        <span id="save-status" class="text-sm text-gray-500">
-          <span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-          Saved
+        <!-- Save-status pill. Starts in the neutral "Draft" state because
+             at page-load nothing has been persisted yet — the old static
+             green "Saved" was a lie that let users assume their content
+             was safe before autosave had actually fired. workspace.js
+             transitions this element through the state machine:
+               Draft (grey)              — empty / < 5 chars, nothing to save
+               Type N more words (amber) — below MIN_SUBMIT_WORDS threshold
+               Saving… (grey)            — POST in flight
+               Saved (green)             — persisted to /api/submit
+               Saved (partial) (amber)   — persisted but truncated at 30K chars
+               Save failed (red)         — non-2xx from backend
+               Session expired (red)     — 401 (auth utils will redirect)
+             `data-state` is the machine-readable copy of the same info,
+             read by doc-export.js before triggering an export so it can
+             warn about unsaved content. -->
+        <span id="save-status" class="text-sm text-gray-500" data-state="initial">
+          <span class="inline-block w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
+          Draft
         </span>
 
         <!-- Export dropdown — moved out of the crowded formatting toolbar to
