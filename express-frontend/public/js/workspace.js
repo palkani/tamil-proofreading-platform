@@ -949,12 +949,57 @@ class WorkspaceController {
         } catch (e) {
           console.warn('[AI] Paste pre-analyze save failed:', e && e.message);
         }
+
+        // If the save produced a live submission id, subscribe to the
+        // backend's per-submission SSE stream to pick up the Gemini
+        // corrections it processes asynchronously. This uses
+        // awaitSubmissionResult() which was previously dead code —
+        // the backend was doing full Gemini processing on every
+        // save_draft:true request, storing corrections in
+        // submissions.suggestions, and broadcasting via
+        // /api/v1/submissions/{id}/stream, but no client ever
+        // subscribed. Result: the AI Assistant panel stayed empty
+        // even when the backend log said "processing_completed"
+        // with 6 valid corrections. Wiring this in makes the
+        // backend's work actually visible.
+        //
+        // We still ALSO call autoAnalyze() below as a parallel
+        // Express-side Gemini path. Whichever returns first wins
+        // (SuggestionsPanel.clearSuggestions + addSuggestions
+        // handles the second-arriving path cleanly). Redundant but
+        // resilient — if either path silently fails, the user still
+        // gets suggestions.
+        if (this.currentDraft && this.currentDraft.id) {
+          const submissionId = this.currentDraft.id;
+          const seqSnapshot = this.analysisSeq;
+          this.awaitSubmissionResult(submissionId, seqSnapshot)
+            .then((data) => {
+              // Ignore stale (user pasted again while we were waiting)
+              if (seqSnapshot !== this.analysisSeq) return;
+              // Backend SSE payload shape: {submission: {suggestions: "[...]"}, corrections: [...]}
+              let corrections = Array.isArray(data && data.corrections) ? data.corrections : null;
+              if (!corrections && data && data.submission && data.submission.suggestions) {
+                try {
+                  const parsed = JSON.parse(data.submission.suggestions);
+                  if (Array.isArray(parsed)) corrections = parsed;
+                } catch (_) { /* not JSON — ignore */ }
+              }
+              if (corrections && corrections.length > 0) {
+                console.log('[AI] Backend SSE delivered', corrections.length, 'correction(s) for submission', submissionId);
+                this._renderInlineCorrections(corrections);
+              }
+            })
+            .catch((e) => {
+              // Fine — autoAnalyze below is the fallback path. Log so
+              // future debugging isn't a mystery when only autoAnalyze
+              // is populating the panel.
+              console.warn('[AI] Backend SSE for submission', submissionId, 'did not deliver:', e && e.message);
+            });
+        }
+
         // Extend the paste-suppress window so any handleEditorChange
         // debounce (2s) triggered by the paste DOM insertion doesn't
-        // preempt the autoAnalyze we're about to start. Without this
-        // guard, the SSE stream could be aborted mid-flight, leaving
-        // the AI Assistant sidebar empty even though Gemini returned
-        // suggestions — the exact secondary bug the user reported.
+        // preempt the autoAnalyze we're about to start.
         this.pasteSuppressUntil = Date.now() + 3000;
         // Regardless of save outcome (empty / gated / failed), still
         // fire the analyze — the user pasted content and expects

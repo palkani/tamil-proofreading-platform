@@ -4,6 +4,8 @@ import (
 	"log"
 	"time"
 
+	"tamil-proofreading-platform/backend/internal/models"
+
 	"gorm.io/gorm"
 )
 
@@ -108,6 +110,24 @@ func EnsureCoreSchema(db *gorm.DB) {
 		} else {
 			log.Printf("[SCHEMA] Created idx_submissions_group_id")
 		}
+	}
+
+	// ── ai_requests ─────────────────────────────────────────────────
+	// Observability table for every Gemini call — cost + latency +
+	// outcome. Currently gated behind MigrateAIRequests which only
+	// runs when RUN_MIGRATIONS=true, so the table doesn't exist in
+	// production. The AI logger fires a warning per request:
+	//   [AI_LOG] Warning: failed to persist ai_request row (...)
+	//     ERROR: relation "ai_requests" does not exist (SQLSTATE 42P01)
+	// Same class of bug as group_id — model landed, migration
+	// skipped. AutoMigrate here creates the table + all model-
+	// declared indexes idempotently, safe to re-run.
+	if err := db.AutoMigrate(&models.AIRequest{}); err != nil {
+		log.Printf("[SCHEMA] Warning: ensure ai_requests table failed: %v", err)
+	}
+	// Companion composite index used by the admin AI-cost dashboard.
+	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_ai_requests_occurred_status ON ai_requests (occurred_at DESC, status)`).Error; err != nil {
+		log.Printf("[SCHEMA] Warning: ensure idx_ai_requests_occurred_status failed: %v", err)
 	}
 
 	log.Printf("[SCHEMA] Core-schema check complete in %v (added=%d columns)", time.Since(start), missing)
