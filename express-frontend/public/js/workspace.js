@@ -41,11 +41,27 @@ const FREE_TIER_MAX_WORDS  = 200;  // max words per analysis for free/anonymous 
 const ANON_DAILY_LIMIT     = 10;   // AI checks/day before signing in
 const FREE_USER_DAILY_LIMIT = 30;  // AI checks/day for signed-in free-plan users
 
-// Resolved from window globals set by workspace.ejs (USER_LOGGED_IN, USER_EMAIL, USER_PLAN)
-// USER_PLAN is updated client-side after fetching /api/v1/me
-let _freeTierUserPlan = 'free';
+// Pro status source-of-truth. Historically this read `data.user.subscription`
+// from /api/v1/me — the RAW subscription enum. That returns "free" for
+// admin users (contact@prooftamil.com et al.) who are effectively Pro
+// via PremiumOverride / email allowlist but have never paid. Result: admins
+// saw "16 AI checks left today" in the workspace even though they should
+// have unlimited access. Same category error the Export dropdown had
+// (fixed in commit c16dc72).
+//
+// Correct signal: is_pro from /api/v1/billing/usage/today, which the Go
+// backend computes with FULL awareness of paid subscription + admin
+// overrides + email allowlist + global-premium flag. That's the same
+// endpoint the Pro pill in the header reads, so this keeps every "am I
+// Pro?" surface in the workspace consistent.
+let _isProCache = null; // null = not resolved yet, true/false = confirmed
+let _freeTierUserPlan = 'free'; // kept for backward-compat with other readers
 
 function _isProUser() {
+  // Cached from /api/v1/billing/usage/today (fetched below). Falls through
+  // to the plan-enum check only if the fetch hasn't landed yet OR the
+  // user is anonymous.
+  if (_isProCache !== null) return _isProCache;
   const plan = (window.USER_PLAN || _freeTierUserPlan || '').toLowerCase();
   return plan === 'pro' || plan === 'enterprise' || plan === 'basic';
 }
@@ -54,18 +70,29 @@ function _isLoggedIn() {
   return window.USER_LOGGED_IN === true;
 }
 
-// Fetch the signed-in user's subscription plan from the backend (once on page load)
+// Resolve the user's true Pro status once on page load. Uses the same
+// endpoint the Pro pill reads so every UI element that gates on Pro
+// (word-limit indicator, quota bar, export unlock) sees a consistent
+// answer.
 (function _fetchUserPlan() {
-  if (!window.USER_LOGGED_IN) return;
-  fetch('/api/v1/me', { credentials: 'include' })
+  if (!window.USER_LOGGED_IN) {
+    _isProCache = false;
+    return;
+  }
+  fetch('/api/v1/billing/usage/today', { credentials: 'include' })
     .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(data) {
-      if (data && data.user && data.user.subscription) {
-        _freeTierUserPlan = data.user.subscription;
-        window.USER_PLAN  = data.user.subscription;
-        // Show/hide word limit indicator based on resolved plan
-        _updateWordLimitUI();
-      }
+    .then(function(usage) {
+      if (!usage) return;
+      // is_pro from the backend already accounts for paid subs + admin
+      // overrides + email allowlist. Trust it.
+      _isProCache = !!usage.is_pro;
+      // Keep the legacy globals populated for any other readers still
+      // consulting them (doc-export.js migrated separately in c16dc72).
+      window.USER_PLAN = usage.is_pro ? 'pro' : 'free';
+      _freeTierUserPlan = window.USER_PLAN;
+      // Repaint plan-dependent UI now that we know the truth.
+      try { _updateWordLimitUI(); } catch (_e) {}
+      try { _updateQuotaBar(); } catch (_e) {}
     })
     .catch(function() {});
 })();
