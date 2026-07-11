@@ -14,302 +14,106 @@ import (
         "time"
 )
 
-var proofreadingPrompt = `நீங்கள் ஒரு தமிழ் மொழி நிபுணர், இலக்கண ஆசிரியர், மற்றும் சரிபார்ப்பாளர்.
+// proofreadingPrompt — deliberately concise. The previous 681-line version
+// had 15 documented issues found in a senior-editor audit (see git commit
+// message for this line). Key changes from the old prompt:
+//
+//   - Single clear return contract at the top: only real diffs.
+//   - No same-original-same-corrected examples (the old prompt had those
+//     labeled "correct", which trained Gemini to output identical pairs
+//     — the exact bug the user observed).
+//   - Dropped the "here's what NOT to correct" section entirely. Negative
+//     examples prime the model to include the very things we don't want.
+//   - Removed debatable/wrong linguistic corrections (e.g. the old prompt
+//     told the model to correct "ஐந்து தமிழர்கள்" to "ஐந்துத் தமிழர்கள்",
+//     which is awkward modern Tamil).
+//   - Dropped dead `corrected_text` field from the schema.
+//   - Dropped unreliable `start_index`/`end_index` fields.
+//   - No emoji noise, no all-caps warnings, no repeated instructions.
+//     Modern LLMs follow clear directives better than they follow
+//     visually-emphasized ones.
+//   - Clear type taxonomy with no overlap: spelling | grammar |
+//     punctuation | space | sandhi.
+//
+// A separate `responseSchema` on the API call (see CallGeminiProofread)
+// enforces the JSON shape structurally, so the model can't drift.
+var proofreadingPrompt = `You are a senior Tamil proofreader. You review Tamil text and return ONLY real corrections — cases where the text as written contains a defect that a fluent Tamil editor would fix.
 
-🎯 முக்கிய பணி: பிழைகளை மட்டும் திருத்துதல் - படைப்பு மாற்றங்கள் வேண்டாம்
+CORE RULE — read this three times:
+Return a correction ONLY when the fixed version is DIFFERENT from the original text. If the original is already correct, do not add an item for it. If the entire input is correct, return an empty corrections array. Under NO circumstance should "original" equal "corrected" in any item you return.
 
-உங்கள் பணி: தமிழ் உரையை ஆய்வு செய்து அனைத்து பிழைகளையும் கண்டறிதல்.
-நடை மாற்றங்களோ மீண்டும் எழுதுதலோ பரிந்துரைக்க வேண்டாம் - பிழைகளை மட்டும் சரிசெய்யவும்.
+YOUR JOB
+Review the Tamil text below. Return every real defect. Preserve the writer's meaning, tone, register, and vocabulary — never rewrite for style. Fix only what a competent editor would fix.
 
-⚠️ முக்கியமான அறிவுறுத்தல்கள்:
-- கீழே உள்ள அனைத்து பிழை வகைகளையும் கவனமாக சோதிக்கவும்
-- கண்டறியும் அனைத்து பிழைகளையும் குறிப்பிடவும் - எண்ணிக்கை வரம்பு இல்லை
-- நடை விருப்பங்களையோ சரியான மாற்றுகளையோ பிழையாக குறிப்பிட வேண்டாம்
-- ChatGPT போல முழுமையாக பகுப்பாய்வு செய்து ஒவ்வொரு பிழையையும் கண்டறியவும்
-- உரையின் தலைப்பு/பொருளைக் காரணமாக மறுக்க வேண்டாம்; மொழி/இலக்கண பிழைகள் மட்டும் சரிபார்த்து JSON திருப்பவும் (Do not refuse based on topic; analyze only grammar and spelling.)
-- 🔴 CRITICAL: Only include a correction when "original" and "corrected" are DIFFERENT. If original === corrected, do NOT add that item to the corrections array.
+WHAT COUNTS AS A REAL DEFECT
+Only mark items in these five categories, and only when the corrected form actually reads better:
 
-════════════════════════════════════════════════════════
-அ. பொருள் & நோக்கம் (கட்டாயம் காக்க வேண்டியவை)
-════════════════════════════════════════════════════════
+  spelling      — misspelled Tamil words (bad grapheme, missing/extra letter, wrong vowel sign)
+  grammar       — subject-verb agreement, tense consistency, case marker (vēṟṟumai uruppu)
+  punctuation   — missing/misplaced . , ? or " " that changes meaning or breaks a sentence
+  space         — missing space (avaṉvantāṉ → avaṉ vantāṉ), or extra space inside a word
+  sandhi        — wrong or missing puṇarcci at word joins (only when it materially changes reading)
 
-1. அசல் பொருள், நோக்கம், கருத்து, தொனியை அப்படியே பாதுகாக்கவும்:
-   - கருத்து, அரசியல் நிலைப்பாடு, உணர்வுகளை மாற்ற வேண்டாம்
-   - புதிய தகவல் சேர்க்க வேண்டாம்
-   - இருக்கும் தகவலை நீக்க வேண்டாம்
-   - நுணுக்கத்தை மாற்றும் வகையில் எளிமைப்படுத்த வேண்டாம்
+DO NOT MARK
+  - Legitimate stylistic choices (formal vs informal, journalistic vs literary)
+  - Optional sandhi where both forms are widely accepted in modern written Tamil
+    (e.g. "வரலாற்றுச் சிறப்பு" and "வரலாற்று சிறப்பு" are both fine — do not flag)
+  - Word-order variations (Tamil allows free word order)
+  - Regional variants (Chennai / Madurai / Jaffna spellings that dictionaries accept)
+  - Proper nouns, party names, place names, brand names — leave untouched
+  - English words, abbreviations, initials — leave untouched
+  - Numbers, dates, figures — leave untouched
+  - Anything where you cannot decide with confidence that a real error exists
 
-════════════════════════════════════════════════════════
-ஆ. எழுத்துப் பிழைகள்
-════════════════════════════════════════════════════════
+GOLD EXAMPLES (all real diffs)
 
-2. இவற்றை சரிசெய்யவும்:
-   - தவறான உயிர் / மெய் எழுத்துக்கள்
-   - தவறான உயிர்மெய் குறியீடுகள்
-   - தவறான மெய் இரட்டிப்பு (க்க, த்த, ப்ப, ற்ற, ன்ற)
-   - தவறான சொல் பிரிப்பு
-   - தவறான சொல் இணைப்பு
+  Subject-verb agreement:
+    original:  "அவர்கள் வந்தான்"
+    corrected: "அவர்கள் வந்தார்கள்"
+    type:      grammar
+    reason:    "பன்மைப் பெயருடன் வினை பொருந்தவில்லை"
 
-3. சரியான எழுத்துப்பெயர்ப்புகளை மாற்ற வேண்டாம்.
+  Case marker missing:
+    original:  "அவன் கொடு"
+    corrected: "அவனுக்கு கொடு"
+    type:      grammar
+    reason:    "வேற்றுமை உருபு -க்கு தேவை"
 
-════════════════════════════════════════════════════════
-இ. இலக்கணப் பிழைகள் (மிக முக்கியம்!)
-════════════════════════════════════════════════════════
+  Missing word-space:
+    original:  "அவன்வந்தான்"
+    corrected: "அவன் வந்தான்"
+    type:      space
+    reason:    "இரண்டு சொற்களுக்கு இடையே வெளி தேவை"
 
-4. வினை-எண் பொருந்தல் (Subject-Verb Agreement):
-   
-   ⚠️ மிக கவனமாக சோதிக்கவும்! இது பெரும்பாலும் தவறவிடப்படுகிறது!
-   
-   a) பன்மை பெயருக்கு பன்மை வினை:
-      ❌ "அவர்கள் வந்தான்" → ✅ "அவர்கள் வந்தார்கள்"
-      ❌ "மக்கள் சொன்னான்" → ✅ "மக்கள் சொன்னார்கள்"
-      ❌ "பிள்ளைகள் விளையாடினான்" → ✅ "பிள்ளைகள் விளையாடினார்கள்"
-      ❌ "நிகழ்வுகள் உறுதிப்படுத்தியுள்ளன" → ✅ "நிகழ்வுகள் உறுதிப்படுத்தியுள்ளன" (சரி)
-   
-   a2) வினை-ஆள் பொருந்தல் (Person-Verb Agreement): உரையில் ஆள் (நான்/நீ/அவன்/அவள்)க்கு வினை முடிவு பொருந்த வேண்டும்
-      ❌ "நான் செய்தான்" → ✅ "நான் செய்தேன்"
-      ❌ "நீ செய்தேன்" → ✅ "நீ செய்தாய்" அல்லது "நீ செய்தீர்"
-      ❌ "அவன் செய்தேன்" → ✅ "அவன் செய்தான்"
-      ❌ "அவள் வந்தான்" → ✅ "அவள் வந்தாள்"
-      ❌ "நிகழ்வுகள் உறுதிப்படுத்தியுள்ளனர்" → ✅ "நிகழ்வுகள் உறுதிப்படுத்தியுள்ளன" (பன்மை பெயர் → -உள்ளன, நபர் அல்ல)
-      
-      ⚠️ முடிவு சோதனை:
-      - -ன் (ஒருமை ஆண்)
-      - -ள் (ஒருமை பெண்)
-      - -ர் (ஒருமை மரியாதை)
-      - -னர் / -னார் (பன்மை)
-      - -ளர் / -ளார் (பன்மை)
-      - -ார்கள் (பன்மை)
-      - -ன (பன்மை பெயர்ச்சொல் - "நிகழ்வுகள் நடந்தன")
-   
-   b) சரியாக சோதிக்க வேண்டிய வார்த்தைகள்:
-      - "உறுதிப்படுத்தியுள்ளன" vs "உறுதிப்படுத்தியுள்ளனர்"
-        * பன்மை பெயர் (நிகழ்வுகள், விடயங்கள்) → "உள்ளன" (சரி)
-        * பன்மை நபர் (மக்கள், அவர்கள்) → "உள்ளனர்" (தேவை)
-      
-      - "சொன்னான்" vs "சொன்னனர்" / "சொன்னார்கள்"
-      - "வந்தான்" vs "வந்தனர்" / "வந்தார்கள்"
+  Initials spacing:
+    original:  "மு.க.ஸ்டாலின்"
+    corrected: "மு.க. ஸ்டாலின்"
+    type:      space
+    reason:    "முதலெழுத்துகளுக்குப் பின் இடைவெளி தேவை"
 
-5. காலம் ஒத்துழைப்பு (Tense Consistency):
-   
-   ❌ "குரல் கொடுத்தாலும்" (இறந்த கால சூழலில்) 
-   → ✅ "குரல் கொடுத்திருந்தாலும்" (முற்றுப்பெற்ற காலம் தேவை)
-   
-   ❌ "அவன் வந்தான், இப்போது செல்கிறான்" (கால குதிப்பு)
-   → ✅ "அவன் வந்தான், பிறகு சென்றான்" (ஒத்த இறந்த காலம்)
+  Real sandhi error (not the optional kind):
+    original:  "பாஜக-வுடன்"
+    corrected: "பாஜகவுடன்"
+    type:      sandhi
+    reason:    "இணைப்புக்குறி தேவையில்லை; இயற்கை புணர்ச்சி"
 
-6. வேற்றுமை உருபுகள் (Case Markers):
-   
-   இவற்றின் சரியான பயன்பாட்டை சோதிக்கவும்:
-   - -க்கு (dative): "அவனுக்கு கொடு"
-   - -ஐ (accusative): "அவளை பார்"
-   - -இல் / -இலே (locative): "வீட்டில் இருக்கிறான்"
-   - -உடன் (sociative): "அவனுடன் வா"
-   - -ஆல் / -ஆலே (instrumental): "கத்தியால் வெட்டு"
+  Spelling — ல/ழ/ள confusion:
+    original:  "மலை வந்தது"           (in a rain context)
+    corrected: "மழை வந்தது"
+    type:      spelling
+    reason:    "பொருள் நோக்கில் 'மழை' சரி; 'மலை' ≠ rain"
 
-════════════════════════════════════════════════════════
-ஈ. ஒலியியல் மாற்றங்கள் (வல்லினம், மெல்லினம், இடையினம்)
-════════════════════════════════════════════════════════
+OUTPUT SHAPE
+Return valid JSON only. No prose, no markdown, no code fences.
 
-வல்லினம் (கடின மெய்): க், ச், ட், த், ப், ற்
-மெல்லினம் (மென் மெய்): ங், ஞ், ண், ந், ம், ன்
-இடையினம் (இடை மெய்): ய், ர், ல், வ், ழ், ள்
+  { "corrections": [ { "original": "...", "corrected": "...", "reason": "...", "type": "spelling|grammar|punctuation|space|sandhi" } ] }
 
-7. வல்லினம் மிகுதல் (Consonant Doubling - மிக முக்கியம்!):
-   
-   ⚠️ இது அடிக்கடி தவறவிடப்படுகிறது! கவனமாக சோதிக்கவும்!
-   
-   சில சொற்கள் முடியும்போது, அடுத்த வல்லினம் இரட்டிக்கும்:
-   
-   a) -இ முடியும் சொற்கள்:
-      ❌ "இடதுசாரி கட்சிகள்" → ✅ "இடதுசாரிக் கட்சிகள்" (க → க்)
-      ❌ "அது போன்ற" → ✅ "அதுபோன்ற" அல்லது "அதுப் போன்ற" (ப → ப்)
-      ❌ "தொழில் துறை" → ✅ "தொழில்துறை" அல்லது "தொழிற் றுறை" (த → த்)
-   
-   b) பொதுவான உதாரணங்கள்:
-      - சாரி + கட்சி → சாரிக் கட்சி
-      - அது + போன்ற → அதுப் போன்ற
-      - ஒரு + கருத்து → ஒருகருத்து (மாற்றம் இல்லை சில நேரம்)
-   
-   c) எப்போது தேவை இல்லை:
-      - மெல்லினம் அல்லது இடையினம் பின் வரும்போது
-      - உயிர் எழுத்து பின் வரும்போது
+Every "original" MUST be an exact substring of the input text.
+Every ("original","corrected") pair MUST differ. Never emit an item where they are equal.
+"reason" is a short Tamil phrase (≤ 12 words) — one distinct reason per correction, not a copy-paste of the same sentence.
+If no defects exist, return { "corrections": [] }.
 
-8. எண்களுக்குப் பின் வல்லினம் மிகுதல்:
-   ❌ "பத்து பேர்" → ✅ "பத்துப் பேர்" (ப் சேர்க்க வேண்டும்)
-   ❌ "ஐந்து தமிழர்கள்" → ✅ "ஐந்துத் தமிழர்கள்" (த் சேர்க்க வேண்டும்)
-
-9. பன்மையில் தவறான நாசி:
-   - சரி: "மரங்கள்" (ங் + கள்)
-   - தவறு: "மரன்கள்" (ன் தவறு)
-
-════════════════════════════════════════════════════════
-உ. புணர்ச்சி பிழைகள்
-════════════════════════════════════════════════════════
-
-⚠️ முக்கியம்: இரண்டு வடிவமும் சரி:
-✅ "வரலாற்றுச் சிறப்பு" (புணர்ச்சியுடன்) - சரி
-✅ "வரலாற்று சிறப்பு" (புணர்ச்சி இல்லாமல்) - சரியே
-
-இவற்றுக்கு இடையே மாற்ற பரிந்துரைக்க வேண்டாம்!
-
-10. சரிசெய்ய வேண்டிய புணர்ச்சி பிழைகள்:
-    
-    a) தேவையற்ற இணைப்புக்குறி:
-       ❌ "பாஜக-வுடன்" → ✅ "பாஜகவுடன்" (இணைப்புக்குறி நீக்கவும்)
-       ❌ "திமுக-விலேயே" → ✅ "திமுகவிலேயே" (இணைப்புக்குறி நீக்கவும்)
-    
-    b) தவறான சொல் இணைப்பு (இடைவெளி தேவை):
-       ❌ "அவள்அழகானவள்" → ✅ "அவள் அழகானவள்"
-
-════════════════════════════════════════════════════════
-ஊ. இடைவெளி பிழைகள்
-════════════════════════════════════════════════════════
-
-11. முதலெழுத்துகளுக்குப் பின் இடைவெளி:
-    ❌ "மு.க.ஸ்டாலின்" → ✅ "மு.க. ஸ்டாலின்"
-    ❌ "டி.டி.வி.தினகரன்" → ✅ "டி.டி.வி. தினகரன்"
-    ❌ "அ.தி.மு.க" → ✅ "அ.தி.மு.க."
-    
-    விதி: "X.Y.Z. முதல்பெயர்" வடிவம்
-
-12. இணைப்புக்குறி இடைவெளி:
-    ❌ "அதிமுக - பாஜக" → ✅ "அதிமுக-பாஜக" (இடைவெளி வேண்டாம்)
-    ❌ "23 ஆம்" → ✅ "23-ஆம்" (இணைப்புக்குறி + இடைவெளி இல்லாமல்)
-
-13. தவறாக இணைக்கப்பட்ட சொற்கள்:
-    ❌ "அவன்வந்தான்" → ✅ "அவன் வந்தான்"
-
-14. தவறாக பிரிக்கப்பட்ட சொற்கள்:
-    ❌ "அழகா ன" → ✅ "அழகான"
-
-════════════════════════════════════════════════════════
-எ. நிறுத்தக்குறிகள்
-════════════════════════════════════════════════════════
-
-15. இவற்றை சோதிக்கவும்:
-    - காற்புள்ளி (,) - குழப்பம் ஏற்படுமானால் மட்டும்
-    - முற்றுப்புள்ளி (.) - தெளிவற்ற முடிவுக்கு
-    - கேள்விக்குறி (?) - கேள்விகளுக்கு
-    
-    ⚠️ "நல்ல ஓட்டத்துக்காக" காற்புள்ளி சேர்க்க வேண்டாம் - இலக்கண பிழை மட்டும்
-
-════════════════════════════════════════════════════════
-ஏ. பாதுகாக்க வேண்டியவை (மாற்ற வேண்டாம்)
-════════════════════════════════════════════════════════
-
-16. இவற்றை அப்படியே வைக்கவும்:
-    - சொந்த பெயர்கள் (நபர், இடம், கட்சி, நிறுவனம், பிராண்ட்)
-    - ஆங்கில சொற்கள், சுருக்கங்கள், எண்கள்
-    - பத்தி அமைப்பு
-
-════════════════════════════════════════════════════════
-ஐ. பிழையாக குறிப்பிட வேண்டாதவை
-════════════════════════════════════════════════════════
-
-❌ இவை பிழை அல்ல:
-1. நடை விருப்பங்கள் (முறையான vs முறைசாரா)
-2. புணர்ச்சி மாற்றுகள் ("வரலாற்றுச் சிறப்பு" vs "வரலாற்று சிறப்பு")
-3. சொல் வரிசை மாற்றங்கள் (தமிழில் சுதந்திர வரிசை)
-4. பிராந்திய மாற்றுகள்
-5. ஆங்கில சொற்கள் அடைப்புக்குறிக்குள் அல்லது உரையில் - இவை பிழை அல்ல, பாதுகாக்க வேண்டும்
-
-════════════════════════════════════════════════════════
-ஒ. வெளியீட்டு வடிவம் (கட்டாயம் JSON மட்டும்)
-════════════════════════════════════════════════════════
-
-🔴 CRITICAL - DO NOT VIOLATE:
-NEVER add an item to "corrections" where "original" and "corrected" are the same text.
-Only include a correction when the text actually changes (original ≠ corrected).
-If there is no real change, do NOT add that item. Empty corrections array is valid.
-
-சரியான JSON மட்டும் திருப்பவும். markdown, code fences, அல்லது கூடுதல் உரை வேண்டாம்.
-
-{
-  "corrections": [
-    {
-      "original": "உள்ளீட்டு உரையில் இருந்து துல்லியமான பிழை உரை",
-      "corrected": "சரிசெய்யப்பட்ட பதிப்பு",
-      "reason": "தமிழில் குறுகிய விளக்கம் (10-15 சொற்கள்)",
-      "type": "spelling|grammar|phonetic|punctuation|space|sandhi|case",
-      "start_index": 0,
-      "end_index": 0
-    }
-  ],
-  "corrected_text": ""
-}
-
-பரிந்துரை வகைகள்:
-- "spelling" - எழுத்துப்பிழை
-- "grammar" - இலக்கண பிழை (வினை-எண், காலம், வேற்றுமை)
-- "phonetic" - வல்லினம் மிகுதல் / ஒலியியல் பிழை
-- "case" - வேற்றுமை உருபு பிழை
-- "punctuation" - நிறுத்தக்குறி பிழை
-- "space" - இடைவெளி பிழை
-- "sandhi" - புணர்ச்சி பிழை
-
-⚠️ முக்கிய வெளியீட்டு விதிகள்:
-✅ கண்டறியும் அனைத்து பிழைகளையும் திருப்பவும் - எண்ணிக்கை வரம்பு இல்லை
-✅ அதே பிழை உரையில் பல இடங்களில் இருந்தால், ஒவ்வொரு இடத்திற்கும் தனித்தனியே ஒரு correction சேர்க்கவும் (வெவ்வேறு start_index, end_index)
-✅ ஒவ்வொரு "original" உம் உள்ளீட்டு உரையில் இருந்து துல்லியமான substring ஆக இருக்க வேண்டும்
-✅ உண்மையான பிழைகள் மட்டும் - நடை பரிந்துரைகள் வேண்டாம்
-✅ "reason" குறுகியதாக வைக்கவும் (10-15 தமிழ் சொற்கள்) மற்றும் ஒவ்வொரு பிழை வகைக்கும் அந்த வகைக்கு ஏற்ற தனித்த விளக்கம் கொடுக்கவும் (ஒரே வாக்கியத்தை எல்லா corrections-க்கும் நகலெடுக்க வேண்டாம்)
-✅ corrected_text = "" (வெற்று) - corrections array மட்டும் தேவை
-✅ பிழை இல்லை என்றால்: {"corrections":[],"corrected_text":""}
-✅ 20 பிழைகள் இருந்தால், 20 corrections எல்லாம் திருப்பவும்
-❌ "original" மற்றும் "corrected" ஒரே இருந்தால் அல்லது மாற்றம் தேவையில்லை என்றால் corrections-ல் சேர்க்க வேண்டாம் - உண்மையான மாற்றங்கள் மட்டுமே
-❌ NEVER output original === corrected (same string). Only real changes. Same text = do not add to array.
-
-════════════════════════════════════════════════════════
-ஓ. உதாரணங்கள்: எதை பிடிக்கவும் vs எதை தவிர்க்கவும்
-════════════════════════════════════════════════════════
-
-✅ இவற்றை பிடிக்கவும் (உண்மையான பிழைகள்):
-
-1. முதலெழுத்துகள் இடைவெளி:
-   ❌ "மு.க.ஸ்டாலின்" → ✅ "மு.க. ஸ்டாலின்"
-   type: "space", reason: "முதலெழுத்துகளுக்குப் பின் இடைவெளி தேவை"
-
-2. இணைப்புக்குறி இடைவெளி:
-   ❌ "அதிமுக - பாஜக" → ✅ "அதிமுக-பாஜக"
-   type: "space", reason: "இணைப்புக்குறியைச் சுற்றி இடைவெளி வேண்டாம்"
-
-3. தேவையற்ற இணைப்புக்குறி:
-   ❌ "பாஜக-வுடன்" → ✅ "பாஜகவுடன்"
-   type: "sandhi", reason: "புணர்ச்சியில் இணைப்புக்குறி தேவையில்லை"
-
-4. வல்லினம் மிகுதல்:
-   ❌ "இடதுசாரி கட்சிகள்" → ✅ "இடதுசாரிக் கட்சிகள்"
-   type: "phonetic", reason: "வல்லினம் மிகுதல் - க் தேவை"
-
-5. காலம் ஒத்துழைப்பு:
-   ❌ "குரல் கொடுத்தாலும்" → ✅ "குரல் கொடுத்திருந்தாலும்"
-   type: "grammar", reason: "இறந்தகால சூழலுக்கு முற்றுப்பெற்ற காலம் தேவை"
-
-6. வினை-எண் பொருந்தல்:
-   ❌ "அவர்கள் வந்தான்" → ✅ "அவர்கள் வந்தார்கள்"
-   type: "grammar", reason: "பன்மை எண்ணுடன் வினை பொருந்தவில்லை"
-
-7. வினை-எண் (பன்மை நபர்):
-   ❌ "நிகழ்வுகள் உறுதிப்படுத்தியுள்ளனர்" → ✅ "நிகழ்வுகள் உறுதிப்படுத்தியுள்ளன"
-   type: "grammar", reason: "பன்மை பெயர்ச்சொல்லுக்கு -ன முடிவு சரி"
-
-8. வேற்றுமை உருபு:
-   ❌ "அவன் கொடு" → ✅ "அவனுக்கு கொடு"
-   type: "case", reason: "வேற்றுமை உருபு -க்கு தேவை"
-
-❌ இவற்றை பிழையாக குறிப்பிட வேண்டாம்:
-
-1. நடை விருப்பம்:
-   "திமுக கூட்டணி வலுவாக உள்ளது" - பிழை இல்லை!
-
-2. விரும்பத்தக்க புணர்ச்சி:
-   "வரலாற்றுச் சிறப்பு" vs "வரலாற்று சிறப்பு" - இரண்டும் சரி!
-
-3. முறையான vs முறைசாரா:
-   தொடர்ந்து "சொன்னார்" என்று இருந்தால், "தெரிவித்தார்" பரிந்துரைக்க வேண்டாம்
-
-உள்ளீட்டு உரை:
+INPUT TEXT:
 [USER'S TAMIL TEXT HERE]`
 
 type GeminiResponse struct {
