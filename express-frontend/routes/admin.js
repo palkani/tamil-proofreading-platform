@@ -95,6 +95,27 @@ router.get('/ai-requests', requireAdmin, (req, res) => {
   });
 });
 
+// Paginated list of every user with AI-request activity. Overview page
+// only shows top 10 by cost; this is the "who's using how much" full
+// list used to spot outliers or audit specific accounts.
+router.get('/ai-requests/users', requireAdmin, (req, res) => {
+  res.render('pages/admin/ai-requests-users', {
+    title: 'Admin · AI requests by user',
+    ...commonLocals(req, 'ai-requests'),
+  });
+});
+
+// Single-user drill-down — every call that user made in the window,
+// with model/status/latency/cost. Reached by clicking a row in the
+// users list or the top-users panel on the overview.
+router.get('/ai-requests/user/:id', requireAdmin, (req, res) => {
+  res.render('pages/admin/ai-requests-user', {
+    title: 'Admin · AI requests · user #' + req.params.id,
+    ...commonLocals(req, 'ai-requests'),
+    userId: req.params.id,
+  });
+});
+
 router.get('/blog-generator', requireAdmin, (req, res) => {
   res.render('pages/admin/blog-generator', {
     title: 'Admin · Blog generator',

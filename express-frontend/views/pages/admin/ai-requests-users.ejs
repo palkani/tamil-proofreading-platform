@@ -1,0 +1,154 @@
+<%- include('../../partials/admin/layout-header') %>
+
+<div class="mx-auto max-w-6xl space-y-4">
+
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-900">AI requests · by user</h2>
+      <p class="text-sm text-slate-500">Every user who made an AI request in the window, sorted by cost. Click a row to drill down into that user's individual calls.</p>
+    </div>
+    <a href="/admin/ai-requests" class="text-sm text-blue-600 hover:underline">← Back to overview</a>
+  </div>
+
+  <!-- Controls -->
+  <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+    <div class="flex items-center gap-2">
+      <span class="text-xs uppercase text-slate-500 mr-1">Window</span>
+      <div class="flex rounded-md border border-slate-300 overflow-hidden text-xs" role="tablist">
+        <button type="button" class="win-btn px-3 py-1.5 font-medium border-r border-slate-300 bg-white hover:bg-slate-50" data-window="1h">1h</button>
+        <button type="button" class="win-btn px-3 py-1.5 font-medium border-r border-slate-300 bg-slate-900 text-white" data-window="24h">24h</button>
+        <button type="button" class="win-btn px-3 py-1.5 font-medium border-r border-slate-300 bg-white hover:bg-slate-50" data-window="7d">7d</button>
+        <button type="button" class="win-btn px-3 py-1.5 font-medium bg-white hover:bg-slate-50" data-window="30d">30d</button>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-xs uppercase text-slate-500 mr-1">Sort</span>
+      <select id="sort-select" class="text-xs rounded-md border border-slate-300 bg-white px-2 py-1.5">
+        <option value="cost">Cost (high → low)</option>
+        <option value="requests">Requests (many → few)</option>
+        <option value="email">Email (A → Z)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Summary line -->
+  <div class="text-xs text-slate-500" id="page-summary">Loading…</div>
+
+  <!-- Table -->
+  <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+        <tr>
+          <th class="px-4 py-2.5 text-left">Email</th>
+          <th class="px-4 py-2.5 text-right">Requests</th>
+          <th class="px-4 py-2.5 text-right">Cache hits</th>
+          <th class="px-4 py-2.5 text-right">Errors</th>
+          <th class="px-4 py-2.5 text-right">Input tokens</th>
+          <th class="px-4 py-2.5 text-right">Output tokens</th>
+          <th class="px-4 py-2.5 text-right">Cost</th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody" class="divide-y divide-slate-100">
+        <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-slate-400">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div class="flex items-center justify-between text-xs text-slate-500">
+    <div id="page-info">—</div>
+    <div class="flex items-center gap-2">
+      <button type="button" id="prev-btn" class="rounded border border-slate-300 bg-white px-3 py-1 hover:bg-slate-50 disabled:opacity-40" disabled>Previous</button>
+      <button type="button" id="next-btn" class="rounded border border-slate-300 bg-white px-3 py-1 hover:bg-slate-50 disabled:opacity-40" disabled>Next</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function() {
+  const state = { window: '24h', sort: 'cost', limit: 50, offset: 0, total: 0 };
+
+  function fmtN(n) { return Number(n || 0).toLocaleString(); }
+  function esc(s) { return String(s || '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+  async function load() {
+    document.getElementById('users-tbody').innerHTML =
+      '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-slate-400">Loading…</td></tr>';
+    const url = '/admin/api/ai-requests/users?window=' + state.window +
+      '&limit=' + state.limit + '&offset=' + state.offset + '&sort=' + state.sort;
+    let data;
+    try {
+      const r = await fetch(url, { credentials: 'include' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      data = await r.json();
+    } catch (e) {
+      document.getElementById('users-tbody').innerHTML =
+        '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-red-500">Failed to load: ' + esc(e.message) + '</td></tr>';
+      return;
+    }
+
+    state.total = data.total_users || 0;
+    document.getElementById('page-summary').textContent =
+      state.total + ' unique users in the last ' + state.window + '. Showing ' + data.users.length + '.';
+
+    const tbody = document.getElementById('users-tbody');
+    if (!data.users || data.users.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-slate-400">No user activity in this window.</td></tr>';
+    } else {
+      tbody.innerHTML = data.users.map((u) => `
+        <tr class="hover:bg-slate-50 cursor-pointer" onclick="location.href='/admin/ai-requests/user/${u.user_id}?window=${state.window}'">
+          <td class="px-4 py-2.5 text-slate-900">${esc(u.email || '(unknown)')}
+            <span class="ml-1 text-xs text-slate-400">#${u.user_id}</span>
+          </td>
+          <td class="px-4 py-2.5 text-right text-slate-700">${fmtN(u.requests)}</td>
+          <td class="px-4 py-2.5 text-right text-slate-500">${fmtN(u.cache_hits)}</td>
+          <td class="px-4 py-2.5 text-right ${u.errors > 0 ? 'text-red-600 font-medium' : 'text-slate-500'}">${fmtN(u.errors)}</td>
+          <td class="px-4 py-2.5 text-right text-slate-500 tabular-nums">${fmtN(u.input_tokens)}</td>
+          <td class="px-4 py-2.5 text-right text-slate-500 tabular-nums">${fmtN(u.output_tokens)}</td>
+          <td class="px-4 py-2.5 text-right text-slate-900 font-medium tabular-nums">${esc(u.cost_usd)}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Pagination controls
+    document.getElementById('page-info').textContent =
+      'Rows ' + (state.offset + 1) + '–' + Math.min(state.offset + state.limit, state.total) + ' of ' + state.total;
+    document.getElementById('prev-btn').disabled = state.offset === 0;
+    document.getElementById('next-btn').disabled = state.offset + state.limit >= state.total;
+  }
+
+  // Wire window switcher
+  document.querySelectorAll('.win-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.window = btn.dataset.window;
+      state.offset = 0;
+      document.querySelectorAll('.win-btn').forEach((b) => {
+        b.classList.remove('bg-slate-900', 'text-white');
+        b.classList.add('bg-white', 'hover:bg-slate-50');
+      });
+      btn.classList.remove('bg-white', 'hover:bg-slate-50');
+      btn.classList.add('bg-slate-900', 'text-white');
+      load();
+    });
+  });
+
+  document.getElementById('sort-select').addEventListener('change', (e) => {
+    state.sort = e.target.value;
+    state.offset = 0;
+    load();
+  });
+  document.getElementById('prev-btn').addEventListener('click', () => {
+    state.offset = Math.max(0, state.offset - state.limit);
+    load();
+  });
+  document.getElementById('next-btn').addEventListener('click', () => {
+    state.offset += state.limit;
+    load();
+  });
+
+  load();
+})();
+</script>
+
+<%- include('../../partials/admin/layout-footer') %>

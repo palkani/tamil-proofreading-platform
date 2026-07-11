@@ -516,6 +516,8 @@ func main() {
 			admin.POST("/ops/run-reconciliation", h.AdminRunReconciliation)
 			admin.GET("/overview", h.AdminGetOverview)
 			admin.GET("/ai-requests/summary", h.AdminGetAIRequestsSummary)
+			admin.GET("/ai-requests/users", h.AdminListAIRequestUsers)
+			admin.GET("/ai-requests/user/:id", h.AdminGetAIRequestUser)
 			admin.GET("/issues", h.AdminGetIssues)
 			admin.GET("/activity", h.AdminGetActivity)
 			admin.POST("/broadcasts/dry-run", h.AdminBroadcastDryRun)

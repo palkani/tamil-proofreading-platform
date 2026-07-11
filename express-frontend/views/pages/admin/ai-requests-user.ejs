@@ -1,0 +1,209 @@
+<%- include('../../partials/admin/layout-header') %>
+
+<div class="mx-auto max-w-6xl space-y-4" data-user-id="<%= userId %>">
+
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-900" id="user-heading">Loading user #<%= userId %>…</h2>
+      <p class="text-sm text-slate-500" id="user-sub">—</p>
+    </div>
+    <div class="flex items-center gap-3 text-sm">
+      <a href="/admin/ai-requests/users" class="text-blue-600 hover:underline">← All users</a>
+      <a href="/admin/ai-requests" class="text-slate-500 hover:underline">Overview</a>
+    </div>
+  </div>
+
+  <!-- Window switcher -->
+  <div class="flex items-center gap-2 border-b border-slate-200 pb-3">
+    <span class="text-xs uppercase text-slate-500 mr-1">Window</span>
+    <div class="flex rounded-md border border-slate-300 overflow-hidden text-xs">
+      <button type="button" class="win-btn px-3 py-1.5 font-medium border-r border-slate-300 bg-white hover:bg-slate-50" data-window="1h">1h</button>
+      <button type="button" class="win-btn px-3 py-1.5 font-medium border-r border-slate-300 bg-slate-900 text-white" data-window="24h">24h</button>
+      <button type="button" class="win-btn px-3 py-1.5 font-medium border-r border-slate-300 bg-white hover:bg-slate-50" data-window="7d">7d</button>
+      <button type="button" class="win-btn px-3 py-1.5 font-medium bg-white hover:bg-slate-50" data-window="30d">30d</button>
+    </div>
+  </div>
+
+  <!-- KPI tiles -->
+  <section class="grid grid-cols-2 gap-3 lg:grid-cols-5">
+    <div class="rounded-lg border border-slate-200 bg-white p-3">
+      <div class="text-xs uppercase tracking-wide text-slate-500">Cost</div>
+      <div class="mt-1 text-xl font-semibold text-slate-900" data-tile="cost">—</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-3">
+      <div class="text-xs uppercase tracking-wide text-slate-500">Requests</div>
+      <div class="mt-1 text-xl font-semibold text-slate-900" data-tile="requests">—</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-3">
+      <div class="text-xs uppercase tracking-wide text-slate-500">Cache hits</div>
+      <div class="mt-1 text-xl font-semibold text-slate-900" data-tile="cache">—</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-3">
+      <div class="text-xs uppercase tracking-wide text-slate-500">Errors</div>
+      <div class="mt-1 text-xl font-semibold text-slate-900" data-tile="errors">—</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-3">
+      <div class="text-xs uppercase tracking-wide text-slate-500">Avg latency</div>
+      <div class="mt-1 text-xl font-semibold text-slate-900" data-tile="latency">—</div>
+    </div>
+  </section>
+
+  <!-- By-model breakdown -->
+  <section class="rounded-lg border border-slate-200 bg-white p-4">
+    <h3 class="text-sm font-semibold text-slate-900 mb-2">Model tier breakdown</h3>
+    <p class="text-xs text-slate-500 mb-3">Which Gemini tier this user was served. Pro users on long text get gemini-2.5-pro; short text or free users get flash / flash-lite.</p>
+    <div id="by-model-panel" class="divide-y divide-slate-100">
+      <div class="py-3 text-sm text-slate-400">Loading…</div>
+    </div>
+  </section>
+
+  <!-- Individual calls -->
+  <section class="rounded-lg border border-slate-200 bg-white">
+    <div class="flex items-center justify-between p-4 border-b border-slate-200">
+      <h3 class="text-sm font-semibold text-slate-900">Individual calls</h3>
+      <span class="text-xs text-slate-500" id="calls-count">—</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+          <tr>
+            <th class="px-4 py-2 text-left">When</th>
+            <th class="px-4 py-2 text-left">Model</th>
+            <th class="px-4 py-2 text-left">Status</th>
+            <th class="px-4 py-2 text-right">Latency</th>
+            <th class="px-4 py-2 text-right">Tokens in</th>
+            <th class="px-4 py-2 text-right">Tokens out</th>
+            <th class="px-4 py-2 text-right">Cost</th>
+            <th class="px-4 py-2 text-left">Submission</th>
+          </tr>
+        </thead>
+        <tbody id="calls-tbody" class="divide-y divide-slate-100">
+          <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-slate-400">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function() {
+  const userId = document.querySelector('[data-user-id]').getAttribute('data-user-id');
+  const state = { window: '24h' };
+
+  function fmtN(n) { return Number(n || 0).toLocaleString(); }
+  function esc(s) { return String(s || '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+  function fmtRelTime(iso) {
+    try {
+      const d = new Date(iso);
+      const diffSec = (Date.now() - d.getTime()) / 1000;
+      if (diffSec < 60) return Math.floor(diffSec) + 's ago';
+      if (diffSec < 3600) return Math.floor(diffSec / 60) + 'm ago';
+      if (diffSec < 86400) return Math.floor(diffSec / 3600) + 'h ago';
+      return Math.floor(diffSec / 86400) + 'd ago';
+    } catch (_) { return iso; }
+  }
+  function statusPill(s) {
+    const cls = {
+      ok: 'bg-green-100 text-green-700',
+      cache_hit: 'bg-slate-100 text-slate-600',
+      timeout: 'bg-amber-100 text-amber-700',
+      rate_limited: 'bg-amber-100 text-amber-700',
+      api_error: 'bg-red-100 text-red-700',
+      invalid_response: 'bg-red-100 text-red-700',
+    }[s] || 'bg-slate-100 text-slate-600';
+    return '<span class="inline-block px-2 py-0.5 rounded text-xs font-medium ' + cls + '">' + esc(s) + '</span>';
+  }
+  function costMicrosToUSD(m) {
+    return '$' + (Number(m || 0) / 1_000_000).toFixed(4);
+  }
+
+  async function load() {
+    const url = '/admin/api/ai-requests/user/' + userId + '?window=' + state.window;
+    let data;
+    try {
+      const r = await fetch(url, { credentials: 'include' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      data = await r.json();
+    } catch (e) {
+      document.getElementById('user-heading').textContent = 'Failed to load user';
+      document.getElementById('user-sub').textContent = e.message;
+      return;
+    }
+
+    // Header
+    const u = data.user || {};
+    const badges = [];
+    if (u.role === 'admin') badges.push('<span class="ml-2 rounded bg-purple-100 text-purple-800 px-2 py-0.5 text-xs">admin</span>');
+    if (u.premium_override) badges.push('<span class="ml-1 rounded bg-emerald-100 text-emerald-800 px-2 py-0.5 text-xs">override</span>');
+    if (u.subscription && u.subscription !== 'free') badges.push('<span class="ml-1 rounded bg-blue-100 text-blue-800 px-2 py-0.5 text-xs">' + esc(u.subscription) + '</span>');
+    document.getElementById('user-heading').innerHTML = esc(u.email || '(unknown)') + badges.join('');
+    document.getElementById('user-sub').textContent =
+      'User #' + u.id + (u.name ? ' · ' + u.name : '') + ' · joined ' + (u.created_at ? new Date(u.created_at).toLocaleDateString() : 'unknown');
+
+    // Tiles
+    const t = data.totals || {};
+    document.querySelector('[data-tile="cost"]').textContent = data.cost_usd || '$0.0000';
+    document.querySelector('[data-tile="requests"]').textContent = fmtN(t.Requests);
+    document.querySelector('[data-tile="cache"]').textContent = fmtN(t.CacheHits);
+    document.querySelector('[data-tile="errors"]').textContent = fmtN(t.Errors);
+    document.querySelector('[data-tile="latency"]').textContent = fmtN(t.AvgLatency) + ' ms';
+
+    // By model
+    const byModel = data.by_model || [];
+    const modelPanel = document.getElementById('by-model-panel');
+    if (byModel.length === 0) {
+      modelPanel.innerHTML = '<div class="py-3 text-sm text-slate-400">No calls in this window.</div>';
+    } else {
+      modelPanel.innerHTML = byModel.map((m) => `
+        <div class="flex items-center justify-between py-2">
+          <div class="font-mono text-sm text-slate-800">${esc(m.model || '(unknown)')}</div>
+          <div class="text-xs text-slate-500">
+            <span class="mr-3">${fmtN(m.requests)} req</span>
+            <span class="font-semibold text-slate-800">${costMicrosToUSD(m.cost_micros)}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Calls
+    const calls = data.calls || [];
+    document.getElementById('calls-count').textContent = calls.length + ' calls shown (last 100 in window)';
+    const tbody = document.getElementById('calls-tbody');
+    if (calls.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-sm text-slate-400">No calls in this window.</td></tr>';
+    } else {
+      tbody.innerHTML = calls.map((c) => `
+        <tr>
+          <td class="px-4 py-2 text-slate-600 whitespace-nowrap" title="${esc(c.occurred_at)}">${fmtRelTime(c.occurred_at)}</td>
+          <td class="px-4 py-2 font-mono text-xs text-slate-700">${esc(c.model || '')}</td>
+          <td class="px-4 py-2">${statusPill(c.status)}</td>
+          <td class="px-4 py-2 text-right text-slate-600 tabular-nums">${c.latency_ms ? fmtN(c.latency_ms) + ' ms' : '—'}</td>
+          <td class="px-4 py-2 text-right text-slate-500 tabular-nums">${fmtN(c.input_tokens)}</td>
+          <td class="px-4 py-2 text-right text-slate-500 tabular-nums">${fmtN(c.output_tokens)}</td>
+          <td class="px-4 py-2 text-right text-slate-900 font-medium tabular-nums">${costMicrosToUSD(c.cost_micros)}</td>
+          <td class="px-4 py-2 text-slate-500">${c.submission_id ? '#' + c.submission_id : '—'}${c.error_type ? '<div class="text-xs text-red-600 mt-0.5">' + esc(c.error_type) + '</div>' : ''}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  // Window switcher
+  document.querySelectorAll('.win-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.window = btn.dataset.window;
+      document.querySelectorAll('.win-btn').forEach((b) => {
+        b.classList.remove('bg-slate-900', 'text-white');
+        b.classList.add('bg-white', 'hover:bg-slate-50');
+      });
+      btn.classList.remove('bg-white', 'hover:bg-slate-50');
+      btn.classList.add('bg-slate-900', 'text-white');
+      load();
+    });
+  });
+
+  load();
+})();
+</script>
+
+<%- include('../../partials/admin/layout-footer') %>
