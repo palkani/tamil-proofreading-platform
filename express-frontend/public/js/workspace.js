@@ -57,11 +57,35 @@ const FREE_USER_DAILY_LIMIT = 30;  // AI checks/day for signed-in free-plan user
 let _isProCache = null; // null = not resolved yet, true/false = confirmed
 let _freeTierUserPlan = 'free'; // kept for backward-compat with other readers
 
+// Client-side admin allowlist — MIRROR of backend billing.IsUserPro
+// email list. Lets us mark these users Pro SYNCHRONOUSLY on page load
+// without waiting for /api/v1/billing/usage/today (which can 503
+// during backend cold-start and leave _isProCache=null forever). Not
+// a security boundary — the backend still gates writes with the same
+// list. This is a UX-consistency fix so admins never see the "14 AI
+// checks left today" bar while backend is warming up.
+const _ADMIN_EMAILS = [
+  'palkani.r@gmail.com',
+  'prooftamil@gmail.com',
+  'banu.palkani@gmail.com',
+  'contact@prooftamil.com',
+];
+
+function _isAdminEmail(email) {
+  if (!email) return false;
+  return _ADMIN_EMAILS.indexOf(String(email).toLowerCase().trim()) !== -1;
+}
+
 function _isProUser() {
-  // Cached from /api/v1/billing/usage/today (fetched below). Falls through
-  // to the plan-enum check only if the fetch hasn't landed yet OR the
-  // user is anonymous.
+  // Cached from /api/v1/billing/usage/today (fetched below), OR from
+  // the synchronous admin-allowlist fast-path in _fetchUserPlan.
   if (_isProCache !== null) return _isProCache;
+  // Admin email fast-path — no fetch required. Matches every admin
+  // account the backend recognizes.
+  if (_isAdminEmail(window.USER_EMAIL)) {
+    _isProCache = true;
+    return true;
+  }
   const plan = (window.USER_PLAN || _freeTierUserPlan || '').toLowerCase();
   return plan === 'pro' || plan === 'enterprise' || plan === 'basic';
 }
@@ -74,27 +98,55 @@ function _isLoggedIn() {
 // endpoint the Pro pill reads so every UI element that gates on Pro
 // (word-limit indicator, quota bar, export unlock) sees a consistent
 // answer.
+//
+// Robust to backend cold-start 503s — retries with exponential backoff
+// up to ~15s so a temporary "starting" wrapper doesn't leave admins
+// staring at "14 AI checks left today" until they refresh.
 (function _fetchUserPlan() {
   if (!window.USER_LOGGED_IN) {
     _isProCache = false;
     return;
   }
-  fetch('/api/v1/billing/usage/today', { credentials: 'include' })
-    .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(usage) {
-      if (!usage) return;
-      // is_pro from the backend already accounts for paid subs + admin
-      // overrides + email allowlist. Trust it.
-      _isProCache = !!usage.is_pro;
-      // Keep the legacy globals populated for any other readers still
-      // consulting them (doc-export.js migrated separately in c16dc72).
-      window.USER_PLAN = usage.is_pro ? 'pro' : 'free';
-      _freeTierUserPlan = window.USER_PLAN;
-      // Repaint plan-dependent UI now that we know the truth.
-      try { _updateWordLimitUI(); } catch (_e) {}
-      try { _updateQuotaBar(); } catch (_e) {}
-    })
-    .catch(function() {});
+  // Admin-email fast-path — resolve Pro SYNCHRONOUSLY before any fetch,
+  // so the quota bar hides on first paint even if the backend is cold.
+  if (_isAdminEmail(window.USER_EMAIL)) {
+    _isProCache = true;
+    window.USER_PLAN = 'pro';
+    _freeTierUserPlan = 'pro';
+    try { _updateWordLimitUI(); } catch (_e) {}
+    try { _updateQuotaBar(); } catch (_e) {}
+    // Still fetch below to log any mismatch, but don't gate UI on it.
+  }
+
+  const backoffs = [0, 2000, 4000, 8000]; // 4 attempts, 14s total window
+  let attempt = 0;
+  function attemptFetch() {
+    const delay = backoffs[attempt++] || 0;
+    setTimeout(function() {
+      fetch('/api/v1/billing/usage/today', { credentials: 'include' })
+        .then(function(r) {
+          if (r.status === 503 && attempt < backoffs.length) {
+            // Backend cold-start; retry.
+            console.info('[PLAN] /usage/today 503 (cold start), retrying in', backoffs[attempt] || 0, 'ms');
+            attemptFetch();
+            return null;
+          }
+          return r.ok ? r.json() : null;
+        })
+        .then(function(usage) {
+          if (!usage) return;
+          _isProCache = !!usage.is_pro;
+          window.USER_PLAN = usage.is_pro ? 'pro' : 'free';
+          _freeTierUserPlan = window.USER_PLAN;
+          try { _updateWordLimitUI(); } catch (_e) {}
+          try { _updateQuotaBar(); } catch (_e) {}
+        })
+        .catch(function() {
+          if (attempt < backoffs.length) attemptFetch();
+        });
+    }, delay);
+  }
+  attemptFetch();
 })();
 
 // ── Suggestion counter (localStorage-backed, resets at midnight) ──
