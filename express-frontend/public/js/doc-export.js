@@ -12,93 +12,132 @@
 (function () {
   'use strict';
 
-  // Startup log — presence in the browser console is the fast way to
-  // verify the deploy took. If you don't see this line on a fresh
-  // reload, the built asset for THIS commit isn't being served yet.
-  console.log('[DocExport] init v20260710a — plan-source = /api/v1/billing/usage/today (is_pro)');
-
   // ── Plan detection ────────────────────────────────────────────────────────
-  // Truthy = user gets clean export + unlocked format buttons.
-  // Falsy  = watermark on DOCX + lock icons in the UI + Upgrade CTA.
   //
-  // We use /api/v1/billing/usage/today because it returns a computed
-  // `is_pro` boolean that respects EVERY path to Pro status — a paid
-  // Dodo subscription, an admin PremiumOverride, the email allowlist,
-  // and the global-premium feature flag. The Pro pill in the header
-  // uses the same endpoint for the same reason: `data.user.subscription`
-  // from /api/v1/me returns the raw enum which is "free" for admins
-  // (they never pay), so reading that directly would gate them out of
-  // their own export feature. This mismatch was the visible bug —
-  // admins seeing lock icons while the Pro pill correctly said "Pro".
+  // Three signals, tried in order — first one that resolves wins. This
+  // replaces an earlier design that relied on window.authUtils.apiFetch,
+  // which has multiple await points (DOMContentLoaded wait, navigation
+  // grace window, token-refresh loop) and was hanging on the workspace
+  // page for reasons that couldn't be diagnosed remotely — resulting in
+  // Pro users seeing lock icons.
   //
-  // Return value normalised to 'pro' | 'free' so the rest of the
-  // module keeps its simple ternary checks.
+  //   1. DOM signal — read the #plan-pill-text element the workspace
+  //      header already paints. If it says "Pro" (or any Pro-ish state
+  //      like "Pro expires in N days" or "Payment past due"), the user
+  //      IS Pro. Zero network. Zero races. Instant answer.
+  //
+  //   2. window.USER_PLAN — a global that workspace.js sets after its
+  //      own successful usage/today fetch. Same authoritative source
+  //      as the pill; different surface.
+  //
+  //   3. Plain fetch fallback — no authUtils dependency. Cookie +
+  //      Bearer from localStorage, 3-second AbortController hard
+  //      timeout so we can never hang the UI.
+  //
+  // The MutationObserver in observePillForChanges() watches the pill
+  // for later updates so a menu opened before workspace.js finished
+  // its own fetch still switches to Pro when the answer lands.
   let _planCache = null;
 
-  // Fetch that mirrors workspace.js's apiFetch — sends BOTH the auth
-  // cookie AND the Bearer token from localStorage. Some backend routes
-  // trust one or the other; sending both matches every other authed
-  // call in the workspace and avoids a silent 401 that would fall
-  // through to plan='free' (which is exactly the bug the user hit —
-  // Pro pill correct, Export locked, because my previous cookie-only
-  // fetch was refused by the backend and I swallowed the error).
-  async function authedFetch(url) {
-    // Prefer the app-wide auth helper if it's on the page — it already
-    // handles token refresh on 401.
-    if (window.authUtils && typeof window.authUtils.apiFetch === 'function') {
-      return window.authUtils.apiFetch(url, {}, true);
+  // Read the plan directly from the DOM / global signals. Returns
+  // 'pro' | 'free' | null (null = not resolved yet, caller may fetch).
+  function readPlanFromSignals() {
+    // Signal 1: the plan pill text painted by workspace.js
+    const pill = document.getElementById('plan-pill-text');
+    if (pill) {
+      const raw = (pill.textContent || '').trim();
+      if (raw && raw !== 'Loading…') {
+        const lc = raw.toLowerCase();
+        // "Pro", "Pro expires today", "Pro expires in 3 days", "Payment past due"
+        // — every non-Free state the pill paints is a Pro state (they had it,
+        // still have some access even if grace/past-due).
+        if (lc.startsWith('pro') || lc.includes('expires') || lc.includes('past due')) return 'pro';
+        // "Free · N/M used today"
+        if (lc.startsWith('free')) return 'free';
+      }
     }
-    const headers = new Headers();
-    try {
-      const token = localStorage.getItem('access_token');
-      if (token) headers.set('Authorization', `Bearer ${token}`);
-    } catch (_) { /* localStorage blocked (privacy mode) — cookie alone must suffice */ }
-    return fetch(url, { headers, credentials: 'include' });
+    // Signal 2: the global workspace.js maintains
+    const wp = String(window.USER_PLAN || '').toLowerCase();
+    if (['pro', 'basic', 'enterprise'].includes(wp)) return 'pro';
+    if (wp === 'free' && window.USER_LOGGED_IN === false) return 'free'; // only trust 'free' for logged-out
+    return null;
   }
 
   async function getUserPlan() {
-    console.log('[DocExport] getUserPlan() called — cache=' + _planCache + ' USER_LOGGED_IN=' + window.USER_LOGGED_IN);
+    if (_planCache) return _planCache;
 
-    if (_planCache) {
-      console.log('[DocExport] getUserPlan() returning cached=' + _planCache);
-      return _planCache;
-    }
-
-    // Logged-out visitors are unambiguously Free — skip the network call.
+    // Logged-out users are unambiguously Free.
     if (window.USER_LOGGED_IN === false) {
-      console.log('[DocExport] getUserPlan() skipping fetch — USER_LOGGED_IN=false');
       _planCache = 'free';
       return _planCache;
     }
 
+    // Signals 1+2: DOM + global (synchronous, no network, no hang possible).
+    const domPlan = readPlanFromSignals();
+    if (domPlan) {
+      _planCache = domPlan;
+      console.log('[DocExport] plan resolved from DOM/global =', domPlan);
+      return domPlan;
+    }
+
+    // Signal 3: plain fetch fallback with a 3-second hard timeout.
+    // Deliberately does NOT go through window.authUtils.apiFetch —
+    // that helper waits for DOMContentLoaded + navigation grace +
+    // does token refresh, which was silently hanging the plan lookup
+    // on the workspace page. Plain fetch + AbortController is
+    // hang-proof.
     try {
-      const res = await authedFetch('/api/v1/billing/usage/today');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+      const headers = new Headers();
+      try {
+        const token = localStorage.getItem('access_token');
+        if (token) headers.set('Authorization', `Bearer ${token}`);
+      } catch (_) { /* localStorage blocked — cookie alone must suffice */ }
+
+      const res = await fetch('/api/v1/billing/usage/today', {
+        headers,
+        credentials: 'include',
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
       if (res.ok) {
         const data = await res.json();
         const plan = data && data.is_pro ? 'pro' : 'free';
-        // Always log — success case is currently invisible in DevTools
-        // and that made the previous bug hard to diagnose. `is_pro`
-        // and the plan verdict are the two values that determine what
-        // the export dropdown shows.
-        console.log('[DocExport] Plan lookup OK — is_pro=' + (data && data.is_pro) + ' plan=' + plan);
+        console.log('[DocExport] plan resolved from fetch =', plan, '(is_pro=' + (data && data.is_pro) + ')');
         window.USER_PLAN = plan;
         _planCache = plan;
         return plan;
       }
-      // Loud log so the next time this bug shows up we spot it in DevTools
-      // console instead of guessing that "plan detection failed silently".
-      console.warn('[DocExport] Plan lookup HTTP', res.status, '— defaulting to free');
+      console.warn('[DocExport] plan fetch HTTP', res.status, '— defaulting to free');
     } catch (e) {
-      console.warn('[DocExport] Plan lookup threw', e && e.message, '— defaulting to free');
+      console.warn('[DocExport] plan fetch failed:', (e && e.message) || e, '— defaulting to free');
     }
 
-    // On network / auth failure return 'free' WITHOUT caching, so the
-    // NEXT menu open retries. Caching a failure would lock a real Pro
-    // user out of exports forever if their very first lookup happened
-    // during a token refresh window. Free is a safe fallback (never
-    // accidentally unlocks a paid feature) but transient failures
-    // should self-heal.
+    // Fallback: 'free' WITHOUT caching so the next menu open retries.
+    // Fail-closed on the UX (locks stay on) but self-healing.
     return 'free';
+  }
+
+  // Watch the plan pill for text changes. When workspace.js finishes
+  // its own usage/today fetch (or the user upgrades mid-session), the
+  // pill's textContent updates — that's the signal to re-sync every
+  // open export menu without a network call.
+  function observePillForChanges() {
+    const pill = document.getElementById('plan-pill-text');
+    if (!pill || typeof window.MutationObserver !== 'function') return;
+    const observer = new MutationObserver(() => {
+      const newPlan = readPlanFromSignals();
+      if (!newPlan || newPlan === _planCache) return;
+      _planCache = newPlan;
+      console.log('[DocExport] plan updated via pill observer =', newPlan);
+      findMenuPairs().forEach(({ menu }) => {
+        menu.setAttribute('data-plan', newPlan === 'free' ? 'free' : 'pro');
+      });
+    });
+    observer.observe(pill, { childList: true, characterData: true, subtree: true });
   }
 
   // ── Editor helpers (mirrors doc-import.js) ────────────────────────────────
@@ -360,11 +399,8 @@
 
   function wireMenus() {
     const pairs = findMenuPairs();
-    console.log('[DocExport] wireMenus() — binding ' + pairs.length + ' pair(s)');
     pairs.forEach(({ btn, menu }) => {
-      console.log('[DocExport] wireMenus() — binding button #' + btn.id + ' → menu #' + menu.id);
       btn.addEventListener('click', (e) => {
-        console.log('[DocExport] click on #' + btn.id);
         e.stopPropagation();
         const isOpen = !menu.classList.contains('hidden');
         closeAllMenus();
@@ -419,24 +455,23 @@
   // and lock icons purely via [data-plan="…"] attribute selectors — no
   // per-element class toggling. Runs async once the plan resolves.
   async function syncMenuPlanState(menu) {
-    console.log('[DocExport] syncMenuPlanState() called — menu=' + (menu && menu.id));
     if (!menu) return;
-    // Instantly reflect any cached plan.
-    if (_planCache) {
-      menu.setAttribute('data-plan', _planCache === 'free' ? 'free' : 'pro');
+    // Optimistic first paint from cache / DOM signal — no await, no
+    // "unknown" flash for users whose plan is already resolved.
+    const cached = _planCache || readPlanFromSignals();
+    if (cached) {
+      menu.setAttribute('data-plan', cached === 'free' ? 'free' : 'pro');
     }
-    // Then confirm via a full lookup (may hit /api/v1/me).
+    // Then confirm via the full resolution path (still fast — hits
+    // the DOM signals first, falls back to a timed fetch).
     const plan = await getUserPlan();
-    console.log('[DocExport] syncMenuPlanState() setting data-plan=' + (plan === 'free' ? 'free' : 'pro'));
     menu.setAttribute('data-plan', plan === 'free' ? 'free' : 'pro');
   }
 
-  // Run one plan sync at load time so any already-open menu (unlikely)
-  // and the initial DOM reflect the correct state before the first click.
+  // Run one plan sync at load time so the initial DOM reflects the
+  // correct state before the user opens the dropdown.
   function syncAllMenus() {
-    const pairs = findMenuPairs();
-    console.log('[DocExport] syncAllMenus() — found ' + pairs.length + ' export menu pair(s)');
-    pairs.forEach(({ menu }) => syncMenuPlanState(menu));
+    findMenuPairs().forEach(({ menu }) => syncMenuPlanState(menu));
   }
 
   // Bootstrap: run once immediately AND once on DOMContentLoaded as a
@@ -455,26 +490,27 @@
   // but a fresh arrow function each call means we'd potentially
   // double-bind — so we guard with a boolean).
   let _wired = false;
-  function bootstrap(source) {
-    if (_wired) {
-      console.log('[DocExport] bootstrap skipped (already wired) — trigger=' + source);
-      return;
-    }
+  function bootstrap() {
+    if (_wired) return;
     _wired = true;
-    console.log('[DocExport] bootstrap running — trigger=' + source + ' readyState=' + document.readyState);
     try {
       wireMenus();
       syncAllMenus();
+      observePillForChanges();
     } catch (e) {
       console.error('[DocExport] bootstrap threw', e && (e.message || e), e && e.stack);
-      // Reset so a later DOMContentLoaded pass can retry cleanly.
-      _wired = false;
+      _wired = false; // let a later event retry
     }
   }
-  bootstrap('immediate');
+  // Run immediately — doc-export.js loads AFTER the export button in
+  // the DOM (workspace.ejs line 1521 vs button at ~933), so the
+  // querySelectorAll for "[id$='-export-btn']" always finds it.
+  // Belt-and-suspenders: also on DOMContentLoaded and window.load
+  // for pages that inject the export UI dynamically.
+  bootstrap();
   if (document.readyState !== 'complete') {
-    document.addEventListener('DOMContentLoaded', () => bootstrap('DOMContentLoaded'));
-    window.addEventListener('load', () => bootstrap('window.load'));
+    document.addEventListener('DOMContentLoaded', bootstrap);
+    window.addEventListener('load', bootstrap);
   }
 
   window.docExport = { exportPdf, exportDocx, exportTxt };
