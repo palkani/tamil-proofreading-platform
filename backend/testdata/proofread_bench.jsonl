@@ -1,0 +1,31 @@
+{"id":"lza-01","context":"rain","input":"நேற்று மலை பெய்தது","expected":[{"original":"மலை","corrected":"மழை","type":"spelling"}],"note":"ல/ழ/ள — rain not mountain"}
+{"id":"lza-02","context":"walking","input":"நான் வலி பார்த்தேன் நடக்க","expected":[{"original":"வலி","corrected":"வழி","type":"semantic"}],"note":"pain vs path in walking context"}
+{"id":"lza-03","context":"school","input":"பள்ளி முடிந்தது; வலியில் நடந்து வந்தேன்","expected":[{"original":"வலியில்","corrected":"வழியில்","type":"semantic"}],"note":"semantic — path not pain"}
+{"id":"lza-04","context":"beauty","input":"அவளது அலகு பார்க்க வேண்டியது","expected":[{"original":"அலகு","corrected":"அழகு","type":"semantic"}],"note":"beauty vs unit in aesthetic context"}
+{"id":"lza-05","context":"tamil","input":"தமிள் என் தாய்மொழி","expected":[{"original":"தமிள்","corrected":"தமிழ்","type":"spelling"}],"note":"the classic — Tamil misspelled"}
+
+{"id":"raw-01","context":"visit","input":"அவன் வர சொன்னான்","expected":[{"original":"வர","corrected":"வற","type":"spelling"}],"note":"ர vs ற — deliberately debatable; leave to Gemini judgment"}
+{"id":"raw-02","context":"news","input":"வெறி பெற்றார் திரைப்பட விழாவில்","expected":[{"original":"வெறி","corrected":"வெற்றி","type":"spelling"}],"note":"mei-doubling — victory not madness"}
+
+{"id":"nnn-01","context":"formal","input":"நாளை வேன்டும் என்று சொன்னான்","expected":[{"original":"வேன்டும்","corrected":"வேண்டும்","type":"spelling"}],"note":"ண vs ன — the modal 'need'"}
+
+{"id":"gra-01","context":"plural-subject","input":"பிள்ளைகள் விளையாடினான்","expected":[{"original":"விளையாடினான்","corrected":"விளையாடினார்கள்","type":"grammar"}],"note":"subject-verb agreement"}
+{"id":"gra-02","context":"first-person","input":"நான் நேற்று வந்தான்","expected":[{"original":"வந்தான்","corrected":"வந்தேன்","type":"grammar"}],"note":"person-verb agreement"}
+{"id":"gra-03","context":"case-missing","input":"அவன் புத்தகம் கொடு","expected":[{"original":"அவன்","corrected":"அவனுக்கு","type":"grammar"}],"note":"missing dative case marker"}
+{"id":"gra-04","context":"neg-mixup","input":"நான் நாளை வர மாட்டான்","expected":[{"original":"மாட்டான்","corrected":"மாட்டேன்","type":"grammar"}],"note":"person mismatch in negation"}
+{"id":"gra-05","context":"conditional","input":"நான் வந்தாலே பிரச்சனை","expected":[{"original":"வந்தாலே","corrected":"வந்தாலும்","type":"grammar"}],"note":"even-if construction — subtle"}
+{"id":"gra-06","context":"quotative","input":"வருவேன் சொன்னான் அவன்","expected":[{"original":"வருவேன் சொன்னான்","corrected":"வருவேன் என்று சொன்னான்","type":"grammar"}],"note":"missing quotative marker"}
+
+{"id":"pun-01","context":"initials","input":"மு.க.ஸ்டாலின் பேசினார்","expected":[{"original":"மு.க.ஸ்டாலின்","corrected":"மு.க. ஸ்டாலின்","type":"space"}],"note":"initials spacing"}
+
+{"id":"spa-01","context":"joined-words","input":"அவன்வந்தான் இப்போது","expected":[{"original":"அவன்வந்தான்","corrected":"அவன் வந்தான்","type":"space"}],"note":"missing space between words"}
+
+{"id":"san-01","context":"hyphen-cleanup","input":"பாஜக-வுடன் கூட்டணி","expected":[{"original":"பாஜக-வுடன்","corrected":"பாஜகவுடன்","type":"sandhi"}],"note":"unnecessary hyphen at sandhi join"}
+
+{"id":"cmp-01","context":"state-name","input":"தமிழ் நாடு அரசு அறிவித்தது","expected":[{"original":"தமிழ் நாடு","corrected":"தமிழ்நாடு","type":"compound"}],"note":"state name is one word"}
+
+{"id":"clean-01","context":"already-correct","input":"தமிழ் இனிய மொழி. நான் தமிழில் எழுத விரும்புகிறேன்","expected":[],"note":"clean text — must return empty array"}
+{"id":"clean-02","context":"already-correct","input":"நேற்று மழை பெய்தது. மக்கள் வீட்டிலேயே இருந்தார்கள்","expected":[],"note":"clean text — must not invent errors"}
+{"id":"clean-03","context":"optional-sandhi","input":"வரலாற்று சிறப்பு வாய்ந்த நிகழ்வு","expected":[],"note":"optional sandhi — MUST NOT flag as error"}
+{"id":"clean-04","context":"informal-register","input":"இப்படி பண்ணக்கூடாது-ன்னு நான் சொன்னேன்","expected":[],"note":"informal register — leave alone, not an error"}
+{"id":"clean-05","context":"proper-nouns","input":"திமுக மற்றும் அதிமுக ஆகியவை","expected":[],"note":"party abbreviations — accepted forms, don't touch"}
