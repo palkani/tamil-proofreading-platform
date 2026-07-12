@@ -10,6 +10,13 @@ type ActivityEventType string
 const (
 	EventRegister         ActivityEventType = "register"
 	EventLogin            ActivityEventType = "login"
+	// EventLoginFailed captures wrong-password / user-not-found / disabled-account
+	// attempts. Written for a matched user_id when we can find one by email;
+	// dropped when the email doesn't correspond to any user (to avoid
+	// creating log rows that leak "this email exists in our DB" via a
+	// UserID lookup). Used by the admin dashboard to spot brute-force
+	// patterns and by support to investigate "I can't log in" tickets.
+	EventLoginFailed      ActivityEventType = "login_failed"
 	EventLogout           ActivityEventType = "logout"
 	EventDraftCreate      ActivityEventType = "draft_create"
 	EventDraftUpdate      ActivityEventType = "draft_update"

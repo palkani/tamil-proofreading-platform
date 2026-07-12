@@ -112,22 +112,37 @@ func EnsureCoreSchema(db *gorm.DB) {
 		}
 	}
 
-	// ── ai_requests ─────────────────────────────────────────────────
-	// Observability table for every Gemini call — cost + latency +
-	// outcome. Currently gated behind MigrateAIRequests which only
-	// runs when RUN_MIGRATIONS=true, so the table doesn't exist in
-	// production. The AI logger fires a warning per request:
-	//   [AI_LOG] Warning: failed to persist ai_request row (...)
-	//     ERROR: relation "ai_requests" does not exist (SQLSTATE 42P01)
-	// Same class of bug as group_id — model landed, migration
-	// skipped. AutoMigrate here creates the table + all model-
-	// declared indexes idempotently, safe to re-run.
-	if err := db.AutoMigrate(&models.AIRequest{}); err != nil {
-		log.Printf("[SCHEMA] Warning: ensure ai_requests table failed: %v", err)
+	// ── Observability tables ────────────────────────────────────────
+	// Every table below is defined as a Go model and written to by
+	// fire-and-forget goroutines. If the table doesn't exist, the
+	// insert fails silently with a warning log ([AI_LOG], [ACTIVITY_LOG])
+	// and the ADMIN DASHBOARD shows empty stats for that class of event.
+	// That's exactly what bit us with activity_events — the admin
+	// asked "why do I see no non-admin login activity?" — answer:
+	// the table didn't exist, every write since deploy was dropped.
+	// AutoMigrate here creates each table + model-declared indexes
+	// idempotently, safe on every startup.
+	observabilityModels := []struct {
+		name  string
+		model any
+	}{
+		{"ai_requests", &models.AIRequest{}},
+		{"activity_events", &models.ActivityEvent{}},
+		{"anonymous_submission_events", &models.AnonymousSubmissionEvent{}},
+		{"visit_events", &models.VisitEvent{}},
+	}
+	for _, m := range observabilityModels {
+		if err := db.AutoMigrate(m.model); err != nil {
+			log.Printf("[SCHEMA] Warning: ensure %s table failed: %v", m.name, err)
+		}
 	}
 	// Companion composite index used by the admin AI-cost dashboard.
 	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_ai_requests_occurred_status ON ai_requests (occurred_at DESC, status)`).Error; err != nil {
 		log.Printf("[SCHEMA] Warning: ensure idx_ai_requests_occurred_status failed: %v", err)
+	}
+	// Companion index for activity feed queries (most-recent first per user).
+	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_activity_events_occurred_user ON activity_events (occurred_at DESC, user_id)`).Error; err != nil {
+		log.Printf("[SCHEMA] Warning: ensure idx_activity_events_occurred_user failed: %v", err)
 	}
 
 	log.Printf("[SCHEMA] Core-schema check complete in %v (added=%d columns)", time.Since(start), missing)

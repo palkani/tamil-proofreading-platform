@@ -415,6 +415,30 @@ func (h *Handlers) Login(c *gin.Context) {
 
         user, err := h.authService.Login(req.Email, req.Password)
         if err != nil {
+                // Failed login — audit stream + activity_events row (if the
+                // email corresponds to a real user). Previously this path
+                // returned 401 with no trace, so brute-force / password-
+                // guessing patterns were invisible and support tickets like
+                // "I can't log in" had nothing to correlate against.
+                //
+                // Reason is copied from the underlying auth error (already
+                // sanitized by authService.Login — safe to expose).
+                auditlog.Warn(c, "auth_login_failed", map[string]any{
+                        "user_email": req.Email,
+                        "reason":     err.Error(),
+                        "country":    geo.CountryFromContext(c),
+                })
+                // Look up user_id by email so the activity_events row is
+                // attributable. Skip the write for unknown emails so we
+                // don't create dangling rows.
+                var candidate models.User
+                if lookupErr := h.db.Select("id").Where("email = ?", strings.ToLower(strings.TrimSpace(req.Email))).First(&candidate).Error; lookupErr == nil && candidate.ID > 0 {
+                        h.activityLogger.Log(candidate.ID, models.EventLoginFailed, map[string]any{
+                                "reason":  err.Error(),
+                                "method":  "password",
+                                "country": geo.CountryFromContext(c),
+                        })
+                }
                 c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
                 return
         }
