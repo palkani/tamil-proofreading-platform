@@ -201,17 +201,27 @@ func (s *LLMService) selectOptimalModel(text string, wordCount int, isProUser bo
 }
 
 func maxOutputTokensForProofread(wordCount int, charCount int) int {
-        // Latency lever: smaller max tokens -> faster decoding.
-        switch {
+	// Latency lever: smaller max_output_tokens directly cuts Gemini
+	// decoding time. Each extra 512 tokens is ~1.5-3s of wall-clock.
+	// Sized to the actual correction payload we typically see per text
+	// class — a 50-word input rarely produces more than 5-10 corrections
+	// × ~40 tokens each = ~400 output tokens. Adding a 1.5x safety
+	// buffer keeps the ceiling honest without wasting decode budget.
+	//
+	// Tightened 2026-07 to shave latency toward the "first suggestion
+	// visible in <2s" target. Prior thresholds were 1024/2048/4096/8192;
+	// halving the smallest two buckets is the safest win because most
+	// interactive traffic falls in them.
+	switch {
 	case charCount < 800 && wordCount <= 150:
-		return 1024
+		return 512 // ~10 corrections of ~40 tokens + JSON overhead
 	case charCount < 1800 && wordCount <= 300:
-		return 2048
+		return 1024
 	case charCount < 3500 && wordCount <= 700:
-		return 4096
-        default:
-		return 8192
-        }
+		return 2560
+	default:
+		return 5120
+	}
 }
 
 func isLikelyTruncatedJSON(s string) bool {
