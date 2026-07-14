@@ -971,3 +971,164 @@ html {
   display: inline-block;
 }
 .paywall-btn-secondary:hover { background: #f1f5f9; }
+
+/* ============================================================
+   Anonymous vs. authenticated visibility contract
+   ============================================================
+   The tool page is server-rendered with data-user-logged-in="true|false"
+   on the top-level .ai-content-writer container. These rules gate what
+   each audience sees. Doing it in CSS (not EJS conditionals) keeps the
+   markup single-source and lets us flip visibility instantly if we ever
+   restore auth from a cookie client-side.
+
+   Anonymous (data-user-logged-in="false"):
+     - Show .anon-cta (signup pitch)
+     - Hide tabs, all .form-section blocks, quota badge, result card,
+       error alert, and the "Back to My Drafts" link
+   Authenticated (data-user-logged-in="true"):
+     - Show tabs + active form + result etc. as normal
+     - Hide .anon-cta                                                  */
+
+.anon-cta { display: none; }
+
+.ai-content-writer[data-user-logged-in="false"] .tabs,
+.ai-content-writer[data-user-logged-in="false"] .form-section,
+.ai-content-writer[data-user-logged-in="false"] .result-section,
+.ai-content-writer[data-user-logged-in="false"] #quota-badge,
+.ai-content-writer[data-user-logged-in="false"] #error-alert,
+.ai-content-writer[data-user-logged-in="false"] .back-to-drafts {
+  display: none !important;
+}
+
+.ai-content-writer[data-user-logged-in="false"] .anon-cta {
+  display: block;
+}
+
+.anon-cta {
+  max-width: 640px;
+  margin: 0 auto 40px;
+  padding: 40px 32px;
+  background: linear-gradient(180deg, #ffffff 0%, #faf5ff 100%);
+  border: 1px solid #e9d5ff;
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(124, 58, 237, 0.08);
+  text-align: center;
+  animation: fadeInDown 0.5s ease-out;
+}
+
+.anon-cta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  border: 1px solid #c4b5fd;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b21a8;
+  margin-bottom: 20px;
+}
+
+.anon-cta-heading {
+  font-family: 'Playfair Display', serif;
+  font-size: 32px;
+  font-weight: 800;
+  color: #1e1b4b;
+  margin: 0 0 12px;
+  line-height: 1.2;
+}
+
+.anon-cta-body {
+  font-size: 16px;
+  color: #475569;
+  line-height: 1.6;
+  margin: 0 0 24px;
+}
+
+.anon-cta-perks {
+  list-style: none;
+  padding: 0;
+  margin: 0 auto 28px;
+  text-align: left;
+  max-width: 420px;
+  display: grid;
+  gap: 8px;
+}
+.anon-cta-perks li {
+  padding-left: 28px;
+  position: relative;
+  font-size: 14.5px;
+  color: #334155;
+}
+.anon-cta-perks li::before {
+  content: '✓';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  color: #10b981;
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.anon-cta-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.anon-cta-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+  color: white;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.anon-cta-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.45);
+}
+.anon-cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 14px 24px;
+  background: white;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+.anon-cta-secondary:hover {
+  background: #f8fafc;
+}
+.anon-cta-footnote {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+.anon-cta-footnote a {
+  color: #7c3aed;
+  font-weight: 600;
+  text-decoration: none;
+}
+.anon-cta-footnote a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 560px) {
+  .anon-cta { padding: 28px 20px; }
+  .anon-cta-heading { font-size: 26px; }
+  .anon-cta-body { font-size: 15px; }
+  .anon-cta-primary, .anon-cta-secondary { width: 100%; justify-content: center; }
+}

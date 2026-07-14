@@ -7,8 +7,10 @@
 
 <div class="ai-content-writer" data-user-logged-in="<%= user && user.id ? 'true' : 'false' %>">
   <div class="writer-container">
-    <!-- Back to Drafts (visible on all screens) -->
-    <div class="mb-4">
+    <!-- Back to Drafts — only meaningful when logged in (anonymous
+         users have no drafts). CSS hides this whole block for
+         data-user-logged-in="false" via the .back-to-drafts selector. -->
+    <div class="mb-4 back-to-drafts">
       <a href="/drafts#ai-content" class="inline-flex items-center gap-2 text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
         Back to My Drafts
@@ -23,6 +25,42 @@
       </p>
     </div>
 
+    <!-- Anonymous signup card. Replaces the interactive tool (tabs +
+         form) for logged-out visitors — showing the empty form to a
+         signed-out user reads as "here's a free tool" and hides the
+         freemium value prop. Instead we show the pitch + a big
+         signup CTA and reveal the tool only after they authenticate.
+         SEO-safe: header + this card contain the tool's descriptive
+         copy, which is what search engines index. -->
+    <div class="anon-cta anonymous-only" role="region" aria-label="Sign up to unlock the AI Content Writer">
+      <div class="anon-cta-badge">
+        <span>🎁</span>
+        <span>Free forever · 2 generations every week</span>
+      </div>
+      <h2 class="anon-cta-heading">Sign up free to start generating</h2>
+      <p class="anon-cta-body">
+        Blogs, essays, articles and stories in Tamil, English, or both — written by AI in seconds.
+        Free accounts get 2 pieces every week. No credit card, no trial timer.
+      </p>
+      <ul class="anon-cta-perks">
+        <li>Tamil, English & bilingual output</li>
+        <li>Blog post, essay, article, story — 4 formats</li>
+        <li>Choose tone: professional, casual, academic, creative, persuasive</li>
+        <li>Save drafts + revise later</li>
+      </ul>
+      <div class="anon-cta-actions">
+        <a href="/signup?redirect=%2Ftools%2Fai-content-writer" class="anon-cta-primary">
+          <span>✨</span> Sign up free
+        </a>
+        <a href="/login?redirect=%2Ftools%2Fai-content-writer" class="anon-cta-secondary">
+          I already have an account
+        </a>
+      </div>
+      <p class="anon-cta-footnote">
+        Need more than 2 per week? <a href="/pricing">See Pro plans</a> for unlimited generations.
+      </p>
+    </div>
+
     <!-- Freemium quota badge (populated by JS on page load for
          logged-in Free users; hidden for anonymous + Pro users). -->
     <div id="quota-badge" class="quota-badge" style="display: none;" role="status" aria-live="polite">
@@ -33,7 +71,9 @@
       </span>
     </div>
 
-    <!-- Tabs -->
+    <!-- Tabs — hidden for anonymous visitors (they see anon-cta above).
+         CSS gate: .ai-content-writer[data-user-logged-in="false"] .tabs
+         { display:none; } lives in AIContentWriter.css. -->
     <div class="tabs">
       <button class="tab active" data-tab="generate">
         <span class="tab-icon">🎨</span>
