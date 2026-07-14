@@ -3,12 +3,12 @@
 <div class="mx-auto max-w-6xl space-y-6" id="admin-ai-requests">
 
   <!-- Window switcher + refresh -->
-  <div class="flex items-center justify-between">
-    <div>
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0 flex-1">
       <h2 class="text-lg font-semibold text-slate-900">AI request observability</h2>
       <p class="text-sm text-slate-500">Per-call Gemini cost, latency, and error rate. Data written asynchronously from each proofread request.</p>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 flex-wrap">
       <div class="flex rounded-md border border-slate-300 overflow-hidden text-xs" role="tablist">
         <button type="button" class="px-3 py-1.5 font-medium border-r border-slate-300 bg-white hover:bg-slate-50" data-window="1h">1h</button>
         <button type="button" class="px-3 py-1.5 font-medium border-r border-slate-300 bg-slate-900 text-white" data-window="24h">24h</button>

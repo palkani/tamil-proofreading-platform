@@ -39,8 +39,9 @@
     </div>
   </section>
 
-  <!-- Results table -->
-  <section class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+  <!-- Results table. overflow-x-auto (not hidden) so narrow viewports
+       can horizontal-scroll the wide column set instead of clipping it. -->
+  <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
     <table class="min-w-full divide-y divide-slate-200 text-sm">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
         <tr>

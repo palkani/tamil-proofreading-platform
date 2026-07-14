@@ -11,21 +11,64 @@
     .admin-nav-item { transition: background-color 120ms ease; }
     .admin-nav-item.active { background-color: rgb(30 58 138); color: white; }
     .admin-nav-item:not(.active):hover { background-color: rgb(243 244 246); }
+
+    /* Off-canvas drawer plumbing (mobile only). Desktop uses static layout
+       via the md: breakpoint on the sidebar element itself; these rules
+       just power the slide-in/out on narrow viewports. */
+    body[data-drawer-open="true"] { overflow: hidden; }
+    #admin-sidebar { transition: transform 220ms ease; }
+    @media (max-width: 767px) {
+      #admin-sidebar { transform: translateX(-100%); }
+      body[data-drawer-open="true"] #admin-sidebar { transform: translateX(0); }
+      #admin-backdrop { opacity: 0; pointer-events: none; transition: opacity 180ms ease; }
+      body[data-drawer-open="true"] #admin-backdrop { opacity: 1; pointer-events: auto; }
+    }
+
+    /* Every wide admin table lives inside a section that must scroll
+       horizontally when the viewport can't hold all columns — otherwise
+       the last columns get clipped and the ops user can't see them.
+       This targets sections that directly contain a full-width table,
+       so no per-page HTML change is required. Uses :has() which is
+       supported in every browser an admin will realistically use. */
+    .admin-content section:has(> table.min-w-full),
+    .admin-content section:has(> .admin-tablewrap > table) {
+      overflow-x: auto;
+    }
+    /* Escape valve for pages that still need overflow:hidden on the outer
+       card (e.g. rounded borders + inner sticky header). Wrap the table
+       in <div class="admin-tablewrap">…</div> — that inner div gets the
+       horizontal scroll instead of the section. */
+    .admin-tablewrap { overflow-x: auto; }
   </style>
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900">
   <div class="flex min-h-screen">
-    <!-- Sidebar -->
-    <aside class="flex w-64 flex-col border-r border-slate-200 bg-white">
-      <div class="border-b border-slate-200 px-6 py-5">
+    <!-- Backdrop shown behind the mobile drawer. Click to dismiss. Hidden
+         on md+ where the sidebar is a static column. -->
+    <div id="admin-backdrop" class="fixed inset-0 z-30 bg-slate-900/50 md:hidden" data-drawer-close></div>
+
+    <!-- Sidebar. On mobile it's a fixed-position off-canvas drawer that
+         slides in via data-drawer-open. On md+ it's a static column,
+         same as before. -->
+    <aside
+      id="admin-sidebar"
+      class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200 bg-white md:sticky md:top-0 md:h-screen md:translate-x-0">
+      <div class="flex items-center justify-between border-b border-slate-200 px-6 py-5">
         <a href="/admin" class="flex items-center gap-2">
           <span class="text-2xl">தமிழ்</span>
           <span class="text-sm font-semibold uppercase tracking-wider text-slate-500">Admin</span>
         </a>
-        <p class="mt-1 text-xs text-slate-400">ProofTamil operations console</p>
+        <button
+          type="button"
+          data-drawer-close
+          class="rounded-md p-1 text-slate-500 hover:bg-slate-100 md:hidden"
+          aria-label="Close menu">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
       </div>
+      <p class="hidden px-6 pt-3 text-xs text-slate-400 md:block">ProofTamil operations console</p>
 
-      <nav class="flex-1 space-y-1 px-3 py-4">
+      <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
         <% navItems.forEach(function(item) { %>
           <a
             href="<%= item.href %>"
@@ -51,15 +94,38 @@
       </nav>
 
       <div class="border-t border-slate-200 px-6 py-4 text-xs text-slate-500">
-        <div class="font-medium text-slate-700"><%= user.email %></div>
+        <div class="font-medium text-slate-700 break-all"><%= user.email %></div>
         <div class="mt-1">Admin session</div>
         <a href="/" class="mt-2 inline-block text-blue-600 hover:underline">← Back to site</a>
       </div>
     </aside>
 
-    <!-- Main content -->
-    <main class="flex-1 overflow-x-hidden">
-      <header class="border-b border-slate-200 bg-white px-8 py-4">
+    <!-- Main content column. On mobile the sidebar is off-canvas so this
+         takes the full viewport width. On md+ the sidebar is a static
+         64-wide column already, so this shrinks to fill the remainder.
+         overflow-x-auto (not hidden) so any table wider than the viewport
+         can horizontal-scroll rather than being clipped. -->
+    <main class="flex min-w-0 flex-1 flex-col overflow-x-auto">
+      <!-- Mobile top bar — hamburger + current page title. Hidden on md+
+           where the sidebar's logo carries branding and the desktop
+           header carries the page title. -->
+      <header class="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 md:hidden">
+        <button
+          type="button"
+          data-drawer-open
+          class="rounded-md p-1.5 text-slate-700 hover:bg-slate-100"
+          aria-label="Open menu"
+          aria-controls="admin-sidebar"
+          aria-expanded="false">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+        </button>
+        <h1 class="flex-1 truncate text-base font-semibold text-slate-900"><%= title.replace('Admin · ', '') %></h1>
+      </header>
+
+      <!-- Desktop header (visible md+) — shows page title + current time,
+           same as before. Hidden on mobile where the top bar above serves
+           that role. -->
+      <header class="hidden border-b border-slate-200 bg-white px-8 py-4 md:block">
         <div class="flex items-center justify-between">
           <h1 class="text-lg font-semibold text-slate-900"><%= title.replace('Admin · ', '') %></h1>
           <div class="text-sm text-slate-500">
@@ -68,4 +134,33 @@
         </div>
       </header>
 
-      <div class="px-8 py-6">
+      <div class="admin-content flex-1 px-4 py-4 sm:px-6 md:px-8 md:py-6">
+<script>
+// Off-canvas drawer wiring. Kept inline + tiny — no framework, no build.
+// Any element with [data-drawer-open] opens; [data-drawer-close] closes;
+// Escape key closes. Body attribute drives CSS.
+(function () {
+  var body = document.body;
+  function setOpen(open) {
+    body.setAttribute('data-drawer-open', open ? 'true' : 'false');
+    var trigger = document.querySelector('[data-drawer-open]');
+    if (trigger) trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  document.addEventListener('click', function (e) {
+    var openBtn = e.target.closest && e.target.closest('[data-drawer-open]');
+    if (openBtn) { setOpen(true); return; }
+    var closeBtn = e.target.closest && e.target.closest('[data-drawer-close]');
+    if (closeBtn) { setOpen(false); }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') setOpen(false);
+  });
+  // Close automatically if the viewport is resized past the md breakpoint
+  // (768px) — otherwise data-drawer-open="true" from a mobile touch would
+  // leak into the desktop layout and lock scrolling.
+  var mq = window.matchMedia('(min-width: 768px)');
+  (mq.addEventListener ? mq.addEventListener.bind(mq, 'change') : mq.addListener.bind(mq))(function (e) {
+    if (e.matches) setOpen(false);
+  });
+})();
+</script>
