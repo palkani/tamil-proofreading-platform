@@ -8,6 +8,16 @@
   let currentResult = null;
   let isLoading = false;
 
+  // Freemium quota state. Loaded on page init for logged-in users; Pro
+  // users get { is_pro: true } and we hide the badge; Free users see
+  // remaining count in the badge and hit the paywall on exhaustion.
+  let quotaState = null;
+
+  function isLoggedIn() {
+    const root = document.querySelector('.ai-content-writer');
+    return root && root.getAttribute('data-user-logged-in') === 'true';
+  }
+
   // Initialize
   document.addEventListener('DOMContentLoaded', function() {
     initTabs();
@@ -16,7 +26,146 @@
     initTranslate();
     initCopyDownload();
     loadDraftFromUrl();
+    loadQuotaBadge();
+    restorePendingPromptAfterSignup();
   });
+
+  // If the user tried to generate while logged out, we stashed their
+  // prompt + settings in localStorage before showing the signup wall.
+  // After they sign up and land back here, restore those fields so
+  // they don't have to retype everything.
+  function restorePendingPromptAfterSignup() {
+    if (!isLoggedIn()) return;
+    let raw;
+    try { raw = localStorage.getItem('acw:pending_prompt'); } catch (e) { return; }
+    if (!raw) return;
+    let stashed;
+    try { stashed = JSON.parse(raw); } catch (e) {
+      try { localStorage.removeItem('acw:pending_prompt'); } catch (_) {}
+      return;
+    }
+    // Expire after 1 hour so an old prompt doesn't hijack a fresh session.
+    if (!stashed || !stashed.savedAt || (Date.now() - stashed.savedAt) > 60 * 60 * 1000) {
+      try { localStorage.removeItem('acw:pending_prompt'); } catch (_) {}
+      return;
+    }
+    const promptEl = document.getElementById('prompt-input');
+    if (promptEl && stashed.prompt) promptEl.value = stashed.prompt;
+    const setSelect = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && val != null) el.value = val;
+    };
+    setSelect('language-select', stashed.language);
+    setSelect('content-type-select', stashed.contentType);
+    setSelect('tone-select', stashed.tone);
+    if (stashed.wordCount) setSelect('word-count-select', String(stashed.wordCount));
+    const titleEl = document.getElementById('include-title-checkbox');
+    if (titleEl && typeof stashed.includeTitle === 'boolean') titleEl.checked = stashed.includeTitle;
+    const metaEl = document.getElementById('include-meta-checkbox');
+    if (metaEl && typeof stashed.includeMeta === 'boolean') metaEl.checked = stashed.includeMeta;
+    try { localStorage.removeItem('acw:pending_prompt'); } catch (_) {}
+  }
+
+  async function loadQuotaBadge() {
+    if (!isLoggedIn()) return;
+    try {
+      const res = await fetch('/api/ai-content-writer/quota', {
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      quotaState = data;
+      renderQuotaBadge();
+    } catch (err) {
+      console.warn('[QUOTA] Failed to load quota:', err.message);
+    }
+  }
+
+  function renderQuotaBadge() {
+    const badge = document.getElementById('quota-badge');
+    if (!badge || !quotaState) return;
+
+    // Pro users don't see the badge at all — matches how the workspace
+    // hides the credits pill for Pro. The tool feels unlimited because
+    // it IS unlimited for them.
+    if (quotaState.is_pro) {
+      badge.style.display = 'none';
+      return;
+    }
+
+    const remaining = Math.max(0, Number(quotaState.remaining) || 0);
+    const limit = Number(quotaState.limit) || 2;
+    const remainingText = document.getElementById('quota-remaining-text');
+    if (remainingText) {
+      remainingText.textContent = `${remaining} of ${limit}`;
+    }
+    badge.classList.toggle('exhausted', remaining === 0);
+    badge.style.display = 'flex';
+  }
+
+  // Paywall modal — used for BOTH the anonymous signup wall (401) and
+  // the Free-quota-exhausted paywall (402). Same DOM node; different
+  // copy/actions per variant.
+  function showPaywall(variant, ctx) {
+    const existing = document.getElementById('paywall-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'paywall-overlay';
+    overlay.className = 'paywall-overlay';
+
+    const isAuth = variant === 'auth_required';
+    const currentUrl = encodeURIComponent(window.location.pathname);
+    const signupUrl = `/signup?redirect=${currentUrl}`;
+    const loginUrl = `/login?redirect=${currentUrl}`;
+
+    const icon = isAuth ? '✨' : '🚀';
+    const heading = isAuth
+      ? 'Sign up to generate'
+      : "You've used your 2 free generations this week";
+    const body = isAuth
+      ? 'Free forever — 2 AI-written pieces every week, no credit card required.'
+      : 'Upgrade to Pro to keep going, or come back next Monday for a fresh quota.';
+
+    const perks = isAuth
+      ? [
+          '2 free generations per week',
+          'Save drafts + revise later',
+          'Tamil, English & bilingual output',
+        ]
+      : [
+          'Unlimited AI generations',
+          'Longer output + priority queue',
+          'Templates + saved brand voice',
+          'Advanced proofreading model',
+        ];
+
+    const primaryHref = isAuth ? signupUrl : '/pricing';
+    const primaryLabel = isAuth ? 'Sign up free' : 'Upgrade to Pro';
+    const secondaryHref = isAuth ? loginUrl : '/tools/ai-content-writer/drafts';
+    const secondaryLabel = isAuth ? 'I already have an account' : 'Back to my drafts';
+
+    overlay.innerHTML = `
+      <div class="paywall-modal" role="dialog" aria-modal="true" aria-labelledby="paywall-heading">
+        <span class="paywall-icon">${icon}</span>
+        <h2 id="paywall-heading">${heading}</h2>
+        <p>${body}</p>
+        <ul class="paywall-perks">
+          ${perks.map(p => `<li>${p}</li>`).join('')}
+        </ul>
+        <div class="paywall-actions">
+          <a href="${primaryHref}" class="paywall-btn-primary">${primaryLabel}</a>
+          <a href="${secondaryHref}" class="paywall-btn-secondary">${secondaryLabel}</a>
+        </div>
+      </div>
+    `;
+
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+  }
 
   function initTabs() {
     const tabs = document.querySelectorAll('.tab');
@@ -77,9 +226,35 @@
     const wordCount = parseInt(wordCountRaw, 10);
     const includeTitle = document.getElementById('include-title-checkbox').checked;
     const includeMeta = document.getElementById('include-meta-checkbox').checked;
-    
+
     if (!Number.isFinite(wordCount) || wordCount < 100 || wordCount > 3000) {
       showError('Please enter a valid word count between 100 and 3000');
+      return;
+    }
+
+    // Anonymous shortcut: never let a not-logged-in user reach the
+    // backend at all. The Express endpoint would 401 them anyway, but
+    // this avoids a wasted network round-trip and shows the modal
+    // instantly on click. We also stash the in-progress prompt in
+    // localStorage so signup → return-to-tool restores their intent.
+    if (!isLoggedIn()) {
+      try {
+        localStorage.setItem('acw:pending_prompt', JSON.stringify({
+          prompt, language, contentType, tone, wordCount,
+          includeTitle, includeMeta,
+          savedAt: Date.now(),
+        }));
+      } catch (e) { /* storage disabled — non-fatal */ }
+      showPaywall('auth_required');
+      return;
+    }
+
+    // Logged-in Free users out of quota: don't waste a Gemini call,
+    // paywall them immediately. Pro users have is_pro=true so this
+    // never fires. If quotaState hasn't loaded yet (initial page load
+    // race), fall through and let the server decide.
+    if (quotaState && !quotaState.is_pro && (quotaState.remaining || 0) <= 0) {
+      showPaywall('quota_exhausted');
       return;
     }
 
@@ -90,6 +265,7 @@
     try {
       const response = await fetch('/api/ai-content-writer/generate-content', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -106,12 +282,34 @@
 
       const data = await response.json();
 
+      if (response.status === 401 || data.error === 'auth_required') {
+        showPaywall('auth_required');
+        return;
+      }
+      if (response.status === 402 || data.error === 'quota_exhausted') {
+        // Server is the source of truth on quota exhaustion — sync
+        // local state before showing paywall so the badge matches.
+        if (data.quota) {
+          quotaState = data.quota;
+          renderQuotaBadge();
+        }
+        showPaywall('quota_exhausted');
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to generate content');
       }
 
       if (data.success) {
         currentResult = data;
+        // Server enriches successful responses with a fresh quota
+        // snapshot; update the badge so users see the countdown
+        // decrement without a page reload.
+        if (data.quota) {
+          quotaState = data.quota;
+          renderQuotaBadge();
+        }
         showResult(data, 'generate');
       } else {
         throw new Error(data.error || 'Failed to generate content');

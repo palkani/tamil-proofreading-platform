@@ -2550,21 +2550,150 @@ router.get('/ai-content-writer/health', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// AI Content Writer — Freemium quota helpers
+// ---------------------------------------------------------------------------
+// The Content Writer is a paid feature masquerading as a free demo, because
+// every generation costs ~2500 output tokens through Gemini. Phase 1 gate
+// (see docs/AI_CONTENT_WRITER_FREEMIUM.md): 2 successful generations per
+// rolling ISO week for Free users, unlimited for Pro.
+//
+// Enforcement lives here in the Express layer because that's where the
+// Gemini call is dispatched. The Go backend owns the counter (activity_events
+// table, event_type='ai_content_writer_request'). We check quota BEFORE the
+// call and write the consume event AFTER a successful generation — failed
+// calls don't burn quota.
+
+// buildBackendHeaders forwards the incoming request's auth (cookie +
+// Authorization header) to the Go backend so quota calls resolve to the
+// same user_id the backend sees for /api/v1/submit and friends.
+function buildBackendHeaders(req) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (req.headers.authorization) {
+    headers.Authorization = req.headers.authorization;
+  }
+  if (req.headers.cookie) {
+    headers.Cookie = req.headers.cookie;
+  }
+  return headers;
+}
+
+// checkContentWriterQuota returns { allowed, quota, statusCode } where:
+//   allowed=false + statusCode=401 → not logged in, send signup wall
+//   allowed=false + statusCode=402 → logged in Free user out of quota
+//   allowed=true                    → proceed to generate
+// Never throws — network errors fail OPEN (allowed=true) so the tool
+// doesn't break during a Cloud Run cold start. The generation itself
+// is still cost-capped by Gemini rate limits in that failure mode.
+async function checkContentWriterQuota(req) {
+  const backend = (req._backendUrl || BACKEND_URL || '').replace(/\/$/, '');
+  if (!backend) {
+    console.warn('[AI-CONTENT-WRITER] No backend URL configured; failing open on quota check');
+    return { allowed: true, quota: null };
+  }
+  const url = `${backend}/ai-content-writer/quota`;
+  try {
+    const response = await axiosWithColdStartRetry({
+      method: 'GET',
+      url,
+      headers: buildBackendHeaders(req),
+      validateStatus: () => true,
+      timeout: 8000,
+    });
+    if (response.status === 401) {
+      return { allowed: false, statusCode: 401, quota: null };
+    }
+    if (response.status < 200 || response.status >= 300) {
+      console.warn(`[AI-CONTENT-WRITER] Quota check failed (${response.status}); failing open`);
+      return { allowed: true, quota: null };
+    }
+    const quota = response.data || {};
+    if (quota.is_pro) {
+      return { allowed: true, quota };
+    }
+    if (typeof quota.remaining === 'number' && quota.remaining <= 0) {
+      return { allowed: false, statusCode: 402, quota };
+    }
+    return { allowed: true, quota };
+  } catch (err) {
+    console.warn('[AI-CONTENT-WRITER] Quota check errored; failing open:', err.message);
+    return { allowed: true, quota: null };
+  }
+}
+
+// consumeContentWriterQuota is fire-and-forget — a failure to record
+// costs the user one extra generation this week; a failure of the whole
+// tool would cost far more. Called after a successful generation.
+function consumeContentWriterQuota(req, meta) {
+  const backend = (req._backendUrl || BACKEND_URL || '').replace(/\/$/, '');
+  if (!backend) return;
+  const url = `${backend}/ai-content-writer/consume`;
+  axiosWithPool.post(url, meta || {}, {
+    headers: buildBackendHeaders(req),
+    validateStatus: () => true,
+    timeout: 6000,
+  }).catch((err) => {
+    console.warn('[AI-CONTENT-WRITER] Consume write failed (non-fatal):', err.message);
+  });
+}
+
 // Generate content endpoint
 router.post('/ai-content-writer/generate-content', async (req, res) => {
   try {
     if (ENABLE_PROXY_LOGS) {
       console.log('[AI-CONTENT-WRITER] POST /generate-content');
     }
-    
+
     if (!contentWriterService) {
       return res.status(503).json({
         error: 'AI Content Writer service is not available',
         details: 'The Python Flask API may not be running. Please check the service.'
       });
     }
-    
+
+    // Freemium gate: check quota before spending a Gemini call.
+    const gate = await checkContentWriterQuota(req);
+    if (!gate.allowed) {
+      if (gate.statusCode === 401) {
+        return res.status(401).json({
+          error: 'auth_required',
+          message: 'Sign up free to generate — 2 pieces per week, no credit card.',
+        });
+      }
+      if (gate.statusCode === 402) {
+        return res.status(402).json({
+          error: 'quota_exhausted',
+          message: "You've used your 2 free generations this week. Upgrade to Pro for unlimited.",
+          quota: gate.quota,
+          upgrade_url: '/pricing',
+        });
+      }
+    }
+
     const result = await contentWriterService.generateContent(req.body);
+
+    // Record consumption on success. Fire-and-forget so it doesn't slow
+    // the response. Pro users still get logged for analytics parity —
+    // the count just doesn't matter for their gate.
+    consumeContentWriterQuota(req, {
+      content_type: req.body?.content_type || 'blog',
+      language: req.body?.language || 'english',
+      word_count: Number(req.body?.word_count) || 0,
+    });
+
+    // Enrich response with fresh quota state so the frontend can update
+    // its badge without a second round-trip. The consume write above is
+    // async so we increment locally to keep the UX consistent.
+    if (gate.quota) {
+      const nextUsed = (gate.quota.used || 0) + 1;
+      const nextRemaining = Math.max(0, (gate.quota.limit || 0) - nextUsed);
+      result.quota = {
+        ...gate.quota,
+        used: nextUsed,
+        remaining: nextRemaining,
+      };
+    }
+
     return res.json(result);
   } catch (error) {
     console.error('[AI-CONTENT-WRITER] Generate content error:', error.message);
@@ -2573,6 +2702,22 @@ router.post('/ai-content-writer/generate-content', async (req, res) => {
       details: error.details || error.response?.data?.error || error.message
     });
   }
+});
+
+// Read-only quota endpoint proxied to the backend. Used by the frontend
+// on page load to render the "2 of 2 free generations left this week"
+// badge before the user even hits Generate.
+router.get('/ai-content-writer/quota', async (req, res) => {
+  const gate = await checkContentWriterQuota(req);
+  if (gate.statusCode === 401) {
+    return res.status(401).json({ error: 'auth_required' });
+  }
+  if (!gate.quota) {
+    // Backend unreachable — return an optimistic placeholder so the
+    // frontend badge doesn't crash. Not user-visible in a Pro session.
+    return res.json({ is_pro: false, used: 0, limit: 2, remaining: 2, resets_at: null });
+  }
+  return res.json(gate.quota);
 });
 
 // Render a blog template for preview/publishing (deterministic, no AI)

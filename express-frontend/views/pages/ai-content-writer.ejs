@@ -23,6 +23,16 @@
       </p>
     </div>
 
+    <!-- Freemium quota badge (populated by JS on page load for
+         logged-in Free users; hidden for anonymous + Pro users). -->
+    <div id="quota-badge" class="quota-badge" style="display: none;" role="status" aria-live="polite">
+      <span class="quota-badge-icon">🎁</span>
+      <span class="quota-badge-text">
+        <strong id="quota-remaining-text">2 of 2</strong> free generations left this week ·
+        <a href="/pricing" class="quota-badge-cta">Upgrade to Pro for unlimited</a>
+      </span>
+    </div>
+
     <!-- Tabs -->
     <div class="tabs">
       <button class="tab active" data-tab="generate">

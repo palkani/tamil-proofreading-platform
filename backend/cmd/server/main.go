@@ -593,6 +593,14 @@ func main() {
 	r.GET("/api/v1/ocr/download/:filename", h.OCRDownload)
 	r.GET("/api/v1/ocr/health", h.OCRHealth)
 
+	// AI Content Writer quota endpoints. Weekly rolling window; 2/week
+	// for Free, effectively unlimited for Pro. Both require auth —
+	// anonymous callers get 401 from AuthMiddleware, which Express
+	// translates into the signup wall on the /tools/ai-content-writer
+	// page.
+	r.GET("/api/v1/ai-content-writer/quota", middleware.AuthMiddleware(cfg.JWTSecret), h.GetAIContentWriterQuota)
+	r.POST("/api/v1/ai-content-writer/consume", middleware.AuthMiddleware(cfg.JWTSecret), h.ConsumeAIContentWriterQuota)
+
 	readyHandler.Store(r)
 	log.Printf("[STARTUP] Backend ready; full router active")
 

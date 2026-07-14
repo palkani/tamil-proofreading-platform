@@ -24,6 +24,12 @@ const (
 	EventAIRequest        ActivityEventType = "ai_request"
 	EventSuggestionAccept ActivityEventType = "suggestion_accept"
 	EventSuggestionReject ActivityEventType = "suggestion_reject"
+	// EventAIContentWriterRequest is written once per successful AI Content
+	// Writer generation (blog / essay / article / story). Used as the quota
+	// source for the 2-per-week Free tier limit — the quota handler counts
+	// rows in this table filtered by user_id + occurred_at >= start_of_week.
+	// Writes on SUCCESS only; failed generations don't consume quota.
+	EventAIContentWriterRequest ActivityEventType = "ai_content_writer_request"
 )
 
 // VisitEvent tracks page views and visitor sessions
