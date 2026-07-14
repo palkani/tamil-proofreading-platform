@@ -112,6 +112,19 @@ func EnsureCoreSchema(db *gorm.DB) {
 		}
 	}
 
+	// ── users table billing columns ─────────────────────────────────
+	// Every column below is referenced by the running Register handler,
+	// billing webhooks, or admin ops panel. Without them present in the
+	// prod DB, the very first request that touches one hits SQLSTATE
+	// 42703 — most visibly, signup fails with:
+	//   ERROR: column "pro_welcomed_at" of relation "users" does not exist
+	// Idempotent via ADD COLUMN IF NOT EXISTS. Source of truth for the
+	// column list is migrations/billing_migration.go so both flows stay
+	// in sync.
+	if err := EnsureUserBillingColumns(db); err != nil {
+		log.Printf("[SCHEMA] Warning: ensure user billing columns failed: %v", err)
+	}
+
 	// ── Observability tables ────────────────────────────────────────
 	// Every table below is defined as a Go model and written to by
 	// fire-and-forget goroutines. If the table doesn't exist, the

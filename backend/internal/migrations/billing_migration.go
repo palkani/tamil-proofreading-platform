@@ -112,6 +112,20 @@ func MigrateBilling(db *gorm.DB) error {
 	return nil
 }
 
+// EnsureUserBillingColumns runs the same idempotent ALTER TABLE IF NOT
+// EXISTS block that migrateUserBillingColumns runs internally, but is
+// exported so it can be called from EnsureCoreSchema (which fires on
+// EVERY startup, unconditional). Without this call, a fresh production
+// deploy that references e.g. users.pro_welcomed_at hits SQLSTATE 42703
+// during register/webhook flows the moment a new billing column lands
+// on the model but hasn't been backfilled into the DB.
+//
+// Prefer THIS over migrateUserBillingColumns in any code path outside
+// the RUN_MIGRATIONS=true admin flow.
+func EnsureUserBillingColumns(db *gorm.DB) error {
+	return migrateUserBillingColumns(db)
+}
+
 func migrateUserBillingColumns(db *gorm.DB) error {
 	// Use raw SQL with IF NOT EXISTS to reliably add billing columns.
 	// This avoids GORM Migrator issues with Supabase pgBouncer (bind message / prepared statement errors).
