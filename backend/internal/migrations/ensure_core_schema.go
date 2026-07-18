@@ -125,16 +125,25 @@ func EnsureCoreSchema(db *gorm.DB) {
 		log.Printf("[SCHEMA] Warning: ensure user billing columns failed: %v", err)
 	}
 
-	// ── Observability tables ────────────────────────────────────────
-	// Every table below is defined as a Go model and written to by
-	// fire-and-forget goroutines. If the table doesn't exist, the
-	// insert fails silently with a warning log ([AI_LOG], [ACTIVITY_LOG])
-	// and the ADMIN DASHBOARD shows empty stats for that class of event.
-	// That's exactly what bit us with activity_events — the admin
-	// asked "why do I see no non-admin login activity?" — answer:
-	// the table didn't exist, every write since deploy was dropped.
-	// AutoMigrate here creates each table + model-declared indexes
-	// idempotently, safe on every startup.
+	// ── Tables that MUST exist regardless of RUN_MIGRATIONS ─────────
+	// Two categories live here:
+	//
+	//   1. Observability tables. Written by fire-and-forget goroutines;
+	//      when missing, inserts fail silently ([AI_LOG], [ACTIVITY_LOG])
+	//      and the admin dashboard shows empty stats. That's what bit us
+	//      with activity_events — the admin asked "why do I see no
+	//      non-admin login activity?" — answer: the table didn't exist,
+	//      every write since deploy was dropped.
+	//
+	//   2. User-facing billing tables. When missing, the write fails
+	//      loudly (SQLSTATE 42P01, relation does not exist) and the
+	//      feature is broken end-to-end. checkout_attempts belongs here
+	//      because CreateCheckoutSession writes to it synchronously as
+	//      the user clicks Upgrade — a missing table returns a 500 and
+	//      the upgrade flow dies.
+	//
+	// AutoMigrate is idempotent: it creates missing tables + model-declared
+	// indexes; existing tables are untouched. Safe on every startup.
 	observabilityModels := []struct {
 		name  string
 		model any
@@ -143,6 +152,9 @@ func EnsureCoreSchema(db *gorm.DB) {
 		{"activity_events", &models.ActivityEvent{}},
 		{"anonymous_submission_events", &models.AnonymousSubmissionEvent{}},
 		{"visit_events", &models.VisitEvent{}},
+		// Billing — synchronously written by the checkout flow. Same
+		// class of bug as the observability tables above but user-facing.
+		{"checkout_attempts", &models.CheckoutAttempt{}},
 	}
 	for _, m := range observabilityModels {
 		if err := db.AutoMigrate(m.model); err != nil {
