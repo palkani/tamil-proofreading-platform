@@ -128,23 +128,27 @@ router.get('/how-to-use', (req, res) => {
   });
 });
 
-// OCR Tool page - accessible to everyone
+// OCR is temporarily under maintenance. Both /tools/ocr (printed) and
+// /tools/handwriting-ocr point at the same maintenance page. To restore:
+// revert this block to the previous res.render calls (ocr-tool /
+// handwriting-ocr-tool). Corresponding API endpoints in routes/api.js
+// are also gated — remove the `router.use('/ocr', ...)` block there
+// at the same time.
 router.get('/tools/ocr', (req, res) => {
   const user = getCurrentUser(req);
   const seo = getSeoData('ocrTool');
-  res.render('pages/ocr-tool', { 
-    title: 'Tamil OCR Tool - Extract Text from Images | ProofTamil',
+  res.status(503).render('pages/ocr-maintenance', {
+    title: 'Tamil OCR — Under Maintenance | ProofTamil',
     seo: seo,
     user: user
   });
 });
 
-// Tamil Handwriting to Text tool page - accessible to everyone
 router.get('/tools/handwriting-ocr', (req, res) => {
   const user = getCurrentUser(req);
   const seo = getSeoData('handwritingOcrTool');
-  res.render('pages/handwriting-ocr-tool', {
-    title: 'Tamil Handwriting to Text - Handwritten Notes OCR | ProofTamil',
+  res.status(503).render('pages/ocr-maintenance', {
+    title: 'Tamil Handwriting OCR — Under Maintenance | ProofTamil',
     seo: seo,
     user: user
   });

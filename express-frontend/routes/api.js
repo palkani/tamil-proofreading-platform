@@ -1684,6 +1684,26 @@ try {
   console.warn('[AI-CONTENT-WRITER] Service not available:', error.message);
 }
 
+// ── OCR maintenance gate ─────────────────────────────────────────
+// Both /ocr/* (printed) and /handwriting-ocr/* (handwriting) endpoints
+// are gated with 503 while the OCR pipeline is being upgraded. The
+// tool pages themselves render a maintenance view (see routes/index.js
+// for /tools/ocr and /tools/handwriting-ocr) — this gate is defence
+// in depth for direct API callers (cached pages, scrapers, integrations).
+// To restore: delete both router.use() calls below.
+const ocrMaintenanceHandler = (req, res) => {
+  res.set('Retry-After', '86400'); // hint to well-behaved clients: try again in ~24h
+  res.status(503).json({
+    error: 'OCR is temporarily under maintenance',
+    message: 'The Tamil OCR service is offline for improvements. Please try again later.',
+    status: 'maintenance',
+    docs_url: 'https://prooftamil.com/tools/ocr'
+  });
+};
+router.use('/ocr', ocrMaintenanceHandler);
+router.use('/handwriting-ocr', ocrMaintenanceHandler);
+// ─────────────────────────────────────────────────────────────────
+
 // OCR health check endpoint
 router.get('/ocr/health', (req, res) => {
   try {
