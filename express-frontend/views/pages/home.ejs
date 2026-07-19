@@ -264,10 +264,14 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
             Start Free — No Credit Card
           </a>
-          <a href="/tools/handwriting-ocr" class="btn-hero-outline w-full sm:w-auto justify-center">
+          <!-- OCR under maintenance — CTA disabled with "coming back soon"
+               badge. Restore: swap <span> back to <a href="/tools/handwriting-ocr">
+               and drop the opacity/badge markup. -->
+          <span class="btn-hero-outline w-full sm:w-auto justify-center opacity-60 cursor-not-allowed pointer-events-none relative" aria-disabled="true" title="Tamil OCR is under maintenance — coming back soon">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-            Try Tamil OCR Free
-          </a>
+            Tamil OCR
+            <span class="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded-full font-semibold uppercase tracking-wider">Coming soon</span>
+          </span>
         <% } %>
       </div>
 
@@ -700,10 +704,12 @@
             <li class="flex items-center gap-2 text-sm text-gray-600"><span class="w-4 h-4 rounded-full flex items-center justify-center text-xs" style="background:#FEF3C7;color:#D97706;">✓</span> JPG, PNG supported</li>
             <li class="flex items-center gap-2 text-sm text-gray-600"><span class="w-4 h-4 rounded-full flex items-center justify-center text-xs" style="background:#FEF3C7;color:#D97706;">✓</span> No sign-up required</li>
           </ul>
-          <a href="/tools/handwriting-ocr" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all hover:opacity-90"
+          <!-- OCR under maintenance — CTA disabled with "coming soon" badge. -->
+          <span class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm opacity-60 cursor-not-allowed pointer-events-none" aria-disabled="true" title="Under maintenance — coming back soon"
              style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#ffffff;">
-            Try OCR Now →
-          </a>
+            OCR Coming Soon
+            <span class="text-[10px] px-1.5 py-0.5 bg-white/30 text-white rounded-full uppercase tracking-wider">Maintenance</span>
+          </span>
         </div>
 
         <!-- CARD 3: AI Content Writer -->
@@ -1214,12 +1220,13 @@
               <span class="text-green-600 font-semibold">● ProofReading AI</span>
             </div>
 
-            <!-- CTA -->
-            <a href="/tools/handwriting-ocr"
-               class="flex items-center justify-center gap-2 w-full px-5 py-3 rounded-full font-bold text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all text-sm"
+            <!-- CTA — OCR under maintenance, disabled with badge. -->
+            <span aria-disabled="true" title="Under maintenance — coming back soon"
+               class="flex items-center justify-center gap-2 w-full px-5 py-3 rounded-full font-bold text-white shadow-lg text-sm opacity-60 cursor-not-allowed pointer-events-none"
                style="background: linear-gradient(135deg, #92400e 0%, #d97706 60%, #ea580c 100%);">
-              ✍️ Try Handwriting to Text — Free
-            </a>
+              ✍️ Handwriting OCR
+              <span class="text-[10px] px-1.5 py-0.5 bg-white/25 text-white rounded-full uppercase tracking-wider">Coming soon</span>
+            </span>
           </div>
         </div>
       </div>
@@ -1366,9 +1373,11 @@
             Try ProofTamil Free
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
           </a>
-          <a href="/tools/handwriting-ocr" style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.9rem 2.25rem;border-radius:1rem;font-weight:600;font-size:1rem;color:#C7D2FE;border:1.5px solid rgba(255,255,255,0.25);transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">
-            Try Handwriting OCR
-          </a>
+          <!-- OCR under maintenance — CTA disabled with badge. -->
+          <span aria-disabled="true" title="Under maintenance — coming back soon" style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.9rem 2.25rem;border-radius:1rem;font-weight:600;font-size:1rem;color:#C7D2FE;border:1.5px solid rgba(255,255,255,0.15);opacity:0.55;cursor:not-allowed;">
+            Handwriting OCR
+            <span style="font-size:10px;padding:2px 8px;background:rgba(255,255,255,0.15);color:#E0E7FF;border-radius:9999px;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">Coming soon</span>
+          </span>
         </div>
       <% } %>
 
