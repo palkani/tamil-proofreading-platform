@@ -478,7 +478,7 @@ router.post('/corrections', async (req, res) => {
         const v2Result = await getV2Corrections(text, process.env.PROOFREAD_V2_BASE);
         if (v2Result) return res.json(v2Result);
       } catch (v2Err) {
-        console.warn('[corrections] v2 adapter failed; falling back to v1:', v2Err.message);
+        console.warn('[v2] proofread FALLBACK (error):', v2Err.message);
       }
     }
 
@@ -962,7 +962,7 @@ router.post('/corrections/stream', async (req, res) => {
           return res.end();
         }
       } catch (v2Err) {
-        console.warn('[corrections/stream] v2 adapter failed; falling back to v1:', v2Err.message);
+        console.warn('[v2] proofread FALLBACK (error, stream):', v2Err.message);
       }
     }
 
