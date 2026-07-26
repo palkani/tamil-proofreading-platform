@@ -1,123 +1,89 @@
 """
-Tamil Handwriting OCR Engine using Deep Learning (optional).
-Requires: torch, numpy, opencv. Place model at MODEL_PATH (e.g. models/tamil_ocr.pth).
-If torch is not installed, api_server runs in preprocess+segment-only mode.
+ocr_engine.py — Gemini vision transcription (plan §4.3, §5.1).
+
+Replaces the old Tesseract/torch path. Each line image is transcribed by a strong
+vision model under a strict "reproduce exactly, do not translate/autocorrect"
+prompt. We run TWO passes per line (Pass A / Pass B): where the two disagree is a
+strong signal the model is guessing — confidence.py uses that to flag words.
+
+Env:
+  GEMINI_API_KEY           required
+  GEMINI_MODEL             primary model      (default gemini-2.5-pro)
+  GEMINI_MODEL_FALLBACK    on primary error   (default gemini-2.5-flash)
 """
 
-import numpy as np
-import cv2
-from typing import List, Optional, Tuple
-from pathlib import Path
+from __future__ import annotations
+
 import logging
-from dataclasses import dataclass
+import os
+from typing import Dict, List
+
+import google.generativeai as genai
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-try:
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
+MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+MODEL_FALLBACK = os.getenv("GEMINI_MODEL_FALLBACK", "gemini-2.5-flash")
 
-# Tamil character set for OCR
-TAMIL_CHARS = [
-    '<blank>', ' ', 'அ', 'ஆ', 'இ', 'ஈ', 'உ', 'ஊ', 'எ', 'ஏ', 'ஐ', 'ஒ', 'ஓ', 'ஔ',
-    'க', 'ங', 'ச', 'ஞ', 'ட', 'ண', 'த', 'ந', 'ப', 'ம', 'ய', 'ர', 'ல', 'வ', 'ழ', 'ள', 'ற', 'ன',
-    'ஜ', 'ஷ', 'ஸ', 'ஹ',
-    'ா', 'ி', 'ீ', 'ு', 'ூ', 'ெ', 'ே', 'ை', 'ொ', 'ோ', 'ௌ', '்', 'ஃ',
-    '௦', '௧', '௨', '௩', '௪', '௫', '௬', '௭', '௮', '௯', '௰',
-    '.', ',', '?', '!', '-', ':', ';', '"', "'", '(', ')', '<unk>', '<pad>',
-]
-if TAMIL_CHARS[0] != '<blank>':
-    TAMIL_CHARS = ['<blank>'] + [c for c in TAMIL_CHARS if c != '<blank>']
-IDX_TO_CHAR = {idx: c for idx, c in enumerate(TAMIL_CHARS)}
-NUM_CLASSES = len(TAMIL_CHARS)
+TRANSCRIBE_PROMPT = """You are an expert Tamil handwriting transcription engine.
+Transcribe the Tamil text in this image EXACTLY as written.
+
+Rules:
+1. Reproduce every Tamil character precisely, including compound letters
+   (உயிர்மெய்) and ligatures (க்ஷ, ஸ்ரீ, ஶ்ரீ).
+2. Preserve line breaks, punctuation, spacing, and numerals as written.
+3. Do NOT translate, transliterate, autocorrect, summarise, or add anything.
+4. If a character is truly unreadable, output [?] in its place.
+5. Output ONLY the transcribed text — no notes, no markdown, no quotes.
+
+Context (may help disambiguate handwriting): {context_hint}
+"""
+
+_CONFIGURED = False
 
 
-@dataclass
-class OCRResult:
-    text: str
-    confidence: float
-    char_confidences: List[float]
-    alternatives: List[Tuple[str, float]]
+def _ensure_configured() -> None:
+    global _CONFIGURED
+    if _CONFIGURED:
+        return
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        raise RuntimeError("GEMINI_API_KEY is not set")
+    genai.configure(api_key=key)
+    _CONFIGURED = True
 
 
-if TORCH_AVAILABLE:
-    class TamilCRNN(nn.Module):
-        def __init__(self, num_classes=NUM_CLASSES, hidden_size=256, num_layers=2, dropout=0.2):
-            super().__init__()
-            self.cnn = nn.Sequential(
-                nn.Conv2d(1, 64, 3, padding=1), nn.BatchNorm2d(64), nn.ReLU(inplace=True), nn.MaxPool2d(2, 2),
-                nn.Conv2d(64, 128, 3, padding=1), nn.BatchNorm2d(128), nn.ReLU(inplace=True), nn.MaxPool2d(2, 2),
-                nn.Conv2d(128, 256, 3, padding=1), nn.BatchNorm2d(256), nn.ReLU(inplace=True),
-                nn.Conv2d(256, 256, 3, padding=1), nn.BatchNorm2d(256), nn.ReLU(inplace=True), nn.MaxPool2d((2, 1), (2, 1)),
-                nn.Conv2d(256, 512, 3, padding=1), nn.BatchNorm2d(512), nn.ReLU(inplace=True),
-                nn.Conv2d(512, 512, 3, padding=1), nn.BatchNorm2d(512), nn.ReLU(inplace=True), nn.MaxPool2d((2, 1), (2, 1)),
-                nn.Conv2d(512, 512, 2, padding=0), nn.BatchNorm2d(512), nn.ReLU(inplace=True),
-            )
-            self.rnn = nn.LSTM(512, hidden_size, num_layers, bidirectional=True, batch_first=True, dropout=dropout if num_layers > 1 else 0)
-            self.fc = nn.Linear(hidden_size * 2, num_classes)
+# Deterministic: we want the same reading every time so a Pass A/B disagreement
+# reflects genuine ambiguity in the handwriting, not sampling randomness.
+_GEN_CONFIG = {"temperature": 0.0, "top_p": 1.0, "max_output_tokens": 2048}
 
-        def forward(self, x):
-            conv = self.cnn(x)
-            conv = conv.squeeze(2).permute(0, 2, 1)
-            rnn_out, _ = self.rnn(conv)
-            return F.log_softmax(self.fc(rnn_out), dim=2)
 
-    class TamilOCREngine:
-        def __init__(self, model_path=None, device=None, img_height=64, img_width=256):
-            self.img_height = img_height
-            self.img_width = img_width
-            self.device = torch.device(device or ('cuda' if torch.cuda.is_available() else 'cpu'))
-            self.model = TamilCRNN(num_classes=NUM_CLASSES)
-            self.model.to(self.device)
-            self.model.eval()
-            if model_path and Path(model_path).exists():
-                state_dict = torch.load(model_path, map_location=self.device)
-                self.model.load_state_dict(state_dict)
-                self.model.eval()
-                logger.info("Loaded model from %s", model_path)
-            else:
-                logger.warning("No model weights loaded. Recognition will be random.")
+def _call(model_name: str, image: Image.Image, prompt: str) -> str:
+    model = genai.GenerativeModel(model_name)
+    resp = model.generate_content([prompt, image], generation_config=_GEN_CONFIG)
+    return (getattr(resp, "text", "") or "").strip()
 
-        def preprocess_image(self, image: np.ndarray):
-            if len(image.shape) == 3:
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            h, w = image.shape
-            new_w = min(int(w * self.img_height / h), self.img_width)
-            image = cv2.resize(image, (new_w, self.img_height))
-            if new_w < self.img_width:
-                image = np.pad(image, ((0, 0), (0, self.img_width - new_w)), mode='constant', constant_values=0)
-            tensor = torch.from_numpy(image.astype(np.float32) / 255.0).unsqueeze(0).unsqueeze(0)
-            return tensor.to(self.device)
 
-        def _greedy_decode(self, output):
-            probs = output.exp()
-            max_probs, indices = probs.max(dim=1)
-            decoded, confidences, prev_idx = [], [], -1
-            for i, idx in enumerate(indices.tolist()):
-                if idx != prev_idx and idx != 0 and idx < len(IDX_TO_CHAR):
-                    decoded.append(IDX_TO_CHAR[idx])
-                    confidences.append(max_probs[i].item())
-                prev_idx = idx
-            return ''.join(decoded), (np.mean(confidences) if confidences else 0.0)
+def transcribe(image: Image.Image, context_hint: str = "") -> str:
+    """Transcribe one image. Retries once on the fallback model, then gives up with
+    '' so the caller (and the whole document) still completes."""
+    _ensure_configured()
+    prompt = TRANSCRIBE_PROMPT.format(context_hint=context_hint or "(none)")
+    try:
+        return _call(MODEL, image, prompt)
+    except Exception as e:
+        logger.warning("primary model %s failed (%s); trying %s", MODEL, e, MODEL_FALLBACK)
+        try:
+            return _call(MODEL_FALLBACK, image, prompt)
+        except Exception as e2:
+            logger.error("fallback model %s also failed: %s", MODEL_FALLBACK, e2)
+            return ""
 
-        @torch.no_grad()
-        def recognize(self, image: np.ndarray, beam_width=1) -> OCRResult:
-            tensor = self.preprocess_image(image)
-            output = self.model(tensor).squeeze(0)
-            text, confidence = self._greedy_decode(output)
-            return OCRResult(text=text, confidence=confidence, char_confidences=[], alternatives=[])
 
-    _engine = None
-
-    def get_ocr_engine(model_path=None):
-        global _engine
-        if _engine is None:
-            _engine = TamilOCREngine(model_path=model_path)
-        return _engine
-else:
-    TamilOCREngine = None  # type: ignore
-    get_ocr_engine = None  # type: ignore
+def transcribe_document(line_images: List[Image.Image], context_hint: str = "") -> Dict[str, List[str]]:
+    """Two full passes over every line. Returns {'pass_a': [...], 'pass_b': [...]}
+    with one entry per input line, aligned by index."""
+    pass_a = [transcribe(img, context_hint) for img in line_images]
+    pass_b = [transcribe(img, context_hint) for img in line_images]
+    return {"pass_a": pass_a, "pass_b": pass_b}

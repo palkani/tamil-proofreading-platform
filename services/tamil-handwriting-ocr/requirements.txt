@@ -1,6 +1,5 @@
 # Tamil Handwriting OCR - ProofTamil integration
-# Without torch: uses Tesseract (tam) fallback for printed/clear handwriting.
-# With torch + model: full handwritten Tamil recognition.
+# Gemini vision pipeline: preprocess -> segment -> 2-pass OCR -> correct -> confidence.
 
 # Web
 fastapi==0.109.0
@@ -13,8 +12,12 @@ numpy>=1.24.0
 pydantic>=2.0.0
 Pillow>=10.0.0
 
-# Tesseract fallback when ML model not loaded (install tesseract-ocr + tesseract-ocr-tam on system)
+# Vision OCR + correction (required for the Gemini pipeline)
+google-generativeai>=0.8.0
+
+# Optional legacy fallback (Tesseract) — kept for a fast/offline mode.
+# Install system tesseract-ocr + tesseract-ocr-tam to use it.
 pytesseract>=0.3.10
 
-# Optional: full recognition (uncomment and place model at MODEL_PATH)
+# Optional: a future fine-tuned handwriting model (plan §9)
 # torch>=2.0.0
