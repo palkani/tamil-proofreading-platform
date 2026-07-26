@@ -164,8 +164,8 @@
         <div class="flex items-center gap-3">
           <span class="text-3xl">✍️</span>
           <div>
-            <p class="text-lg font-bold leading-tight">Handwriting OCR is a Pro feature</p>
-            <p class="text-sm text-white/80 mt-0.5">Upgrade to extract text from your handwritten images</p>
+            <p class="text-lg font-bold leading-tight">You've used your free scan this week</p>
+            <p class="text-sm text-white/80 mt-0.5">Free includes 1 Handwriting OCR per week</p>
           </div>
         </div>
       </div>
@@ -191,7 +191,7 @@
             Create free account
           </a>
         </div>
-        <p class="text-xs text-gray-400 mt-3 text-center">✍️ 15 documents/month on Pro · resets on the 1st · Pro plans start from ₹199/month</p>
+        <p class="text-xs text-gray-400 mt-3 text-center">✍️ Free: 1 scan/week · Pro: 15/month · Pro plans start from ₹199/month</p>
       </div>
     </div>
 
@@ -510,8 +510,13 @@
       processBtn.disabled = false;
 
       if (!res.ok || data.error) {
+        if (data.error === 'login_required' || res.status === 401) {
+          // Session gone (page is login-gated, but the token can expire mid-session).
+          window.location.href = (data.login_url || '/login') + '?redirect=' + encodeURIComponent('/tools/handwriting-ocr');
+          return;
+        }
         if (data.upgrade_required) {
-          // Hide generic error, show upgrade card instead
+          // Free weekly limit reached → show the upgrade card instead of a raw error.
           errorEl.classList.add('hidden');
           document.getElementById('upgradeCard').classList.remove('hidden');
         } else {
