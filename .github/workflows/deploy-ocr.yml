@@ -1,0 +1,96 @@
+# Deploy the Tamil handwriting OCR service to Cloud Run.
+#
+# Manual (workflow_dispatch). Builds the FastAPI + Gemini pipeline image and deploys
+# it to Cloud Run in us-central1 (a domain-mapping-supported region), binding the
+# GEMINI_API_KEY from Secret Manager. Same GCP project / deploy SA / gemini secret as
+# the v2 services — no new cloud setup, just add these to THIS repo:
+#
+#   Secret:   GCP_SA_KEY   (the gh-deployer service-account JSON key)
+#   Variables: GCP_PROJECT (= prooftamil), GCP_REGION (= us-central1)
+#
+# After it deploys, map a domain (one-time) and point Vercel at it:
+#   gcloud beta run domain-mappings create --service prooftamil-ocr \
+#     --domain ocr.prooftamil.com --region us-central1
+#   → then add the printed CNAME in DNS, and set HANDWRITING_OCR_URL=https://ocr.prooftamil.com
+
+name: Deploy OCR service (Cloud Run)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [prod, staging]
+        default: prod
+
+concurrency:
+  group: deploy-ocr-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    env:
+      REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+      PROJECT: ${{ vars.GCP_PROJECT }}
+      SVC: prooftamil-ocr-${{ github.event.inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard — config present
+        run: |
+          test -n "$PROJECT" || { echo "::error::repo variable GCP_PROJECT is not set"; exit 1; }
+          echo "Deploying OCR to $PROJECT/$REGION as $SVC"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker + ensure Artifact Registry repo
+        run: |
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          gcloud artifacts repositories create prooftamil \
+            --repository-format=docker --location="$REGION" \
+            --description="ProofTamil images" 2>/dev/null || true
+
+      - name: Build & push
+        run: |
+          IMG="${REGION}-docker.pkg.dev/${PROJECT}/prooftamil/ocr"
+          TAG="${GITHUB_SHA::12}"
+          echo "IMG=$IMG" >> "$GITHUB_ENV"; echo "TAG=$TAG" >> "$GITHUB_ENV"
+          docker build -t "$IMG:$TAG" -t "$IMG:latest" services/tamil-handwriting-ocr
+          docker push "$IMG:$TAG"
+          docker push "$IMG:latest"
+
+      - name: Deploy
+        run: |
+          # min-instances 1 keeps it warm (image → text should feel instant); the
+          # pipeline can take a few seconds, so give it a generous request timeout.
+          gcloud run deploy "$SVC" \
+            --image "${IMG}:${TAG}" \
+            --region "$REGION" --port 8080 \
+            --allow-unauthenticated \
+            --min-instances 1 --max-instances 10 \
+            --cpu 1 --memory 1Gi --timeout 120 \
+            --set-env-vars "GEMINI_MODEL=gemini-2.5-pro,GEMINI_MODEL_FALLBACK=gemini-2.5-flash" \
+            --set-secrets "GEMINI_API_KEY=gemini:latest" \
+            --quiet
+
+          URL=$(gcloud run services describe "$SVC" --region "$REGION" --format='value(status.url)')
+          echo "OCR service → $URL"
+          curl -fsS --retry 8 --retry-all-errors --retry-delay 3 "$URL/health" && echo
+          {
+            echo "### OCR deployed"
+            echo "- service: \`$SVC\` ($REGION)"
+            echo "- url: $URL"
+            echo ""
+            echo "Next: map a domain and set \`HANDWRITING_OCR_URL\` on Vercel to it."
+          } >> "$GITHUB_STEP_SUMMARY"
