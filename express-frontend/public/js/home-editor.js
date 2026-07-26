@@ -153,6 +153,24 @@ function normalizeTamilWord(item) {
   return String(raw || '').trim();
 }
 
+// Bilingual suggestion-type badge (Tamil · English) — matches the workspace panel
+// (suggestions.js getTypeLabel) so both editors' AI Assistant badges read identically.
+function bilingualTypeLabel(type) {
+  const t = (type || 'grammar').toLowerCase();
+  const ta = {
+    grammar: 'இலக்கணம்', style: 'நடை', clarity: 'தெளிவு', spelling: 'எழுத்துப்பிழை',
+    punctuation: 'நிறுத்தற்குறி', 'word choice': 'சொல் தேர்வு',
+    'incomplete word': 'முழுமையற்ற சொல்', sandhi: 'புணர்ச்சி', agreement: 'ஒப்புமை',
+  };
+  const en = {
+    grammar: 'Grammar', style: 'Style', clarity: 'Clarity', spelling: 'Spelling',
+    punctuation: 'Punctuation', 'word choice': 'Word Choice',
+    'incomplete word': 'Incomplete Word', sandhi: 'Sandhi', agreement: 'Agreement',
+  };
+  const cap = t.charAt(0).toUpperCase() + t.slice(1);
+  return `${ta[t] || cap} · ${en[t] || cap}`;
+}
+
 function firstTextNode(root) {
   if (!root) return null;
   if (root.nodeType === Node.TEXT_NODE) return root;
@@ -2053,7 +2071,7 @@ class HomeEditor {
     }
     
     const suggestionsHTML = suggestions.map((suggestion, index) => {
-      const typeLabel = (suggestion.type || 'grammar').toUpperCase();
+      const typeLabel = bilingualTypeLabel(suggestion.type);
       const hasCorrection = suggestion.original && suggestion.corrected;
       const hasAlternatives = suggestion.alternatives && Array.isArray(suggestion.alternatives) && suggestion.alternatives.length > 0;
       
