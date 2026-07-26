@@ -15,6 +15,7 @@ const ocrDailyLimit = require('../middleware/ocrDailyLimit');
 
 // Latency-based regional backend resolver (Asia vs US Cloud Run instances)
 const { getRegionalBackendUrl } = require('../utils/regional-backend');
+const { getV2Corrections } = require('../lib/v2-proofread');
 
 // SEO automation service
 const seoAutomation = require('../services/seo-automation');
@@ -465,6 +466,20 @@ router.post('/corrections', async (req, res) => {
         corrections: [],
         error: `Text exceeds maximum length (${MAX_CORRECTIONS_TEXT_CHARS} characters). Consider splitting the document.`
       });
+    }
+
+    // ── v2 proofreading adapter (flag-gated by PROOFREAD_V2_BASE) ──────────────
+    // When set, serve corrections from the ProofTamil v2 cascade via the gateway,
+    // translated to this endpoint's shape. On ANY failure getV2Corrections returns
+    // null (or throws) and we fall through to the existing Gemini path below — so
+    // enabling v2 can never make corrections worse than they are today.
+    if (process.env.PROOFREAD_V2_BASE) {
+      try {
+        const v2Result = await getV2Corrections(text, process.env.PROOFREAD_V2_BASE);
+        if (v2Result) return res.json(v2Result);
+      } catch (v2Err) {
+        console.warn('[corrections] v2 adapter failed; falling back to v1:', v2Err.message);
+      }
     }
 
     // Cache hit: return immediately without hitting any backend or Gemini
