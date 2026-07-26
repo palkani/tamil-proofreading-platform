@@ -1724,8 +1724,10 @@ const ocrMaintenanceHandler = (req, res) => {
     docs_url: 'https://prooftamil.com/tools/ocr'
   });
 };
-router.use('/ocr', ocrMaintenanceHandler);
-router.use('/handwriting-ocr', ocrMaintenanceHandler);
+// OCR re-enabled (Gemini vision pipeline). The maintenance handler is kept above
+// so the gate can be reinstated instantly by uncommenting these two lines.
+// router.use('/ocr', ocrMaintenanceHandler);
+// router.use('/handwriting-ocr', ocrMaintenanceHandler);
 // ─────────────────────────────────────────────────────────────────
 
 // OCR health check endpoint
@@ -2066,6 +2068,45 @@ router.post('/handwriting-ocr/extract-words', ocrDailyLimit(), uploadHandwriting
 
   const t0 = Date.now();
 
+  // Optional topic hint the user types ("history notes", "a recipe") — helps the
+  // model disambiguate ambiguous handwriting.
+  const contextHint = ((req.body && req.body.context) || '').toString().slice(0, 300).trim();
+  const contextLine = contextHint
+    ? `\nContext (topic of these notes, may help disambiguate handwriting): ${contextHint}`
+    : '';
+
+  // Prefer the dedicated Gemini OCR pipeline service (preprocess → 2-pass → correct
+  // → confidence) when it's deployed. Dormant until HANDWRITING_OCR_URL is set; on
+  // any error we fall through to the inline direct-Gemini path below.
+  if (HANDWRITING_OCR_URL) {
+    try {
+      const form = new FormData();
+      form.append('file', req.file.buffer, { filename: req.file.originalname || 'image', contentType: req.file.mimetype });
+      form.append('context', contextHint);
+      form.append('mode', (req.body && req.body.mode === 'fast') ? 'fast' : 'accurate');
+      const svc = await axiosWithPool.post(
+        `${HANDWRITING_OCR_URL.replace(/\/$/, '')}/api/ocr/extract-words`,
+        form,
+        { headers: form.getHeaders(), timeout: 90000 }
+      );
+      const d = svc.data || {};
+      if (d.success && (d.full_text || d.text)) {
+        return res.json({
+          success: true,
+          full_text: d.full_text || d.text || '',
+          lines: (d.full_text || d.text || '').split('\n').filter(Boolean),
+          words: Array.isArray(d.words) ? d.words : [],
+          flagged_words: Array.isArray(d.flagged_words) ? d.flagged_words : [],
+          confidence_pct: typeof d.confidence_pct === 'number' ? d.confidence_pct : null,
+          processing_time_ms: Date.now() - t0,
+          model_used: d.engine || 'pipeline'
+        });
+      }
+    } catch (e) {
+      console.warn('[HANDWRITING-OCR] pipeline service failed, falling back to inline Gemini:', e.message);
+    }
+  }
+
   const imageBase64 = req.file.buffer.toString('base64');
   const mimeType = req.file.mimetype;
 
@@ -2085,7 +2126,7 @@ router.post('/handwriting-ocr/extract-words', ocrDailyLimit(), uploadHandwriting
             {
               text: `You are an expert OCR system specialized in handwritten Tamil script (தமிழ் கையெழுத்து).
 
-${langInstruction}
+${langInstruction}${contextLine}
 
 Carefully examine this image and extract ALL visible handwritten text — notes, letters, words, and sentences. Read every line from top to bottom, left to right.
 
@@ -2143,11 +2184,24 @@ Output ONLY the raw JSON — no markdown, no preamble.`
 
     console.log(`[HANDWRITING-OCR] lang=${lang} extracted ${words.length} words, ${lines.length} lines in ${processingMs}ms`);
 
+    // Confidence layer derived from the per-word scores, so the response shape
+    // matches the pipeline service (confidence_pct + flagged_words for the UI).
+    const LOW_CONF = 0.65;
+    const scoredWords = words.filter(w => w && typeof w.confidence === 'number');
+    const flaggedWords = scoredWords
+      .filter(w => w.confidence < LOW_CONF)
+      .map(w => ({ word: w.text, reason: 'low_confidence', confidence: Math.round(w.confidence * 100) / 100 }));
+    const confidencePct = scoredWords.length
+      ? Math.round((scoredWords.filter(w => w.confidence >= LOW_CONF).length / scoredWords.length) * 100) / 100
+      : null;
+
     return res.json({
       success: true,
       full_text: fullText,
       lines,
       words,
+      flagged_words: flaggedWords,
+      confidence_pct: confidencePct,
       lines_count: lines.length,
       words_count: words.length || fullText.split(/\s+/).filter(Boolean).length,
       processing_time_ms: processingMs,

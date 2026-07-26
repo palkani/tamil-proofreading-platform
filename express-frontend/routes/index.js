@@ -137,8 +137,8 @@ router.get('/how-to-use', (req, res) => {
 router.get('/tools/ocr', (req, res) => {
   const user = getCurrentUser(req);
   const seo = getSeoData('ocrTool');
-  res.status(503).render('pages/ocr-maintenance', {
-    title: 'Tamil OCR — Under Maintenance | ProofTamil',
+  res.render('pages/ocr-tool', {
+    title: 'Tamil OCR — Extract Tamil Text from Images & PDFs | ProofTamil',
     seo: seo,
     user: user
   });
@@ -147,8 +147,8 @@ router.get('/tools/ocr', (req, res) => {
 router.get('/tools/handwriting-ocr', (req, res) => {
   const user = getCurrentUser(req);
   const seo = getSeoData('handwritingOcrTool');
-  res.status(503).render('pages/ocr-maintenance', {
-    title: 'Tamil Handwriting OCR — Under Maintenance | ProofTamil',
+  res.render('pages/handwriting-ocr-tool', {
+    title: 'Tamil Handwriting to Text — Convert Handwritten Tamil Online | ProofTamil',
     seo: seo,
     user: user
   });
