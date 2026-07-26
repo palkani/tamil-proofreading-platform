@@ -10,9 +10,15 @@
   .word-chip.high   { background: #dcfce7; border-color: #86efac; color: #166534; }
   .word-chip.mid    { background: #fef9c3; border-color: #fde047; color: #713f12; }
   .word-chip.low    { background: #f3f4f6; border-color: #d1d5db; color: #374151; }
-  .step-dot { width: 10px; height: 10px; border-radius: 50%; background: #d1d5db; transition: background 0.3s; }
-  .step-dot.active  { background: #b45309; }
-  .step-dot.done    { background: #16a34a; }
+  .step-dot { width: 12px; height: 12px; border-radius: 50%; background: #e5e7eb; transition: all 0.3s; }
+  .step-dot.active  { background: #b45309; animation: stepPulse 1.4s ease-in-out infinite; }
+  .step-dot.done    { background: #16a34a; box-shadow: none; animation: none; }
+  @keyframes stepPulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(180,83,9,0.18); }
+    50%      { box-shadow: 0 0 0 7px rgba(180,83,9,0.04); }
+  }
+  .step-bar { height: 3px; width: 36px; border-radius: 999px; background: #e5e7eb; transition: background 0.4s; }
+  .step-bar.fill { background: #16a34a; }
   #resultText { font-family: 'Noto Sans Tamil', 'Latha', system-ui, sans-serif; font-size: 16px; line-height: 1.9; }
   #resultText[contenteditable="true"] { outline: none; cursor: text; }
   #resultText[contenteditable="true"]:focus { box-shadow: 0 0 0 2px #f59e0b inset; border-radius: 8px; }
@@ -102,27 +108,42 @@
     </div>
 
     <!-- Loading State -->
-    <div id="loading" class="hidden bg-white rounded-2xl shadow-xl border border-gray-200 p-10 text-center mb-6">
-      <div class="inline-block animate-spin rounded-full h-14 w-14 border-b-4 border-amber-600 mb-5"></div>
-      <!-- Step indicators -->
-      <div class="flex items-center justify-center gap-3 mb-4">
-        <div class="flex flex-col items-center gap-1">
+    <div id="loading" class="hidden bg-white rounded-2xl shadow-xl border border-gray-200 p-8 sm:p-10 text-center mb-6">
+      <!-- Stepper: Upload → Analyse → Extract (each turns green as it completes) -->
+      <div class="flex items-center justify-center gap-2 sm:gap-3 mb-6">
+        <div class="flex flex-col items-center gap-1.5">
           <div id="step1dot" class="step-dot"></div>
-          <span class="text-xs text-gray-500">Upload</span>
+          <span class="text-xs font-medium text-gray-500">Upload</span>
         </div>
-        <div class="h-px w-8 bg-gray-300"></div>
-        <div class="flex flex-col items-center gap-1">
+        <div id="step1bar" class="step-bar"></div>
+        <div class="flex flex-col items-center gap-1.5">
           <div id="step2dot" class="step-dot"></div>
-          <span class="text-xs text-gray-500">Analyse</span>
+          <span class="text-xs font-medium text-gray-500">Analyse</span>
         </div>
-        <div class="h-px w-8 bg-gray-300"></div>
-        <div class="flex flex-col items-center gap-1">
+        <div id="step2bar" class="step-bar"></div>
+        <div class="flex flex-col items-center gap-1.5">
           <div id="step3dot" class="step-dot"></div>
-          <span class="text-xs text-gray-500">Extract</span>
+          <span class="text-xs font-medium text-gray-500">Extract</span>
         </div>
       </div>
-      <div id="loadingMsg" class="text-base font-semibold text-amber-700">Uploading image…</div>
-      <div class="text-sm text-gray-400 mt-1">ProofReading AI is reading your handwriting</div>
+
+      <!-- Progress bar — eases forward so a long extraction never looks frozen -->
+      <div class="max-w-md mx-auto">
+        <div class="h-2 rounded-full bg-amber-100 overflow-hidden">
+          <div id="ocrProgressBar" class="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600" style="width:0%; transition: width 0.5s ease-out;"></div>
+        </div>
+        <div class="flex items-center justify-between mt-2 text-xs text-gray-400">
+          <span><span id="ocrElapsed">0s</span> elapsed</span>
+          <span id="ocrPercent">0%</span>
+        </div>
+      </div>
+
+      <!-- Rotating status tied to the real pipeline phases -->
+      <div class="flex items-center justify-center gap-2 text-base font-semibold text-amber-700 mt-5">
+        <span class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-amber-200 border-t-amber-600"></span>
+        <span id="loadingMsg">Uploading image…</span>
+      </div>
+      <div class="text-sm text-gray-400 mt-1.5">Usually 20–40s for a full page. Keep this tab open — we won't lose your text.</div>
     </div>
 
     <!-- Error -->
@@ -281,34 +302,74 @@
   const resultImg    = document.getElementById('resultImg');
   const resultImgName= document.getElementById('resultImgName');
 
-  // Step dots
+  // Step dots + connectors + progress readouts
   const step1 = document.getElementById('step1dot');
   const step2 = document.getElementById('step2dot');
   const step3 = document.getElementById('step3dot');
+  const step1bar = document.getElementById('step1bar');
+  const step2bar = document.getElementById('step2bar');
+  const ocrProgressBar = document.getElementById('ocrProgressBar');
+  const ocrPercent = document.getElementById('ocrPercent');
+  const ocrElapsed = document.getElementById('ocrElapsed');
 
   let selectedFile = null;
   let extractedText = '';
 
-  // ── Step animation ───────────────────────────────────────────────────────
-  let _stepTimer = null;
-  function runSteps() {
-    [step1, step2, step3].forEach(d => d.className = 'step-dot');
-    let s = 0;
+  // ── Progress simulation ────────────────────────────────────────────────────
+  // We get no streaming progress from the server, so we model it: the bar EASES
+  // toward ~92% (fast at first, slowing down) and never fake-completes — only a real
+  // success snaps it to 100%. Messages + the stepper are keyed to progress, so the
+  // whole thing keeps moving for the full 20–90s instead of freezing after 5s.
+  const OCR_PHASES = [
+    { at: 0,  step: 0, msg: 'Uploading your image…' },
+    { at: 10, step: 1, msg: 'Cleaning up the image…' },
+    { at: 25, step: 1, msg: 'Reading your handwriting, line by line…' },
+    { at: 55, step: 2, msg: 'Checking Tamil spelling…' },
+    { at: 78, step: 2, msg: 'Polishing the result…' },
+    { at: 88, step: 2, msg: 'Almost there…' },
+  ];
+  let _ocrTimer = null, _ocrStart = 0, _ocrProgress = 0;
+
+  function _setStep(activeIndex) {
     const dots = [step1, step2, step3];
-    const msgs = ['Uploading image…', 'ProofReading AI is reading your handwriting…', 'Extracting text…'];
-    function advance() {
-      if (s < dots.length) {
-        dots[s].classList.add('active');
-        loadingMsg.textContent = msgs[s];
-        s++;
-        _stepTimer = setTimeout(advance, 1800);
-      }
-    }
-    advance();
+    dots.forEach((d, i) => {
+      d.className = 'step-dot' + (i < activeIndex ? ' done' : i === activeIndex ? ' active' : '');
+    });
+    step1bar.className = 'step-bar' + (activeIndex >= 1 ? ' fill' : '');
+    step2bar.className = 'step-bar' + (activeIndex >= 2 ? ' fill' : '');
+  }
+  function _setProgress(p) {
+    ocrProgressBar.style.width = p.toFixed(0) + '%';
+    ocrPercent.textContent = Math.round(p) + '%';
+  }
+  function _tickOcr() {
+    const elapsed = (Date.now() - _ocrStart) / 1000;
+    // Ease toward 92% with a ~22s time constant; monotonic (never goes backwards).
+    const target = 92 * (1 - Math.exp(-elapsed / 22));
+    _ocrProgress = Math.max(_ocrProgress, Math.min(92, target));
+    _setProgress(_ocrProgress);
+    ocrElapsed.textContent = Math.floor(elapsed) + 's';
+    let phase = OCR_PHASES[0];
+    for (const x of OCR_PHASES) { if (_ocrProgress >= x.at) phase = x; }
+    loadingMsg.textContent = phase.msg;
+    _setStep(phase.step);
+  }
+  function runSteps() {
+    clearInterval(_ocrTimer);
+    _ocrStart = Date.now();
+    _ocrProgress = 0;
+    _setStep(0);
+    _setProgress(0);
+    _tickOcr();
+    _ocrTimer = setInterval(_tickOcr, 250);
   }
   function finishSteps() {
-    clearTimeout(_stepTimer);
-    [step1, step2, step3].forEach(d => { d.classList.remove('active'); d.classList.add('done'); });
+    clearInterval(_ocrTimer);
+    _setProgress(100);
+    [step1, step2, step3].forEach(d => { d.className = 'step-dot done'; });
+    step1bar.className = 'step-bar fill';
+    step2bar.className = 'step-bar fill';
+    loadingMsg.textContent = 'Done!';
   }
 
   // ── File select helpers ───────────────────────────────────────────────────
