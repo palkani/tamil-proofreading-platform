@@ -43,13 +43,15 @@
 
 @layer base {
   html {
-    overflow-x: hidden;
+    /* `clip` prevents horizontal scroll WITHOUT creating a scroll container —
+       `overflow-x: hidden` here silently breaks `position: sticky` on the header. */
+    overflow-x: clip;
   }
   body {
     background: var(--bg-primary);
     color: var(--text-primary);
     font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   a {

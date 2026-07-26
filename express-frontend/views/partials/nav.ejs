@@ -295,6 +295,13 @@
 <% } %>
 
 <style>
+/* CRITICAL for the freeze: the compiled output.css sets `html{overflow-x:hidden}`,
+   which turns <html> into a scroll container and SILENTLY BREAKS position:sticky on
+   the header. `overflow-x: clip` still prevents horizontal scroll but does NOT create
+   a scroll container, so sticky works. Shipped here because output.css lags input.css. */
+html, body {
+  overflow-x: clip;
+}
 /* Freeze the whole header (nav + promo ribbon) at the top of the viewport on scroll.
    Kept here in the partial's own <style> so it always ships — the compiled
    public/css/output.css can lag behind input.css. */
