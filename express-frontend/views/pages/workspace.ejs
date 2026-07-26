@@ -55,6 +55,37 @@
     background: rgba(0, 0, 0, 0.12);
     margin: 0 8px;
   }
+  /* Handwriting OCR entry — a labeled pill (not an icon-only toolbar-btn) so it's
+     discoverable. Amber to match the OCR tool's theme and set it apart from the
+     black-and-white formatting controls. */
+  .workspace-toolbar .toolbar-ocr-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: #B45309;
+    background: #FFFBEB;
+    border: 1px solid #FDE68A;
+    text-decoration: none;
+    transition: all 120ms ease;
+  }
+  .workspace-toolbar .toolbar-ocr-btn:hover {
+    background: #FEF3C7;
+    border-color: #FCD34D;
+    color: #92400E;
+  }
+  .workspace-toolbar .toolbar-ocr-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+  }
   .workspace-toolbar .toolbar-pill {
     display: inline-flex;
     gap: 2px;
@@ -1257,6 +1288,26 @@
               <line x1="8" y1="23" x2="16" y2="23"/>
             </svg>
           </button>
+
+          <div class="toolbar-divider"></div>
+
+          <!-- Handwriting OCR entry. Voice typing and OCR are both "content-in" tools,
+               so this sits beside the mic. Opens the OCR tool in a NEW tab so an
+               unsaved draft is never lost to a navigation. Pro feature — the tool page
+               enforces the paywall + 15/month quota. -->
+          <a href="/tools/handwriting-ocr" target="_blank" rel="noopener"
+             id="ocr-scan-btn" class="toolbar-ocr-btn"
+             title="Scan handwritten Tamil into editable text (Pro · opens in a new tab)"
+             aria-label="Scan handwriting to text (opens in a new tab)">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+              <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+              <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+              <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+              <rect x="7.5" y="9" width="9" height="6" rx="1.5"/>
+            </svg>
+            <span>Scan handwriting</span>
+          </a>
 
           <div class="flex-1"></div>
         </div>

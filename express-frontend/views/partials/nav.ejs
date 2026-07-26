@@ -295,12 +295,27 @@
 <% } %>
 
 <style>
+/* Freeze the whole header (nav + promo ribbon) at the top of the viewport on scroll.
+   Kept here in the partial's own <style> so it always ships — the compiled
+   public/css/output.css can lag behind input.css. */
+.site-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
 .promo-stripe {
   background: linear-gradient(90deg, #1E1B4B 0%, #312E81 30%, #4F46E5 60%, #312E81 85%, #1E1B4B 100%);
   color: #fff;
   overflow: hidden;
   border-bottom: 1px solid rgba(99,102,241,0.25);
   box-shadow: 0 2px 10px rgba(30,27,75,0.30);
+  /* Freezes directly under the nav. Offset = nav height (h-14 = 56px, h-16 = 64px ≥sm). */
+  position: sticky;
+  top: 56px;
+  z-index: 49;
+}
+@media (min-width: 640px) {
+  .promo-stripe { top: 64px; }
 }
 .promo-stripe-inner {
   padding: 0.55rem 0;
@@ -312,7 +327,21 @@
   align-items: center;
   width: max-content;
   will-change: transform;
-  /* JS drives the animation — no CSS animation here */
+  /* Seamless marquee: the track holds two identical sets (A + B), so translating by
+     exactly -50% scrolls one full set and loops with no visible jump. Pure CSS — no
+     JS timing/measurement to get wrong. */
+  animation: promo-marquee 45s linear infinite;
+}
+/* Pause on hover so users can read a line. */
+.promo-stripe-inner:hover .promo-stripe-track {
+  animation-play-state: paused;
+}
+@keyframes promo-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .promo-stripe-track { animation: none; }
 }
 .promo-stripe-item {
   white-space: nowrap;
@@ -336,50 +365,7 @@
 }
 </style>
 
-<!-- Marquee JS: bulletproof pixel-based RAF loop (no CSS %-based animation bugs) -->
-<script>
-(function() {
-  var track = document.querySelector('.promo-stripe-track');
-  if (!track) return;
-  // Respect prefers-reduced-motion
-  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-  var offset = 0;
-  var speed = 0.55; // px per frame (~33px/s at 60fps)
-  var paused = false;
-  var halfWidth = 0;
-  var raf;
-
-  function measure() {
-    // scrollWidth = total width of both sets (A+B); halfWidth = width of one set
-    halfWidth = track.scrollWidth / 2;
-  }
-
-  function step() {
-    if (!paused) {
-      offset += speed;
-      if (offset >= halfWidth) offset = 0; // seamless jump back to set A start
-      track.style.transform = 'translateX(-' + offset.toFixed(2) + 'px)';
-    }
-    raf = requestAnimationFrame(step);
-  }
-
-  // Pause on hover so users can read
-  track.addEventListener('mouseenter', function() { paused = true; });
-  track.addEventListener('mouseleave', function() { paused = false; });
-
-  // Wait for fonts/layout to settle before measuring
-  window.addEventListener('load', function() {
-    measure();
-    step();
-  });
-  // Fallback if load already fired
-  if (document.readyState === 'complete') {
-    measure();
-    step();
-  }
-})();
-</script>
+<!-- Marquee is pure CSS now (see .promo-stripe-track animation above) — no JS loop. -->
 
 <script>
   // Flag to prevent multiple logout confirmations

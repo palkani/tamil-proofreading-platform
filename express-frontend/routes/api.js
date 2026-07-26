@@ -11,7 +11,7 @@ const crypto = require('crypto');
 const { keyRotator } = require('../utils/gemini-key-rotator');
 
 // Daily rate limit for handwriting OCR (2 free extractions per IP per day)
-const ocrDailyLimit = require('../middleware/ocrDailyLimit');
+const ocrMonthlyLimit = require('../middleware/ocrMonthlyLimit');
 
 // Latency-based regional backend resolver (Asia vs US Cloud Run instances)
 const { getRegionalBackendUrl } = require('../utils/regional-backend');
@@ -2048,7 +2048,7 @@ router.get('/handwriting-ocr/health', (req, res) => {
   return res.json({ status: 'ok', service: 'gemini-vision', model: 'gemini-2.5-flash' });
 });
 
-router.post('/handwriting-ocr/extract-words', ocrDailyLimit(), uploadHandwriting.single('file'), async (req, res) => {
+router.post('/handwriting-ocr/extract-words', ocrMonthlyLimit(), uploadHandwriting.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded. Please select an image file.' });
   }
@@ -2087,10 +2087,14 @@ router.post('/handwriting-ocr/extract-words', ocrDailyLimit(), uploadHandwriting
       const svc = await axiosWithPool.post(
         `${HANDWRITING_OCR_URL.replace(/\/$/, '')}/api/ocr/extract-words`,
         form,
-        { headers: form.getHeaders(), timeout: 90000 }
+        // 120s matches the ml Cloud Run request timeout — the parallelized pipeline
+        // finishes well under this for a page, but a very long multi-page scan needs
+        // the headroom before we give up and fall through to inline Gemini.
+        { headers: form.getHeaders(), timeout: 120000 }
       );
       const d = svc.data || {};
       if (d.success && (d.full_text || d.text)) {
+        await ocrMonthlyLimit.recordSuccess(req); // consume one monthly credit on success
         return res.json({
           success: true,
           full_text: d.full_text || d.text || '',
@@ -2194,6 +2198,11 @@ Output ONLY the raw JSON — no markdown, no preamble.`
     const confidencePct = scoredWords.length
       ? Math.round((scoredWords.filter(w => w.confidence >= LOW_CONF).length / scoredWords.length) * 100) / 100
       : null;
+
+    // Consume one monthly credit only when we actually extracted something.
+    if (fullText && fullText.trim()) {
+      await ocrMonthlyLimit.recordSuccess(req);
+    }
 
     return res.json({
       success: true,
