@@ -138,49 +138,35 @@
    *                                  backend-only words (e.g. "உயை" for "uyi")
    */
   function mergeSuggestions(local, backend, localTranslit) {
-    // Build a backend score map: position 0 = best (highest score)
-    const backendRank = new Map();
-    backend.forEach((w, i) => {
-      const k = (w || '').normalize?.('NFC') || w;
-      if (k && !backendRank.has(k)) backendRank.set(k, i); // lower i = better rank
-    });
-
-    // Assign a combined score to each local word:
-    //   - If the backend also ranked it, use backend rank as primary sort key
-    //   - Otherwise fall back to local position
-    const scored = local.map((w, localIdx) => {
-      const k = (w || '').normalize?.('NFC') || w;
-      const bRank = backendRank.has(k) ? backendRank.get(k) : 999;
-      // Lower value = better. Backend-confirmed words get priority via bRank * 100,
-      // local-only words get a high penalty so they stay below backend-confirmed words.
-      const sort = bRank < 999 ? bRank * 100 + localIdx : 10000 + localIdx;
-      return { w, k, sort };
-    });
-    scored.sort((a, b) => a.sort - b.sort);
-
+    // BACKEND-FIRST. The backend is lexicon-frequency-ranked, so its order IS the
+    // answer — position 0 is the most common real word for this input. Emit backend
+    // words in backend order, then fill any remaining slots with local-only guesses.
+    //
+    // This replaces the old "local-first" merge, which emitted the client-side
+    // transliteration guesses first and only appended backend-only words at the end
+    // behind a phonetic prefix-gate. That buried — and often filtered out entirely —
+    // the correct top word: e.g. "ennam" → எண்ணம் is backend #1, but the local engine
+    // guessed எந்நம், so எண்ணம் failed the prefix-gate and never showed.
+    //
+    // localTranslit is kept for signature compatibility; no longer used to gate
+    // backend results (the backend already returns phonetically-relevant words).
+    void localTranslit;
+    const norm = (w) => ((w || '').normalize ? w.normalize('NFC') : (w || ''));
     const seen = new Set();
     const out = [];
-    // 1. Emit sorted local words
-    for (const { w, k } of scored) {
+
+    // 1. Backend words, in the backend's own (frequency) order.
+    for (const w of backend) {
+      const k = norm(w);
       if (k && !seen.has(k)) { seen.add(k); out.push(w); }
       if (out.length >= MAX_SHOW) break;
     }
-    // 2. Fill remaining slots with backend-only words, filtered for phonetic consistency.
-    // If the local engine produced a transliteration (e.g. "உயி" for "uyi"), only
-    // include backend-only words that share it as a prefix — or have it as their prefix.
-    // This prevents Aksharamukha quirks like "uyi" → "உயை" from polluting the list.
-    const translit = (localTranslit || '').normalize ? localTranslit.normalize('NFC') : (localTranslit || '');
-    for (const w of backend) {
-      const k = (w || '').normalize?.('NFC') || w;
-      if (!k || seen.has(k)) continue;
-      // Phonetic consistency gate (only when local engine produced a result)
-      if (translit && translit.length >= 2) {
-        const wn = w.normalize ? w.normalize('NFC') : w;
-        const phonOk = wn.startsWith(translit) || translit.startsWith(wn);
-        if (!phonOk) continue; // skip phonetically inconsistent backend word
-      }
-      seen.add(k); out.push(w);
+    // 2. Fill remaining slots with local-only guesses the backend didn't return
+    //    (covers rare inputs the lexicon has no entry for).
+    for (const w of local) {
       if (out.length >= MAX_SHOW) break;
+      const k = norm(w);
+      if (k && !seen.has(k)) { seen.add(k); out.push(w); }
     }
     return out;
   }
