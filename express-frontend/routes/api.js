@@ -949,6 +949,23 @@ router.post('/corrections/stream', async (req, res) => {
       return res.end();
     }
 
+    // ── v2 proofreading adapter (flag-gated by PROOFREAD_V2_BASE) ──────────────
+    // Try v2 first and emit its corrections as SSE in this endpoint's format.
+    // Nothing is written until v2 succeeds, so on ANY failure we fall through to
+    // the existing Gemini stream below — v2 can't break proofreading.
+    if (process.env.PROOFREAD_V2_BASE) {
+      try {
+        const v2Result = await getV2Corrections(text, process.env.PROOFREAD_V2_BASE);
+        if (v2Result) {
+          for (const c of v2Result.corrections) sendEvent('correction', c);
+          sendEvent('done', { count: v2Result.corrections.length, engine: 'v2' });
+          return res.end();
+        }
+      } catch (v2Err) {
+        console.warn('[corrections/stream] v2 adapter failed; falling back to v1:', v2Err.message);
+      }
+    }
+
     // Cache hit: replay cached corrections without touching Gemini
     const cacheKey = getCacheKey(text);
     const cached = getCachedResult(cacheKey);
