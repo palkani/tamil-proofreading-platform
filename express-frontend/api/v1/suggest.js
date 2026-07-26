@@ -50,6 +50,44 @@ export default async function handler(request) {
     );
   }
 
+  // ── v2 IME suggest (flag-gated by SUGGEST_V2_BASE) ────────────────────────
+  // When set (e.g. https://api.prooftamil.com), try v2 once; v2 and v1 return the
+  // same { suggestions:[{word,score}] } shape, so it's transparent to the client.
+  // On ANY problem we fall through to the regional v1 flow below — v2 can't break
+  // the IME. NOTE: v2 is single-region (asia-south1); enabling this adds cross-region
+  // latency per keystroke for US traffic, so enable deliberately and measure.
+  const V2_BASE = (typeof process !== 'undefined' && process.env && process.env.SUGGEST_V2_BASE) || '';
+  if (V2_BASE) {
+    try {
+      const v2Url = `${V2_BASE.replace(/\/+$/, '')}/api/v1/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
+      const r = await fetch(v2Url, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        cf: { cacheTtl: CACHE_TTL, cacheEverything: true },
+      });
+      if (r.status === 200) {
+        const data = await r.json();
+        if (data && Array.isArray(data.suggestions)) {
+          // v2 returns { query, suggestions:[{word,score}] }; v1's client also expects
+          // success:true. Normalise so the shape matches v1 exactly.
+          const out = { success: true, ...data };
+          return new Response(JSON.stringify(out), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': `public, max-age=60, s-maxage=${CACHE_TTL}, stale-while-revalidate=300`,
+              'CDN-Cache-Control': `public, max-age=${CACHE_TTL}`,
+              'X-Backend-Region': 'v2',
+            },
+          });
+        }
+      }
+      // non-200 or unexpected shape → fall through to v1
+    } catch (_e) {
+      // v2 unreachable → fall through to v1
+    }
+  }
+
   // Build backend URL - route to closest region
   const backendBase = getBackendUrl(request);
   const backendUrl = `${backendBase}/api/v1/suggest?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(mode)}&limit=${limit}`;
