@@ -57,7 +57,9 @@ async function getV2Corrections(text, base) {
       type: mapType(s.type),
     }));
 
-  return { success: true, corrections };
+  // `engine` lets callers/UI see which path served the response (visible in the
+  // Network tab); v1's client ignores unknown fields.
+  return { success: true, corrections, engine: 'v2' };
 }
 
 module.exports = { getV2Corrections };
