@@ -264,10 +264,10 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
             Start Free — No Credit Card
           </a>
-          <!-- OCR under maintenance — CTA disabled with "coming back soon"
-               badge. Restore: swap <span> back to <a href="/tools/handwriting-ocr">
-               and drop the opacity/badge markup. -->
-          <a href="/tools/ocr" class="btn-hero-outline w-full sm:w-auto justify-center relative">
+          <!-- Points at the handwriting-OCR tool (the deployed Gemini pipeline via
+               HANDWRITING_OCR_URL). The generic /tools/ocr document tool needs a
+               separate OCR_SERVICE_URL service, so it is not linked from the hero. -->
+          <a href="/tools/handwriting-ocr" class="btn-hero-outline w-full sm:w-auto justify-center relative">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             Tamil OCR
           </a>
@@ -703,7 +703,7 @@
             <li class="flex items-center gap-2 text-sm text-gray-600"><span class="w-4 h-4 rounded-full flex items-center justify-center text-xs" style="background:#FEF3C7;color:#D97706;">✓</span> JPG, PNG supported</li>
             <li class="flex items-center gap-2 text-sm text-gray-600"><span class="w-4 h-4 rounded-full flex items-center justify-center text-xs" style="background:#FEF3C7;color:#D97706;">✓</span> No sign-up required</li>
           </ul>
-          <a href="/tools/ocr" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all hover:brightness-110"
+          <a href="/tools/handwriting-ocr" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all hover:brightness-110"
              style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#ffffff;">
             Extract Text from Image →
           </a>
