@@ -14,6 +14,10 @@
   .step-dot.active  { background: #b45309; }
   .step-dot.done    { background: #16a34a; }
   #resultText { font-family: 'Noto Sans Tamil', 'Latha', system-ui, sans-serif; font-size: 16px; line-height: 1.9; }
+  #resultText[contenteditable="true"] { outline: none; cursor: text; }
+  #resultText[contenteditable="true"]:focus { box-shadow: 0 0 0 2px #f59e0b inset; border-radius: 8px; }
+  /* Low-confidence words the model wasn't sure about — click to fix inline. */
+  .ocr-flagged { background: #fef08a; border-bottom: 2px dashed #d97706; border-radius: 3px; padding: 0 2px; cursor: text; }
 </style>
 
 <div class="min-h-screen bg-gradient-to-b from-amber-50 via-white to-white py-12">
@@ -68,6 +72,20 @@
         <label class="flex items-center gap-1.5 cursor-pointer text-sm text-gray-700">
           <input type="radio" name="ocrLang" value="mixed" class="accent-amber-600"> Tamil + English
         </label>
+      </div>
+
+      <!-- Context / topic hint (optional) — boosts accuracy on ambiguous handwriting -->
+      <div class="mt-5">
+        <label for="ocrContext" class="block text-sm font-medium text-gray-600 mb-1.5 text-center">
+          What are these notes about? <span class="text-gray-400 font-normal">(optional — helps accuracy)</span>
+        </label>
+        <input
+          id="ocrContext"
+          type="text"
+          maxlength="200"
+          placeholder="e.g. history lecture notes, a recipe, a poem…"
+          class="w-full max-w-xl mx-auto block px-4 py-2.5 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+        >
       </div>
 
       <!-- Extract Button -->
@@ -377,6 +395,31 @@
     errorEl.classList.remove('hidden');
   }
 
+  // ── Result rendering (flagged-word highlight + inline editing) ─────────────
+  function escapeHtml(s) {
+    return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderResult(text, flaggedSet) {
+    if (!text) {
+      resultText.textContent = '(No text detected in the image)';
+      resultText.removeAttribute('contenteditable');
+      return;
+    }
+    let html = escapeHtml(text);
+    // Wrap each flagged word (longest first, so shorter substrings don't split them).
+    Array.from(flaggedSet || []).sort((a, b) => b.length - a.length).forEach(w => {
+      const esc = escapeHtml(w);
+      if (esc) html = html.split(esc).join(`<mark class="ocr-flagged">${esc}</mark>`);
+    });
+    resultText.innerHTML = html;
+    resultText.setAttribute('contenteditable', 'true');
+    resultText.setAttribute('spellcheck', 'false');
+  }
+
+  // Keep copy/download/open-editor in sync with any inline corrections.
+  resultText.addEventListener('input', () => { extractedText = resultText.innerText; });
+
   // ── Main extract ──────────────────────────────────────────────────────────
   processBtn.addEventListener('click', async () => {
     if (!selectedFile) return;
@@ -393,6 +436,7 @@
       const formData = new FormData();
       formData.append('file', selectedFile);
       formData.append('lang', document.querySelector('input[name="ocrLang"]:checked')?.value || 'tamil');
+      formData.append('context', (document.getElementById('ocrContext')?.value || '').trim());
 
       const res = await fetch('/api/handwriting-ocr/extract-words', {
         method: 'POST',
@@ -418,10 +462,19 @@
 
       // ── Render results ───────────────────────────────────────────────────
       extractedText = data.full_text || '';
-      resultText.textContent = extractedText || '(No text detected in the image)';
 
-      // Stats line
+      // Flagged (low-confidence) words the model was unsure about — highlight them
+      // and make the whole result editable so a human can fix them inline.
+      const flagged = new Set(
+        (Array.isArray(data.flagged_words) ? data.flagged_words : [])
+          .map(f => (typeof f === 'string' ? f : (f && f.word) || '')).filter(Boolean)
+      );
+      renderResult(extractedText, flagged);
+
+      // Stats line (+ overall confidence, + how many words to review)
       const parts = [];
+      if (data.confidence_pct != null) parts.push('~' + Math.round(data.confidence_pct * 100) + '% confident');
+      if (flagged.size) parts.push(flagged.size + ' to review');
       if (data.lines_count) parts.push(data.lines_count + ' lines');
       if (data.words_count) parts.push(data.words_count + ' words');
       if (data.processing_time_ms) parts.push(((data.processing_time_ms) / 1000).toFixed(1) + 's');
