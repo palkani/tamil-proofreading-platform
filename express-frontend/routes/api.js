@@ -949,22 +949,14 @@ router.post('/corrections/stream', async (req, res) => {
       return res.end();
     }
 
-    // ── v2 proofreading adapter (flag-gated by PROOFREAD_V2_BASE) ──────────────
-    // Try v2 first and emit its corrections as SSE in this endpoint's format.
-    // Nothing is written until v2 succeeds, so on ANY failure we fall through to
-    // the existing Gemini stream below — v2 can't break proofreading.
-    if (process.env.PROOFREAD_V2_BASE) {
-      try {
-        const v2Result = await getV2Corrections(text, process.env.PROOFREAD_V2_BASE);
-        if (v2Result) {
-          for (const c of v2Result.corrections) sendEvent('correction', c);
-          sendEvent('done', { count: v2Result.corrections.length, engine: 'v2' });
-          return res.end();
-        }
-      } catch (v2Err) {
-        console.warn('[v2] proofread FALLBACK (error, stream):', v2Err.message);
-      }
-    }
+    // NOTE: the v2 adapter is deliberately NOT applied to this streaming endpoint.
+    // The workspace runs TWO parallel correction pipelines — the Go-backend submission
+    // path (/api/submit → /api/v1/submissions/{id}/stream, which carries offsets and
+    // drives the editor highlighting) AND this autoAnalyze path. When both returned v1
+    // they deduped into one set; making this one v2 caused them to diverge (duplicate
+    // suggestions + broken highlighting). v2 stays on the non-streaming /api/corrections
+    // (used by the home editor). Migrating the workspace fully to v2 is a separate task
+    // (retire the backend pipeline + carry offsets through the adapter).
 
     // Cache hit: replay cached corrections without touching Gemini
     const cacheKey = getCacheKey(text);
