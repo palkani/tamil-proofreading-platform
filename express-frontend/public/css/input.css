@@ -302,30 +302,15 @@
 }
 
 /* Suggestion card styles */
+/* The AI-Assistant card look now comes from Tailwind classes set in suggestions.js /
+   home-editor.js (a light accent card with dark text — one shared theme). This rule
+   is intentionally minimal: the old dark-card styling that used to live here was what
+   made the restyled workspace card unreadable (light text on a dark background). */
 .suggestion-card {
-  @apply border rounded-2xl p-4 transition-all;
-  background: #1E1B4B;
-  border-color: rgba(255, 255, 255, 0.12);
-  color: #e2e8f0;
-  box-shadow: 0 20px 40px rgba(79, 70, 229, 0.35);
+  transition: box-shadow 0.15s, border-color 0.15s;
 }
-
 .suggestion-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border-color: var(--color-primary);
-}
-
-/* Ensure generated Tailwind "text-gray-*" classes inside dark cards remain readable */
-.suggestion-card h5 {
-  color: #f8fafc; /* slate-50 */
-}
-.suggestion-card > p {
-  color: #cbd5e1; /* slate-300 */
-}
-/* The inner Original/Suggested box should stay light with dark text */
-.suggestion-card .bg-gray-50 {
-  background: rgba(255, 255, 255, 0.95) !important;
-  color: #111827;
 }
 
 /* Enhanced Toolbar Styles */
