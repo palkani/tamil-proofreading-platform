@@ -64,6 +64,23 @@
 /* Navigation bar — typography and theme colors */
 .site-nav {
   letter-spacing: 0.01em;
+  /* Freeze the header at the top of the viewport on scroll. */
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+/* The promo stripe sits directly under the nav and freezes with it, so the whole
+ * header stays put. Offset = nav height (h-14 = 56px mobile, h-16 = 64px ≥sm). */
+.promo-stripe {
+  position: sticky;
+  top: 56px;
+  z-index: 49;
+}
+@media (min-width: 640px) {
+  .promo-stripe {
+    top: 64px;
+  }
 }
 .site-nav .nav-link {
   font-size: 0.875rem;
