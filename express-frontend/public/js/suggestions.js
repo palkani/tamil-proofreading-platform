@@ -348,23 +348,24 @@ class SuggestionsPanel {
   }
 
   getTypeLabel(type) {
-    const labels = {
-      grammar:           'இலக்கணம்',       // Grammar
-      style:             'நடை',            // Style
-      clarity:           'தெளிவு',          // Clarity
-      spelling:          'எழுத்துப்பிழை',   // Spelling
-      punctuation:       'நிறுத்தற்குறி',   // Punctuation
-      'word choice':     'சொல் தேர்வு',    // Word Choice
-      'incomplete word': 'முழுமையற்ற சொல்', // Incomplete Word
-      'sandhi':          'புணர்ச்சி',        // Sandhi
-      'missing space':   'இடைவெளி குறைபாடு', // Missing Space
-      'phonetic':        'ஒலியியல்',        // Phonetic
-      'case':            'வேற்றுமை',        // Case
-      'space':           'இடைவெளி',        // Space
-      suggestion:        'பரிந்துரை',        // Suggestions
-      alternative:       'மாற்று வழிகள்'    // Alternative Phrasings
+    // Bilingual badge: Tamil · English (shared shape with the home editor).
+    const t = (type || 'grammar').toLowerCase();
+    const ta = {
+      grammar: 'இலக்கணம்', style: 'நடை', clarity: 'தெளிவு', spelling: 'எழுத்துப்பிழை',
+      punctuation: 'நிறுத்தற்குறி', 'word choice': 'சொல் தேர்வு',
+      'incomplete word': 'முழுமையற்ற சொல்', sandhi: 'புணர்ச்சி', agreement: 'ஒப்புமை',
+      'missing space': 'இடைவெளி குறைபாடு', phonetic: 'ஒலியியல்', case: 'வேற்றுமை',
+      space: 'இடைவெளி', suggestion: 'பரிந்துரை', alternative: 'மாற்று வழிகள்',
     };
-    return labels[type?.toLowerCase()] || (type ? type.charAt(0).toUpperCase() + type.slice(1).toLowerCase() : 'பரிந்துரை');
+    const en = {
+      grammar: 'Grammar', style: 'Style', clarity: 'Clarity', spelling: 'Spelling',
+      punctuation: 'Punctuation', 'word choice': 'Word Choice',
+      'incomplete word': 'Incomplete Word', sandhi: 'Sandhi', agreement: 'Agreement',
+      'missing space': 'Missing Space', phonetic: 'Phonetic', case: 'Case',
+      space: 'Space', suggestion: 'Suggestion', alternative: 'Alternative',
+    };
+    const cap = t.charAt(0).toUpperCase() + t.slice(1);
+    return `${ta[t] || cap} · ${en[t] || cap}`;
   }
 
   /** Returns a CSS class name for the type badge based on suggestion type. */
@@ -389,7 +390,10 @@ class SuggestionsPanel {
 
   createSuggestionCard(suggestion) {
     const card = document.createElement('div');
-    card.className = 'suggestion-card';
+    // `suggestion-card` is kept for the focus/nav selectors; its box CSS is
+    // neutralised in workspace.ejs so these Tailwind classes — identical to the home
+    // editor — control the look. One shared AI-Assistant card theme across both.
+    card.className = 'suggestion-card bg-accent-50 rounded-lg p-4 border-l-4 border-primary-500 mb-3';
     card.setAttribute('data-suggestion-id', suggestion.id);
 
     // Resolve original and suggested text
@@ -404,36 +408,31 @@ class SuggestionsPanel {
       suggestedText = suggestion.preview.trim();
     }
 
-    const badgeClass  = this._getTypeBadgeClass(suggestion.type);
-    const typeLabel   = this.getTypeLabel(suggestion.type);
-    const reason      = (suggestion.description || '').trim();
-    const hasApply    = !!suggestion.onApply;
-    const occCount    = suggestion.occurrenceCount || 1;
-    const countBadge  = occCount > 1
-      ? `<span class="sugg-occurrence-badge">${occCount}×</span>`
-      : '';
+    const typeLabel  = this.getTypeLabel(suggestion.type);
+    const reason     = (suggestion.description || '').trim();
+    const hasApply   = !!suggestion.onApply;
+    const occCount   = suggestion.occurrenceCount || 1;
+    const acceptText = occCount > 1 ? `Accept all ${occCount}` : 'Accept';
 
     card.innerHTML = `
-      <span class="sugg-type-badge ${badgeClass}">${escapeHtml(typeLabel)}</span>${countBadge}
-
-      ${originalText ? `
-        <span class="sugg-field-label">Original:</span>
-        <div class="sugg-original-box tamil-text">${escapeHtml(originalText)}</div>
-      ` : ''}
-
-      ${suggestedText ? `
-        <span class="sugg-field-label">Suggestion:</span>
-        <div class="sugg-suggestion-box tamil-text">${escapeHtml(suggestedText)}</div>
-      ` : ''}
-
-      ${reason ? `
-        <span class="sugg-field-label">Reason:</span>
-        <p class="sugg-reason-text">${escapeHtml(reason)}</p>
-      ` : ''}
-
-      <div class="sugg-actions">
-        ${hasApply ? `<button class="sugg-accept-btn">${occCount > 1 ? `Accept all ${occCount}` : 'Accept'}</button>` : ''}
-        <button class="sugg-ignore-btn">Ignore</button>
+      <div class="flex items-start gap-2">
+        <span class="inline-block px-2 py-1 bg-primary-600 text-white text-xs rounded font-semibold flex-shrink-0 whitespace-nowrap">${escapeHtml(typeLabel)}</span>
+        <div class="flex-1 min-w-0">
+          ${(originalText && suggestedText) ? `
+            <p class="text-sm text-gray-700 mb-2">
+              <span class="line-through text-red-600 tamil-text">"${escapeHtml(originalText)}"</span>
+              <span class="mx-1 text-gray-400">→</span>
+              <span class="text-green-600 font-semibold tamil-text">"${escapeHtml(suggestedText)}"</span>
+            </p>
+          ` : (suggestedText ? `
+            <p class="text-sm mb-2"><span class="text-green-600 font-semibold tamil-text">"${escapeHtml(suggestedText)}"</span></p>
+          ` : '')}
+          ${reason ? `<p class="text-sm text-gray-700 mb-2 tamil-text">${escapeHtml(reason)}</p>` : ''}
+          <div class="flex gap-2 mt-3 pt-3 border-t border-primary-200">
+            ${hasApply ? `<button type="button" class="sugg-accept-btn flex-1 px-4 py-2 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 transition-colors">${escapeHtml(acceptText)}</button>` : ''}
+            <button type="button" class="sugg-ignore-btn flex-1 px-4 py-2 bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-300 transition-colors">Ignore</button>
+          </div>
+        </div>
       </div>
     `;
 
