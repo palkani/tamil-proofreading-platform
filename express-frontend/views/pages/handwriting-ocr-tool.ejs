@@ -5,11 +5,6 @@
   .font-tamil { font-family: 'Noto Sans Tamil', 'Latha', 'Vijaya', system-ui, sans-serif; }
   #dropZone.drag-over { border-color: #b45309; background: #fef3c7; }
   #imagePreview img { max-height: 320px; object-fit: contain; }
-  .word-chip { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 13px; margin: 3px; border: 1px solid; cursor: default; transition: transform 0.1s; font-family: 'Noto Sans Tamil', 'Latha', system-ui, sans-serif; }
-  .word-chip:hover { transform: scale(1.05); }
-  .word-chip.high   { background: #dcfce7; border-color: #86efac; color: #166534; }
-  .word-chip.mid    { background: #fef9c3; border-color: #fde047; color: #713f12; }
-  .word-chip.low    { background: #f3f4f6; border-color: #d1d5db; color: #374151; }
   .step-dot { width: 12px; height: 12px; border-radius: 50%; background: #e5e7eb; transition: all 0.3s; }
   .step-dot.active  { background: #b45309; animation: stepPulse 1.4s ease-in-out infinite; }
   .step-dot.done    { background: #16a34a; box-shadow: none; animation: none; }
@@ -230,17 +225,6 @@
           <div id="resultText" class="bg-gray-50 rounded-xl p-5 min-h-32 max-h-80 overflow-y-auto border border-gray-200 whitespace-pre-wrap text-gray-900 leading-relaxed font-tamil"></div>
         </div>
       </div>
-
-      <!-- Word Chips -->
-      <div id="wordChipsSection" class="hidden px-6 pb-6">
-        <div class="text-sm font-semibold text-gray-600 mb-2">Individual words with confidence:</div>
-        <div id="wordChips" class="flex flex-wrap"></div>
-        <div class="mt-2 flex gap-4 text-xs text-gray-500">
-          <span><span class="inline-block w-3 h-3 rounded-full bg-green-300 mr-1"></span>High (&gt;85%)</span>
-          <span><span class="inline-block w-3 h-3 rounded-full bg-yellow-300 mr-1"></span>Medium (55–85%)</span>
-          <span><span class="inline-block w-3 h-3 rounded-full bg-gray-300 mr-1"></span>Low (&lt;55%)</span>
-        </div>
-      </div>
     </div>
 
     <!-- Tips -->
@@ -296,8 +280,6 @@
   const copyBtn      = document.getElementById('copyBtn');
   const downloadTxt  = document.getElementById('downloadTxt');
   const openEditorBtn= document.getElementById('openEditorBtn');
-  const wordChipsSection = document.getElementById('wordChipsSection');
-  const wordChips    = document.getElementById('wordChips');
   const resultImageWrap = document.getElementById('resultImageWrap');
   const resultImg    = document.getElementById('resultImg');
   const resultImgName= document.getElementById('resultImgName');
@@ -560,21 +542,6 @@
       } else {
         downloadTxt.classList.add('hidden');
         openEditorBtn.classList.add('hidden');
-      }
-
-      // Word chips
-      const words = Array.isArray(data.words) ? data.words : [];
-      if (words.length > 0) {
-        wordChips.innerHTML = words.map(w => {
-          const conf = w.confidence != null ? w.confidence : 0.8;
-          const pct = (conf * 100).toFixed(0) + '%';
-          const cls = conf >= 0.85 ? 'high' : conf >= 0.55 ? 'mid' : 'low';
-          const escaped = (w.text || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-          return `<span class="word-chip ${cls}" title="Confidence: ${pct}">${escaped}<span style="font-size:10px;opacity:0.6;margin-left:4px">${pct}</span></span>`;
-        }).join('');
-        wordChipsSection.classList.remove('hidden');
-      } else {
-        wordChipsSection.classList.add('hidden');
       }
 
       resultArea.classList.remove('hidden');

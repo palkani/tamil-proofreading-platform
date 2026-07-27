@@ -143,18 +143,15 @@
           </button>
         </div>
         <div class="flex-shrink-0 flex items-center gap-2" id="drafts-primary-cta-wrap">
-          <!-- Handwriting OCR entry (moved here from the workspace toolbar). Amber to
-               match the OCR theme and set it apart from the primary "New Draft" CTA. -->
+          <!-- Handwriting OCR entry (moved here from the workspace toolbar). Same
+               primary theme as "Create New Draft" so the two actions read as a set. -->
           <a href="/tools/handwriting-ocr" id="drafts-ocr-cta"
-             class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm border transition-all duration-200"
-             style="color:#B45309;background:#FFFBEB;border-color:#FDE68A;"
-             title="Scan handwritten Tamil into editable text"
-             onmouseover="this.style.background='#FEF3C7';this.style.borderColor='#FCD34D';"
-             onmouseout="this.style.background='#FFFBEB';this.style.borderColor='#FDE68A';">
+             class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-white shadow-md hover:shadow-lg transition-all duration-200 bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+             title="Scan handwritten Tamil into editable text">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7.5" y="9" width="9" height="6" rx="1.5"/>
             </svg>
-            <span class="hidden sm:inline">Scan handwriting</span>
+            <span class="hidden sm:inline">Handwriting OCR</span>
           </a>
           <a href="/workspace" id="drafts-primary-cta" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-white shadow-md hover:shadow-lg transition-all duration-200 bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
