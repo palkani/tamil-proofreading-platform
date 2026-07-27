@@ -1,37 +1,37 @@
 /**
- * Handwriting OCR access + monthly quota (paid-only).
+ * Handwriting OCR access + usage quota.
  *
  * Policy:
- *   - Free / anonymous users:  NO access — 402 pro_required.
- *   - Admin allowlist / JWT admin: unlimited (support/ops).
- *   - Paid users (backend is_premium): 15 extractions per calendar month,
- *     tracked PER ACCOUNT, resetting on the 1st (UTC).
+ *   - Anonymous:            NO access — 401 login_required (the page route also
+ *                           redirects to /login before the tool ever renders).
+ *   - Admin allowlist / JWT admin: unlimited.
+ *   - Free (logged in):     1 extraction per WEEK  (resets Monday, UTC).
+ *   - Paid (backend is_premium): 15 extractions per MONTH (resets the 1st, UTC).
  *
  * Paid status source of truth: the Go backend `GET /api/v1/billing/me`
- * (-> billing.is_premium) — the SAME signal the billing page and the client
- * `_isProUser()` use. The JWT in req.user carries NO subscription field, so we must
- * ask the backend; we forward the user's access_token cookie exactly like the other
- * billing calls in routes/index.js.
+ * (-> billing.is_premium) — the JWT in req.user carries no subscription field.
  *
  * Quota storage: reuses the existing `increment_ocr_usage(p_ip, p_date)` Supabase RPC
- * and the handwriting_ocr_usage table (PK ip+usage_date) with NO schema change:
- *   - p_ip   = "user:<email>"                 (namespaced so it never collides with a
- *                                              real IP row from the old daily limiter)
- *   - p_date = first day of the current month → a new row per month = automatic reset.
+ * and the handwriting_ocr_usage table (PK ip+usage_date) with NO schema change. The
+ * `p_ip` column is used as a generic key:
+ *   - Paid monthly:  p_ip = "user:<email>",   p_date = first day of the month.
+ *   - Free weekly:   p_ip = "userwk:<email>", p_date = Monday of the week.
+ * A new row per period = automatic reset; the two namespaces never collide.
+ *
  * The quota is CHECKED here (a read) and only INCREMENTED on a successful extraction
- * (handler calls recordSuccess), so a failed upload never burns one of the 15 credits.
+ * (handler calls recordSuccess), so a failed upload never burns a credit.
  *
  * Failure posture:
- *   - Supabase unreachable → fail OPEN on the quota (never block a paying customer
- *     over a counter hiccup).
- *   - Backend billing unreachable → fail CLOSED with a retryable 503 (don't hand a
- *     paid feature to unverified users), except admins, who are verified from the JWT
- *     alone and keep working during an outage.
+ *   - Supabase unreachable → fail OPEN on the quota (never block over a counter hiccup).
+ *   - Backend billing unreachable → treat as FREE tier (still usable, just the lower
+ *     limit) rather than locking a paying user out entirely.
  */
 
 const axios = require('axios');
 
-const MONTHLY_LIMIT = 15;
+const MONTHLY_LIMIT = 15;    // paid
+const FREE_WEEKLY_LIMIT = 1; // free, logged in
+
 // Kept in sync with the allowlist in routes/api.js (docx export, blog publish).
 const ADMIN_ALLOWLIST = [
   'palkani.r@gmail.com',
@@ -47,10 +47,19 @@ function backendUrl() {
   return (process.env.BACKEND_URL_US || process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/$/, '');
 }
 
-/** Current month bucket as 'YYYY-MM-01' (UTC) — the p_date we key rows by. */
+/** First day of the current month, 'YYYY-MM-01' (UTC). */
 function monthKey() {
   const now = new Date();
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+}
+
+/** Monday of the current week, 'YYYY-MM-DD' (UTC). */
+function weekKey() {
+  const now = new Date();
+  const dow = now.getUTCDay();                 // 0=Sun … 6=Sat
+  const backToMonday = dow === 0 ? 6 : dow - 1;
+  const mon = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - backToMonday));
+  return mon.toISOString().split('T')[0];
 }
 
 function isAdmin(req) {
@@ -58,14 +67,10 @@ function isAdmin(req) {
   return (!!email && ADMIN_ALLOWLIST.includes(email)) || req.user?.isAdmin === true;
 }
 
-/**
- * Ask the backend whether this user is premium. Returns { premium, ok } — ok:false
- * means we couldn't verify (network/backend error), which the caller treats as
- * fail-closed-but-retryable.
- */
+/** Ask the backend whether this user is premium. { premium, ok }. */
 async function verifyPremium(req) {
   const token = req.cookies && req.cookies.access_token;
-  if (!token) return { premium: false, ok: true }; // not logged in → not premium (verified)
+  if (!token) return { premium: false, ok: true };
   try {
     const resp = await axios.get(backendUrl() + '/api/v1/billing/me', {
       headers: { Authorization: 'Bearer ' + token },
@@ -75,7 +80,6 @@ async function verifyPremium(req) {
     if (resp.status === 200 && resp.data && resp.data.billing) {
       return { premium: !!resp.data.billing.is_premium, ok: true };
     }
-    // A well-formed non-premium / unauthorized answer is still a verified "no".
     if (resp.status === 200 || resp.status === 401 || resp.status === 403) {
       return { premium: false, ok: true };
     }
@@ -94,104 +98,105 @@ function supabaseHeaders() {
   };
 }
 
-/** Read this account's usage count for the current month (0 if none / on error). */
-async function readMonthlyCount(userKey) {
+/** Read the usage count for a (key, period) bucket. 0 if none / on error (fail open). */
+async function readCount(pIp, pDate) {
   if (!SUPABASE_URL || !SUPABASE_KEY) return 0;
   try {
     const url =
       `${SUPABASE_URL}/rest/v1/handwriting_ocr_usage` +
-      `?ip=eq.${encodeURIComponent('user:' + userKey)}` +
-      `&usage_date=eq.${monthKey()}&select=count`;
+      `?ip=eq.${encodeURIComponent(pIp)}&usage_date=eq.${pDate}&select=count`;
     const resp = await axios.get(url, { headers: supabaseHeaders(), timeout: 3000 });
     return Array.isArray(resp.data) && resp.data[0] ? Number(resp.data[0].count) || 0 : 0;
   } catch (err) {
-    console.error('[OCR-LIMIT] monthly read error (failing open):', err.message);
-    return 0; // fail open for paying users
+    console.error('[OCR-LIMIT] usage read error (failing open):', err.message);
+    return 0;
   }
 }
 
-/** Atomically add one to this account's month bucket; returns the new count. */
-async function incrementMonthly(userKey) {
+/** Atomically add one to a (key, period) bucket; returns the new count. */
+async function increment(pIp, pDate) {
   if (!SUPABASE_URL || !SUPABASE_KEY) return 0;
   try {
     const resp = await axios.post(
       `${SUPABASE_URL}/rest/v1/rpc/increment_ocr_usage`,
-      { p_ip: `user:${userKey}`, p_date: monthKey() },
+      { p_ip: pIp, p_date: pDate },
       { headers: supabaseHeaders(), timeout: 3000 }
     );
     return Number(resp.data) || 0;
   } catch (err) {
-    console.error('[OCR-LIMIT] monthly increment error:', err.message);
+    console.error('[OCR-LIMIT] usage increment error:', err.message);
     return 0;
   }
 }
 
 /**
- * Express middleware: gate access (paid-only) + check (not consume) the monthly quota.
+ * Express middleware: gate access + check (not consume) the tier quota.
  */
 function ocrMonthlyLimit() {
   return async (req, res, next) => {
-    // Admins: unlimited, verified from the JWT alone (works during a backend outage).
+    const email = String(req.user?.email || '').toLowerCase().trim();
+
+    // Anonymous: must sign in. (The page route redirects first; this guards the API.)
+    if (!email) {
+      return res.status(401).json({
+        success: false,
+        error: 'login_required',
+        message: 'Please sign in to use Handwriting OCR.',
+        login_url: '/login',
+      });
+    }
+
+    // Admins: unlimited.
     if (isAdmin(req)) {
       req.ocrUnlimited = true;
       return next();
     }
 
-    const { premium, ok } = await verifyPremium(req);
+    const { premium } = await verifyPremium(req);
 
-    if (!ok) {
-      // Couldn't verify subscription — don't hand out a paid feature; ask to retry.
-      return res.status(503).json({
-        success: false,
-        error: 'verify_failed',
-        message: 'Could not verify your subscription right now. Please try again in a moment.',
-      });
-    }
+    // Tier → (namespace, period, limit). A billing hiccup degrades to the free tier
+    // rather than locking anyone out.
+    const tier = premium ? 'pro' : 'free';
+    const pIp = premium ? `user:${email}` : `userwk:${email}`;
+    const pDate = premium ? monthKey() : weekKey();
+    const limit = premium ? MONTHLY_LIMIT : FREE_WEEKLY_LIMIT;
 
-    if (!premium) {
-      return res.status(402).json({
-        success: false,
-        upgrade_required: true, // tells the tool UI to show the upgrade card
-        error: 'Handwriting OCR is a Pro feature. Upgrade to extract text from your images.',
-        message: 'Handwriting OCR is a Pro feature. Upgrade at /pricing to extract text from your images.',
-        upgrade_url: '/pricing',
-      });
-    }
-
-    // Paid: enforce 15 / month per account.
-    const email = String(req.user?.email || '').toLowerCase().trim();
-    const userKey = email || String(req.user?.id || req.user?.sub || 'unknown');
-    const used = await readMonthlyCount(userKey);
-    if (used >= MONTHLY_LIMIT) {
+    const used = await readCount(pIp, pDate);
+    if (used >= limit) {
+      if (tier === 'free') {
+        return res.status(429).json({
+          success: false,
+          upgrade_required: true, // shows the upgrade card in the tool UI
+          error: `You've used your ${FREE_WEEKLY_LIMIT} free Handwriting OCR this week. Upgrade to Pro for ${MONTHLY_LIMIT} a month.`,
+          limit: { tier: 'free', weekly_limit: FREE_WEEKLY_LIMIT, used, remaining: 0, resets_at: 'Monday (UTC)' },
+        });
+      }
       return res.status(429).json({
         success: false,
         upgrade_required: false,
-        error: `You've used all ${MONTHLY_LIMIT} handwriting OCR extractions for this month.`,
-        limit: {
-          monthly_limit: MONTHLY_LIMIT,
-          used,
-          remaining: 0,
-          resets_at: 'the 1st of next month (UTC)',
-        },
+        error: `You've used all ${MONTHLY_LIMIT} Handwriting OCR extractions for this month.`,
+        limit: { tier: 'pro', monthly_limit: MONTHLY_LIMIT, used, remaining: 0, resets_at: 'the 1st of next month (UTC)' },
       });
     }
 
     // Under the cap — let it through. The credit is consumed only on success.
-    req.ocrQuota = { userKey, used, limit: MONTHLY_LIMIT };
+    req.ocrQuota = { pIp, pDate, limit, tier };
     next();
   };
 }
 
 /**
  * Consume one credit — call ONLY after a successful extraction. No-op for admins
- * (unlimited) and when there is no quota context (free users never get this far).
+ * and when there is no quota context.
  */
 async function recordSuccess(req) {
   if (req.ocrUnlimited || !req.ocrQuota) return;
-  const count = await incrementMonthly(req.ocrQuota.userKey);
-  console.log(`[OCR-LIMIT] paid ${req.ocrQuota.userKey} consumed 1 → ${count}/${MONTHLY_LIMIT} this month`);
+  const { pIp, pDate, limit, tier } = req.ocrQuota;
+  const count = await increment(pIp, pDate);
+  console.log(`[OCR-LIMIT] ${tier} ${pIp} consumed 1 → ${count}/${limit} (${pDate})`);
 }
 
 module.exports = ocrMonthlyLimit;
 module.exports.recordSuccess = recordSuccess;
 module.exports.MONTHLY_LIMIT = MONTHLY_LIMIT;
+module.exports.FREE_WEEKLY_LIMIT = FREE_WEEKLY_LIMIT;

@@ -144,7 +144,11 @@ router.get('/tools/ocr', (req, res) => {
   });
 });
 
-router.get('/tools/handwriting-ocr', (req, res) => {
+// Handwriting OCR is login-gated: anonymous visitors are bounced to /login (which
+// offers sign-up) with ?redirect back here, so they land on the tool right after
+// authenticating. Access tiers (free = 1/week, Pro = 15/month) are enforced on the
+// API in middleware/ocrMonthlyLimit.js.
+router.get('/tools/handwriting-ocr', requireAuth, (req, res) => {
   const user = getCurrentUser(req);
   const seo = getSeoData('handwritingOcrTool');
   res.render('pages/handwriting-ocr-tool', {
