@@ -2777,6 +2777,14 @@ router.post('/ai-content-writer/generate-content', async (req, res) => {
       }
     }
 
+    // Home demo is a short "taste": hard-cap its output length server-side so the
+    // client field (or a crafted request carrying source:'home-demo') can't exceed it.
+    // The full tool sends no such source and is unaffected.
+    if (req.body && req.body.source === 'home-demo') {
+      const wc = Number(req.body.word_count);
+      req.body.word_count = Math.min(50, Number.isFinite(wc) && wc > 0 ? wc : 50);
+    }
+
     const result = await contentWriterService.generateContent(req.body);
 
     // Record consumption on success. Fire-and-forget so it doesn't slow

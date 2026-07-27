@@ -2,6 +2,11 @@
 (function () {
   const $ = (id) => document.getElementById(id);
 
+  // The home demo is a short "taste" — hard cap on the generated length. The server
+  // enforces the same 50 for any request tagged source:'home-demo', so editing this
+  // (or the number field) can't get more out of the demo.
+  const HOME_DEMO_MAX_WORDS = 50;
+
   function showStatus(msg, kind) {
     const el = $('home-writer-status');
     if (!el) return;
@@ -47,8 +52,8 @@
     const contentType = $('home-writer-type')?.value || 'blog';
     const wcRaw = String($('home-writer-word-count')?.value || '').trim();
     let wordCount = parseInt(wcRaw, 10);
-    if (!Number.isFinite(wordCount)) wordCount = 200;
-    wordCount = Math.max(80, Math.min(200, wordCount)); // home demo cap
+    if (!Number.isFinite(wordCount)) wordCount = HOME_DEMO_MAX_WORDS;
+    wordCount = Math.max(20, Math.min(HOME_DEMO_MAX_WORDS, wordCount)); // home demo cap
     if ($('home-writer-word-count')) $('home-writer-word-count').value = String(wordCount);
 
     const outWrap = $('home-writer-output');
@@ -71,6 +76,7 @@
           word_count: wordCount,
           include_title: true,
           include_meta: false,
+          source: 'home-demo', // server hard-caps word_count to 50 for this source
         }),
       });
 
@@ -96,6 +102,19 @@
   function init() {
     const genBtn = $('home-writer-generate');
     if (genBtn) genBtn.addEventListener('click', generate);
+
+    // Keep the number field within the demo cap as the user types/blurs.
+    const wcField = $('home-writer-word-count');
+    if (wcField) {
+      const clamp = () => {
+        let v = parseInt(wcField.value, 10);
+        if (!Number.isFinite(v)) return;
+        if (v > HOME_DEMO_MAX_WORDS) wcField.value = String(HOME_DEMO_MAX_WORDS);
+        if (v < 20) wcField.value = '20';
+      };
+      wcField.addEventListener('change', clamp);
+      wcField.addEventListener('blur', clamp);
+    }
 
     const copyBtn = $('home-writer-copy');
     if (copyBtn) {
