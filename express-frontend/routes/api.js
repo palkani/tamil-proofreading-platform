@@ -2048,6 +2048,17 @@ router.get('/handwriting-ocr/health', (req, res) => {
   return res.json({ status: 'ok', service: 'gemini-vision', model: 'gemini-2.5-flash' });
 });
 
+// Read-only usage for the "N/3 uploads left" badge on the tool page. Never consumes.
+router.get('/handwriting-ocr/usage', async (req, res) => {
+  try {
+    const usage = await ocrMonthlyLimit.getUsage(req);
+    res.json({ success: true, ...usage });
+  } catch (e) {
+    console.warn('[HANDWRITING-OCR] usage lookup failed:', e.message);
+    res.json({ success: false });
+  }
+});
+
 router.post('/handwriting-ocr/extract-words', ocrMonthlyLimit(), uploadHandwriting.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded. Please select an image file.' });
