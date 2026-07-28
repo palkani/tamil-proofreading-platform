@@ -251,8 +251,12 @@
     }
   }
   </script>
+  <% } %>
 
-  <!-- Structured Data - FAQPage (AI-optimised: specific, factual, non-promotional answers) -->
+  <!-- FAQPage: HOME ONLY, and its questions must mirror the visible FAQ on the home
+       page (Google flags FAQ markup that doesn't match on-page content). Other pages
+       render their own FAQ from seo.faqItems below. -->
+  <% if (pageType === 'home') { %>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -260,104 +264,35 @@
     "mainEntity": [
       {
         "@type": "Question",
-        "name": "What is ProofTamil?",
+        "name": "What exactly is ProofTamil?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "ProofTamil is an AI-powered Tamil language writing platform available at prooftamil.com. It provides three core tools: (1) an AI proofreader that checks Tamil grammar, spelling, and verb conjugation in under 2 seconds; (2) a handwriting OCR tool that converts photographs of handwritten Tamil notes into editable text; and (3) an AI content writer that generates Tamil and English articles and blog posts."
+          "text": "ProofTamil is an AI-powered Tamil proofreading and OCR platform. It checks Tamil grammar, spelling, and style errors in real time — and can also convert photos of handwritten Tamil notes into editable digital text using its Handwritten Notes into Text tool."
         }
       },
       {
         "@type": "Question",
-        "name": "How do I check Tamil grammar online?",
+        "name": "How accurate is the Tamil handwriting OCR?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Visit prooftamil.com, type or paste your Tamil text in the editor, and click 'Check Grammar'. The AI analyses the text and highlights grammar errors, spelling mistakes, and verb conjugation issues with coloured underlines. Click any suggestion to apply the correction. The free plan supports up to 200 words per check and 30 checks per day."
+          "text": "The OCR engine is trained specifically on Tamil script, including complex conjunct letters (உயிர்மெய் எழுத்துக்கள்). It handles notebook pages, exam sheets, and whiteboard photos — and shows a confidence score per word so you know exactly where to double-check."
         }
       },
       {
         "@type": "Question",
-        "name": "What Tamil grammar errors does ProofTamil detect?",
+        "name": "Is ProofTamil free to use?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "ProofTamil detects: verb conjugation errors (e.g. wrong tense forms), spelling mistakes including commonly confused letters (ல vs ழ vs ள), sandhi rule violations, subject-verb agreement issues, punctuation errors, formal vs. spoken register mismatches, and redundant or unclear sentence constructions."
+          "text": "Yes — the Free plan includes 30 AI grammar checks per day (up to 200 words each), with no sign-up required to try. Handwritten Notes into Text needs a free account and includes 3 free conversions. Pro plans unlock unlimited checks, 20 conversions per month, priority processing, and full API access."
         }
       },
       {
         "@type": "Question",
-        "name": "How do I convert handwritten Tamil notes to text?",
+        "name": "What's the smart transliteration feature?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Use ProofTamil's Tamil Handwriting OCR at prooftamil.com/tools/handwriting-ocr. Take a clear photograph of your handwritten Tamil notes, upload the image (JPG or PNG), and the AI converts it to editable Tamil text in seconds. Free users get 2 conversions per day; Pro users get unlimited conversions."
+          "text": "Type in English (Tanglish) directly in the editor — \"vanakkam nanbaa\" — and ProofTamil converts it to வணக்கம் நண்பா as you press Space. The AI ranks multiple context-aware word choices so you can pick the right meaning without switching keyboards."
         }
-      },
-      {
-        "@type": "Question",
-        "name": "What types of Tamil documents can the OCR tool read?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "ProofTamil's OCR tools support: handwritten Tamil notes and letters (via the handwriting-ocr tool), printed Tamil books and documents, scanned PDFs, whiteboard content, and Tamil text in photographs. Accepted formats include JPG, PNG, WEBP, and PDF."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "How do I type Tamil without a Tamil keyboard?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "ProofTamil supports Tanglish (phonetic Tamil typing). Type Tamil words using English letters — for example: 'vanakkam' converts to வணக்கம், 'nandri' converts to நன்றி, 'en peyar Tamil' converts to என் பெயர் தமிழ். The conversion happens in real time as you type, on any device."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "What is the difference between ProofTamil Free and Pro?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "ProofTamil Free: 200 words per proofreading check, 30 AI checks per day, 2 OCR conversions per day, up to 5 saved drafts. ProofTamil Pro: unlimited words per check, unlimited daily AI checks, unlimited OCR conversions, unlimited saved drafts, all correction types including style and rewrite suggestions, and priority support."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Does ProofTamil support both formal and spoken Tamil?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Yes. ProofTamil has two style modes: Formal Tamil (இலக்கிய தமிழ்) applies strict classical grammar rules, suitable for academic writing and journalism. Spoken Tamil (பேச்சு தமிழ்) accepts everyday conversational forms like பண்ற, போறேன், and வேணும் as correct."
-        }
-      }
-    ]
-  }
-  </script>
-
-  <!-- Structured Data - HowTo for OCR (AI systems extract step-by-step content) -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "HowTo",
-    "name": "How to Convert Handwritten Tamil Notes to Text",
-    "description": "Use ProofTamil's Tamil Handwriting OCR to turn photographs of handwritten Tamil notes into clean, editable digital text.",
-    "totalTime": "PT1M",
-    "step": [
-      {
-        "@type": "HowToStep",
-        "position": "1",
-        "name": "Photograph your handwritten Tamil notes",
-        "text": "Take a clear photo of your handwritten Tamil notes, letter, or document using your phone camera. Ensure good lighting and that the text is in focus."
-      },
-      {
-        "@type": "HowToStep",
-        "position": "2",
-        "name": "Upload the image to ProofTamil",
-        "text": "Visit prooftamil.com/tools/handwriting-ocr and upload your photo (JPG or PNG). No sign-up is required for free usage."
-      },
-      {
-        "@type": "HowToStep",
-        "position": "3",
-        "name": "AI reads and converts the Tamil text",
-        "text": "ProofTamil's AI model analyses the handwriting and converts it to Tamil Unicode text in seconds."
-      },
-      {
-        "@type": "HowToStep",
-        "position": "4",
-        "name": "Copy and use the editable Tamil text",
-        "text": "Copy the extracted Tamil text to use in any document, email, or app. You can also run it through ProofTamil's proofreader to correct any recognition errors."
       }
     ]
   }
@@ -411,26 +346,29 @@
   <% if (pageType === 'tool') { %>
   <!-- Structured Data - Tool-specific WebApplication schema -->
   <% const toolSchemas = {
-    'Tamil OCR Online Free - Extract Tamil Text from Images | ProofTamil': {
+    '/tools/ocr': {
       name: 'Tamil OCR Tool - ProofTamil',
       description: 'Free online Tamil OCR tool. Upload JPG, PNG, or PDF images and extract Tamil text instantly using Google Vision AI.',
       url: baseUrl + '/tools/ocr',
       featureList: ['Tamil OCR from JPG/PNG/PDF', 'Google Vision AI', 'Instant text extraction', 'Free no sign-up']
     },
-    'Tamil Handwriting to Text Online - Free Handwriting OCR | ProofTamil': {
-      name: 'Tamil Handwriting OCR - ProofTamil',
+    '/tools/handwriting-ocr': {
+      name: 'Handwritten Notes into Text - ProofTamil',
       description: 'Convert handwritten Tamil notes to editable text online. Upload a photo of handwritten Tamil and get text instantly.',
       url: baseUrl + '/tools/handwriting-ocr',
       featureList: ['Handwritten Tamil recognition', 'Photo to text conversion', 'AI handwriting model', 'Free online tool']
     },
-    'AI Tamil Content Writer - Generate Tamil Blogs & Articles | ProofTamil': {
+    '/tools/ai-content-writer': {
       name: 'AI Tamil Content Writer - ProofTamil',
       description: 'Generate high-quality Tamil blog posts, articles, and essays using AI. Supports formal and spoken Tamil styles.',
       url: baseUrl + '/tools/ai-content-writer',
       featureList: ['AI Tamil blog generator', 'Formal and spoken Tamil', 'English to Tamil content', 'Free AI writer']
     }
   };
-  const toolSchema = toolSchemas[seoTitle] || null;
+  // Key by URL PATH, not the title string — titles drift (em dash vs hyphen) and
+  // previously left toolSchema always null, so tool pages shipped no app schema.
+  const toolPath = (typeof canonicalUrl === 'string' ? canonicalUrl : '').replace(baseUrl, '').split('?')[0].replace(/\/$/, '');
+  const toolSchema = toolSchemas[toolPath] || null;
   %>
   <% if (toolSchema) { %>
   <script type="application/ld+json">
@@ -530,45 +468,6 @@
   %>
   <% } %>
 
-  <% if (pageType === 'article' || pageType === 'howToUse') { %>
-  <!-- Structured Data - HowTo for tutorial pages -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "HowTo",
-    "name": "How to Use ProofTamil Tamil Grammar Checker",
-    "description": "Step-by-step guide to check Tamil grammar, fix spelling errors, and improve Tamil writing using ProofTamil's AI-powered proofreading tool.",
-    "step": [
-      {
-        "@type": "HowToStep",
-        "name": "Sign Up or Login",
-        "text": "Create a free account or login to access ProofTamil's full features. You can sign up with email or Google account."
-      },
-      {
-        "@type": "HowToStep",
-        "name": "Open Your Workspace",
-        "text": "Navigate to the workspace to start writing or paste your Tamil text for proofreading."
-      },
-      {
-        "@type": "HowToStep",
-        "name": "Type or Paste Tamil Text",
-        "text": "Type in English (phonetic) like 'vanakkam' and it converts to Tamil, or paste existing Tamil text."
-      },
-      {
-        "@type": "HowToStep",
-        "name": "Get AI Suggestions",
-        "text": "AI automatically analyzes your text for grammar errors, spelling mistakes, and provides correction suggestions."
-      },
-      {
-        "@type": "HowToStep",
-        "name": "Apply Corrections",
-        "text": "Click on suggestions to apply them instantly. Your text is automatically saved."
-      }
-    ]
-  }
-  </script>
-  <% } %>
-  
   <% if (pageType === 'contact') { %>
   <!-- Structured Data - ContactPage -->
   <script type="application/ld+json">
@@ -617,8 +516,26 @@
     ]
   }
   </script>
+  <!-- Blog node: defines the #blog @id every BlogPosting references via isPartOf. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Blog",
+    "@id": "<%= baseUrl %>/blog#blog",
+    "name": "ProofTamil Blog",
+    "url": "<%= baseUrl %>/blog",
+    "description": "Guides on Tamil grammar, proofreading techniques, handwriting OCR, AI writing tools, and Tamil language preservation.",
+    "publisher": {
+      "@type": "Organization",
+      "name": "ProofTamil",
+      "url": "<%= baseUrl %>",
+      "logo": { "@type": "ImageObject", "url": "<%= baseUrl %>/images/favicon-512x512.png", "width": 512, "height": 512 }
+    },
+    "inLanguage": ["ta", "en"]
+  }
+  </script>
   <% } %>
-  
+
   <!-- Centralized Authentication Utilities -->
   <!-- Defer so it doesn't block first paint (still runs before DOMContentLoaded) -->
   <script src="/js/auth-utils.js" defer></script>

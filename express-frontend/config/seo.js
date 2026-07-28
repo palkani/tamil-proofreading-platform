@@ -63,22 +63,19 @@ const seoConfig = {
     ogDescription: 'Free online Tamil editor — Tanglish typing (vanakkam → வணக்கம்) plus AI grammar and spell check. Works on any device. No download, no sign-up.',
     pageType: 'landing',
     includeStructuredData: true,
+    // Mirror the visible FAQ on views/pages/free-tamil-editor.ejs (3 questions).
     faqItems: [
       {
-        q: 'How do I type Tamil online without a Tamil keyboard?',
-        a: 'Open ProofTamil\'s free Tamil editor at prooftamil.com/free-tamil-editor and type phonetically in English (Tanglish). For example: "vanakkam" → வணக்கம், "nandri" → நன்றி, "en peyar Tamil" → என் பெயர் தமிழ். No Tamil keyboard or special software needed.'
+        q: 'Is this a free Tamil editing tool?',
+        a: 'Yes — this page is designed for free Tamil editing and proofreading online.'
       },
       {
-        q: 'Can I proofread Tamil text in the free Tamil editor?',
-        a: 'Yes! After typing or pasting Tamil text in ProofTamil\'s free editor, click the Check Grammar button. The AI checks for grammar errors, spelling mistakes, and provides one-click correction suggestions.'
+        q: 'Can I paste Tamil text and correct it?',
+        a: 'Yes. Paste your Tamil text into the editor and review suggestions to improve grammar and spelling.'
       },
       {
-        q: 'Is ProofTamil\'s Tamil editor completely free?',
-        a: 'Yes, the free Tamil editor at prooftamil.com/free-tamil-editor is 100% free. Type in Tanglish, paste Tamil text, and get AI grammar corrections — no download, no sign-up, no hidden fees.'
-      },
-      {
-        q: 'Can I use the free Tamil editor on mobile?',
-        a: 'Yes, ProofTamil\'s free Tamil editor works on all devices including mobile phones and tablets. Open prooftamil.com/free-tamil-editor in any browser on Android or iOS to start typing and proofreading Tamil.'
+        q: 'Can I convert images or PDFs to Tamil text?',
+        a: 'Yes — use our Handwritten Notes into Text tool to convert photos of handwritten Tamil into editable text.'
       }
     ]
   },
@@ -311,22 +308,24 @@ const seoConfig = {
     ogTitle: 'ProofTamil Pro Pricing - Unlimited Tamil AI Proofreading',
     ogDescription: 'Upgrade to ProofTamil Pro — unlimited words, unlimited AI checks per day, all correction types. Simple pricing, cancel anytime.',
     pageType: 'pricing',
+    // These must mirror the visible FAQ on views/pages/pricing.ejs (same questions
+    // and substantially the same answers) — mismatched FAQ markup is a spam-policy risk.
     faqItems: [
       {
-        q: 'What is included in ProofTamil Pro?',
-        a: 'ProofTamil Pro includes: unlimited words per analysis (vs 200 on free), unlimited AI proofreading checks per day (vs 30 on free), all correction types (grammar, style, and full rewrite), and unlimited saved drafts. Visit prooftamil.com/pricing for current prices.'
+        q: 'Can I cancel anytime?',
+        a: "Yes. Cancel from your account page at any time. You'll keep Pro access until the end of your billing period."
       },
       {
-        q: 'Is there a free plan for ProofTamil?',
-        a: 'Yes, ProofTamil has a permanent free plan with 200 words per analysis and 30 AI proofreading checks per day — enough for students and casual Tamil writers. No credit card required. Upgrade to Pro anytime for unlimited access.'
+        q: 'Which payment methods are accepted?',
+        a: 'In India: UPI, Credit/Debit cards, Netbanking, and Wallets via Razorpay. Elsewhere: Credit/Debit cards, Apple Pay, and Google Pay via Stripe.'
       },
       {
-        q: 'Can I cancel ProofTamil Pro anytime?',
-        a: 'Yes, ProofTamil Pro subscriptions can be cancelled anytime from your account page. Your Pro access continues until the end of the current billing period with no additional charges.'
+        q: 'Is my data secure?',
+        a: 'Yes. Payments are processed by Razorpay (India) or Stripe (other regions), both PCI-DSS Level 1 certified payment processors. We never store your card details.'
       },
       {
-        q: 'Does ProofTamil offer a yearly discount?',
-        a: 'Yes, ProofTamil Pro yearly plans are significantly cheaper than monthly billing. Visit prooftamil.com/pricing to compare monthly and yearly prices and choose the best option for you.'
+        q: 'What happens to my drafts if I downgrade?',
+        a: 'Your drafts are always saved. If you downgrade to Free, you keep access to all your existing drafts but daily AI checks revert to the free limit.'
       }
     ]
   },
