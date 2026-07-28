@@ -36,6 +36,7 @@ Disallow: /api/
 Disallow: /admin/
 Disallow: /my-blogs
 Disallow: /billing/
+Disallow: /tools/ai-content-writer/drafts
 
 # Disallow redirect aliases — these 301 to canonical URLs.
 # Disallowing prevents crawl budget waste on non-canonical paths.
