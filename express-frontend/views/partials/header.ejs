@@ -516,8 +516,26 @@
     ]
   }
   </script>
+  <!-- Blog node: defines the #blog @id every BlogPosting references via isPartOf. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Blog",
+    "@id": "<%= baseUrl %>/blog#blog",
+    "name": "ProofTamil Blog",
+    "url": "<%= baseUrl %>/blog",
+    "description": "Guides on Tamil grammar, proofreading techniques, handwriting OCR, AI writing tools, and Tamil language preservation.",
+    "publisher": {
+      "@type": "Organization",
+      "name": "ProofTamil",
+      "url": "<%= baseUrl %>",
+      "logo": { "@type": "ImageObject", "url": "<%= baseUrl %>/images/favicon-512x512.png", "width": 512, "height": 512 }
+    },
+    "inLanguage": ["ta", "en"]
+  }
+  </script>
   <% } %>
-  
+
   <!-- Centralized Authentication Utilities -->
   <!-- Defer so it doesn't block first paint (still runs before DOMContentLoaded) -->
   <script src="/js/auth-utils.js" defer></script>
