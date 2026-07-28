@@ -75,6 +75,19 @@
 (function () {
   const pageSize = 25;
   const state = { email: '', subscription: '', country: '', sort: 'created_desc', offset: 0, total: 0 };
+
+  // Pre-fill filters from the URL query (drill-downs from the admin dashboard, e.g.
+  // /admin/users?subscription=pro). Only apply keys the page actually supports.
+  (function initFromUrl() {
+    const q = new URLSearchParams(location.search);
+    ['email', 'subscription', 'country', 'sort'].forEach(function (k) {
+      if (q.has(k)) state[k] = q.get(k);
+    });
+    document.querySelectorAll('[data-filter]').forEach(function (el) {
+      const k = el.dataset.filter;
+      if (state[k] != null && state[k] !== '') el.value = state[k];
+    });
+  })();
   const debounced = (fn, ms) => {
     let t;
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
