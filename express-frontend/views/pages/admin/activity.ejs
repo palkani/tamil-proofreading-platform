@@ -11,7 +11,7 @@
       </div>
       <div class="sm:col-span-2">
         <label class="block text-xs font-medium text-slate-600">User email</label>
-        <input type="text" data-filter="email" placeholder="e.g. jeya"
+        <input type="text" data-filter="email" placeholder="search / filter user…"
                class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
       </div>
       <div>
@@ -32,42 +32,39 @@
     <div class="mt-3 flex items-center justify-between text-xs text-slate-500">
       <div data-count>Loading…</div>
       <div class="flex items-center gap-3">
+        <!-- View toggle: grouped by user vs flat chronological feed -->
+        <div class="inline-flex overflow-hidden rounded-md border border-slate-300">
+          <button type="button" data-view-btn="users" class="px-2.5 py-1 text-xs font-medium">By user</button>
+          <button type="button" data-view-btn="events" class="border-l border-slate-300 px-2.5 py-1 text-xs font-medium">All events</button>
+        </div>
         <button type="button" data-clear class="text-blue-600 hover:underline">Clear filters</button>
         <button type="button" data-refresh class="text-blue-600 hover:underline">Refresh</button>
       </div>
     </div>
   </section>
 
-  <!-- Feed table. overflow-x-auto so wide rows can scroll horizontally
-       on narrow screens instead of getting clipped. -->
-  <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-    <table class="min-w-full divide-y divide-slate-200 text-sm">
-      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-        <tr>
-          <th class="px-4 py-2 text-left">When</th>
-          <th class="px-4 py-2 text-left">User</th>
-          <th class="px-4 py-2 text-left">Event</th>
-          <th class="px-4 py-2 text-left">Metadata</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-100" data-body>
-        <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">Loading…</td></tr>
-      </tbody>
-    </table>
-    <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-600">
-      <div data-page-status>—</div>
-      <div class="space-x-2">
-        <button type="button" data-page-prev class="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-40 disabled:pointer-events-none">Prev</button>
-        <button type="button" data-page-next class="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-40 disabled:pointer-events-none">Next</button>
-      </div>
-    </div>
+  <!-- Content: JS swaps between user list / user detail / flat feed. -->
+  <section class="overflow-hidden rounded-lg border border-slate-200 bg-white" data-content>
+    <div class="px-4 py-8 text-center text-slate-400">Loading…</div>
   </section>
 </div>
 
 <script>
 (function () {
-  const pageSize = 50;
-  const state = { event_type: '', email: '', user_id: '', since_hours: '168', offset: 0, total: 0 };
+  const CAP = 4000;        // safety ceiling on events pulled for grouping
+  const PAGE = 200;        // backend page size while gathering the window
+  const flatPageSize = 50;
+  const state = {
+    event_type: '', email: '', user_id: '', since_hours: '168',
+    view: 'users',         // 'users' | 'detail' | 'events'
+    detailKey: null,
+    offset: 0,             // flat view pagination
+    total: 0,
+  };
+  let allGroups = [];      // [{ key, email, user_id, events:[], types:{}, last }]
+  let windowTotal = 0;
+  let capped = false;
+
   const escape = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const debounced = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
   const fmtRelative = (iso) => {
@@ -78,25 +75,31 @@
     return Math.round(diff / 86400) + 'd';
   };
   const fmtDate = (iso) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const content = () => document.querySelector('[data-content]');
+  const setCount = (t) => { document.querySelector('[data-count]').textContent = t; };
 
-  function eventBadge(type) {
+  function tone(type) {
     const t = String(type || '').toLowerCase();
-    let tone = 'slate';
-    if (t.startsWith('login') || t === 'register') tone = 'green';
-    else if (t.startsWith('logout')) tone = 'slate';
-    else if (t.startsWith('ai_')) tone = 'blue';
-    else if (t.includes('subscription') || t.includes('payment') || t.includes('billing')) tone = 'amber';
-    else if (t.includes('delete') || t.includes('failed')) tone = 'red';
-    const tones = {
-      green: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-      slate: 'bg-slate-100 text-slate-700 ring-slate-200',
-      red: 'bg-red-50 text-red-700 ring-red-200',
-      blue: 'bg-blue-50 text-blue-700 ring-blue-200',
-      amber: 'bg-amber-50 text-amber-700 ring-amber-200',
-    };
-    return '<span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ' + tones[tone] + '">' + escape(type) + '</span>';
+    if (t.startsWith('login') || t === 'register') return 'green';
+    if (t.startsWith('ai_')) return 'blue';
+    if (t.includes('subscription') || t.includes('payment') || t.includes('billing')) return 'amber';
+    if (t.includes('delete') || t.includes('failed')) return 'red';
+    return 'slate';
   }
-
+  const TONES = {
+    green: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    slate: 'bg-slate-100 text-slate-700 ring-slate-200',
+    red: 'bg-red-50 text-red-700 ring-red-200',
+    blue: 'bg-blue-50 text-blue-700 ring-blue-200',
+    amber: 'bg-amber-50 text-amber-700 ring-amber-200',
+  };
+  function eventBadge(type) {
+    return '<span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ' + TONES[tone(type)] + '">' + escape(type) + '</span>';
+  }
+  function typeChip(type, count) {
+    return '<span class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ' + TONES[tone(type)] + '">' +
+      escape(type) + '<span class="opacity-60">×' + count + '</span></span>';
+  }
   function renderMetadata(raw) {
     if (!raw || raw === '{}' || raw === 'null') return '<span class="text-slate-400">—</span>';
     let parsed;
@@ -107,88 +110,233 @@
     });
     return '<span class="font-mono text-xs">' + pairs.join('&nbsp;&nbsp;') + '</span>';
   }
+  const loadingHtml = () => '<div class="px-4 py-8 text-center text-slate-400">Loading…</div>';
+  const errorHtml = (m) => '<div class="px-4 py-8 text-center text-red-600">Failed to load: ' + escape(m) + '</div>';
+  const emptyHtml = (m) => '<div class="px-4 py-8 text-center text-slate-400">' + escape(m) + '</div>';
 
-  function render(data) {
-    state.total = data.total;
-    const rows = data.activity || [];
-    const tbody = document.querySelector('[data-body]');
-    if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">No activity matches.</td></tr>';
-    } else {
-      tbody.innerHTML = rows.map(function (a) {
-        const userLabel = a.email
-          ? '<a href="/admin/users/' + encodeURIComponent(a.user_id) + '" class="text-blue-600 hover:underline">' + escape(a.email) + '</a>'
-          : '<span class="text-slate-500">user #' + a.user_id + '</span>';
-        return '<tr class="hover:bg-slate-50">' +
-          '<td class="px-4 py-2 whitespace-nowrap"><span class="text-slate-900">' + fmtRelative(a.occurred_at) + '</span> <span class="text-xs text-slate-400">' + fmtDate(a.occurred_at) + '</span></td>' +
-          '<td class="px-4 py-2">' + userLabel + '</td>' +
-          '<td class="px-4 py-2">' + eventBadge(a.event_type) + '</td>' +
-          '<td class="px-4 py-2">' + renderMetadata(a.metadata) + '</td>' +
-          '</tr>';
-      }).join('');
-    }
-    const start = state.total === 0 ? 0 : state.offset + 1;
-    const end = Math.min(state.offset + pageSize, state.total);
-    document.querySelector('[data-page-status]').textContent = state.total === 0 ? '0 results' : (start + '–' + end + ' of ' + state.total);
-    document.querySelector('[data-count]').textContent = state.total + ' events in window';
-    document.querySelector('[data-page-prev]').disabled = state.offset === 0;
-    document.querySelector('[data-page-next]').disabled = end >= state.total;
+  function syncToggle() {
+    document.querySelectorAll('[data-view-btn]').forEach(function (b) {
+      const active = (b.dataset.viewBtn === 'events') === (state.view === 'events');
+      b.className = 'px-2.5 py-1 text-xs font-medium ' + (b.dataset.viewBtn === 'events' ? 'border-l border-slate-300 ' : '') +
+        (active ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50');
+    });
   }
 
-  function load() {
+  // ── Gather the window (event_type + since_hours applied server-side) ─────────
+  async function fetchWindow() {
+    let offset = 0, all = [], total = 0;
+    capped = false;
+    while (all.length < CAP) {
+      const params = new URLSearchParams({
+        event_type: state.event_type, email: '', user_id: state.user_id,
+        since_hours: state.since_hours, limit: PAGE, offset,
+      });
+      const r = await fetch('/admin/api/activity?' + params.toString(), { credentials: 'include' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      total = d.total || 0;
+      const batch = d.activity || [];
+      all = all.concat(batch);
+      offset += PAGE;                       // advance in backend (unfiltered) terms
+      if (batch.length === 0 || offset >= total + PAGE) break;
+    }
+    if (all.length >= CAP) capped = true;
+    return { events: all, total };
+  }
+
+  function groupByUser(events) {
+    const map = new Map();
+    for (const e of events) {
+      const key = e.email || ('user #' + e.user_id);
+      let g = map.get(key);
+      if (!g) { g = { key, email: e.email, user_id: e.user_id, events: [], types: {}, last: e.occurred_at }; map.set(key, g); }
+      g.events.push(e);
+      g.types[e.event_type] = (g.types[e.event_type] || 0) + 1;
+      if (new Date(e.occurred_at) > new Date(g.last)) g.last = e.occurred_at;
+    }
+    return Array.from(map.values()).sort((a, b) => new Date(b.last) - new Date(a.last));
+  }
+
+  // ── Master: list of users ───────────────────────────────────────────────────
+  function renderUserList() {
+    syncToggle();
+    const q = state.email.toLowerCase();
+    let groups = allGroups;
+    if (q) groups = groups.filter((g) => (g.email || ('user #' + g.user_id)).toLowerCase().includes(q));
+    if (state.user_id) groups = groups.filter((g) => String(g.user_id) === state.user_id);
+
+    setCount(groups.length + (groups.length === 1 ? ' user' : ' users') + ' · ' + windowTotal + (capped ? '+' : '') + ' events in window');
+    if (!groups.length) { content().innerHTML = emptyHtml('No users match.'); return; }
+
+    content().innerHTML = groups.map(function (g) {
+      const label = g.email ? escape(g.email) : ('user #' + g.user_id);
+      const chips = Object.entries(g.types).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([t, c]) => typeChip(t, c)).join(' ');
+      return '<button type="button" data-user="' + escape(g.key) + '" class="flex w-full items-center gap-4 border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50">' +
+          '<div class="min-w-0 flex-1">' +
+            '<div class="truncate font-medium text-slate-900">' + label + '</div>' +
+            '<div class="mt-1 flex flex-wrap gap-1">' + chips + '</div>' +
+          '</div>' +
+          '<div class="whitespace-nowrap text-right">' +
+            '<div class="text-sm font-semibold text-slate-700">' + g.events.length + ' events</div>' +
+            '<div class="text-xs text-slate-400">last ' + fmtRelative(g.last) + ' ago</div>' +
+          '</div>' +
+          '<svg class="h-4 w-4 flex-shrink-0 text-slate-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>' +
+        '</button>';
+    }).join('');
+    content().querySelectorAll('[data-user]').forEach((b) => b.addEventListener('click', () => openDetail(b.dataset.user)));
+  }
+
+  // ── Detail: one user's timeline ─────────────────────────────────────────────
+  function openDetail(key) {
+    const g = allGroups.find((x) => x.key === key);
+    if (!g) return;
+    state.view = 'detail'; state.detailKey = key;
+    renderDetail(g);
+  }
+  function renderDetail(g) {
+    syncToggle();
+    const label = g.email ? escape(g.email) : ('user #' + g.user_id);
+    const evs = g.events.slice().sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
+    setCount(g.events.length + ' events for ' + label);
+    const header = '<div class="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">' +
+        '<button type="button" data-back class="text-sm text-blue-600 hover:underline">← All users</button>' +
+        '<div class="font-semibold text-slate-900">' + label + '</div>' +
+        (g.user_id ? '<a href="/admin/users/' + encodeURIComponent(g.user_id) + '" class="text-xs text-blue-600 hover:underline">view profile</a>' : '') +
+        '<div class="ml-auto text-xs text-slate-500">' + g.events.length + ' events · last ' + fmtRelative(g.last) + ' ago</div>' +
+      '</div>';
+    const rows = evs.map((a) => '<tr class="hover:bg-slate-50">' +
+        '<td class="px-4 py-2 whitespace-nowrap"><span class="text-slate-900">' + fmtRelative(a.occurred_at) + '</span> <span class="text-xs text-slate-400">' + fmtDate(a.occurred_at) + '</span></td>' +
+        '<td class="px-4 py-2">' + eventBadge(a.event_type) + '</td>' +
+        '<td class="px-4 py-2">' + renderMetadata(a.metadata) + '</td>' +
+      '</tr>').join('');
+    content().innerHTML = header +
+      '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-200 text-sm">' +
+      '<thead class="bg-white text-xs uppercase tracking-wide text-slate-500"><tr>' +
+      '<th class="px-4 py-2 text-left">When</th><th class="px-4 py-2 text-left">Event</th><th class="px-4 py-2 text-left">Metadata</th>' +
+      '</tr></thead><tbody class="divide-y divide-slate-100">' + rows + '</tbody></table></div>';
+    content().querySelector('[data-back]').addEventListener('click', function () {
+      state.view = 'users'; state.detailKey = null; renderUserList();
+    });
+  }
+
+  // ── Flat feed (original chronological view) ─────────────────────────────────
+  function renderFlat(data) {
+    syncToggle();
+    state.total = data.total;
+    const rows = data.activity || [];
+    const head = '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-200 text-sm">' +
+      '<thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>' +
+      '<th class="px-4 py-2 text-left">When</th><th class="px-4 py-2 text-left">User</th><th class="px-4 py-2 text-left">Event</th><th class="px-4 py-2 text-left">Metadata</th>' +
+      '</tr></thead><tbody class="divide-y divide-slate-100">';
+    const body = !rows.length
+      ? '<tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">No activity matches.</td></tr>'
+      : rows.map(function (a) {
+          const userLabel = a.email
+            ? '<a href="/admin/users/' + encodeURIComponent(a.user_id) + '" class="text-blue-600 hover:underline">' + escape(a.email) + '</a>'
+            : '<span class="text-slate-500">user #' + a.user_id + '</span>';
+          return '<tr class="hover:bg-slate-50">' +
+            '<td class="px-4 py-2 whitespace-nowrap"><span class="text-slate-900">' + fmtRelative(a.occurred_at) + '</span> <span class="text-xs text-slate-400">' + fmtDate(a.occurred_at) + '</span></td>' +
+            '<td class="px-4 py-2">' + userLabel + '</td>' +
+            '<td class="px-4 py-2">' + eventBadge(a.event_type) + '</td>' +
+            '<td class="px-4 py-2">' + renderMetadata(a.metadata) + '</td>' +
+            '</tr>';
+        }).join('');
+    const start = state.total === 0 ? 0 : state.offset + 1;
+    const end = Math.min(state.offset + flatPageSize, state.total);
+    const pager = '</tbody></table></div>' +
+      '<div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-600">' +
+        '<div>' + (state.total === 0 ? '0 results' : (start + '–' + end + ' of ' + state.total)) + '</div>' +
+        '<div class="space-x-2">' +
+          '<button type="button" data-page-prev class="rounded-md border border-slate-300 px-3 py-1 disabled:pointer-events-none disabled:opacity-40"' + (state.offset === 0 ? ' disabled' : '') + '>Prev</button>' +
+          '<button type="button" data-page-next class="rounded-md border border-slate-300 px-3 py-1 disabled:pointer-events-none disabled:opacity-40"' + (end >= state.total ? ' disabled' : '') + '>Next</button>' +
+        '</div>' +
+      '</div>';
+    content().innerHTML = head + body + pager;
+    setCount(state.total + ' events in window');
+    const prev = content().querySelector('[data-page-prev]');
+    const next = content().querySelector('[data-page-next]');
+    if (prev) prev.addEventListener('click', function () { state.offset = Math.max(0, state.offset - flatPageSize); loadFlat(); });
+    if (next) next.addEventListener('click', function () { state.offset += flatPageSize; loadFlat(); });
+  }
+
+  // ── Loaders ─────────────────────────────────────────────────────────────────
+  async function loadGrouped() {
+    content().innerHTML = loadingHtml();
+    setCount('Loading…');
+    try {
+      const { events, total } = await fetchWindow();
+      windowTotal = total;
+      allGroups = groupByUser(events);
+      if (state.view === 'detail' && state.detailKey) {
+        const g = allGroups.find((x) => x.key === state.detailKey);
+        if (g) { renderDetail(g); return; }
+        state.view = 'users';
+      }
+      renderUserList();
+    } catch (e) {
+      console.error('[ADMIN/ACTIVITY] grouped load failed', e);
+      content().innerHTML = errorHtml(e.message);
+    }
+  }
+
+  function loadFlat() {
+    content().innerHTML = loadingHtml();
     const params = new URLSearchParams({
-      event_type: state.event_type,
-      email: state.email,
-      user_id: state.user_id,
-      since_hours: state.since_hours,
-      limit: pageSize,
-      offset: state.offset,
+      event_type: state.event_type, email: state.email, user_id: state.user_id,
+      since_hours: state.since_hours, limit: flatPageSize, offset: state.offset,
     });
     fetch('/admin/api/activity?' + params.toString(), { credentials: 'include' })
       .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
-      .then(render)
+      .then(renderFlat)
       .catch(function (err) {
-        console.error('[ADMIN/ACTIVITY] load failed', err);
-        document.querySelector('[data-body]').innerHTML =
-          '<tr><td colspan="4" class="px-4 py-6 text-center text-red-600">Failed to load: ' + escape(err.message) + '</td></tr>';
+        console.error('[ADMIN/ACTIVITY] flat load failed', err);
+        content().innerHTML = errorHtml(err.message);
       });
   }
 
-  const runLoad = debounced(load, 250);
+  function reload() {
+    state.offset = 0;
+    if (state.view === 'events') loadFlat();
+    else { state.view = state.view === 'detail' ? 'detail' : 'users'; loadGrouped(); }
+  }
+
+  // In grouped mode the email/user_id filters just re-filter the already-loaded
+  // user list (no refetch); event_type/window change the window so they refetch.
+  function onFilterChange(which) {
+    state.offset = 0;
+    if (state.view === 'events') { loadFlat(); return; }
+    if (which === 'email' || which === 'user_id') {
+      state.view = 'users'; state.detailKey = null; renderUserList();
+    } else {
+      state.view = 'users'; state.detailKey = null; loadGrouped();
+    }
+  }
+
+  const runFilter = debounced(onFilterChange, 250);
   document.querySelectorAll('[data-filter]').forEach(function (el) {
-    el.addEventListener('input', function () {
-      state[el.dataset.filter] = el.value.trim();
-      state.offset = 0;
-      runLoad();
-    });
-    el.addEventListener('change', function () {
-      state[el.dataset.filter] = el.value.trim();
-      state.offset = 0;
-      load();
+    el.addEventListener('input', function () { state[el.dataset.filter] = el.value.trim(); runFilter(el.dataset.filter); });
+    el.addEventListener('change', function () { state[el.dataset.filter] = el.value.trim(); onFilterChange(el.dataset.filter); });
+  });
+  document.querySelectorAll('[data-view-btn]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.view = b.dataset.viewBtn === 'events' ? 'events' : 'users';
+      state.detailKey = null; state.offset = 0;
+      state.view === 'events' ? loadFlat() : loadGrouped();
     });
   });
   document.querySelector('[data-clear]').addEventListener('click', function () {
     document.querySelectorAll('[data-filter]').forEach(function (el) {
-      if (el.tagName === 'SELECT') el.value = el.options[0].value;
-      else el.value = '';
+      if (el.tagName === 'SELECT') el.value = el.options[1].value; else el.value = '';
     });
-    state.event_type = state.email = state.user_id = '';
-    state.since_hours = '168';
+    state.event_type = state.email = state.user_id = ''; state.since_hours = '168';
     document.querySelector('[data-filter="since_hours"]').value = '168';
-    state.offset = 0;
-    load();
+    state.offset = 0; state.detailKey = null;
+    state.view === 'events' ? loadFlat() : loadGrouped();
   });
-  document.querySelector('[data-refresh]').addEventListener('click', load);
-  document.querySelector('[data-page-prev]').addEventListener('click', function () {
-    state.offset = Math.max(0, state.offset - pageSize);
-    load();
-  });
-  document.querySelector('[data-page-next]').addEventListener('click', function () {
-    state.offset += pageSize;
-    load();
-  });
+  document.querySelector('[data-refresh]').addEventListener('click', reload);
 
-  load();
+  syncToggle();
+  loadGrouped();
 })();
 </script>
 
