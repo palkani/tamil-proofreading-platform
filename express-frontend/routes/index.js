@@ -187,6 +187,12 @@ router.get('/tools/ai-content-writer/drafts', requireAuth, (req, res) => {
 router.get('/blog', async (req, res) => {
   const user = getCurrentUser(req);
   const page = Number(req.query.page || 1) || 1;
+  // Free-text search — backs the WebSite SearchAction JSON-LD (/blog?q={term}).
+  const q = String(req.query.q || '').trim().toLowerCase();
+  const applyQ = (posts) => !q ? posts : posts.filter((p) =>
+    (p.title || '').toLowerCase().includes(q) ||
+    (p.excerpt || '').toLowerCase().includes(q) ||
+    (p.keywords || '').toLowerCase().includes(q));
   const seoBase = getSeoData('blog') || getSeoData('home');
   const seo = {
     ...seoBase,
@@ -212,7 +218,7 @@ router.get('/blog', async (req, res) => {
         title: 'Blog | ProofTamil',
         seo,
         user,
-        posts: filePosts,
+        posts: applyQ(filePosts),
         error: filePosts.length ? null : msg,
         page,
         limit: 12,
@@ -227,7 +233,7 @@ router.get('/blog', async (req, res) => {
       title: 'Blog | ProofTamil',
       seo,
       user,
-      posts: merged,
+      posts: applyQ(merged),
       error: null,
       page,
       limit: 12,
