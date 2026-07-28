@@ -7015,7 +7015,7 @@ setTimeout(function ocrImportFromSession() {
 
     // Brief toast notification
     const toast = document.createElement('div');
-    toast.textContent = '✅ Handwriting OCR text loaded into editor';
+    toast.textContent = '✅ Handwritten notes loaded into editor';
     toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:500;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,0.2)';
     document.body.appendChild(toast);
     setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.4s'; setTimeout(() => toast.remove(), 400); }, 3000);
