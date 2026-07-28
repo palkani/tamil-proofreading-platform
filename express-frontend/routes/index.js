@@ -801,8 +801,12 @@ router.get('/pricing', async (req, res) => {
     });
   }
 
-  // Geo-detect country from CDN/proxy headers
+  // Geo-detect country from CDN/proxy headers. `?country=XX` is a preview override
+  // for testing regional views (e.g. /pricing?country=IN) — DISPLAY ONLY; the actual
+  // charge is recomputed server-side by the customer's real geo at checkout, so this
+  // can't be used to pay another region's price.
   const countryCode = (
+    req.query.country ||
     req.headers['cf-ipcountry'] ||
     req.headers['x-vercel-ip-country'] ||
     'US'
