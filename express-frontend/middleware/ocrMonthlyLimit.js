@@ -191,7 +191,37 @@ async function recordSuccess(req) {
   console.log(`[OCR-LIMIT] ${tier} ${pIp} consumed 1 → ${count}/${limit} (${pDate})`);
 }
 
+/**
+ * Read-only usage snapshot for the current user — powers the "N/3 uploads left"
+ * badge. Does NOT consume anything. Returns:
+ *   { loggedIn:false }                                   (anonymous)
+ *   { loggedIn:true, tier:'admin', unlimited:true }      (admin)
+ *   { loggedIn:true, tier, used, limit, remaining, unlimited:false, period }
+ */
+async function getUsage(req) {
+  const email = String(req.user?.email || '').toLowerCase().trim();
+  if (!email) return { loggedIn: false };
+  if (isAdmin(req)) return { loggedIn: true, tier: 'admin', unlimited: true };
+
+  const { premium } = await verifyPremium(req);
+  const tier = premium ? 'pro' : 'free';
+  const pIp = premium ? `user:${email}` : `userfree:${email}`;
+  const pDate = premium ? monthKey() : FREE_LIFETIME_KEY;
+  const limit = premium ? MONTHLY_LIMIT : FREE_TOTAL_LIMIT;
+  const used = await readCount(pIp, pDate);
+  return {
+    loggedIn: true,
+    tier,
+    unlimited: false,
+    used,
+    limit,
+    remaining: Math.max(0, limit - used),
+    period: premium ? 'month' : 'total',
+  };
+}
+
 module.exports = ocrMonthlyLimit;
 module.exports.recordSuccess = recordSuccess;
+module.exports.getUsage = getUsage;
 module.exports.MONTHLY_LIMIT = MONTHLY_LIMIT;
 module.exports.FREE_TOTAL_LIMIT = FREE_TOTAL_LIMIT;
