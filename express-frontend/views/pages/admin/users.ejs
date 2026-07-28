@@ -74,13 +74,13 @@
 <script>
 (function () {
   const pageSize = 25;
-  const state = { email: '', subscription: '', country: '', sort: 'created_desc', offset: 0, total: 0 };
+  const state = { email: '', subscription: '', country: '', sort: 'created_desc', since_days: '', offset: 0, total: 0 };
 
   // Pre-fill filters from the URL query (drill-downs from the admin dashboard, e.g.
-  // /admin/users?subscription=pro). Only apply keys the page actually supports.
+  // /admin/users?subscription=pro, or ?since_days=30 for the Signups tiles).
   (function initFromUrl() {
     const q = new URLSearchParams(location.search);
-    ['email', 'subscription', 'country', 'sort'].forEach(function (k) {
+    ['email', 'subscription', 'country', 'sort', 'since_days'].forEach(function (k) {
       if (q.has(k)) state[k] = q.get(k);
     });
     document.querySelectorAll('[data-filter]').forEach(function (el) {
@@ -137,7 +137,8 @@
     const start = state.offset + 1;
     const end = Math.min(state.offset + pageSize, state.total);
     document.querySelector('[data-page-status]').textContent = state.total === 0 ? '0 results' : (start + '–' + end + ' of ' + state.total);
-    document.querySelector('[data-count]').textContent = state.total + ' total';
+    document.querySelector('[data-count]').textContent =
+      state.total + ' total' + (state.since_days ? ' · registered in last ' + state.since_days + ' days' : '');
     document.querySelector('[data-page-prev]').disabled = state.offset === 0;
     document.querySelector('[data-page-next]').disabled = end >= state.total;
   }
@@ -148,6 +149,7 @@
       subscription: state.subscription,
       country: state.country,
       sort: state.sort,
+      since_days: state.since_days,
       limit: pageSize,
       offset: state.offset,
     });
@@ -178,7 +180,7 @@
     document.querySelectorAll('[data-filter]').forEach(function (el) {
       el.value = el.tagName === 'SELECT' ? el.options[0].value : '';
     });
-    state.email = state.subscription = state.country = '';
+    state.email = state.subscription = state.country = state.since_days = '';
     state.sort = 'created_desc';
     state.offset = 0;
     load();

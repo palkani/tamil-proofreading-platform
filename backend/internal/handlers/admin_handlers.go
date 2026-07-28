@@ -48,6 +48,14 @@ func (h *Handlers) AdminGetUsers(c *gin.Context) {
 	if v := c.Query("country"); v != "" {
 		query = query.Where("country_code = ?", v)
 	}
+	// since_days: only users registered within the last N days. Powers the dashboard
+	// "Signups · 7d/30d" drill-downs so the list + count match the tile exactly
+	// (tile counts users.created_at, not activity 'register' events).
+	if v := c.Query("since_days"); v != "" {
+		if days, err := strconv.Atoi(v); err == nil && days > 0 {
+			query = query.Where("created_at >= ?", time.Now().AddDate(0, 0, -days))
+		}
+	}
 
 	var total int64
 	query.Count(&total)
