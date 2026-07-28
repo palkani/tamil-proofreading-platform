@@ -13,7 +13,7 @@
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
-const { requireAdmin } = require('../middleware/admin');
+const { requireAdmin, isAdminEmail } = require('../middleware/admin');
 
 // Backend base URL for admin API proxying. Falls back to the same
 // value the rest of the app uses; a dedicated ADMIN_BACKEND_URL var
@@ -164,11 +164,26 @@ router.all('/api/*', requireAdmin, async (req, res) => {
 
   try {
     const response = await axios(config);
+    let data = response.data;
+
+    // Hide admin/staff accounts' own events from the Activity feed — repeated staff
+    // logins are internal noise, not real user activity. Filtered here (proxy) so no
+    // backend change is needed. `total` is best-effort adjusted by what we drop on this
+    // page; because the backend paginates on the unfiltered set, the count can be a
+    // few off across pages — acceptable for an internal ops view.
+    if (upstreamPath === '/activity' && data && Array.isArray(data.activity)) {
+      const before = data.activity.length;
+      data = { ...data, activity: data.activity.filter((a) => !isAdminEmail(a.email)) };
+      if (typeof data.total === 'number') {
+        data.total = Math.max(0, data.total - (before - data.activity.length));
+      }
+    }
+
     res.status(response.status);
     if (response.headers['content-type']) {
       res.type(response.headers['content-type']);
     }
-    return res.send(response.data);
+    return res.send(data);
   } catch (err) {
     console.error('[ADMIN] proxy error:', err.message);
     return res.status(502).json({ error: 'Backend unreachable', details: err.message });
