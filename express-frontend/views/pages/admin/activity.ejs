@@ -65,6 +65,20 @@
   let windowTotal = 0;
   let capped = false;
 
+  // Pre-fill filters from the URL query (drill-downs from the admin dashboard, e.g.
+  // /admin/activity?event_type=register&since_hours=720).
+  (function initFromUrl() {
+    const q = new URLSearchParams(location.search);
+    ['event_type', 'email', 'user_id', 'since_hours', 'view'].forEach(function (k) {
+      if (q.has(k)) state[k] = q.get(k);
+    });
+    if (state.view !== 'events' && state.view !== 'detail') state.view = 'users';
+    document.querySelectorAll('[data-filter]').forEach(function (el) {
+      const k = el.dataset.filter;
+      if (state[k] != null && state[k] !== '') el.value = state[k];
+    });
+  })();
+
   const escape = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const debounced = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
   const fmtRelative = (iso) => {
@@ -336,7 +350,7 @@
   document.querySelector('[data-refresh]').addEventListener('click', reload);
 
   syncToggle();
-  loadGrouped();
+  state.view === 'events' ? loadFlat() : loadGrouped();
 })();
 </script>
 

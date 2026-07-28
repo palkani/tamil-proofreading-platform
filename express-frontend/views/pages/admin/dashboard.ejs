@@ -4,42 +4,42 @@
   <!-- Metric tiles. Populated by /admin/api/overview fetch below. Skeleton
        values are em dashes so a slow network doesn't show "0" (misleading). -->
   <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-    <div class="rounded-lg border border-slate-200 bg-white p-5" data-tile="total-users">
+    <a href="/admin/users" class="block rounded-lg border border-slate-200 bg-white p-5 transition-colors hover:border-blue-300 hover:bg-blue-50" data-tile="total-users">
       <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Total users</div>
       <div class="mt-2 text-2xl font-semibold text-slate-900" data-value>—</div>
       <div class="mt-1 text-xs text-slate-500" data-sub>All time</div>
-    </div>
-    <div class="rounded-lg border border-slate-200 bg-white p-5" data-tile="pro-users">
+    </a>
+    <a href="/admin/users?subscription=pro" class="block rounded-lg border border-slate-200 bg-white p-5 transition-colors hover:border-blue-300 hover:bg-blue-50" data-tile="pro-users">
       <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Pro users</div>
       <div class="mt-2 text-2xl font-semibold text-slate-900" data-value>—</div>
       <div class="mt-1 text-xs text-slate-500" data-sub>Currently subscribed</div>
-    </div>
-    <div class="rounded-lg border border-slate-200 bg-white p-5" data-tile="monthly-revenue">
+    </a>
+    <a href="/admin/users?subscription=pro&sort=last_active" class="block rounded-lg border border-slate-200 bg-white p-5 transition-colors hover:border-blue-300 hover:bg-blue-50" data-tile="monthly-revenue">
       <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Revenue this month</div>
       <div class="mt-2 text-2xl font-semibold text-slate-900" data-value>—</div>
       <div class="mt-1 text-xs text-slate-500" data-sub>USD equivalent, paid invoices</div>
-    </div>
-    <div class="rounded-lg border border-slate-200 bg-white p-5" data-tile="active-24h">
+    </a>
+    <a href="/admin/activity?since_hours=24" class="block rounded-lg border border-slate-200 bg-white p-5 transition-colors hover:border-blue-300 hover:bg-blue-50" data-tile="active-24h">
       <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Active (24h)</div>
       <div class="mt-2 text-2xl font-semibold text-slate-900" data-value>—</div>
       <div class="mt-1 text-xs text-slate-500" data-sub>Distinct users</div>
-    </div>
+    </a>
   </section>
 
   <!-- Secondary metrics: signup momentum + issues counter -->
   <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-    <div class="rounded-lg border border-slate-200 bg-white p-4" data-tile="signups-7d">
+    <a href="/admin/activity?event_type=register&since_hours=168" class="block rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-blue-300 hover:bg-blue-50" data-tile="signups-7d">
       <div class="text-xs font-medium text-slate-500">Signups · 7d</div>
       <div class="mt-1 text-lg font-semibold text-slate-900" data-value>—</div>
-    </div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4" data-tile="signups-30d">
+    </a>
+    <a href="/admin/activity?event_type=register&since_hours=720" class="block rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-blue-300 hover:bg-blue-50" data-tile="signups-30d">
       <div class="text-xs font-medium text-slate-500">Signups · 30d</div>
       <div class="mt-1 text-lg font-semibold text-slate-900" data-value>—</div>
-    </div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4" data-tile="active-30d">
+    </a>
+    <a href="/admin/activity?since_hours=720" class="block rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-blue-300 hover:bg-blue-50" data-tile="active-30d">
       <div class="text-xs font-medium text-slate-500">Active users · 30d</div>
       <div class="mt-1 text-lg font-semibold text-slate-900" data-value>—</div>
-    </div>
+    </a>
     <a href="/admin/issues" class="rounded-lg border border-slate-200 bg-white p-4 hover:border-red-300 hover:bg-red-50" data-tile="issues-total">
       <div class="text-xs font-medium text-slate-500">Open issues</div>
       <div class="mt-1 text-lg font-semibold text-slate-900" data-value>—</div>
