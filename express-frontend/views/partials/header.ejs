@@ -411,26 +411,29 @@
   <% if (pageType === 'tool') { %>
   <!-- Structured Data - Tool-specific WebApplication schema -->
   <% const toolSchemas = {
-    'Tamil OCR Online Free - Extract Tamil Text from Images | ProofTamil': {
+    '/tools/ocr': {
       name: 'Tamil OCR Tool - ProofTamil',
       description: 'Free online Tamil OCR tool. Upload JPG, PNG, or PDF images and extract Tamil text instantly using Google Vision AI.',
       url: baseUrl + '/tools/ocr',
       featureList: ['Tamil OCR from JPG/PNG/PDF', 'Google Vision AI', 'Instant text extraction', 'Free no sign-up']
     },
-    'Tamil Handwriting to Text Online - Free Handwriting OCR | ProofTamil': {
-      name: 'Tamil Handwriting OCR - ProofTamil',
+    '/tools/handwriting-ocr': {
+      name: 'Handwritten Notes into Text - ProofTamil',
       description: 'Convert handwritten Tamil notes to editable text online. Upload a photo of handwritten Tamil and get text instantly.',
       url: baseUrl + '/tools/handwriting-ocr',
       featureList: ['Handwritten Tamil recognition', 'Photo to text conversion', 'AI handwriting model', 'Free online tool']
     },
-    'AI Tamil Content Writer - Generate Tamil Blogs & Articles | ProofTamil': {
+    '/tools/ai-content-writer': {
       name: 'AI Tamil Content Writer - ProofTamil',
       description: 'Generate high-quality Tamil blog posts, articles, and essays using AI. Supports formal and spoken Tamil styles.',
       url: baseUrl + '/tools/ai-content-writer',
       featureList: ['AI Tamil blog generator', 'Formal and spoken Tamil', 'English to Tamil content', 'Free AI writer']
     }
   };
-  const toolSchema = toolSchemas[seoTitle] || null;
+  // Key by URL PATH, not the title string — titles drift (em dash vs hyphen) and
+  // previously left toolSchema always null, so tool pages shipped no app schema.
+  const toolPath = (typeof canonicalUrl === 'string' ? canonicalUrl : '').replace(baseUrl, '').split('?')[0].replace(/\/$/, '');
+  const toolSchema = toolSchemas[toolPath] || null;
   %>
   <% if (toolSchema) { %>
   <script type="application/ld+json">
