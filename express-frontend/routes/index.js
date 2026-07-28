@@ -829,7 +829,7 @@ router.get('/pricing', async (req, res) => {
     const isIndia = countryCode === 'IN';
     return {
       monthly: isIndia
-        ? { display_price: '999', currency: 'INR' }
+        ? { display_price: '1000', currency: 'INR' }
         : { display_price: '12.00', currency: 'USD' },
       yearly: isIndia
         ? { display_price: '9599', currency: 'INR' }

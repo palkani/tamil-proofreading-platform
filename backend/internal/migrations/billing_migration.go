@@ -217,9 +217,9 @@ func seedBillingData(db *gorm.DB) {
 			Name:                    "ProofTamil Pro (Monthly)",
 			Description:             "Unlimited proofreading with AI-powered suggestions",
 			BaseCurrency:            "USD",
-			BasePriceUSD:            1200,  // $12.00
-			IndiaMultiplier:         0.75,  // 25% discount for India
-			IndiaFixedPriceINRCents: 99900, // ₹999.00 fixed India price
+			BasePriceUSD:            1200,   // $12.00
+			IndiaMultiplier:         0.75,   // 25% discount for India
+			IndiaFixedPriceINRCents: 100000, // ₹1000.00 fixed India price
 			BillingInterval:         "month",
 			Active:                  true,
 			TrialDays:               0,
