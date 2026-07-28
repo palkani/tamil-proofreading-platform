@@ -5,8 +5,8 @@
  *   - Anonymous:            NO access — 401 login_required (the page route also
  *                           redirects to /login before the tool ever renders).
  *   - Admin allowlist / JWT admin: unlimited.
- *   - Free (logged in):     1 extraction per WEEK  (resets Monday, UTC).
- *   - Paid (backend is_premium): 15 extractions per MONTH (resets the 1st, UTC).
+ *   - Free (logged in):     3 extractions TOTAL (lifetime, until upgrade — never resets).
+ *   - Paid (backend is_premium): 20 extractions per MONTH (resets the 1st, UTC).
  *
  * Paid status source of truth: the Go backend `GET /api/v1/billing/me`
  * (-> billing.is_premium) — the JWT in req.user carries no subscription field.
@@ -29,8 +29,10 @@
 
 const axios = require('axios');
 
-const MONTHLY_LIMIT = 15;    // paid
-const FREE_WEEKLY_LIMIT = 1; // free, logged in
+const MONTHLY_LIMIT = 20;    // paid, per calendar month
+const FREE_TOTAL_LIMIT = 3;  // free, LIFETIME (until upgrade) — not a periodic reset
+// Fixed bucket "date" so the free counter never rolls over: one row per user, forever.
+const FREE_LIFETIME_KEY = '2000-01-01';
 
 // Kept in sync with the allowlist in routes/api.js (docx export, blog publish).
 const ADMIN_ALLOWLIST = [
@@ -51,15 +53,6 @@ function backendUrl() {
 function monthKey() {
   const now = new Date();
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
-}
-
-/** Monday of the current week, 'YYYY-MM-DD' (UTC). */
-function weekKey() {
-  const now = new Date();
-  const dow = now.getUTCDay();                 // 0=Sun … 6=Sat
-  const backToMonday = dow === 0 ? 6 : dow - 1;
-  const mon = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - backToMonday));
-  return mon.toISOString().split('T')[0];
 }
 
 function isAdmin(req) {
@@ -141,7 +134,7 @@ function ocrMonthlyLimit() {
       return res.status(401).json({
         success: false,
         error: 'login_required',
-        message: 'Please sign in to use Handwriting OCR.',
+        message: 'Please sign in to convert handwritten notes to text.',
         login_url: '/login',
       });
     }
@@ -154,12 +147,14 @@ function ocrMonthlyLimit() {
 
     const { premium } = await verifyPremium(req);
 
-    // Tier → (namespace, period, limit). A billing hiccup degrades to the free tier
+    // Tier → (namespace, bucket, limit). A billing hiccup degrades to the free tier
     // rather than locking anyone out.
+    //   pro  → 20 per calendar month (resets the 1st)
+    //   free → 3 LIFETIME, until they upgrade (fixed bucket key = never resets)
     const tier = premium ? 'pro' : 'free';
-    const pIp = premium ? `user:${email}` : `userwk:${email}`;
-    const pDate = premium ? monthKey() : weekKey();
-    const limit = premium ? MONTHLY_LIMIT : FREE_WEEKLY_LIMIT;
+    const pIp = premium ? `user:${email}` : `userfree:${email}`;
+    const pDate = premium ? monthKey() : FREE_LIFETIME_KEY;
+    const limit = premium ? MONTHLY_LIMIT : FREE_TOTAL_LIMIT;
 
     const used = await readCount(pIp, pDate);
     if (used >= limit) {
@@ -167,14 +162,14 @@ function ocrMonthlyLimit() {
         return res.status(429).json({
           success: false,
           upgrade_required: true, // shows the upgrade card in the tool UI
-          error: `You've used your ${FREE_WEEKLY_LIMIT} free Handwriting OCR this week. Upgrade to Pro for ${MONTHLY_LIMIT} a month.`,
-          limit: { tier: 'free', weekly_limit: FREE_WEEKLY_LIMIT, used, remaining: 0, resets_at: 'Monday (UTC)' },
+          error: `You've used all ${FREE_TOTAL_LIMIT} free conversions. Upgrade to Pro for ${MONTHLY_LIMIT} per month.`,
+          limit: { tier: 'free', total_limit: FREE_TOTAL_LIMIT, used, remaining: 0, resets_at: 'never (one-time free allowance)' },
         });
       }
       return res.status(429).json({
         success: false,
         upgrade_required: false,
-        error: `You've used all ${MONTHLY_LIMIT} Handwriting OCR extractions for this month.`,
+        error: `You've used all ${MONTHLY_LIMIT} conversions for this month.`,
         limit: { tier: 'pro', monthly_limit: MONTHLY_LIMIT, used, remaining: 0, resets_at: 'the 1st of next month (UTC)' },
       });
     }
@@ -199,4 +194,4 @@ async function recordSuccess(req) {
 module.exports = ocrMonthlyLimit;
 module.exports.recordSuccess = recordSuccess;
 module.exports.MONTHLY_LIMIT = MONTHLY_LIMIT;
-module.exports.FREE_WEEKLY_LIMIT = FREE_WEEKLY_LIMIT;
+module.exports.FREE_TOTAL_LIMIT = FREE_TOTAL_LIMIT;
