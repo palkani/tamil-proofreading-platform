@@ -313,9 +313,13 @@
   function renderUsage() {
     if (!usageBadge || !usageText || !_usage) return;
     if (_usage.unlimited) {
-      usageText.textContent = 'Unlimited uploads';
-      _styleUsage('#F5F3FF', '#6D28D9', '#DDD6FE');
-    } else if (_usage.tier === 'pro') {
+      // Admin / internal role — no limit to communicate, so don't show a badge at all
+      // ("Unlimited uploads" reads as a misleading public claim).
+      usageBadge.classList.add('hidden');
+      usageBadge.style.display = 'none';
+      return;
+    }
+    if (_usage.tier === 'pro') {
       usageText.textContent = _usage.remaining + '/' + _usage.limit + ' left this month';
       _styleUsage('#F5F3FF', '#6D28D9', '#DDD6FE');
     } else {
