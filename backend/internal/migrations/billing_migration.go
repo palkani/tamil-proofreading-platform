@@ -218,8 +218,8 @@ func seedBillingData(db *gorm.DB) {
 			Description:             "Unlimited proofreading with AI-powered suggestions",
 			BaseCurrency:            "USD",
 			BasePriceUSD:            1200,   // $12.00
-			IndiaMultiplier:         0.75,   // 25% discount for India
-			IndiaFixedPriceINRCents: 100000, // ₹1000.00 fixed India price
+			IndiaMultiplier:         1.0,    // no India discount (removed 2026-07)
+			IndiaFixedPriceINRCents: 100000, // ₹1000.00 fixed India price (matches Dodo product)
 			BillingInterval:         "month",
 			Active:                  true,
 			TrialDays:               0,
@@ -241,8 +241,9 @@ func seedBillingData(db *gorm.DB) {
 			Description:             "Unlimited proofreading with AI-powered suggestions - save 20%",
 			BaseCurrency:            "USD",
 			BasePriceUSD:            11520,  // $115.20 (12 * 12 * 0.8)
-			IndiaMultiplier:         0.75,
-			IndiaFixedPriceINRCents: 959900, // ₹9599.00 fixed India price (~20% off ₹999×12)
+			IndiaMultiplier:         1.0,    // no India discount (removed 2026-07)
+			// TODO: set to the yearly Dodo/Razorpay product price in paise once confirmed.
+			IndiaFixedPriceINRCents: 959900, // ₹9599.00 fixed India price
 			BillingInterval:         "year",
 			Active:                  true,
 			TrialDays:               0,

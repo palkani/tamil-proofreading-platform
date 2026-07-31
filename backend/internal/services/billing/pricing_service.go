@@ -116,17 +116,21 @@ func (s *PricingService) CalculatePricing(planCode, countryCode string) (*models
 		quote.IsIndiaPrice = true
 		quote.Currency = "INR"
 
+		// India DISCOUNT REMOVED (2026-07): we no longer apply IndiaMultiplier, so the
+		// displayed price matches the Dodo/Razorpay product price. Preferred path is a
+		// fixed INR price on the plan (india_fixed_price_inr_cents), which is exact and
+		// bypasses FX. If that isn't set, we convert the FULL USD base at the FX rate —
+		// no percentage discount either way.
 		if plan.IndiaFixedPriceINRCents > 0 {
-			// Fixed INR price set on the plan — bypass FX rate calculation entirely.
-			// This ensures the displayed price exactly matches the Dodo/Razorpay product price.
+			// Fixed INR price — bypass FX entirely so it exactly matches the payment
+			// provider's product price.
 			quote.FinalPriceCents = plan.IndiaFixedPriceINRCents
 			quote.FinalPriceUSDCents = plan.BasePriceUSD // keep USD base for reference
-			quote.DiscountPercent = int((1 - plan.IndiaMultiplier) * 100)
+			quote.DiscountPercent = 0
 		} else {
-			// Apply India discount and convert USD → INR via FX rate
-			indiaUSDCents := int(math.Round(float64(plan.BasePriceUSD) * plan.IndiaMultiplier))
-			quote.FinalPriceUSDCents = indiaUSDCents
-			quote.DiscountPercent = int((1 - plan.IndiaMultiplier) * 100)
+			// No fixed price: charge the FULL USD base converted to INR (no discount).
+			quote.FinalPriceUSDCents = plan.BasePriceUSD
+			quote.DiscountPercent = 0
 
 			// Convert to INR — fall back to hardcoded rate if DB has no recent entry
 			fxRate, err := s.GetLatestFXRate("INR")
@@ -140,9 +144,8 @@ func (s *PricingService) CalculatePricing(planCode, countryCode string) (*models
 				}
 			}
 
-			// Convert: indiaUSDCents / 100 * fxRate * 100 = indiaUSDCents * fxRate
 			// Round to nearest paisa (1 INR = 100 paise)
-			inrCents := int(math.Round(float64(indiaUSDCents) * fxRate.Rate))
+			inrCents := int(math.Round(float64(plan.BasePriceUSD) * fxRate.Rate))
 			quote.FinalPriceCents = inrCents
 			quote.FXRate = fxRate.Rate
 			quote.FXRateAsOfDate = fxRate.AsOfDate.Format("2006-01-02")
