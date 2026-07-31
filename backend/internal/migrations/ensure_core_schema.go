@@ -155,6 +155,10 @@ func EnsureCoreSchema(db *gorm.DB) {
 		// Billing — synchronously written by the checkout flow. Same
 		// class of bug as the observability tables above but user-facing.
 		{"checkout_attempts", &models.CheckoutAttempt{}},
+		// Plans — read on every /pricing request. Newly added columns (e.g.
+		// india_fixed_price_inr_cents) must exist even when RUN_MIGRATIONS=false,
+		// or pricing silently falls back to the FX calc and shows the wrong price.
+		{"plans", &models.Plan{}},
 	}
 	for _, m := range observabilityModels {
 		if err := db.AutoMigrate(m.model); err != nil {
