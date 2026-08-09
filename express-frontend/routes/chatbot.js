@@ -132,6 +132,79 @@ function toSources(chunks) {
   return sources;
 }
 
+/* ------------------------------------------------------- GET /chat/health */
+
+/**
+ * Diagnostics for "the bot answers, but never from the corpus".
+ *
+ * That symptom has one common cause — CHATBOT_DATABASE_URL pointing at a
+ * database without the chatbot tables — but retrieval failures are swallowed
+ * by design so the visitor still gets a reply, which makes it invisible from
+ * the outside. This endpoint makes it visible.
+ *
+ * Counts and booleans are safe to expose. The database HOST and raw error text
+ * are only returned when CHATBOT_HEALTH_TOKEN is set and matches ?token=, so
+ * this cannot be used to fingerprint infrastructure.
+ */
+router.get('/chat/health', async (req, res) => {
+  const token = process.env.CHATBOT_HEALTH_TOKEN;
+  const detailed = Boolean(token) && req.query.token === token;
+
+  const health = {
+    ok: false,
+    database: { configured: false, reachable: false, tablesPresent: false, documents: 0, chunks: 0 },
+    gemini: { keysConfigured: 0, keysAvailable: 0 },
+  };
+
+  const dsn = process.env.CHATBOT_DATABASE_URL || process.env.DATABASE_URL || '';
+  health.database.configured = Boolean(dsn);
+  if (detailed && dsn) {
+    try {
+      const url = new URL(dsn);
+      // Host and database name only — never the user or password.
+      health.database.host = `${url.hostname}:${url.port}${url.pathname}`;
+      health.database.source = process.env.CHATBOT_DATABASE_URL
+        ? 'CHATBOT_DATABASE_URL'
+        : 'DATABASE_URL (fallback)';
+    } catch (_) {
+      health.database.host = 'unparseable';
+    }
+  }
+
+  try {
+    const { getKeyStatus } = require('../lib/chatbot/gemini');
+    const status = getKeyStatus();
+    health.gemini.keysConfigured = status.totalKeys;
+    health.gemini.keysAvailable = status.availableKeys;
+  } catch (error) {
+    if (detailed) health.gemini.error = error.message;
+  }
+
+  try {
+    const { query } = require('../lib/chatbot/db');
+    const rows = await query(
+      `select (select count(*) from chatbot_documents)  as documents,
+              (select count(*) from chatbot_doc_chunks) as chunks`,
+    );
+    health.database.reachable = true;
+    health.database.tablesPresent = true;
+    health.database.documents = Number(rows[0].documents);
+    health.database.chunks = Number(rows[0].chunks);
+  } catch (error) {
+    // 42P01 = undefined_table: connected fine, but the schema was never run.
+    health.database.reachable = error.code === '42P01';
+    health.database.tablesPresent = false;
+    if (detailed) health.database.error = error.message;
+    else if (error.code === '42P01') health.database.hint = 'schema.sql has not been run';
+    else health.database.hint = 'cannot reach the database';
+  }
+
+  health.ok =
+    health.database.tablesPresent && health.database.chunks > 0 && health.gemini.keysConfigured > 0;
+
+  res.status(health.ok ? 200 : 503).json(health);
+});
+
 /* ------------------------------------------------------------- POST /chat */
 
 router.post('/chat', async (req, res) => {
