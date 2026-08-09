@@ -24,7 +24,8 @@
     "test:e2e:verify": "node tests/e2e/verify-setup.js",
     "test:e2e:headed": "HEADLESS=false node tests/e2e/run-all-tests.js",
     "test:e2e:debug": "HEADLESS=false SLOW_MO=100 node tests/e2e/run-all-tests.js",
-    "test:all": "npm run test:converter && npm run test:e2e"
+    "test:all": "npm run test:converter && npm run test:e2e",
+    "ingest:chatbot": "node scripts/ingest-chatbot.js"
   },
   "keywords": [
     "tamil",
@@ -36,6 +37,7 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^1.6.2",
+    "cheerio": "^1.2.0",
     "compression": "^1.7.4",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
