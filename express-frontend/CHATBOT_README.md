@@ -1,14 +1,3 @@
-> # ⚠️ SUPERSEDED — do not edit this copy
->
-> The chatbot now lives in **`express-frontend/`**, which is what `vercel.json`
-> actually deploys. This Next.js app is not deployed and its copy of the
-> chatbot is kept only for reference.
->
-> **Read and edit `express-frontend/CHATBOT_README.md` instead.**
->
-> Editing `frontend/lib/chatbot/*` has no effect on the live site — the
-> running code is `express-frontend/lib/chatbot/*`.
-
 # ProofTamil Chatbot
 
 A bilingual (English + Tamil) support and lead-capture assistant for
@@ -43,27 +32,35 @@ content in the chat. It routes visitors to the existing product tools.
 ## Architecture
 
 ```
-Visitor
+Visitor on any prooftamil.com page
   │
-  ├─► components/chatbot/ChatWidget.tsx      floating widget (client)
+  ├─► public/js/chatbot-widget.js         floating widget (vanilla JS)
+  │        │  included once from views/partials/footer.ejs
   │        │  POST /api/chat  ── NDJSON stream ──►
   │        ▼
-  │   app/api/chat/route.ts                  validate → rate-limit → embed
-  │        │                                 → retrieve → prompt → stream
-  │        ├─► lib/chatbot/gemini.ts          Gemini: embeddings + generation
-  │        ├─► lib/chatbot/db.ts              pg pool (direct Postgres)
-  │        ├─► lib/chatbot/vectorStore.ts     pgvector top-K cosine search
-  │        ├─► lib/chatbot/systemPrompt.ts    persona + grounding rules
-  │        ├─► lib/chatbot/leadIntent.ts      when to offer the email card
-  │        └─► lib/chatbot/persistence.ts     conversations + messages
+  │   routes/chatbot.js                   validate → rate-limit → embed
+  │        │                              → retrieve → prompt → stream
+  │        ├─► lib/chatbot/gemini.js       Gemini: embeddings + generation
+  │        ├─► lib/chatbot/db.js           pg pool (direct Postgres)
+  │        ├─► lib/chatbot/vectorStore.js  pgvector top-K cosine search
+  │        ├─► lib/chatbot/systemPrompt.js persona + grounding rules
+  │        ├─► lib/chatbot/leadIntent.js   when to offer the email card
+  │        └─► lib/chatbot/persistence.js  conversations + messages
   │
   └─► POST /api/leads ─► chatbot_leads + notifyNewLead() ─► contact@prooftamil.com
 
-scripts/ingest.ts   sitemap → fetch → extract → chunk → embed → upsert
+scripts/ingest-chatbot.js   sitemap → fetch → extract → chunk → embed → upsert
 ```
 
-Everything lives inside `frontend/`. The Go backend and the Express app are
-untouched.
+Everything lives inside `express-frontend/`, which is what `vercel.json`
+deploys — so the widget ships with the site. The Go backend is untouched.
+
+The router is mounted in `create-app.js` *before* `apiRouter` so `/api/chat`
+and `/api/leads` resolve here rather than falling through.
+
+The widget is dependency-free vanilla JS with its own scoped CSS (prefixed
+`ptc-`, scoped under `#ptc-root`). It deliberately does NOT use Tailwind
+classes, so it cannot be broken by a CSS rebuild and needs no build step.
 
 ### Models
 
@@ -83,18 +80,18 @@ Both are overridable via `CHAT_MODEL_ID` / `EMBEDDING_MODEL_ID`.
 ## Setup from scratch
 
 ```bash
-cd frontend
+cd express-frontend
 npm install
-cp .env.local.example .env.local     # then set CHATBOT_DATABASE_URL
 ```
 
 1. **Pick a Postgres** with pgvector available — a Supabase project, Cloud SQL,
    or a local server for development.
 2. **Run the schema** — see [below](#running-the-schema).
-3. **Set `CHATBOT_DATABASE_URL`** in `frontend/.env.local`. No API keys needed —
-   `GOOGLE_GENAI_API_KEY` and the SendGrid key are inherited from `../.env`.
-4. **Ingest the site content:** `npm run ingest`
-5. **Run it:** `npm run dev` → http://localhost:3100
+3. **Set `CHATBOT_DATABASE_URL`** if you want to pin a specific database.
+   No API keys needed: `GOOGLE_GENAI_API_KEY`, `DATABASE_URL` and the SendGrid
+   key are all inherited from the repo-root `.env`.
+4. **Ingest the site content:** `npm run ingest:chatbot`
+5. **Run it:** `npm run dev` → the widget appears on every page with a footer.
 
 ---
 
@@ -177,11 +174,11 @@ the same thing.
 ## Ingestion
 
 ```bash
-npm run ingest                  # incremental — only re-embeds changed pages
-npm run ingest -- --force       # re-embed everything
-npm run ingest -- --dry-run     # fetch + chunk + report; no writes, no Gemini
-npm run ingest -- --url=https://www.prooftamil.com/pricing
-npm run ingest -- --limit=5
+npm run ingest:chatbot          # incremental — only re-embeds changed pages
+npm run ingest:chatbot -- --force       # re-embed everything
+npm run ingest:chatbot -- --dry-run     # fetch + chunk + report; no writes, no Gemini
+npm run ingest:chatbot -- --url=https://www.prooftamil.com/pricing
+npm run ingest:chatbot -- --limit=5
 ```
 
 The pipeline is: **sitemap → fetch → extract → chunk (~700 tokens, 15% overlap)
@@ -192,7 +189,7 @@ Expected output:
 ```
 Fetching sitemap: https://www.prooftamil.com/sitemap.xml
   found 41 URLs
-[1/41] https://www.prooftamil.com/ — inserted (3 chunks)
+[1/41] https://www.prooftamil.com/ — inserted (4 chunks)
 ...
 Done. inserted=41 updated=0 skipped=0 failed=0 chunks=168
 ```
@@ -213,29 +210,28 @@ never pins a Postgres connection.
 
 | Trigger | Command |
 |---|---|
-| Published or edited a page | `npm run ingest` |
-| Changed pricing or plans | `npm run ingest` — **do this immediately** |
-| Deleted a page | `npm run ingest` (prunes documents no longer in the sitemap) |
-| Changed `EMBEDDING_MODEL_ID` or `EMBEDDING_DIMENSIONS` | `npm run ingest -- --force` |
+| Published or edited a page | `npm run ingest:chatbot` |
+| Changed pricing or plans | `npm run ingest:chatbot` — **do this immediately** |
+| Deleted a page | `npm run ingest:chatbot` (prunes documents no longer in the sitemap) |
+| Changed `EMBEDDING_MODEL_ID` or `EMBEDDING_DIMENSIONS` | `npm run ingest:chatbot -- --force` |
 | Routine freshness | nightly cron — see [Production notes](#production-notes) |
 
 > Vectors from two different embedding models are **not comparable**. Mixing
 > them degrades retrieval silently rather than raising an error, which is why a
 > model change always needs `--force`.
 
-### Why ingest runs under `--conditions=react-server`
+### Dependencies
 
-`lib/chatbot/gemini.ts` and friends `import 'server-only'`, which throws outside
-a React Server context. The `react-server` export condition resolves that
-package to its no-op build, so the script can reuse the exact same modules the
-API route uses instead of duplicating them. This is already wired into the
-`ingest` script in `package.json`.
+`cheerio` is required only by ingestion, never by the running server — the
+route handlers never load `lib/chatbot/extract.js`. It is a regular dependency
+rather than a devDependency so a production cron can run ingestion without a
+separate install step.
 
 ---
 
 ## Editing the system prompt
 
-`lib/chatbot/systemPrompt.ts` is the main behavioural knob. Editing it needs
+`lib/chatbot/systemPrompt.js` is the main behavioural knob. Editing it needs
 **no re-ingest and no migration** — the change takes effect on the next request.
 
 The `PERSONA` constant covers the product description, the two jobs, grounding
@@ -294,12 +290,12 @@ The reader must do two things or Tamil breaks:
    A Tamil grapheme spans up to 3 UTF-8 bytes and can split across chunks;
    decoding each chunk independently emits replacement characters mid-word.
 
-`components/chatbot/useChat.ts` is the reference implementation.
+`public/js/chatbot-widget.js` is the reference implementation.
 
 ### Test it with curl
 
 ```bash
-curl -N -X POST http://localhost:3100/api/chat \
+curl -N -X POST http://localhost:3000/api/chat \
   -H 'Content-Type: application/json' \
   -d '{
         "sessionId": "11111111-2222-3333-4444-555555555555",
@@ -310,7 +306,7 @@ curl -N -X POST http://localhost:3100/api/chat \
 A Tamil question:
 
 ```bash
-curl -N -X POST http://localhost:3100/api/chat \
+curl -N -X POST http://localhost:3000/api/chat \
   -H 'Content-Type: application/json' \
   -d '{
         "sessionId": "11111111-2222-3333-4444-555555555555",
@@ -324,7 +320,7 @@ curl -N -X POST http://localhost:3100/api/chat \
 
 ### When the card appears
 
-`lib/chatbot/leadIntent.ts` offers the card **at most once per session** on any
+`lib/chatbot/leadIntent.js` offers the card **at most once per session** on any
 of:
 
 | Reason | Trigger |
@@ -351,7 +347,7 @@ A row without consent cannot exist, even if the route has a bug.
 
 ### Lead notifications
 
-`lib/chatbot/notify.ts` → `notifyNewLead()`. It tries, in order:
+`lib/chatbot/notify.js` → `notifyNewLead()`. It tries, in order:
 
 1. **Resend** (`RESEND_API_KEY`) — https://resend.com, sign up, verify
    `prooftamil.com`, create an API key.
@@ -375,11 +371,11 @@ Notification failures never turn a captured lead into an error the visitor sees
 
 | Concern | Mitigation |
 |---|---|
-| API key in client bundle | `@google/genai` and `pg` are `import 'server-only'`; verified absent from `.next/static` |
+| API key reaching the browser | Gemini and `pg` are only ever required from `routes/` and `lib/`; the widget is a static file that talks to the API over fetch |
 | Public credential reaching the tables | There is no anon key and no PostgREST surface — the database is reachable only by this server |
 | SQL injection | Every query is parameterised (`$1`, `$2`); no string interpolation anywhere in `lib/chatbot/` |
 | Prompt injection via page content | Model is instructed to treat context as reference only; it has no tools and cannot act |
-| XSS via model output | `Markdown.tsx` builds React elements and **never** uses `dangerouslySetInnerHTML`. Raw HTML in a reply renders as visible text. |
+| XSS via model output | The widget renders replies by **building DOM nodes and setting `textContent`** — `innerHTML` is never used with model output. Raw HTML in a reply shows as visible characters. |
 | Malicious links | Only `http:` / `https:` become anchors — `javascript:`, `data:`, `vbscript:` degrade to plain text. All links get `rel="noopener noreferrer nofollow"`. |
 | Abuse / cost blowout | Token buckets per IP (30/min) and per session (15/min) |
 | Oversized input | 2000 chars per message, 100 messages per request, 12 turns of history |
@@ -389,15 +385,14 @@ Notification failures never turn a captured lead into an error the visitor sees
 ### Verifying no secret reached the client
 
 ```bash
-npm run build
-for n in GOOGLE_GENAI_API_KEY GoogleGenAI CHATBOT_DATABASE_URL AIza; do
-  printf '%-28s ' "$n"
-  grep -rq "$n" .next/static/ && echo 'LEAKED' || echo 'absent'
+for n in GOOGLE_GENAI_API_KEY AIza DATABASE_URL SG. postgres; do
+  printf '%-24s ' "$n"
+  grep -qF "$n" public/js/chatbot-widget.js && echo 'LEAKED' || echo 'absent'
 done
 ```
 
-All four must report `absent`. Re-run this after adding any new client
-component that touches chatbot code.
+All must report `absent`. The widget is a plain static file, so this is a
+direct read rather than a bundle scan.
 
 ---
 
@@ -405,7 +400,7 @@ component that touches chatbot code.
 
 ### 1. Replace the in-memory rate limiter
 
-`lib/chatbot/rateLimit.ts` is **per-process**. On serverless or multi-instance
+`lib/chatbot/rateLimit.js` is **per-process**. On serverless or multi-instance
 deploys each instance keeps its own buckets, so the effective limit is
 `capacity × instances`. That is an abuse speed-bump, not a quota.
 
@@ -453,34 +448,36 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: express-frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci                 # dev deps needed: tsx, cheerio, dotenv
-      - run: npm run ingest
+      - run: npm ci
+      - run: npm run ingest:chatbot
         env:
           GOOGLE_GENAI_API_KEY: ${{ secrets.GOOGLE_GENAI_API_KEY }}
           CHATBOT_DATABASE_URL: ${{ secrets.CHATBOT_DATABASE_URL }}
 ```
 
-`npm ci` (not `--omit=dev`) matters: `tsx`, `cheerio` and `dotenv` are
-devDependencies and the script needs all three.
+`cheerio` and `dotenv` are regular dependencies, so this works with a
+production install too.
 
 ### 3. Deployment
 
-`vercel.json` at the repo root currently pins `rootDirectory: "express-frontend"`,
-so **this Next app is not deployed by the existing config**. To ship the
-chatbot you need either:
+`vercel.json` pins `rootDirectory: "express-frontend"`, which is exactly where
+the chatbot now lives — so it deploys with the site, no extra project and no
+CORS setup.
 
-- a **second Vercel project** with root directory `frontend`, and the widget
-  embedded into the Express app pointing at it (requires CORS on both routes); or
-- to **move the site** to this Next app and change `rootDirectory`.
+Set `CHATBOT_DATABASE_URL` (and `GOOGLE_GENAI_API_KEY` if it is not already
+there) in the Vercel dashboard. The repo-root `.env` is not readable at runtime
+on serverless.
 
-Set the three required env vars in the host's dashboard either way — do not
-commit them.
+**CORS note:** `create-app.js` allows `https://prooftamil.com` and
+`https://www.prooftamil.com` via `PRODUCTION_ORIGINS`, so same-origin widget
+requests pass. To exercise it on `localhost`, start the server with
+`FRONTEND_URL=http://localhost:3000` or the origin check rejects the request.
 
 ### 4. Cost
 
@@ -505,21 +502,21 @@ Watch server logs for these prefixes:
 
 **"I'm not sure" to everything.** The corpus is empty or the schema is missing.
 Check `select count(*) from chatbot_doc_chunks;` — expect ~168. If it is 0, run
-`npm run ingest`.
+`npm run ingest:chatbot`.
 
 **Everything fails with a connection error.** `CHATBOT_DATABASE_URL` is unset,
 so it fell back to `DATABASE_URL` — which in this repo may be the Cloud SQL host
 from `../.env.local` rather than the database you meant. Set it explicitly.
 
 **Embedding dimension mismatch.** `EMBEDDING_DIMENSIONS` and the `vector(N)`
-column disagree. Make them match, then `npm run ingest -- --force`.
+column disagree. Make them match, then `npm run ingest:chatbot -- --force`.
 
 **`EMBEDDING_MODEL_ID` rejected.** Your key may not have the model. Set
 `EMBEDDING_MODEL_ID=gemini-embedding-2` and re-run with `--force`. The dimension
 stays 768 either way, so no SQL change is needed.
 
 **Ingest throws "This module cannot be imported from a Client Component".**
-It was run without `--conditions=react-server`. Use `npm run ingest`, not
+It was run without `--conditions=react-server`. Use `npm run ingest:chatbot`, not
 `npx tsx scripts/ingest.ts`.
 
 **Replies arrive in one lump instead of streaming.** A proxy is buffering. The
@@ -546,7 +543,7 @@ running; build from source against it:
 `../SENDGRID_SENDER_SETUP.md`. The lead is still stored — only the email fails.
 
 **The bot mentions "context" or "my sources" in a reply.** Tighten the last
-Style rule in `lib/chatbot/systemPrompt.ts`; avoid using those words in the
+Style rule in `lib/chatbot/systemPrompt.js`; avoid using those words in the
 prompt itself, since they prime the model to echo them.
 
 **The lead card never appears.** It is once per session. Reset it with
