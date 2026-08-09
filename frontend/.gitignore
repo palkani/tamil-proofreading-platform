@@ -1,0 +1,14 @@
+# Next.js
+.next/
+out/
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# dependencies
+node_modules/
+
+# env — the root .gitignore already denies .env*, this is the local restatement
+.env
+.env.*
+!.env.example
+!.env.*.example
