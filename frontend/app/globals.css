@@ -1,0 +1,94 @@
+@import 'tailwindcss';
+
+/*
+ * ProofTamil brand tokens. Exposed through Tailwind v4's `@theme` so they are
+ * usable both as utilities (`bg-primary`, `font-tamil`) and as raw CSS custom
+ * properties (`var(--color-primary)`) from hand-written CSS.
+ */
+@theme {
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-soft: #eef2ff;
+  --color-secondary: #0ea5e9;
+  --color-accent: #14b8a6;
+
+  --color-ink: #0f172a;
+  --color-muted: #64748b;
+  --color-line: #e2e8f0;
+  --color-surface: #ffffff;
+  --color-canvas: #f8fafc;
+
+  /*
+   * Noto Sans Tamil leads the Tamil stack. Tamil glyphs carry tall ascenders
+   * and deep descenders, so anything rendering Tamil also needs the roomier
+   * line-height set on `.font-tamil` below — the font alone is not enough.
+   */
+  --font-sans: 'Inter', 'DM Sans', 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  --font-tamil: 'Noto Sans Tamil', 'Latha', 'Nirmala UI', var(--font-sans);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Chat panel entrance. Applied via `motion-safe:` so it is skipped entirely
+   when the OS asks for reduced motion. */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+}
+
+/*
+ * Tamil script needs vertical breathing room that Latin does not. Applied to
+ * any element whose content may be Tamil rather than to <body>, so English
+ * copy keeps its tighter default rhythm.
+ */
+.font-tamil,
+[lang='ta'] {
+  font-family: var(--font-tamil);
+  line-height: 1.85;
+}
+
+/* Vestibular disorders are not a preference — honour the OS setting. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
