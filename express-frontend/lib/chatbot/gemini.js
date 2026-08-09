@@ -9,18 +9,50 @@ const {
   MAX_OUTPUT_TOKENS,
 } = require('./config');
 
-/** Server-side Gemini client. GOOGLE_GENAI_API_KEY never leaves the server. */
+const { keyRotator } = require('../../utils/gemini-key-rotator');
 
-let cached = null;
+/**
+ * Server-side Gemini client. Keys never leave the server.
+ *
+ * Keys come from the app's existing rotator (utils/gemini-key-rotator.js), so
+ * the chatbot uses the same GEMINI_API_KEY_1..N already configured in Vercel
+ * as the rest of the site — no chatbot-specific key to add. The rotator also
+ * falls back to AI_INTEGRATIONS_GEMINI_API_KEY, then GOOGLE_GENAI_API_KEY.
+ *
+ * Rotation matters here: these are free-tier keys with low RPM, and RAG
+ * ingestion fires ~170 embedding calls in a burst. Spreading them across keys
+ * and cooling down a key that 429s is the difference between an ingest that
+ * completes and one that spends minutes in backoff.
+ */
 
-function getGenAI() {
-  if (cached) return cached;
+// One SDK client per key. Rebuilding it per request would be wasteful, but a
+// single cached client cannot rotate — so cache by key instead.
+const clients = new Map();
 
-  const apiKey = process.env.GOOGLE_GENAI_API_KEY;
-  if (!apiKey) throw new Error('GOOGLE_GENAI_API_KEY missing. Required for the chatbot.');
+function clientFor(apiKey) {
+  let client = clients.get(apiKey);
+  if (!client) {
+    client = new GoogleGenAI({ apiKey });
+    clients.set(apiKey, client);
+  }
+  return client;
+}
 
-  cached = new GoogleGenAI({ apiKey });
-  return cached;
+/** @returns {{ client: GoogleGenAI, index: number }} */
+function leaseClient() {
+  const lease = keyRotator.getNextKey();
+  if (!lease) {
+    throw new Error(
+      'No Gemini API key configured. Set GEMINI_API_KEY_1 (and optionally _2, _3) ' +
+        'or GOOGLE_GENAI_API_KEY.',
+    );
+  }
+  return { client: clientFor(lease.key), index: lease.index };
+}
+
+/** Exposed for the health check and for tests. */
+function getKeyStatus() {
+  return keyRotator.getStatus();
 }
 
 /* ------------------------------------------------------------------ retries */
@@ -39,20 +71,43 @@ function isRetryable(error) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function isRateLimit(error) {
+  if (!error) return false;
+  if (error.status === 429) return true;
+  return /\b429\b|rate limit|quota|RESOURCE_EXHAUSTED/i.test(String(error.message || error));
+}
+
+/**
+ * Retry with key rotation.
+ *
+ * A fresh key is leased per attempt, so a 429 moves to the next key rather
+ * than sleeping on the exhausted one. Only when every key is cooling down does
+ * the backoff actually cost wall-clock.
+ */
 async function withRetry(label, fn) {
   let lastError;
 
   for (let attempt = 0; attempt <= EMBED_MAX_RETRIES; attempt++) {
+    const lease = leaseClient();
+
     try {
-      return await fn();
+      return await fn(lease.client);
     } catch (error) {
       lastError = error;
+
+      // Take the exhausted key out of rotation for its cooldown so sibling
+      // calls in the same ingest do not immediately pick it again.
+      if (isRateLimit(error)) keyRotator.markRateLimited(lease.index);
+
       if (attempt === EMBED_MAX_RETRIES || !isRetryable(error)) break;
 
       // Full jitter: a fixed backoff would make every batch in a parallel
-      // ingest retry in lockstep and re-trigger the 429.
-      const ceiling = Math.min(1000 * 2 ** attempt, 30000);
-      await sleep(Math.random() * ceiling);
+      // ingest retry in lockstep and re-trigger the 429. Skipped when another
+      // key is free, since rotating is instant.
+      if (keyRotator.getAvailableKeyCount() === 0) {
+        const ceiling = Math.min(1000 * 2 ** attempt, 30000);
+        await sleep(Math.random() * ceiling);
+      }
     }
   }
 
@@ -83,8 +138,8 @@ function normalize(vector) {
 }
 
 async function embedChunk(texts, taskType) {
-  const response = await withRetry(`embedContent(${texts.length} texts)`, () =>
-    getGenAI().models.embedContent({
+  const response = await withRetry(`embedContent(${texts.length} texts)`, (client) =>
+    client.models.embedContent({
       model: EMBEDDING_MODEL_ID,
       contents: texts,
       config: { taskType, outputDimensionality: EMBEDDING_DIMENSIONS },
@@ -147,17 +202,19 @@ async function embedBatch(texts, taskType, onProgress) {
  * forward them straight into its NDJSON response without buffering.
  */
 async function streamChat(systemInstruction, history) {
-  const stream = await getGenAI().models.generateContentStream({
-    model: CHAT_MODEL_ID,
-    contents: history.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] })),
-    config: {
-      systemInstruction,
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
-      // Low but non-zero: grounded support answers should be near-deterministic
-      // while still reading like prose rather than a lookup table.
-      temperature: 0.3,
-    },
-  });
+  const stream = await withRetry('generateContentStream', (client) =>
+    client.models.generateContentStream({
+      model: CHAT_MODEL_ID,
+      contents: history.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] })),
+      config: {
+        systemInstruction,
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+        // Low but non-zero: grounded support answers should be near-deterministic
+        // while still reading like prose rather than a lookup table.
+        temperature: 0.3,
+      },
+    }),
+  );
 
   async function* deltas() {
     for await (const chunk of stream) {
@@ -168,4 +225,4 @@ async function streamChat(systemInstruction, history) {
   return deltas();
 }
 
-module.exports = { getGenAI, embedText, embedBatch, streamChat };
+module.exports = { leaseClient, getKeyStatus, embedText, embedBatch, streamChat };
