@@ -520,9 +520,36 @@ Watch server logs for these prefixes:
 
 ## Troubleshooting
 
-**"I'm not sure" to everything.** The corpus is empty or the schema is missing.
-Check `select count(*) from chatbot_doc_chunks;` — expect ~168. If it is 0, run
-`npm run ingest:chatbot`.
+**"I'm not sure" to everything / replies never cite sources.** The bot is
+reaching Gemini but not the corpus. Retrieval failures are swallowed on purpose
+so the visitor still gets a reply, which makes this invisible from outside —
+use the health endpoint:
+
+```bash
+curl https://www.prooftamil.com/api/chat/health
+```
+
+```json
+{"ok": false,
+ "database": {"configured": true, "reachable": true, "tablesPresent": false,
+              "documents": 0, "chunks": 0,
+              "hint": "schema.sql has not been run"},
+ "gemini": {"keysConfigured": 3, "keysAvailable": 3}}
+```
+
+A healthy deployment reports `"ok": true` with `documents: 41`, `chunks: 168`.
+Set `CHATBOT_HEALTH_TOKEN` and pass `?token=…` to also see the database host
+and the raw error — those are withheld from the public response so the endpoint
+cannot be used to fingerprint infrastructure.
+
+Common readings:
+
+| Response | Meaning |
+|---|---|
+| `tablesPresent: false`, hint `schema.sql has not been run` | Connected to the wrong database, or the schema was never applied |
+| `reachable: false`, hint `cannot reach the database` | Bad DSN, or the host is firewalled from your deploy (Cloud SQL IP allowlists do not include Vercel's egress) |
+| `chunks: 0` but tables present | Schema applied, ingestion never run — `npm run ingest:chatbot` |
+| `keysConfigured: 0` | No `GEMINI_API_KEY_1` / `GOOGLE_GENAI_API_KEY` in the environment |
 
 **Everything fails with a connection error.** `CHATBOT_DATABASE_URL` is unset,
 so it fell back to `DATABASE_URL` — which in this repo may be the Cloud SQL host
