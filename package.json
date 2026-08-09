@@ -13,6 +13,7 @@
     "@google-cloud/secret-manager": "^6.1.1",
     "@google/genai": "^1.29.1",
     "connect-pg-simple": "^10.0.0",
+    "framer-motion": "^12.42.2",
     "pg": "^8.16.3"
   }
 }
