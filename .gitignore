@@ -79,3 +79,9 @@ attached_assets/
 backup.sql
 backup_clean.sql
 .replit
+
+# claude-seo/ is a clone of a separate upstream repo
+# (github.com/AgriciDaniel/claude-seo). `git add`ing it creates a gitlink with
+# no .gitmodules entry, so clones would get an empty directory instead of the
+# files. Ignore it here; add it as a real submodule if it should be tracked.
+claude-seo/
