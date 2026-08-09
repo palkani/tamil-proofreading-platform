@@ -32,6 +32,7 @@ const apiRouter = require('./routes/api');
 const processRouter = require('./routes/process');
 const workspaceRouter = require('./routes/workspace');
 const adminRouter = require('./routes/admin');
+const chatbotRouter = require('./routes/chatbot');
 
 // JS files that must never be served from cache
 const NO_CACHE_JS = [
@@ -207,6 +208,9 @@ function createApp() {
   app.use('/admin', adminRouter);
   app.use('/workspace', workspaceRouter);
   app.use('/', indexRouter);
+  // Before apiRouter so /api/chat and /api/leads resolve here rather than
+  // falling through to whatever apiRouter does with unmatched paths.
+  app.use('/api', chatbotRouter);
   app.use('/api', apiRouter);
   app.use('/api/process', processRouter);
 
