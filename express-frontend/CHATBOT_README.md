@@ -109,7 +109,7 @@ database to use.
 | Variable | Source | Purpose |
 |---|---|---|
 | `CHATBOT_DATABASE_URL` | **you set this** | Which Postgres holds the chatbot tables |
-| `GOOGLE_GENAI_API_KEY` | inherited from `../.env` | Gemini, server-side only |
+| `GEMINI_API_KEY_1`, `_2`, `_3`… | already in Vercel | Gemini keys, server-side only — shared with the rest of the site |
 | `SENDGRID_SMTP_PASSWORD` | inherited from `../.env` | An `SG.…` key — used via the SendGrid v3 Web API |
 | `EMAIL_FROM_ADDRESS`, `CONTACT_TO_EMAIL` | inherited from `../.env` | Notification envelope |
 | `CHAT_MODEL_ID` | optional | Default `gemini-3.6-flash` |
@@ -119,8 +119,28 @@ database to use.
 | `RESEND_API_KEY` | optional | Preferred lead-notification transport |
 
 Precedence, highest first: real `process.env` (CI secrets, host dashboard) →
-`frontend/.env.local` → `frontend/.env` → `../.env.local` → `../.env`. Root
-files never override.
+`express-frontend/.env.local` → `express-frontend/.env` → `../.env.local` →
+`../.env`. Root files never override.
+
+### Gemini keys
+
+The chatbot does **not** have its own API key. It calls
+`utils/gemini-key-rotator.js` — the same pool the rest of the site uses — so
+the `GEMINI_API_KEY_1..N` already set in Vercel work with no extra
+configuration. The rotator resolves, in order:
+
+1. `GEMINI_API_KEY_1` … `GEMINI_API_KEY_10` (round-robin)
+2. `AI_INTEGRATIONS_GEMINI_API_KEY`
+3. `GOOGLE_GENAI_API_KEY`
+
+Rotation is not cosmetic here. These are typically free-tier keys with a low
+requests-per-minute ceiling, and a full ingest fires ~170 embedding calls in a
+burst. A key that returns 429 is put in a 90-second cooldown and the next
+attempt leases a different key, so the exponential backoff only costs
+wall-clock when *every* key is cooling down.
+
+With no key configured at all, the site still serves normally and `/api/chat`
+returns a graceful error line — verified.
 
 > **Always set `CHATBOT_DATABASE_URL` explicitly.** This repo has *two*
 > different `DATABASE_URL`s — a Supabase pooler in `../.env` and a Cloud SQL

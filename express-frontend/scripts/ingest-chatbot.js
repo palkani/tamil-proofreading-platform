@@ -18,7 +18,7 @@ const fs = require('fs');
 const dotenv = require('dotenv');
 const cheerio = require('cheerio');
 
-// express-frontend/.env first, then the repo root — so GOOGLE_GENAI_API_KEY and
+// express-frontend/.env first, then the repo root — so the Gemini keys and
 // DATABASE_URL are inherited from the credentials the rest of the monorepo
 // already uses. `override: false` means the nearer file always wins.
 [
@@ -102,7 +102,15 @@ function requireEnv(dryRun) {
   if (dryRun) return;
 
   const missing = [];
-  if (!process.env.GOOGLE_GENAI_API_KEY) missing.push('GOOGLE_GENAI_API_KEY');
+
+  // Any of the rotator's key variables will do — the chatbot uses the same
+  // pool as the rest of the site (utils/gemini-key-rotator.js).
+  const hasGeminiKey =
+    Array.from({ length: 10 }, (_, i) => process.env[`GEMINI_API_KEY_${i + 1}`]).some(Boolean) ||
+    process.env.AI_INTEGRATIONS_GEMINI_API_KEY ||
+    process.env.GOOGLE_GENAI_API_KEY;
+
+  if (!hasGeminiKey) missing.push('GEMINI_API_KEY_1 (or GOOGLE_GENAI_API_KEY)');
   if (!process.env.CHATBOT_DATABASE_URL && !process.env.DATABASE_URL) {
     missing.push('CHATBOT_DATABASE_URL');
   }
