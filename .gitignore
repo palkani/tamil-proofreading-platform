@@ -8,10 +8,13 @@ venv/
 *.pyc
 *.pyo
 
-# Environment variables
+# Environment variables — deny everything, allow only the placeholder templates.
+# .env.production was tracked here until it leaked live Google/Cloud SQL creds;
+# the broad glob is the fence so a new .env.<whatever> can't slip through again.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
 
 # Build outputs
 dist/
@@ -62,7 +65,6 @@ temp/
 *.tmp
 
 .vercel
-.env*.local
 backend/seed_corpus_wiki.sql
 
 # Tesseract traineddata (large; download at build/deploy time)
