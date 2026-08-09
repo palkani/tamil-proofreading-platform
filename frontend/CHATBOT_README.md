@@ -1,14 +1,3 @@
-> # ⚠️ SUPERSEDED — do not edit this copy
->
-> The chatbot now lives in **`express-frontend/`**, which is what `vercel.json`
-> actually deploys. This Next.js app is not deployed and its copy of the
-> chatbot is kept only for reference.
->
-> **Read and edit `express-frontend/CHATBOT_README.md` instead.**
->
-> Editing `frontend/lib/chatbot/*` has no effect on the live site — the
-> running code is `express-frontend/lib/chatbot/*`.
-
 # ProofTamil Chatbot
 
 A bilingual (English + Tamil) support and lead-capture assistant for
