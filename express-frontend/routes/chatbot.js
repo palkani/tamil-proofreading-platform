@@ -1,5 +1,6 @@
 const express = require('express');
 
+// config and rateLimit are dependency-free, so they are safe to load eagerly.
 const {
   MAX_HISTORY_MESSAGES,
   MAX_MESSAGE_CHARS,
@@ -8,18 +9,30 @@ const {
   RATE_LIMIT_SESSION_CAPACITY,
   RATE_LIMIT_SESSION_WINDOW_MS,
 } = require('../lib/chatbot/config');
-const { embedText, streamChat } = require('../lib/chatbot/gemini');
-const { detectLeadIntent } = require('../lib/chatbot/leadIntent');
-const { notifyNewLead } = require('../lib/chatbot/notify');
-const {
-  appendMessage,
-  ensureConversation,
-  insertLead,
-  markLeadOffered,
-} = require('../lib/chatbot/persistence');
 const { consume } = require('../lib/chatbot/rateLimit');
-const { buildSystemPrompt } = require('../lib/chatbot/systemPrompt');
-const { matchChunks } = require('../lib/chatbot/vectorStore');
+const { detectLeadIntent } = require('../lib/chatbot/leadIntent');
+
+/**
+ * Everything that pulls in `pg` or `@google/genai` is required LAZILY, inside
+ * the handlers.
+ *
+ * This router is required at module scope by create-app.js, so a top-level
+ * `require('pg')` that fails takes down the ENTIRE site, not just the chatbot —
+ * which is exactly what happened when these packages were missing from
+ * express-frontend/package.json (they resolved from the repo-root
+ * node_modules locally, but Vercel installs only this manifest).
+ *
+ * Loading them per-request keeps the blast radius at /api/chat. Node caches
+ * modules after the first require, so the cost is one-time, not per-request.
+ */
+function chatbotDeps() {
+  return {
+    gemini: require('../lib/chatbot/gemini'),
+    persistence: require('../lib/chatbot/persistence'),
+    systemPrompt: require('../lib/chatbot/systemPrompt'),
+    vectorStore: require('../lib/chatbot/vectorStore'),
+  };
+}
 
 /**
  * ProofTamil chatbot routes.
@@ -147,6 +160,19 @@ router.post('/chat', async (req, res) => {
 
   const question = messages[messages.length - 1].content.trim();
   if (!question) return ndjsonError(res, 'Message cannot be empty.', 400);
+
+  // If a chatbot dependency is missing or broken, fail THIS endpoint only.
+  let deps;
+  try {
+    deps = chatbotDeps();
+  } catch (error) {
+    console.error('[chat] chatbot modules unavailable:', error.message);
+    return ndjsonError(res, 'The assistant is unavailable right now.', 503);
+  }
+  const { embedText, streamChat } = deps.gemini;
+  const { appendMessage, ensureConversation, markLeadOffered } = deps.persistence;
+  const { buildSystemPrompt } = deps.systemPrompt;
+  const { matchChunks } = deps.vectorStore;
 
   /* -------------------------------------------------------- retrieval */
 
@@ -286,6 +312,16 @@ router.post('/leads', async (req, res) => {
   const context = optionalString(body.context, MAX_MESSAGE_CHARS);
   const pageUrl = optionalString(body.pageUrl, 2000);
   const sessionId = optionalString(body.sessionId, 64);
+
+  let insertLead;
+  let notifyNewLead;
+  try {
+    insertLead = require('../lib/chatbot/persistence').insertLead;
+    notifyNewLead = require('../lib/chatbot/notify').notifyNewLead;
+  } catch (error) {
+    console.error('[leads] chatbot modules unavailable:', error.message);
+    return res.status(503).json({ error: 'Lead capture is unavailable right now.' });
+  }
 
   try {
     await insertLead({ email, name, context, pageUrl, sessionId });
