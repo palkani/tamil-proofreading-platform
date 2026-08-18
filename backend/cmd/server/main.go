@@ -475,6 +475,12 @@ func main() {
 		// Protected routes (require authentication)
 		protected := v1.Group("")
 		protected.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+		// TokenVersionMiddleware forces a token refresh after billing_service
+		// bumps the user's token_version (cancellation, refund, plan change).
+		// Without this a cancelled subscriber kept Pro features for up to
+		// 15 minutes until the natural JWT expiry. Runs after AuthMiddleware
+		// so it has the userID + claims in context.
+		protected.Use(middleware.TokenVersionMiddleware(db))
 		{
 			// User profile
 			protected.GET("/me", h.GetCurrentUser)

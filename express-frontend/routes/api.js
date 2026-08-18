@@ -25,6 +25,13 @@ const llmAnonRateLimit = require('../middleware/rateLimiter')(15, 60);
 // Gemini through them the way they could before this commit.
 const { authenticateJWT } = require('../middleware/auth');
 
+// Single source of truth for the operator/admin email allowlist. Reads
+// ADMIN_ALLOWED_EMAILS env var (mirrored with the backend's Go-side
+// billing.AdminEmails list). Kept here so every Express-side "is this
+// staff?" check uses the same predicate — the earlier inline copies in
+// docx-export and blog-publish caused drift bugs.
+const { isAdminEmail } = require('../middleware/admin');
+
 // Latency-based regional backend resolver (Asia vs US Cloud Run instances)
 const { getRegionalBackendUrl } = require('../utils/regional-backend');
 const { getV2Corrections } = require('../lib/v2-proofread');
@@ -2322,25 +2329,37 @@ router.post('/document/export-docx', async (req, res) => {
     const planRaw = String(req.body?.plan || '').toLowerCase();
     const isPro = ['pro', 'basic', 'enterprise'].includes(planRaw);
 
-    // Server-side Pro gate — three ways to pass, matching the client
-    // pill's is_pro semantics:
-    //   1. Subscription enum ∈ {pro, basic, enterprise}  (paid users)
-    //   2. Email in the admin allowlist                  (support/ops)
-    //   3. TODO if needed: PremiumOverride flag          (currently only
-    //      accessible via a Go backend call — not worth an extra hop
-    //      just for this endpoint; admins already covered by #2)
+    // Server-side Pro gate. Client-sent `plan` is deliberately IGNORED
+    // — never trust the browser to declare its own tier. The previous
+    // code checked req.user.subscription, but that field is never set
+    // on the JWT (auth_service.go only signs user_id, email, role), so
+    // every real Pro subscriber not on the admin allowlist was denied
+    // export and shown "Upgrade to Pro" — a real revenue regression.
     //
-    // Client-sent `plan` is deliberately IGNORED — never trust the
-    // browser to declare its own tier. Every hit here re-derives status
-    // from the authenticated session.
-    const sessionPlan = String(req.user?.subscription || '').toLowerCase();
-    const isPaidTier = ['pro', 'basic', 'enterprise'].includes(sessionPlan);
-    const sessionEmail = String(req.user?.email || '').toLowerCase().trim();
-    // Kept in sync with the blog-publish allowlist. If a sixth admin
-    // email lands, this and the four other duplicates become worth
-    // consolidating into a shared module.
-    const adminAllowlist = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com', 'contact@prooftamil.com'];
-    const isAdmin = sessionEmail && adminAllowlist.includes(sessionEmail);
+    // Ask the backend authoritatively. billing.IsUserPro covers all
+    // four passing paths (paid subscription, PremiumOverride grant,
+    // admin role, operator email).
+    const isAdmin = isAdminEmail(req.user?.email);
+    let isPaidTier = false;
+    if (!isAdmin && req.cookies?.access_token) {
+      try {
+        const backend = (req._backendUrl || BACKEND_URL || '').replace(/\/$/, '');
+        if (backend) {
+          const meResp = await axios.get(backend + '/api/v1/billing/me', {
+            headers: { Authorization: 'Bearer ' + req.cookies.access_token },
+            timeout: 5000,
+            validateStatus: () => true,
+          });
+          if (meResp.status === 200 && meResp.data?.billing?.is_premium) {
+            isPaidTier = true;
+          }
+        }
+      } catch (err) {
+        // Fail-closed: if the backend can't confirm Pro status, treat
+        // as free rather than granting export on a network hiccup.
+        console.warn('[DOCX-EXPORT] billing/me check failed:', err.message);
+      }
+    }
 
     if (!isPaidTier && !isAdmin) {
       return res.status(402).json({
@@ -3040,15 +3059,13 @@ router.post('/ai-content-writer/translate', authenticateJWT, async (req, res) =>
 // ============= END AI CONTENT WRITER API ROUTES =============
 
 // ============= BLOG PUBLISH API (Express -> Go backend) =============
-// Admin-only emails allowed to publish blogs
-const BLOG_PUBLISH_ALLOWED_EMAILS = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com', 'contact@prooftamil.com'];
 
 // Small helper — 403s if the request isn't from an allowlisted admin.
-// Returns true if the request should continue. Kept inline so we don't
-// spread admin-check logic across the file.
+// Returns true if the request should continue. Uses the shared
+// isAdminEmail helper (single source of truth) so this can't drift
+// from the DOCX-export / OCR-limit checks.
 function guardBlogAdmin(req, res) {
-  const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : '';
-  if (!userEmail || !BLOG_PUBLISH_ALLOWED_EMAILS.includes(userEmail)) {
+  if (!isAdminEmail(req.user?.email)) {
     res.status(403).json({ error: 'Admin-only endpoint.' });
     return false;
   }
@@ -3171,10 +3188,9 @@ router.post('/blog-generator/generate', async (req, res) => {
 router.post('/blog/publish', async (req, res) => {
   try {
     // Check if user is allowed to publish (admin only)
-    const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : '';
-    if (!userEmail || !BLOG_PUBLISH_ALLOWED_EMAILS.includes(userEmail)) {
-      console.log('[BLOG-PUBLISH] Unauthorized publish attempt:', userEmail || 'no user');
-      return res.status(403).json({ 
+    if (!isAdminEmail(req.user?.email)) {
+      console.log('[BLOG-PUBLISH] Unauthorized publish attempt:', req.user?.email || 'no user');
+      return res.status(403).json({
         error: 'Blog publishing is restricted to administrators.',
         message: 'Please contact the admin to publish content.'
       });
@@ -3239,8 +3255,7 @@ router.post('/blog/publish', async (req, res) => {
 router.delete('/blog/posts/:id', async (req, res) => {
   try {
     // Check if user is allowed to delete (admin only)
-    const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : '';
-    if (!userEmail || !BLOG_PUBLISH_ALLOWED_EMAILS.includes(userEmail)) {
+    if (!isAdminEmail(req.user?.email)) {
       return res.status(403).json({ error: 'Blog deletion is restricted to administrators.' });
     }
 
@@ -3278,8 +3293,7 @@ router.delete('/blog/posts/:id', async (req, res) => {
 router.put('/blog/posts/:id', async (req, res) => {
   try {
     // Check if user is allowed to update (admin only)
-    const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : '';
-    if (!userEmail || !BLOG_PUBLISH_ALLOWED_EMAILS.includes(userEmail)) {
+    if (!isAdminEmail(req.user?.email)) {
       return res.status(403).json({ error: 'Blog updates are restricted to administrators.' });
     }
 
