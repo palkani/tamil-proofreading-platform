@@ -6,6 +6,7 @@
 
 import { graphemes, graphemeCount, scriptOf, normalize, words } from '../src/tamil.js';
 import { cer, wer, summarize, formatReport } from '../src/metrics.js';
+import type { OcrResponse } from '../src/prompt.js';
 
 let failures = 0;
 function assert(cond: unknown, msg: string) {
@@ -70,6 +71,17 @@ assert(report.catastrophicRate === 0.5, `catastrophic rate = 0.5 (c,d both > 0.3
 // (No linear interpolation — fine for 100+-page runs where the difference vanishes.)
 assert(approx(report.medianCer, 0.45), `medianCer = 0.45 for [0.02,0.18,0.45,1.0] — got ${report.medianCer.toFixed(3)}`);
 console.log(formatReport(report));
+
+console.log('\n── OcrResponse type sanity ──');
+// Compile-time only — asserts the shape exported by prompt.ts stays stable.
+const sample: OcrResponse = {
+  raw_text: 'வணக்கம்',
+  suggestions: [
+    { raw_word: 'வலி', suggested_word: 'வழி', reason: 'stroke ambiguity', confidence: 0.7 },
+  ],
+};
+assert(sample.raw_text === 'வணக்கம்', 'OcrResponse.raw_text field wired');
+assert(sample.suggestions[0].confidence === 0.7, 'OcrResponse.suggestions[].confidence field wired');
 
 console.log(failures === 0 ? '\nAll smoke tests passed ✓' : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

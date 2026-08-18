@@ -1,38 +1,43 @@
-// Baseline transcriber — a single Gemini vision call on the whole image,
-// no preprocessing, no strip cutting, no consensus. This is deliberately
-// dumb so the phase-0 baseline number reflects what the previous OCR
-// pipeline shipped before we took the feature down. Every later phase
-// (preprocessing, tiling, N-pass consensus, lexicon repair) has to beat
-// this to justify its cost.
+// Baseline transcriber — single Gemini vision call, whole image, no
+// preprocessing. Returns { raw_text, suggestions[] } via structured
+// JSON output.
 //
-// Providers are pluggable but only Gemini is wired today (our existing
-// key rotator + billing account, cheapest per token). Adding Claude /
-// GPT-4o is a follow-up when we know they buy something over the baseline.
+// Design notes:
+//
+// - responseMimeType: "application/json" is Gemini's own JSON-mode
+//   toggle. Guarantees valid JSON output — no markdown fences, no
+//   preamble. If the model can't satisfy the schema it errors instead
+//   of returning garbage, which is what we want at the OCR boundary.
+//
+// - The prompt lives in ./prompt.ts so the schema and instructions
+//   are colocated and version-controlled together. Every subsequent
+//   phase (preprocess+strips, 2-pass consensus, layout blocks) reuses
+//   this prompt; only the pipeline around it changes.
+//
+// - The response shape (OcrResponse from prompt.ts) is deliberately
+//   flat and extensible: raw_text as a string, suggestions as an
+//   array of records. Phase-2 layout work adds a `blocks` array
+//   alongside these; phase-3 multi-provider adds a `passes` metadata
+//   field. Existing consumers keep working.
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { TRANSCRIPTION_PROMPT, OcrResponse, OcrSuggestion } from './prompt.js';
 
 export interface TranscribeOptions {
-  /** Model ID, e.g. "gemini-2.5-flash". */
   model: string;
-  /** Provider API key. If unset the call throws with a clear message. */
   apiKey: string;
-  /** Request timeout in milliseconds. Default 60_000. */
   timeoutMs?: number;
 }
 
 export interface TranscribeResult {
-  text: string;
+  raw_text: string;
+  suggestions: OcrSuggestion[];
   wallMs: number;
-  costUsd: number;   // best-effort estimate; 0 if we can't derive it
-  raw?: unknown;     // raw provider response for debugging
+  costUsd: number;
+  raw?: unknown;   // full provider payload for debugging
 }
 
-/**
- * Read a local image file and return { mimeType, base64 } for provider
- * upload. Only formats real users upload: jpg, jpeg, png, webp, heic.
- * (HEIC is common from iPhone photos of handwritten notes.)
- */
 async function readImage(imagePath: string): Promise<{ mimeType: string; data: string }> {
   const buf = await readFile(imagePath);
   const ext = path.extname(imagePath).toLowerCase().replace('.', '');
@@ -46,36 +51,49 @@ async function readImage(imagePath: string): Promise<{ mimeType: string; data: s
 }
 
 /**
- * Baseline transcription prompt. Deliberately plain — no JSON schema, no
- * block structure. This matches what "single-pass vision LLM" typically
- * produces without extra scaffolding. Later phases layer on the
- * structured-output prompt from the plan doc.
- *
- * We DO explicitly instruct:
- *   - Preserve English/Tanglish/numbers verbatim (do not transliterate)
- *   - Emit ⟨?⟩ for illegible text (don't hallucinate)
- * because these are baseline defensive asks — omitting them makes the
- * baseline artificially worse and skews later comparisons.
+ * Parse the model response. Belt-and-braces even though we request
+ * JSON mode — some models occasionally still wrap in ```json fences
+ * on the first token or emit a stray leading BOM.
  */
-const BASELINE_PROMPT = `You are transcribing handwritten Tamil text from an image.
-
-Return the text exactly as written, preserving line breaks and paragraph structure.
-
-Rules:
-1. Output Tamil in Tamil Unicode (do NOT transliterate).
-2. Preserve English words, Tanglish, numbers, dates, URLs, and formulae verbatim in their original script — do NOT translate or transliterate them.
-3. If any portion is illegible, output ⟨?⟩ for that word instead of guessing.
-4. Do not add commentary, translations, or explanations. Return only the transcribed text.
-5. Preserve line breaks; use a blank line between paragraphs.`;
+function parseOcrResponse(text: string): OcrResponse {
+  if (!text || !text.trim()) {
+    return { raw_text: '', suggestions: [] };
+  }
+  let cleaned = text.trim();
+  // Strip markdown fences if the model got clever
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+  // Strip UTF-8 BOM
+  if (cleaned.charCodeAt(0) === 0xFEFF) cleaned = cleaned.slice(1);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (err) {
+    // If parsing fails, treat the whole response as raw_text and
+    // return no suggestions. Better than throwing — the user still
+    // sees the transcription in the UI.
+    return { raw_text: text, suggestions: [] };
+  }
+  const obj = (parsed && typeof parsed === 'object' ? parsed : {}) as Record<string, unknown>;
+  const raw_text = typeof obj.raw_text === 'string' ? obj.raw_text : '';
+  const suggestions = Array.isArray(obj.suggestions)
+    ? obj.suggestions
+        .filter((s): s is Record<string, unknown> => Boolean(s) && typeof s === 'object')
+        .map<OcrSuggestion>((s) => ({
+          raw_word: String(s.raw_word ?? ''),
+          suggested_word: String(s.suggested_word ?? ''),
+          reason: String(s.reason ?? ''),
+          confidence: typeof s.confidence === 'number' ? Math.max(0, Math.min(1, s.confidence)) : 0,
+          context_before: s.context_before ? String(s.context_before) : undefined,
+          context_after: s.context_after ? String(s.context_after) : undefined,
+        }))
+        .filter((s) => s.raw_word && s.suggested_word)
+    : [];
+  return { raw_text, suggestions };
+}
 
 /**
- * Baseline: single Gemini vision call, no preprocessing. Returns
- * transcribed text + wall-clock + best-effort cost estimate.
- *
- * Cost calc uses published rates (as of writing): gemini-2.5-flash at
- * $0.075/1M input + $0.30/1M output tokens. Image tokens are counted
- * against input. We don't have exact token counts unless the response
- * usage metadata includes them; falls back to 0 if unavailable.
+ * Baseline: single Gemini vision call, structured JSON output.
+ * Returns raw_text + suggestions + wall clock + best-effort cost.
  */
 export async function transcribeBaseline(
   imagePath: string,
@@ -93,7 +111,7 @@ export async function transcribeBaseline(
       {
         role: 'user',
         parts: [
-          { text: BASELINE_PROMPT },
+          { text: TRANSCRIPTION_PROMPT },
           {
             inline_data: {
               mime_type: image.mimeType,
@@ -104,11 +122,9 @@ export async function transcribeBaseline(
       },
     ],
     generationConfig: {
-      // Determinism — comparing runs needs low variance.
-      temperature: 0,
-      // Handwriting output is usually short; cap so we don't wait forever
-      // on a hallucination loop. 8k tokens ≈ 20 pages of dense Tamil.
-      maxOutputTokens: 8192,
+      temperature: 0,           // determinism — reruns should agree
+      maxOutputTokens: 8192,    // ~20 pages of dense Tamil; plenty of room for JSON + suggestions
+      responseMimeType: 'application/json',
     },
   };
 
@@ -140,14 +156,12 @@ export async function transcribeBaseline(
     usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
   };
 
-  const text = payload.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const rawText = payload.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const { raw_text, suggestions } = parseOcrResponse(rawText);
 
-  // Best-effort cost — gemini-2.5-flash pricing per Google's public
-  // rate card. Wrong-by-a-factor at worst; still useful for relative
-  // comparison across pipeline variants.
   const inTokens = payload.usageMetadata?.promptTokenCount ?? 0;
   const outTokens = payload.usageMetadata?.candidatesTokenCount ?? 0;
   const costUsd = (inTokens * 0.075 + outTokens * 0.30) / 1_000_000;
 
-  return { text, wallMs, costUsd, raw: payload };
+  return { raw_text, suggestions, wallMs, costUsd, raw: payload };
 }

@@ -122,12 +122,14 @@ async function runBaseline(pairs: Array<{ image: string; groundTruth: string; pa
   return pool(pairs, args.concurrency, async ({ image, groundTruth, page }) => {
     try {
       const r = await transcribeBaseline(image, { model, apiKey });
+      // Score against raw_text (verbatim) — suggestions are additive
+      // metadata, not part of the transcription being measured.
       const score: PageScore = {
         page,
-        cer: cer(r.text, groundTruth),
-        wer: wer(r.text, groundTruth),
+        cer: cer(r.raw_text, groundTruth),
+        wer: wer(r.raw_text, groundTruth),
         gtGraphemes: graphemeCount(groundTruth),
-        predGraphemes: graphemeCount(r.text),
+        predGraphemes: graphemeCount(r.raw_text),
         wallMs: r.wallMs,
         costUsd: r.costUsd,
       };
