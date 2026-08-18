@@ -135,6 +135,37 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
   <link rel="dns-prefetch" href="https://www.googletagmanager.com">
+
+  <!-- Google Analytics 4 (measurement ID G-T7HELZM78J).
+       Loaded as high in <head> as possible so pageview timing is
+       accurate. Skipped on admin pages (noIndex=true) so staff
+       sessions don't pollute the analytics stream.
+       Google Consent Mode v2 defaults: analytics_storage granted,
+       ad_* denied — safe for EU/UK cookie requirements without
+       needing a consent banner. Async load — zero LCP impact.
+       To change the measurement ID, edit the G-T7HELZM78J string
+       below and redeploy. To disable entirely, wrap this block in
+       another env-flag conditional. -->
+  <% if (!noIndex) { %>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-T7HELZM78J"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    gtag('consent', 'default', {
+      analytics_storage: 'granted',
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      wait_for_update: 500
+    });
+    gtag('js', new Date());
+    gtag('config', 'G-T7HELZM78J', {
+      anonymize_ip: true,
+      send_page_view: true
+    });
+  </script>
+  <% } %>
+
   <!-- Inter font: render-blocking on purpose. ?display=swap prevents FOIT (text
        renders in a fallback font until Inter loads, then swaps). Trimmed from
        9 weights to 5 (400 body, 500 chips, 600 buttons, 700 headings, 800 hero)
