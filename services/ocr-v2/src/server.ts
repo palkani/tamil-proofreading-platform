@@ -43,7 +43,10 @@ try {
 
 const API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY || process.env.AI_INTEGRATIONS_GEMINI_API_KEY || '';
 const MODEL = process.env.OCR_V2_MODEL || 'gemini-2.5-flash';
-const PORT = Number(process.env.OCR_V2_PORT || 3081);
+// Cloud Run assigns the port dynamically via the PORT env var; local
+// dev + Docker default to OCR_V2_PORT (3081). PORT takes precedence
+// so Cloud Run's health-check finds us on the port it expects.
+const PORT = Number(process.env.PORT || process.env.OCR_V2_PORT || 3081);
 
 const app = express();
 const upload = multer({
@@ -1056,9 +1059,11 @@ app.post('/api/ocr', upload.single('image'), async (req: Request, res: Response)
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`\n🔬 OCR v2 verbatim+suggestions demo running`);
-  console.log(`   URL:   http://localhost:${PORT}`);
+// Bind to 0.0.0.0 explicitly — Cloud Run only routes traffic to
+// containers listening on all interfaces, not just 127.0.0.1.
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n🔬 OCR v2 verbatim+suggestions running`);
+  console.log(`   Port:  ${PORT}`);
   console.log(`   Model: ${MODEL}`);
   console.log(`   Key:   ${API_KEY ? '✓ loaded (' + API_KEY.slice(0, 6) + '…)' : '⚠ MISSING — set GEMINI_API_KEY or GOOGLE_GENAI_API_KEY'}`);
   console.log('');

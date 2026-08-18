@@ -160,8 +160,25 @@ router.get('/tools/ocr', (req, res) => {
   });
 });
 
+// /tools/handwriting-ocr — split by OCR v2 beta feature flag:
+//   - Beta users (email on OCR_V2_BETA_EMAILS or admin allowlist) →
+//     render the new OCR v2 UI, which POSTs to /api/ocr-v2/pipeline.
+//   - Everyone else → maintenance page as before.
+// When we open the beta to all Pro users, expand OCR_V2_BETA_EMAILS.
+// When we open to all users, revert this to always-render the OCR v2 UI.
 router.get('/tools/handwriting-ocr', (req, res) => {
   const user = getCurrentUser(req);
+  const { isOcrV2BetaUser } = require('../middleware/ocrV2Beta');
+  const inBeta = isOcrV2BetaUser(req);
+
+  if (inBeta) {
+    const seo = { ...(getSeoData('handwritingOcrTool') || {}), noIndex: true };
+    return res.render('pages/handwriting-ocr-v2', {
+      title: 'Handwriting OCR (Beta) | ProofTamil',
+      seo: seo,
+      user: user,
+    });
+  }
   const seo = { ...(getSeoData('handwritingOcrTool') || {}), noIndex: true };
   res.render('pages/ocr-maintenance', {
     title: 'Tamil Handwriting OCR — Under Maintenance | ProofTamil',
