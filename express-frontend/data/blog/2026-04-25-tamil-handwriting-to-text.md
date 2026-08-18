@@ -9,6 +9,8 @@ keywords: "handwritten tamil to text, tamil handwriting ocr, handwriting to text
 primary_keyword: "handwritten tamil to text"
 ---
 
+> **⚠️ Tool status:** Our Handwritten Notes into Text tool is temporarily offline for a major upgrade. This guide stays live so you understand what handwriting OCR is and what to look for; we'll relaunch soon with better accuracy for both printed and handwritten Tamil. [Get notified](https://www.prooftamil.com/contact) when it's back.
+
 If you have boxes of handwritten Tamil — old letters from family, school notebooks, journal entries, recipe cards, meeting minutes — you don't have to retype any of it. Modern AI can convert **handwritten Tamil to text** from a simple photograph in under 30 seconds. This guide explains how Tamil handwriting OCR works, what kinds of handwriting it handles best, and the photo tricks that make accuracy jump from 70% to 95%.
 
 ## What is handwriting OCR for Tamil?

@@ -150,7 +150,9 @@ router.get('/how-to-use', (req, res) => {
 //   3. Revert commit 38855f5 to re-enable the sitewide OCR CTAs.
 router.get('/tools/ocr', (req, res) => {
   const user = getCurrentUser(req);
-  const seo = getSeoData('ocrTool');
+  // noIndex=true so the maintenance view drops out of Google's index —
+  // pairs with the removal of both URLs from sitemap.xml above.
+  const seo = { ...(getSeoData('ocrTool') || {}), noIndex: true };
   res.render('pages/ocr-maintenance', {
     title: 'Tamil OCR — Under Maintenance | ProofTamil',
     seo: seo,
@@ -160,7 +162,7 @@ router.get('/tools/ocr', (req, res) => {
 
 router.get('/tools/handwriting-ocr', (req, res) => {
   const user = getCurrentUser(req);
-  const seo = getSeoData('handwritingOcrTool');
+  const seo = { ...(getSeoData('handwritingOcrTool') || {}), noIndex: true };
   res.render('pages/ocr-maintenance', {
     title: 'Tamil Handwriting OCR — Under Maintenance | ProofTamil',
     seo: seo,
@@ -1069,8 +1071,11 @@ router.get('/sitemap.xml', (req, res) => {
   const pages = [
     { url: '/',                       priority: '1.0',  changefreq: 'weekly',  lastmod: currentDate },
     { url: '/free-tamil-editor',      priority: '0.95', changefreq: 'weekly',  lastmod: '2026-04-19' },
-    { url: '/tools/handwriting-ocr',  priority: '0.90', changefreq: 'weekly',  lastmod: '2026-04-19' },
-    { url: '/tools/ocr',              priority: '0.85', changefreq: 'monthly', lastmod: '2026-02-01' },
+    // OCR URLs removed from sitemap while the feature is offline. The
+    // pages still return 200 with a maintenance view (see /tools/ocr
+    // and /tools/handwriting-ocr routes above) + <meta robots noindex>
+    // so Google will drop them from the index within a few weeks. Add
+    // both entries back when OCR is restored.
     { url: '/tools/ai-content-writer',priority: '0.80', changefreq: 'monthly', lastmod: '2026-02-01' },
     { url: '/how-to-use',             priority: '0.80', changefreq: 'monthly', lastmod: '2026-03-01' },
     { url: '/blog',                   priority: '0.80', changefreq: 'weekly',  lastmod: currentDate },
