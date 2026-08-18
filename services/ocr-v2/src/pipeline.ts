@@ -26,7 +26,11 @@ export interface PipelineOptions {
   mode: PipelineMode;
   model: string;
   apiKey: string;
-  /** For 'full' mode: how many strips to transcribe in parallel. Default 3. */
+  /** For 'full' mode: how many strips to transcribe in parallel.
+   *  Default 6 — most real pages produce 4-6 strips, so 6 lets them
+   *  all fire simultaneously and finish in a single Gemini round-trip
+   *  rather than serialized batches. Well under Gemini's paid-tier
+   *  rate limit (300 req/min). */
   concurrency?: number;
   /** For 'full' mode: target lines per strip. Default 5. */
   linesPerStrip?: number;
@@ -152,7 +156,7 @@ export async function runPipeline(
   const stripStarted = Date.now();
   const stripResults = await pool(
     cut.strips,
-    opts.concurrency ?? 3,
+    opts.concurrency ?? 6,
     async (strip): Promise<TranscribeResult> =>
       transcribeBuffer(strip.buffer, {
         model: opts.model, apiKey: opts.apiKey, mimeType: 'image/png',

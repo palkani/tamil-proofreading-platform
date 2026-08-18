@@ -64,12 +64,24 @@ const PAGE = `<!doctype html>
 <title>OCR v2 — Verbatim + Suggestions Demo</title>
 <style>
   :root {
-    --bg: #0b1220; --panel: #131d33; --panel-2: #1a2540; --border: #2a3654;
-    --text: #e6ecf8; --text-strong: #f5f8ff; --muted: #8898b8;
-    --accent: #fbbf24; --accent-2: #a855f7; --accent-glow: rgba(168, 85, 247, 0.35);
-    --ok: #10b981; --warn: #f59e0b; --err: #ef4444;
+    /* Palette aligned to prooftamil.com brand:
+       --bg / --panel / --panel-2 / --border : deep navy shades built
+         on the site's primary #1E1B4B for on-brand structure
+         (dark-theme UI kept — better for staring at scanned pages).
+       --accent / --accent-2 : the amber gradient used across every
+         OCR CTA on the main site (#F59E0B → #D97706). Primary
+         action button + progress ring are amber.
+       --purple : #7C3AED — reserved for AI/suggestion accents,
+         matching how AI Content Writer + AI features are colored
+         on the site. Used on suggestion cards + ring gradient stop. */
+    --bg: #0f0d2a; --panel: #1a1745; --panel-2: #221e56; --border: #2f2a6b;
+    --text: #e6ecf8; --text-strong: #f5f8ff; --muted: #9691c3;
+    --accent: #F59E0B; --accent-2: #D97706;
+    --purple: #7C3AED; --purple-2: #A855F7;
+    --accent-glow: rgba(245, 158, 11, 0.28);
+    --ok: #10b981; --warn: #F59E0B; --err: #ef4444;
     --radius: 12px; --radius-sm: 8px;
-    --shadow-primary: 0 8px 24px rgba(168, 85, 247, 0.28), 0 2px 4px rgba(0,0,0,0.2);
+    --shadow-primary: 0 8px 24px rgba(245, 158, 11, 0.28), 0 2px 4px rgba(0,0,0,0.2);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
@@ -101,8 +113,8 @@ const PAGE = `<!doctype html>
     border-radius: 999px; font-family: inherit; letter-spacing: 0.02em;
     transition: all 0.15s; text-transform: uppercase; }
   .mode-picker button:hover:not(.active) { color: var(--text); }
-  .mode-picker button.active { background: linear-gradient(135deg, var(--accent-2), var(--accent));
-    color: #1a1a2e; }
+  .mode-picker button.active { background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #1E1B4B; }
 
   /* ── Layout ───────────────────────────────────────────────── */
   main { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; padding: 12px 24px 24px; }
@@ -155,11 +167,14 @@ const PAGE = `<!doctype html>
     padding: 12px 16px; font-size: 14px; user-select: none;
     -webkit-tap-highlight-color: transparent; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-primary { flex: 1; background: linear-gradient(135deg, #a855f7 0%, #fbbf24 100%);
-    color: #1a1a2e; font-weight: 700; font-size: 15px;
+  /* Primary CTA — amber gradient matching every OCR button on the
+     main site (see home.ejs and free-tamil-editor.ejs). Same gradient
+     stops as the site's Handwriting OCR bento-card CTA. */
+  .btn-primary { flex: 1; background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+    color: #1E1B4B; font-weight: 700; font-size: 15px;
     box-shadow: var(--shadow-primary); padding: 14px 20px; }
   .btn-primary:hover:not(:disabled) { transform: translateY(-1px);
-    box-shadow: 0 12px 28px rgba(168, 85, 247, 0.4), 0 2px 4px rgba(0,0,0,0.2); }
+    box-shadow: 0 12px 28px rgba(245, 158, 11, 0.42), 0 2px 4px rgba(0,0,0,0.2); }
   .btn-primary:active:not(:disabled) { transform: translateY(0);
     box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3); }
   .btn-primary.success { background: linear-gradient(135deg, #10b981, #10b981);
@@ -191,10 +206,10 @@ const PAGE = `<!doctype html>
     transform: translate(-50%, -50%);
     display: flex; flex-direction: column; align-items: center; gap: 18px;
     padding: 28px 36px; min-width: 240px; max-width: 90%;
-    background: rgba(19, 29, 51, 0.85); backdrop-filter: blur(20px);
+    background: rgba(26, 23, 69, 0.88); backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 16px;
-    box-shadow: 0 20px 60px rgba(168, 85, 247, 0.28),
+    border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(245, 158, 11, 0.22),
                 0 8px 24px rgba(0, 0, 0, 0.5),
                 inset 0 1px 0 rgba(255,255,255,0.08);
     animation: cardIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
@@ -237,6 +252,24 @@ const PAGE = `<!doctype html>
   .error-banner { display: none; gap: 12px; padding: 14px; margin-bottom: 12px;
     background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3);
     border-left: 3px solid var(--err); border-radius: var(--radius-sm); }
+
+  /* Validation banners — appear inline in the image column BEFORE
+     any transcription starts. Two flavours:
+       .validation-error  — blocking. Bad format, oversize, corrupt file.
+                            Transcription does NOT auto-run.
+       .validation-warn   — non-blocking. Low resolution etc. Auto-run
+                            proceeds; user gets a heads-up. */
+  .validation-banner { display: none; gap: 10px; padding: 10px 12px;
+    margin-bottom: 12px; border-radius: var(--radius-sm); font-size: 13px;
+    align-items: flex-start; line-height: 1.5; }
+  .validation-error { background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.3); border-left: 3px solid var(--err);
+    color: #fca5a5; }
+  .validation-warn { background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.3); border-left: 3px solid var(--warn);
+    color: #fcd34d; }
+  .validation-banner .vb-icon { font-size: 16px; line-height: 1.2; flex-shrink: 0; }
+  .validation-banner .vb-text b { color: var(--text-strong); }
   .error-icon-box { font-size: 20px; line-height: 1; flex-shrink: 0; }
   .error-content { flex: 1; min-width: 0; }
   .error-title { font-size: 13px; font-weight: 600; color: #fca5a5; margin-bottom: 4px; }
@@ -282,10 +315,14 @@ const PAGE = `<!doctype html>
   /* ── Suggestions column ─────────────────────────────────── */
   #suggestions { flex: 1; padding: 8px; overflow-y: auto; }
   #suggestions.placeholder { padding: 24px 16px; color: var(--muted); font-style: italic; }
+  /* Suggestion cards — purple left-border matches the AI Content
+     Writer accent on the main site, signalling "AI-generated
+     suggestion". Border-left color is the fastest visual cue for
+     "this card has an AI proposal". */
   .card { background: var(--panel-2); border: 1px solid var(--border);
-    border-left: 3px solid var(--warn); border-radius: var(--radius-sm);
+    border-left: 3px solid var(--purple); border-radius: var(--radius-sm);
     padding: 12px 14px; margin-bottom: 10px; transition: all 0.15s; }
-  .card:hover { border-color: var(--muted); }
+  .card:hover { border-color: var(--purple-2); }
   .card .row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
     font-family: "Latha", "Noto Sans Tamil", sans-serif; font-size: 15px; }
   .card .raw-word { color: var(--warn); text-decoration: line-through; }
@@ -355,6 +392,13 @@ ${!API_KEY ? '<div class="keywarn">⚠️ No GEMINI_API_KEY / GOOGLE_GENAI_API_K
     </div>
     <div class="img-body">
 
+      <!-- Validation banners — appear inline for the current file.
+           Blocking (error) suppresses auto-transcribe; warning does not. -->
+      <div id="validationBanner" class="validation-banner">
+        <div class="vb-icon" id="vbIcon">⚠️</div>
+        <div class="vb-text" id="vbText"></div>
+      </div>
+
       <!-- Error banner (shown only in error state) -->
       <div id="errorBanner" class="error-banner" hidden>
         <div class="error-icon-box">⚠️</div>
@@ -416,8 +460,8 @@ ${!API_KEY ? '<div class="keywarn">⚠️ No GEMINI_API_KEY / GOOGLE_GENAI_API_K
               <svg viewBox="0 0 96 96">
                 <defs>
                   <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%"   stop-color="#a855f7" />
-                    <stop offset="100%" stop-color="#fbbf24" />
+                    <stop offset="0%"   stop-color="#F59E0B" />
+                    <stop offset="100%" stop-color="#D97706" />
                   </linearGradient>
                 </defs>
                 <circle class="track" cx="48" cy="48" r="42" />
@@ -497,6 +541,9 @@ ${!API_KEY ? '<div class="keywarn">⚠️ No GEMINI_API_KEY / GOOGLE_GENAI_API_K
     sugCount: document.getElementById('sugCount'),
     toast: document.getElementById('toast'),
     btnCopy: document.getElementById('btnCopy'),
+    validationBanner: document.getElementById('validationBanner'),
+    vbIcon: document.getElementById('vbIcon'),
+    vbText: document.getElementById('vbText'),
   };
 
   // Copy button — copies whatever is currently rendered in #rawText
@@ -568,7 +615,13 @@ ${!API_KEY ? '<div class="keywarn">⚠️ No GEMINI_API_KEY / GOOGLE_GENAI_API_K
 
     if (newState === 'idle') {
       els.fileMetaHeader.textContent = '';
+      els.validationBanner.style.display = 'none';
       currentFile = null;
+    }
+    if (newState === 'processing') {
+      // Hide validation warnings/errors during processing — they
+      // apply to file selection, not to the in-flight request.
+      els.validationBanner.style.display = 'none';
     }
     if (newState === 'success') {
       els.btnRun.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24"><path d="M12 2v6l4-4M12 8L8 4M4 12h6l-4-4M4 12l4 4M20 12h-6l4-4M20 12l-4 4M12 22v-6l4 4M12 16l-4 4"/></svg> Transcribe again <kbd>↵</kbd>';
@@ -599,8 +652,98 @@ ${!API_KEY ? '<div class="keywarn">⚠️ No GEMINI_API_KEY / GOOGLE_GENAI_API_K
     showToast._t = setTimeout(() => els.toast.classList.remove('show'), 2600);
   }
 
+  // ── Validation ────────────────────────────────────────────
+  // Runs on every file selection BEFORE we start a transcription.
+  // Blocks bad inputs (wrong format, oversize, corrupt) with a clear
+  // error message. Warns on suboptimal inputs (very low resolution)
+  // but still proceeds — user's choice.
+  const MAX_BYTES = 20 * 1024 * 1024;   // matches server multer limit
+  const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+  const ALLOWED_EXT   = /\.(jpe?g|png|webp|heic|heif)$/i;
+  const MIN_SHORT_EDGE = 300;   // below this, OCR accuracy tanks
+  const MAX_LONG_EDGE_WARN = 6000;
+
+  function hideValidation() {
+    els.validationBanner.style.display = 'none';
+  }
+  function showValidation(kind, iconHtml, textHtml) {
+    els.validationBanner.className = 'validation-banner ' + (kind === 'error' ? 'validation-error' : 'validation-warn');
+    els.vbIcon.textContent = iconHtml;
+    els.vbText.innerHTML = textHtml;
+    els.validationBanner.style.display = 'flex';
+  }
+
+  /**
+   * Validate a File. Returns { ok, blocking, reason } where
+   *   ok=true, blocking=false            → good to go
+   *   ok=true, blocking=false, reason=X  → warning; proceed anyway
+   *   ok=false, blocking=true, reason=X  → do NOT transcribe
+   */
+  async function validateFile(f) {
+    if (!f) return { ok: false, blocking: true, reason: 'No file selected.' };
+
+    // Type + extension check — belt AND braces since browser MIME
+    // sniffing is unreliable (some drop empty type, some report
+    // application/octet-stream for HEIC).
+    const type = String(f.type || '').toLowerCase();
+    const nameOk = ALLOWED_EXT.test(f.name || '');
+    const typeOk = ALLOWED_TYPES.has(type);
+    if (!nameOk && !typeOk) {
+      return { ok: false, blocking: true,
+        reason: '<b>Unsupported file format.</b> Please upload a <b>JPG</b>, <b>PNG</b>, <b>WebP</b>, or <b>HEIC</b> image.' };
+    }
+
+    // Size check — client-side rejection saves the multipart upload
+    // trip if the file is oversize.
+    if (f.size > MAX_BYTES) {
+      return { ok: false, blocking: true,
+        reason: '<b>File too large.</b> This file is ' + fmtSize(f.size) + '. Max is 20 MB.' };
+    }
+    if (f.size < 200) {
+      return { ok: false, blocking: true,
+        reason: '<b>File is too small</b> (' + f.size + ' bytes) — probably empty or corrupt.' };
+    }
+
+    // Try to actually load as an image + read its dimensions. Catches
+    // corrupt files, wrong-labeled formats, HEIC (which most browsers
+    // can\\'t preview) — we don\\'t block HEIC on preview failure because
+    // the server-side sharp pipeline handles it fine.
+    try {
+      const dims = await new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(f);
+        const img = new Image();
+        const cleanup = () => URL.revokeObjectURL(url);
+        img.onload  = () => { cleanup(); resolve({ w: img.naturalWidth, h: img.naturalHeight }); };
+        img.onerror = () => { cleanup(); reject(new Error('image failed to load')); };
+        // Timeout in case the browser hangs on HEIC or a weird encoding
+        setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 5000);
+        img.src = url;
+      });
+      const shortEdge = Math.min(dims.w, dims.h);
+      const longEdge  = Math.max(dims.w, dims.h);
+      if (shortEdge > 0 && shortEdge < MIN_SHORT_EDGE) {
+        return { ok: true, blocking: false,
+          reason: '<b>Low resolution</b> (' + dims.w + '×' + dims.h + 'px). OCR accuracy will be lower. Recommended: at least ' + MIN_SHORT_EDGE + 'px on the short edge.' };
+      }
+      if (longEdge > MAX_LONG_EDGE_WARN) {
+        return { ok: true, blocking: false,
+          reason: '<b>Very large image</b> (' + dims.w + '×' + dims.h + 'px). It will be downscaled to 2200px long-edge before transcription.' };
+      }
+    } catch (_) {
+      // HEIC often fails browser preview but server-side sharp reads it
+      // fine — don\\'t block based on Image() failing. Just skip the
+      // dimensions check for that file.
+      if (type === 'image/heic' || type === 'image/heif' || /\.(heic|heif)$/i.test(f.name || '')) {
+        return { ok: true, blocking: false, reason: '' };
+      }
+      return { ok: false, blocking: true,
+        reason: '<b>Corrupted or unreadable image.</b> Try re-exporting from your photos app or camera.' };
+    }
+    return { ok: true, blocking: false, reason: '' };
+  }
+
   // ── File selection ────────────────────────────────────────
-  function setFile(f) {
+  async function setFile(f) {
     if (!f) return;
     currentFile = f;
     els.filenameLabel.textContent = f.name;
@@ -612,14 +755,43 @@ ${!API_KEY ? '<div class="keywarn">⚠️ No GEMINI_API_KEY / GOOGLE_GENAI_API_K
     setState('ready');
     // Reset transcription output on new file
     els.rawText.className = 'placeholder';
-    els.rawText.innerHTML = 'Ready. Press <kbd style="background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 11px; border: 1px solid var(--border);">↵</kbd> to transcribe.';
+    els.rawText.innerHTML = 'Validating image…';
     els.suggestions.className = 'placeholder';
     els.suggestions.innerHTML = 'Waiting for transcription…';
     els.sugCount.textContent = '';
     els.meta.style.display = 'none';
-    els.btnCopy.disabled = true;   // no text to copy until transcription completes
+    els.btnCopy.disabled = true;
     sugList = [];
     sugState = [];
+    hideValidation();
+
+    // Pre-flight validation — blocks transcription on hard errors,
+    // warns (and continues) on soft ones like low resolution.
+    const v = await validateFile(f);
+    if (!v.ok && v.blocking) {
+      showValidation('error', '⚠️', v.reason);
+      els.rawText.innerHTML = 'Fix the validation issue on the left, then upload again.';
+      currentFile = null;   // block auto-run and manual Transcribe
+      return;
+    }
+    if (v.reason) {
+      // Non-blocking warning — show but continue.
+      showValidation('warn', '⚠️', v.reason);
+    }
+
+    // Auto-trigger transcription after a short pause so the user
+    // sees "yes, that's my image" before it kicks off. If they realize
+    // they picked the wrong file, they can hit Cancel in the processing
+    // overlay OR press Esc — nothing is committed to the model until
+    // the fetch actually fires.
+    els.rawText.innerHTML = 'Auto-transcribing in a moment…';
+    setTimeout(() => {
+      // Only fire if user hasn't already changed image or clicked
+      // Transcribe manually in the meantime (state !== 'processing').
+      if (currentFile === f && state === 'ready') {
+        transcribe();
+      }
+    }, 400);
   }
 
   els.fileInput.addEventListener('change', () => setFile(els.fileInput.files[0]));

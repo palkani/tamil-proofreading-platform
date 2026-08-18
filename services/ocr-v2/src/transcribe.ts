@@ -90,9 +90,20 @@ function parseOcrResponse(text: string): OcrResponse {
   try {
     parsed = JSON.parse(cleaned);
   } catch (err) {
-    // If parsing fails, treat the whole response as raw_text and
-    // return no suggestions. Better than throwing — the user still
-    // sees the transcription in the UI.
+    // JSON parse failure almost always means Gemini's response got
+    // truncated mid-string by maxOutputTokens (or, rarely, the model
+    // ignored responseMimeType). Log it so operators notice —
+    // silently dumping malformed JSON into raw_text hid this class
+    // of bug for hours during phase 2.
+    console.warn('[transcribe] JSON parse failed, likely truncated response. Length:', text.length, 'first 200:', text.slice(0, 200), 'last 200:', text.slice(-200));
+    // Best-effort extract: pull the raw_text field value substring even
+    // from malformed JSON so the user still sees the partial content.
+    const rawMatch = cleaned.match(/"raw_text"\s*:\s*"((?:[^"\\]|\\.)*)/);
+    if (rawMatch) {
+      const partial = rawMatch[1]
+        .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      return { raw_text: partial + '\n\n[⚠️ Response was truncated — try again or use Full Pipeline mode]', suggestions: [] };
+    }
     return { raw_text: text, suggestions: [] };
   }
   const obj = (parsed && typeof parsed === 'object' ? parsed : {}) as Record<string, unknown>;
@@ -177,7 +188,15 @@ async function runGemini(
     ],
     generationConfig: {
       temperature: 0,
-      maxOutputTokens: 8192,
+      // Bumped from 8192 → 16384 because dense pages with the
+      // {raw_text, suggestions[]} JSON wrapper were hitting the
+      // ceiling mid-string on baseline single-call runs — malformed
+      // JSON came back, my parser fell back to dumping the invalid
+      // response as raw_text, and the user saw a truncated
+      // transcription with no clue why. gemini-2.5-flash supports
+      // up to 32k output tokens; 16k is enough for a book chapter
+      // of Tamil plus suggestions, well below the model's ceiling.
+      maxOutputTokens: 16384,
       responseMimeType: 'application/json',
     },
   };

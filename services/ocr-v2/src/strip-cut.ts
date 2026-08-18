@@ -30,13 +30,19 @@
 import sharp from 'sharp';
 
 export interface StripCutOptions {
-  /** Target lines per strip. Default 5. */
+  /** Target lines per strip. Default 4 (tuned down from 5 after phase-2
+   *  runs showed content occasionally dropping from strips with >5
+   *  lines — smaller strips give Gemini more per-line attention). */
   linesPerStrip?: number;
   /** Threshold (0..1) of max-ink-per-row above which a row counts as "ink". Default 0.15. */
   inkThreshold?: number;
   /** Smoothing window in rows for the projection. Default 5. */
   smoothingWindow?: number;
-  /** Padding around each strip in pixels (safety margin). Default 12. */
+  /** Padding around each strip in pixels (safety margin). Default 24
+   *  (was 12) — larger padding means boundary lines are duplicated
+   *  across adjacent strips so a line at the seam is never lost. The
+   *  raw-text reassembly in pipeline.ts joins strips with a blank line
+   *  and the small duplication is a UX-acceptable cost of reliability. */
   strippadPx?: number;
 }
 
@@ -146,10 +152,10 @@ export async function cutIntoStrips(
   opts: StripCutOptions = {}
 ): Promise<StripCutResult> {
   const started = Date.now();
-  const linesPerStrip = opts.linesPerStrip ?? 5;
+  const linesPerStrip = opts.linesPerStrip ?? 4;
   const inkThreshold = opts.inkThreshold ?? 0.15;
   const smoothingWindow = opts.smoothingWindow ?? 5;
-  const padPx = opts.strippadPx ?? 12;
+  const padPx = opts.strippadPx ?? 24;
 
   // Load original for cropping.
   const srcBuf = typeof input === 'string'
