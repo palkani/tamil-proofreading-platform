@@ -1724,10 +1724,17 @@ const ocrMaintenanceHandler = (req, res) => {
     docs_url: 'https://prooftamil.com/tools/ocr'
   });
 };
-// OCR re-enabled (Gemini vision pipeline). The maintenance handler is kept above
-// so the gate can be reinstated instantly by uncommenting these two lines.
-// router.use('/ocr', ocrMaintenanceHandler);
-// router.use('/handwriting-ocr', ocrMaintenanceHandler);
+// OCR under maintenance — API gated. Every /ocr/* and /handwriting-ocr/*
+// endpoint returns 503 with a clean JSON body BEFORE hitting the real
+// handlers below, so cached pages, integrations, and scrapers get a
+// consistent maintenance signal instead of a partial-broken response
+// (e.g. the PDF path erroring with "OCR server not set up"). Defence
+// in depth for the page-level gate in routes/index.js.
+//
+// To restore OCR: comment out these two router.use() lines and revert
+// the res.render() targets in routes/index.js — see comment there.
+router.use('/ocr', ocrMaintenanceHandler);
+router.use('/handwriting-ocr', ocrMaintenanceHandler);
 // ─────────────────────────────────────────────────────────────────
 
 // OCR health check endpoint

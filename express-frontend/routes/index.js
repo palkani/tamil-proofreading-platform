@@ -129,33 +129,40 @@ router.get('/how-to-use', (req, res) => {
 });
 
 // OCR is temporarily under maintenance. Both /tools/ocr (printed) and
-// /tools/handwriting-ocr point at the same maintenance page. To restore:
-// revert this block to the previous res.render calls (ocr-tool /
-// handwriting-ocr-tool). Corresponding API endpoints in routes/api.js
-// are also gated — remove the `router.use('/ocr', ...)` block there
-// at the same time.
+// /tools/handwriting-ocr render the shared ocr-maintenance view so a
+// visitor who lands on either URL directly (bookmark, search result,
+// "related reading" link from a blog post) sees a clean maintenance
+// message instead of a half-working tool that errors on PDF upload
+// with "OCR server not set up".
+//
+// SEO note: we still return 200 OK for both URLs so Google keeps the
+// flagship landing pages indexed. The maintenance view is short-lived
+// and reverting is trivial. If maintenance stretches beyond a few
+// weeks, add <meta name="robots" content="noindex, follow"> to the
+// maintenance view and revisit.
+//
+// To restore OCR:
+//   1. Change res.render targets below back to 'pages/ocr-tool' and
+//      'pages/handwriting-ocr-tool'.
+//   2. Comment out both router.use() gates in routes/api.js (search
+//      for `ocrMaintenanceHandler`) so the real API endpoints handle
+//      requests again.
+//   3. Revert commit 38855f5 to re-enable the sitewide OCR CTAs.
 router.get('/tools/ocr', (req, res) => {
   const user = getCurrentUser(req);
   const seo = getSeoData('ocrTool');
-  res.render('pages/ocr-tool', {
-    title: 'Tamil OCR — Extract Tamil Text from Images & PDFs | ProofTamil',
+  res.render('pages/ocr-maintenance', {
+    title: 'Tamil OCR — Under Maintenance | ProofTamil',
     seo: seo,
     user: user
   });
 });
 
-// SEO-CRITICAL: this PAGE is intentionally open to everyone (incl. Googlebot) so it
-// stays indexable — it's a flagship landing page. Gating the page with requireAuth
-// previously 307-redirected Googlebot to /login and de-indexed the URL, tanking
-// organic traffic. The LOGIN GATE lives on the ACTION instead: the upload/extract
-// API (routes/api.js + middleware/ocrMonthlyLimit.js) returns 401 login_required for
-// anonymous users, and the page JS redirects them to /login on that response. So
-// anonymous users can read the page but must sign in to actually convert.
 router.get('/tools/handwriting-ocr', (req, res) => {
   const user = getCurrentUser(req);
   const seo = getSeoData('handwritingOcrTool');
-  res.render('pages/handwriting-ocr-tool', {
-    title: 'Tamil Handwriting to Text — Convert Handwritten Tamil Online | ProofTamil',
+  res.render('pages/ocr-maintenance', {
+    title: 'Tamil Handwriting OCR — Under Maintenance | ProofTamil',
     seo: seo,
     user: user
   });
