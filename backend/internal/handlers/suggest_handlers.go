@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -251,7 +252,16 @@ func (h *Handlers) SuggestSelect(c *gin.Context) {
 			Query:    req.Prefix,
 			Selected: selected,
 		}
-		go func() { _ = h.db.Create(&ev).Error }()
+		// Log the error instead of swallowing it — same class of silent
+		// data-loss bug that hid weeks of activity_events writes when the
+		// table didn't exist. If this ever starts warning, either the
+		// table is missing or the model drifted; either way, ops needs
+		// to see it, not have it vanish.
+		go func() {
+			if err := h.db.Create(&ev).Error; err != nil {
+				log.Printf("[SUGGEST_ACCEPT] Warning: failed to write suggestion_accept_event: %v", err)
+			}
+		}()
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "source": "db"})
 }
