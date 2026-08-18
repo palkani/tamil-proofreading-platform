@@ -1,0 +1,270 @@
+<%- include('../partials/header') %>
+
+<!--
+  Interstitial page for Dodo Payments checkout.
+
+  BUG THIS FIXES: users clicked Upgrade → payment.js did
+  window.location.href = <dodo URL> → user was replaced onto
+  checkout.dodopayments.com/... which has no "Back" button in its
+  own UI. If a user changed their mind or landed there by accident,
+  they had no path back to prooftamil.com except browser-back
+  (which not everyone knows about, especially on mobile).
+
+  This page inserts itself between our pricing page and Dodo:
+
+    /pricing → /checkout/redirecting?url=<dodo>&plan=<code>
+             → (~1s pause) → <dodo>
+
+  From Dodo, browser-back returns HERE, and this page has a
+  prominent "Back to pricing" button. Users always have a path home.
+
+  Query params:
+    url   URL-encoded Dodo checkout URL to redirect to
+    plan  optional — plan code shown in the "you're upgrading to" line
+
+  If `url` is missing or malformed, we render an error state with
+  a Back link instead of blindly redirecting.
+-->
+
+<style>
+  .redir-wrap {
+    min-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    background: linear-gradient(180deg, #f8f9ff 0%, #eef2ff 100%);
+  }
+  .redir-card {
+    max-width: 460px;
+    width: 100%;
+    background: white;
+    border: 1px solid #e0e7ff;
+    border-radius: 20px;
+    padding: 40px 32px;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(30, 27, 75, 0.08);
+  }
+  .redir-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    color: white;
+    box-shadow: 0 8px 24px rgba(124, 58, 237, 0.25);
+  }
+  .redir-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: #1e1b4b;
+    margin: 0 0 8px;
+  }
+  .redir-subtitle {
+    font-size: 14px;
+    color: #64748b;
+    line-height: 1.6;
+    margin: 0 0 24px;
+  }
+  .redir-plan-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: #ede9fe;
+    color: #6b21a8;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 20px;
+  }
+  .redir-progress {
+    height: 3px;
+    background: #ede9fe;
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 24px 0;
+    position: relative;
+  }
+  .redir-progress-fill {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, #7c3aed, #a855f7);
+    width: 0%;
+    transition: width 1000ms linear;
+  }
+  .redir-progress.fill .redir-progress-fill {
+    width: 100%;
+  }
+  .redir-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 24px;
+  }
+  .redir-btn-primary {
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: transform 0.15s;
+  }
+  .redir-btn-primary:hover {
+    transform: translateY(-1px);
+  }
+  .redir-btn-back {
+    padding: 10px 20px;
+    background: transparent;
+    color: #64748b;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.15s;
+  }
+  .redir-btn-back:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #1e293b;
+  }
+  .redir-footnote {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 20px;
+    line-height: 1.5;
+  }
+  .redir-error {
+    color: #dc2626;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    text-align: left;
+    margin-bottom: 20px;
+  }
+</style>
+
+<div class="redir-wrap">
+  <div class="redir-card">
+    <div id="content-ready">
+      <div class="redir-icon">🔐</div>
+      <h1 class="redir-title">Redirecting to secure checkout</h1>
+      <p class="redir-subtitle">
+        You're being sent to <b>Dodo Payments</b>, our PCI-DSS compliant payment processor.
+        You can safely return here anytime.
+      </p>
+      <div id="planBadge" class="redir-plan-badge" style="display:none">
+        <span>Plan:</span>
+        <span id="planLabel"></span>
+      </div>
+      <div class="redir-progress" id="progressBar">
+        <div class="redir-progress-fill"></div>
+      </div>
+      <div class="redir-actions">
+        <a href="#" id="btnContinue" class="redir-btn-primary">
+          <span>Continue to payment now</span>
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </a>
+        <a href="/pricing" class="redir-btn-back">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          <span>← Back to pricing</span>
+        </a>
+      </div>
+      <p class="redir-footnote">
+        Auto-redirecting in <span id="countdown">1</span>s · payments are processed by Dodo Payments Inc. · you can cancel your subscription anytime.
+      </p>
+    </div>
+
+    <div id="content-error" style="display:none">
+      <div class="redir-icon" style="background: linear-gradient(135deg, #dc2626, #ef4444)">⚠️</div>
+      <h1 class="redir-title">Something went wrong</h1>
+      <p class="redir-subtitle" id="errorMessage">The checkout link is invalid or missing.</p>
+      <div class="redir-actions">
+        <a href="/pricing" class="redir-btn-primary">← Back to pricing</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var raw = params.get('url') || '';
+  var plan = params.get('plan') || '';
+
+  // Guard: only allow known Dodo checkout hosts. Never blind-redirect
+  // to arbitrary URLs — this route is a public GET and could otherwise
+  // be used as an open redirector for phishing.
+  var isValidUrl = false;
+  var target = null;
+  try {
+    target = new URL(raw);
+    isValidUrl = target.protocol === 'https:' &&
+      (target.hostname === 'checkout.dodopayments.com' ||
+       target.hostname.endsWith('.dodopayments.com'));
+  } catch (_) {
+    isValidUrl = false;
+  }
+
+  if (!isValidUrl) {
+    document.getElementById('content-ready').style.display = 'none';
+    document.getElementById('content-error').style.display = 'block';
+    return;
+  }
+
+  if (plan) {
+    document.getElementById('planBadge').style.display = 'inline-flex';
+    document.getElementById('planLabel').textContent = plan;
+  }
+
+  var btnContinue = document.getElementById('btnContinue');
+  btnContinue.href = target.href;
+
+  // Wire up the progress bar fill animation (visual cue that
+  // something is happening even during the 1s pause).
+  requestAnimationFrame(function () {
+    document.getElementById('progressBar').classList.add('fill');
+  });
+
+  // Countdown display
+  var seconds = 1;
+  document.getElementById('countdown').textContent = seconds;
+
+  // Auto-redirect after 1000ms. User has the whole page + explicit
+  // buttons to interact with before this fires. If they click
+  // "Back to pricing" the navigation cancels the redirect.
+  var redirectTimer = setTimeout(function () {
+    window.location.href = target.href;
+  }, 1000);
+
+  // If user clicks "Continue to payment now" — go immediately, cancel timer
+  btnContinue.addEventListener('click', function (e) {
+    e.preventDefault();
+    clearTimeout(redirectTimer);
+    window.location.href = target.href;
+  });
+})();
+</script>
+
+<%- include('../partials/footer') %>

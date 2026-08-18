@@ -57,8 +57,13 @@
       }
 
       if (data.checkout_url) {
-        // DodoPayments hosted checkout — redirect user to the secure checkout page
-        window.location.href = data.checkout_url;
+        // Route via /checkout/redirecting interstitial so users have a
+        // visible "Back to pricing" button when they land on Dodo (their
+        // page has no in-app back navigation) and if they browser-back
+        // from Dodo, they hit our page not the pricing page directly.
+        var q = 'url=' + encodeURIComponent(data.checkout_url)
+              + (planCode ? '&plan=' + encodeURIComponent(planCode) : '');
+        window.location.href = '/checkout/redirecting?' + q;
       } else {
         throw new Error('No checkout URL returned. Please contact support.');
       }
