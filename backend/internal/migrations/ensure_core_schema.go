@@ -148,17 +148,61 @@ func EnsureCoreSchema(db *gorm.DB) {
 		name  string
 		model any
 	}{
+		// ── Observability (fire-and-forget writes, admin dashboards) ──
 		{"ai_requests", &models.AIRequest{}},
 		{"activity_events", &models.ActivityEvent{}},
 		{"anonymous_submission_events", &models.AnonymousSubmissionEvent{}},
 		{"visit_events", &models.VisitEvent{}},
-		// Billing — synchronously written by the checkout flow. Same
-		// class of bug as the observability tables above but user-facing.
+		{"daily_visit_stats", &models.DailyVisitStats{}},
+		{"daily_activity_stats", &models.DailyActivityStats{}},
+		{"suggestion_accept_events", &models.SuggestionAcceptEvent{}},
+
+		// ── Auth-critical (login/signup breaks if these are missing) ──
+		// email_verifications: never migrated anywhere before this. Signup
+		// OTP writes would 500 on a fresh env. RefreshToken writes fire
+		// on every login. password_reset_tokens on every reset flow.
+		{"email_verifications", &models.EmailVerification{}},
+		{"refresh_tokens", &models.RefreshToken{}},
+		{"password_reset_tokens", &models.PasswordResetToken{}},
+
+		// ── Billing (synchronous writes on payment/checkout webhooks) ──
+		// If any of these are missing, Dodo webhooks 500 silently and the
+		// user's subscription status never updates in our DB.
 		{"checkout_attempts", &models.CheckoutAttempt{}},
-		// Plans — read on every /pricing request. Newly added columns (e.g.
-		// india_fixed_price_inr_cents) must exist even when RUN_MIGRATIONS=false,
-		// or pricing silently falls back to the FX calc and shows the wrong price.
 		{"plans", &models.Plan{}},
+		{"subscriptions", &models.Subscription{}},
+		{"invoices", &models.Invoice{}},
+		{"payment_events", &models.PaymentEvent{}},
+		{"payments", &models.Payment{}},
+		{"fx_rates", &models.FXRate{}},
+		{"feature_flags", &models.FeatureFlag{}},
+		{"billing_audit_logs", &models.BillingAuditLog{}},
+		{"admin_broadcasts", &models.AdminBroadcast{}},
+
+		// ── Product-core (draft/submission/usage lifecycle) ──
+		// Every draft save writes DraftGroup + Submission + Usage;
+		// AIContentDraft on every AI Content Writer save.
+		{"draft_groups", &models.DraftGroup{}},
+		{"ai_content_drafts", &models.AIContentDraft{}},
+		{"usages", &models.Usage{}},
+		{"suggestion_limits", &models.SuggestionLimit{}},
+
+		// ── Content + community (CMS, mailing list, affiliates) ──
+		{"blog_posts", &models.BlogPost{}},
+		{"newsletter_subscribers", &models.NewsletterSubscriber{}},
+		{"contact_messages", &models.ContactMessage{}},
+		{"affiliates", &models.Affiliate{}},
+		{"referrals", &models.Referral{}},
+		{"affiliate_earnings", &models.AffiliateEarning{}},
+		{"affiliate_audit_logs", &models.AffiliateAuditLog{}},
+
+		// ── Tamil data tables (populated by CLI seeders, read at request) ──
+		// These are large read-only lookup tables. AutoMigrate here just
+		// guarantees the schema exists so a fresh env doesn't need a
+		// separate CLI setup step before the suggest fallback works.
+		{"tamil_words", &models.TamilWord{}},
+		{"tamil_bigrams", &models.TamilBigram{}},
+		{"tamil_phrases", &models.TamilPhrase{}},
 	}
 	for _, m := range observabilityModels {
 		if err := db.AutoMigrate(m.model); err != nil {

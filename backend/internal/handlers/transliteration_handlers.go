@@ -437,12 +437,16 @@ func (h *Handlers) TransliterateAccept(c *gin.Context) {
 			"prev":     req.Prev,
 			"mode":     mode,
 		})
-		_ = h.db.Create(&models.ActivityEvent{
+		// Log the error instead of swallowing it — silent-drop pattern
+		// that hid the activity_events outage for weeks before we caught it.
+		if err := h.db.Create(&models.ActivityEvent{
 			UserID:     *uidPtr,
 			EventType:  models.EventSuggestionAccept,
 			Metadata:   string(meta),
 			OccurredAt: time.Now(),
-		}).Error
+		}).Error; err != nil {
+			log.Printf("[TRANSLIT] Warning: failed to write activity_event: %v", err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"logged": true})
