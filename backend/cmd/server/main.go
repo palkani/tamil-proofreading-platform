@@ -351,9 +351,41 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(gin.Logger())
 
-	// CORS configuration
+	// CORS configuration.
+	//
+	// SECURITY: AllowOrigins:["*"] combined with AllowCredentials:true is
+	// spec-invalid and gin-contrib/cors handles it by echoing the incoming
+	// Origin, which means every origin (including attacker.com) can send
+	// authenticated requests carrying the user's access_token cookie and
+	// read the response — a full CSRF surface.
+	//
+	// AllowOriginFunc gives us a precise allowlist:
+	//   - production apex + www
+	//   - vercel preview deployments (staging URLs)
+	//   - local dev on any localhost port
+	// Everything else is rejected. Legitimate integrations that need
+	// cross-origin access can be added here explicitly.
 	corsConfig := cors.Config{
-		AllowOrigins:     []string{"*"},
+		AllowOriginFunc: func(origin string) bool {
+			o := strings.ToLower(origin)
+			// Production canonical origins
+			if o == "https://prooftamil.com" || o == "https://www.prooftamil.com" {
+				return true
+			}
+			// Vercel preview deploys (branch previews for staging)
+			if strings.HasSuffix(o, ".vercel.app") {
+				return true
+			}
+			// Subdomains of the production apex (future admin.prooftamil.com etc)
+			if strings.HasSuffix(o, ".prooftamil.com") {
+				return true
+			}
+			// Local dev
+			if strings.HasPrefix(o, "http://localhost:") || strings.HasPrefix(o, "http://127.0.0.1:") {
+				return true
+			}
+			return false
+		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Request-ID", "Cookie"},
 		ExposeHeaders:    []string{"Content-Length", "Set-Cookie"},
@@ -588,9 +620,17 @@ func main() {
 		r.GET("/email/unsubscribe", dunning.Unsubscribe)
 	}
 
-	// OCR proxy routes (if configured)
-	r.POST("/api/v1/ocr/upload", h.OCRUpload)
-	r.GET("/api/v1/ocr/download/:filename", h.OCRDownload)
+	// OCR proxy routes.
+	//
+	// SECURITY: /upload was previously mounted on the bare r router (no
+	// auth middleware) — anyone could proxy arbitrary 20MB files through
+	// the OCR upstream. Now gated behind AuthMiddleware so only logged-in
+	// users can invoke it. The whole OCR feature is also under maintenance
+	// (see the Express /api/ocr router.use gate) but defence in depth
+	// belongs here on the Go side too, so a future re-enable doesn't
+	// reopen the hole.
+	r.POST("/api/v1/ocr/upload", middleware.AuthMiddleware(cfg.JWTSecret), h.OCRUpload)
+	r.GET("/api/v1/ocr/download/:filename", middleware.AuthMiddleware(cfg.JWTSecret), h.OCRDownload)
 	r.GET("/api/v1/ocr/health", h.OCRHealth)
 
 	// AI Content Writer quota endpoints. Weekly rolling window; 2/week

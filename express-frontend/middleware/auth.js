@@ -1,5 +1,15 @@
 const jwt = require('jsonwebtoken');
 
+// Signing key must match the backend's JWT_SECRET so Express can verify
+// the token's HMAC. Fail-closed: if this env var is missing we refuse
+// to populate req.user rather than trusting the payload (previous
+// behavior — jwt.decode — accepted any client-crafted JWT and let
+// attackers pose as admin for every Express-gated route).
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('[AUTH] SECURITY: JWT_SECRET env var is not set. Express cannot verify tokens; every request will be treated as anonymous. Set JWT_SECRET to match the backend.');
+}
+
 const getAccessTokenFromRequest = (req) => {
   const authHeader = req.headers.authorization || '';
   if (authHeader.startsWith('Bearer ')) {
@@ -22,15 +32,50 @@ const attachUser = (req, res, next) => {
       return next();
     }
 
-    // Decode without verifying signature — trust is enforced by backend
-    const payload = jwt.decode(token) || {};
-    
+    // SECURITY: verify the HMAC signature — do NOT trust unverified JWTs.
+    // Previous behavior (jwt.decode) accepted any client-crafted JWT, so
+    // any user could pose as admin for Express-gated routes (DOCX export,
+    // blog admin, blog-generator).
+    //
+    // Fail-closed if JWT_SECRET isn't configured — refusing to populate
+    // req.user is safer than trusting the payload.
+    if (!JWT_SECRET) {
+      req.user = null;
+      return next();
+    }
+
+    let payload;
+    try {
+      // clockTolerance=300 preserves the 5-minute clock skew tolerance
+      // the pre-verify code applied by hand.
+      payload = jwt.verify(token, JWT_SECRET, {
+        algorithms: ['HS256'],
+        clockTolerance: 300,
+      });
+    } catch (verifyErr) {
+      if (verifyErr.name === 'TokenExpiredError') {
+        // Handled below — decode without verifying so we can still tell
+        // the client to refresh. Safe: we don't populate req.user, we
+        // just check whether a refresh token is present.
+        payload = jwt.decode(token) || {};
+      } else {
+        // Bad signature or malformed token — treat as anonymous and
+        // clear the cookie so the client stops sending it.
+        console.warn('[AUTH] JWT verification failed:', verifyErr.message);
+        req.user = null;
+        if (req.cookies && req.cookies.access_token) {
+          res.clearCookie('access_token');
+        }
+        return next();
+      }
+    }
+
     // Check if token is expired (with 5 minute clock skew tolerance)
     if (payload.exp) {
       const now = Math.floor(Date.now() / 1000);
       const clockSkewTolerance = 300; // 5 minutes in seconds
       const isExpired = payload.exp < (now - clockSkewTolerance);
-      
+
       if (isExpired) {
         // Token is expired.
         // IMPORTANT: Do NOT treat the user as authenticated when access token is expired,
@@ -152,38 +197,39 @@ function authenticateJWT(req, res, next) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // SECURITY: fail-closed if JWT_SECRET is not configured. Previously
+  // this decoded without verifying, so any client-crafted JWT was
+  // accepted.
+  if (!JWT_SECRET) {
+    return res.status(500).json({ error: 'Auth not configured' });
+  }
+
+  let payload;
   try {
-    const payload = jwt.decode(token);
-    if (!payload) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-    
-    // Check if token is expired (with 5 minute clock skew tolerance)
-    if (payload.exp) {
-      const now = Math.floor(Date.now() / 1000);
-      const clockSkewTolerance = 300; // 5 minutes in seconds
-      if (payload.exp < (now - clockSkewTolerance)) {
-        console.log('[AUTH] Token expired in authenticateJWT:', { exp: payload.exp, now: now, diff: payload.exp - now });
-        return res.status(401).json({ error: 'Token expired' });
-      }
-    }
-    
-    // Handle both Supabase format (sub) and backend format (user_id)
-    const userId = payload.sub || payload.user_id;
-    if (!userId) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-    
-    req.authUser = {
-      id: userId,
-      email: payload.email,
-      name: payload.name,
-      profile_picture: payload.picture,
-    };
-    return next();
+    payload = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256'],
+      clockTolerance: 300, // 5-min clock skew tolerance
+    });
   } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expired' });
+    }
     return res.status(401).json({ error: 'Invalid token' });
   }
+
+  // Handle both Supabase format (sub) and backend format (user_id)
+  const userId = payload.sub || payload.user_id;
+  if (!userId) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+
+  req.authUser = {
+    id: userId,
+    email: payload.email,
+    name: payload.name,
+    profile_picture: payload.picture,
+  };
+  return next();
 }
 
 module.exports = {

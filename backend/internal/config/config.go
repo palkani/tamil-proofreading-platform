@@ -73,11 +73,30 @@ func Load() *Config {
 	// Load .env file if it exists (ignore error if it doesn't)
 	_ = godotenv.Load()
 
+	// SECURITY: JWT_SECRET must be set to a real value in production.
+	// The previous default ("change-this-secret-key-in-production") is
+	// a publicly-known string — anyone could forge admin JWTs against
+	// it. Fail-fast at startup if we're in production and the value
+	// is unset or still on the default.
+	jwtSecret := getEnv("JWT_SECRET", "")
+	isProd := isProduction()
+	if jwtSecret == "" || jwtSecret == "change-this-secret-key-in-production" {
+		if isProd {
+			log.Fatal("[CONFIG] FATAL: JWT_SECRET must be set to a non-default value in production. Set it in Cloud Run environment variables (Console → Cloud Run → prooftamil-backend → Edit → Variables & Secrets → JWT_SECRET).")
+		}
+		if jwtSecret == "" {
+			jwtSecret = "change-this-secret-key-in-production"
+			log.Printf("[CONFIG] WARNING: JWT_SECRET is unset — using an insecure default. This is only safe for local development.")
+		} else {
+			log.Printf("[CONFIG] WARNING: JWT_SECRET is still the default placeholder value. This is only safe for local development.")
+		}
+	}
+
 	refreshCookieKey := deriveKey(getEnv("REFRESH_COOKIE_ENCRYPTION_KEY", ""))
 	if len(refreshCookieKey) == 0 {
 		base := getEnv("REFRESH_TOKEN_SECRET", "")
 		if base == "" {
-			base = getEnv("JWT_SECRET", "change-this-secret-key-in-production")
+			base = jwtSecret
 		}
 		refreshCookieKey = deriveKey(base)
 	}
@@ -124,7 +143,7 @@ func Load() *Config {
 		FrontendURL:               getEnv("FRONTEND_URL", "http://localhost:3000"),
 		BackendURL:                strings.TrimRight(getEnv("BACKEND_URL", ""), "/"),
 		GoogleOAuthRedirectDomain: getEnv("GOOGLE_OAUTH_REDIRECT_DOMAIN", "https://prooftamil.com"),
-		JWTSecret:                 getEnv("JWT_SECRET", "change-this-secret-key-in-production"),
+		JWTSecret:                 jwtSecret,
 		RefreshTokenSecret:        getEnv("REFRESH_TOKEN_SECRET", ""),
 		// Access tokens are short-lived (15m) to limit blast radius
 		AccessTokenTTLMinutes:  getEnvAsInt("ACCESS_TOKEN_TTL_MINUTES", 15),
@@ -204,6 +223,31 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// isProduction reports whether the process appears to be running in a
+// production environment. Used to fail-fast on misconfigurations that
+// are catastrophic in prod but expected on a developer laptop (empty
+// JWT_SECRET, etc). Signals used, in order:
+//   - GIN_MODE=release           (Gin's own production flag)
+//   - GO_ENV=production          (common convention)
+//   - K_SERVICE non-empty        (Cloud Run always sets this)
+//   - K_REVISION non-empty       (Cloud Run always sets this)
+//   - NODE_ENV=production        (fallback if the shared env is copied)
+func isProduction() bool {
+	if strings.ToLower(os.Getenv("GIN_MODE")) == "release" {
+		return true
+	}
+	if strings.ToLower(os.Getenv("GO_ENV")) == "production" {
+		return true
+	}
+	if os.Getenv("K_SERVICE") != "" || os.Getenv("K_REVISION") != "" {
+		return true
+	}
+	if strings.ToLower(os.Getenv("NODE_ENV")) == "production" {
+		return true
+	}
+	return false
 }
 
 // parseRunMigrations: only "true", "1", "yes", "on" (case-insensitive) enable migrations; "false", "0", "no", "off" or anything else disables.

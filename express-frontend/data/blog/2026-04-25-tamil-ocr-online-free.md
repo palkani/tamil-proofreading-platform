@@ -9,9 +9,11 @@ keywords: "tamil ocr online free, tamil ocr, tamil text from image, tamil pdf to
 primary_keyword: "tamil ocr online free"
 ---
 
+> **⚠️ Tool status:** Our Tamil OCR tool is temporarily offline for a major upgrade. This guide stays live so you understand what Tamil OCR is and what to look for; we'll relaunch soon with better accuracy for both printed and handwritten Tamil. [Get notified](https://www.prooftamil.com/contact) when it's back.
+
 If you have printed Tamil books, scanned PDFs, photos of Tamil signs, or screenshots of Tamil text — and you need to copy that text out as editable Tamil Unicode — you need a **Tamil OCR online free** tool. OCR (Optical Character Recognition) reads the visual shapes in an image and outputs them as text characters you can paste, edit, search, and proofread.
 
-This guide covers what Tamil OCR can do, where it gets tripped up, and how to use [ProofTamil's free Tamil OCR tool](https://www.prooftamil.com/tools/ocr) to extract Tamil text from any image or PDF in under 30 seconds.
+This guide covers what Tamil OCR can do and where it gets tripped up. Our own Tamil OCR tool is currently offline for the upgrade linked above — the walkthrough below stays useful as a general reference for how Tamil OCR works.
 
 ## What is Tamil OCR?
 
