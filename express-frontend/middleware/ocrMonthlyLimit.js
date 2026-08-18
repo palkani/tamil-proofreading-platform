@@ -34,13 +34,11 @@ const FREE_TOTAL_LIMIT = 3;  // free, LIFETIME (until upgrade) — not a periodi
 // Fixed bucket "date" so the free counter never rolls over: one row per user, forever.
 const FREE_LIFETIME_KEY = '2000-01-01';
 
-// Kept in sync with the allowlist in routes/api.js (docx export, blog publish).
-const ADMIN_ALLOWLIST = [
-  'palkani.r@gmail.com',
-  'prooftamil@gmail.com',
-  'banu.palkani@gmail.com',
-  'contact@prooftamil.com',
-];
+// Delegate to the shared admin allowlist (middleware/admin.js reads
+// ADMIN_ALLOWED_EMAILS env var). Previously this file kept its own
+// hard-coded copy — one of six places in the Express layer that had
+// to be updated in lockstep, and drifted twice.
+const { isAdminEmail } = require('./admin');
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
@@ -56,8 +54,7 @@ function monthKey() {
 }
 
 function isAdmin(req) {
-  const email = String(req.user?.email || '').toLowerCase().trim();
-  return (!!email && ADMIN_ALLOWLIST.includes(email)) || req.user?.isAdmin === true;
+  return isAdminEmail(req.user?.email) || req.user?.isAdmin === true;
 }
 
 /** Ask the backend whether this user is premium. { premium, ok }. */

@@ -695,26 +695,18 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	}
 
 	// Free tier word limit: 200 words per submission for free-plan users.
-	// Admin bypass and paid plans are exempt.
-	{
-		var planUser models.User
-		if dbErr := h.db.Select("subscription", "email", "role").First(&planUser, userID).Error; dbErr == nil {
-			isFree := planUser.Subscription == models.PlanFree || planUser.Subscription == ""
-			isAdminEmail := planUser.Role == models.RoleAdmin ||
-				strings.EqualFold(planUser.Email, "palkani.r@gmail.com") ||
-				strings.EqualFold(planUser.Email, "prooftamil@gmail.com") ||
-				strings.EqualFold(planUser.Email, "banu.palkani@gmail.com") ||
-				strings.EqualFold(planUser.Email, "contact@prooftamil.com")
-			if isFree && !isAdminEmail && wordCount > 200 {
-				c.JSON(http.StatusUnprocessableEntity, gin.H{
-					"error":      "word_limit_exceeded",
-					"message":    "Free plan is limited to 200 words per analysis. Upgrade to Pro for unlimited words.",
-					"word_limit": 200,
-					"word_count": wordCount,
-				})
-				return
-			}
-		}
+	// Reuses the already-computed `isPro` — previously this block did its
+	// own inline Pro check that missed PremiumOverride grants AND drifted
+	// from the operator allowlist maintained in billing.IsUserRecordPro,
+	// so users granted Pro via admin override still hit the 200-word cap.
+	if !isPro && wordCount > 200 {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"error":      "word_limit_exceeded",
+			"message":    "Free plan is limited to 200 words per analysis. Upgrade to Pro for unlimited words.",
+			"word_limit": 200,
+			"word_count": wordCount,
+		})
+		return
 	}
 
 	// Daily Gemini token usage limit.
@@ -723,18 +715,12 @@ func (h *Handlers) SubmitText(c *gin.Context) {
 	// even for max-length (200-word) Tamil texts (~8000 tokens/submission worst-case).
 	const dailyTokenLimit = 50000
 
-	// Admin bypass: do not enforce daily quota for the admin email(s) or admin role.
-	// This allows you to demo/test freely without hitting limits.
-	isAdminBypass := false
-	{
-		var u models.User
-		if err := h.db.Select("email", "role").First(&u, userID).Error; err == nil {
-			email := strings.ToLower(strings.TrimSpace(u.Email))
-			if u.Role == models.RoleAdmin || email == "palkani.r@gmail.com" || email == "prooftamil@gmail.com" || email == "banu.palkani@gmail.com" || email == "contact@prooftamil.com" {
-				isAdminBypass = true
-			}
-		}
-	}
+	// Admin/Pro bypass: do not enforce daily quota for staff or paid users.
+	// Uses the same isPro predicate the word-limit block above uses so
+	// the two gates can never disagree (an admin previously saw
+	// "unlimited words" but hit the 50k daily-token cap because the two
+	// checks drifted).
+	isAdminBypass := isPro
 	now := time.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)

@@ -9,6 +9,40 @@ import (
 	"gorm.io/gorm"
 )
 
+// AdminEmails is the single source of truth for the operator/admin
+// allowlist across the Go backend. Every "is this a staff user?" check
+// MUST use IsAdminEmail below — inline `email == "..."` chains have
+// bitten us multiple times (one call site missed → the classic
+// "admin sees Pro pill but hits Free daily limit" bug).
+//
+// Kept in sync with the Express-side ADMIN_ALLOWED_EMAILS env var
+// (see express-frontend/middleware/admin.js). If you add or remove an
+// entry here, update the env var in Vercel too.
+var AdminEmails = []string{
+	"palkani.r@gmail.com",
+	"prooftamil@gmail.com",
+	"banu.palkani@gmail.com",
+	"contact@prooftamil.com",
+}
+
+// IsAdminEmail reports whether the given email is on the operator
+// allowlist. Case-insensitive, whitespace-tolerant. Empty input → false.
+func IsAdminEmail(email string) bool {
+	if email == "" {
+		return false
+	}
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	if normalized == "" {
+		return false
+	}
+	for _, allowed := range AdminEmails {
+		if normalized == allowed {
+			return true
+		}
+	}
+	return false
+}
+
 // IsUserPro returns true if the given user should be treated as Pro for
 // feature-gating purposes. Consolidates the logic that previously lived
 // inline in usage_today_handler.go (line 69-87) and mirrors what the
@@ -60,15 +94,9 @@ func IsUserRecordPro(user *models.User) bool {
 	if user.Role == models.RoleAdmin {
 		return true
 	}
-	// Operator allowlist. Kept in sync with:
-	//   - usage_today_handler.go:74-78
-	//   - submission_handlers.go:635-639 + 663-664
-	// If a sixth admin email lands, add here + those two spots + the
-	// blog-publish allowlist (see doc-export.js / api.js). Worth
-	// consolidating into a shared const at that point.
-	switch strings.ToLower(strings.TrimSpace(user.Email)) {
-	case "palkani.r@gmail.com", "prooftamil@gmail.com",
-		"banu.palkani@gmail.com", "contact@prooftamil.com":
+	// Operator allowlist — single source of truth in AdminEmails
+	// (defined above). Update AdminEmails to add/remove staff.
+	if IsAdminEmail(user.Email) {
 		return true
 	}
 	// Paid subscription. Basic + Enterprise both count as "Pro-tier"

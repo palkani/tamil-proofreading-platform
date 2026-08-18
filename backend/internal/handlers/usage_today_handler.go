@@ -7,6 +7,7 @@ import (
 
 	"tamil-proofreading-platform/backend/internal/middleware"
 	"tamil-proofreading-platform/backend/internal/models"
+	"tamil-proofreading-platform/backend/internal/services/billing"
 
 	"github.com/gin-gonic/gin"
 )
@@ -59,32 +60,13 @@ func (h *Handlers) GetUsageToday(c *gin.Context) {
 		return
 	}
 
-	// Resolve plan state. Pro = personal subscription is Pro AND not
-	// expired, OR premium_override, OR the user is an admin / on the
-	// hard-coded operator email list. The admin bypass mirrors the
-	// same check submission_handlers.go uses at write time so the pill
-	// the workspace shows and the limits the submit endpoint enforces
-	// agree — otherwise an admin sees "Free · 0/20 used today" while
-	// their submissions are actually unlimited, which is confusing.
-	isPro := user.PremiumOverride
-	if !isPro {
-		if user.Role == models.RoleAdmin {
-			isPro = true
-		} else {
-			emailLower := strings.ToLower(strings.TrimSpace(user.Email))
-			if emailLower == "palkani.r@gmail.com" ||
-				emailLower == "prooftamil@gmail.com" ||
-				emailLower == "banu.palkani@gmail.com" ||
-				emailLower == "contact@prooftamil.com" {
-				isPro = true
-			}
-		}
-	}
-	if !isPro && user.Subscription == models.PlanPro {
-		if user.SubscriptionEnd == nil || user.SubscriptionEnd.After(time.Now()) {
-			isPro = true
-		}
-	}
+	// Resolve plan state via the shared predicate. Previously this
+	// duplicated the rules inline AND missed two cases: Basic/Enterprise
+	// plans were treated as Free (only PlanPro was recognized), and the
+	// operator allowlist drifted out of sync with pro_status.go. Both
+	// caused paying users to see "Free · 0/20 used today" in the
+	// workspace and hit the daily-quota block on their 21st draft.
+	isPro := billing.IsUserRecordPro(&user)
 
 	tier := "free"
 	if isPro {
