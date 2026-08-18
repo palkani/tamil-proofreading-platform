@@ -51,6 +51,28 @@ async function readImage(imagePath: string): Promise<{ mimeType: string; data: s
 }
 
 /**
+ * Sniff a mime type from the leading bytes of an image buffer. Used
+ * by pipeline callers that hand us pre-loaded strip buffers from
+ * preprocess.ts / strip-cut.ts (they're always PNG, but this stays
+ * defensive so a future JPEG-native pipeline works too).
+ */
+function sniffMime(buf: Buffer): string {
+  if (buf.length >= 8 &&
+      buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+    return 'image/png';
+  }
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (buf.length >= 12 &&
+      buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) {
+    return 'image/webp';
+  }
+  return 'application/octet-stream';
+}
+
+/**
  * Parse the model response. Belt-and-braces even though we request
  * JSON mode — some models occasionally still wrap in ```json fences
  * on the first token or emit a stray leading BOM.
@@ -92,6 +114,26 @@ function parseOcrResponse(text: string): OcrResponse {
 }
 
 /**
+ * Buffer-based transcription — same as transcribeBaseline but takes
+ * a pre-loaded image buffer + explicit mime type. Used by the
+ * pipeline to send individual strip buffers (from strip-cut.ts)
+ * without round-tripping through the filesystem.
+ */
+export async function transcribeBuffer(
+  imageBuffer: Buffer,
+  opts: TranscribeOptions & { mimeType?: string }
+): Promise<TranscribeResult> {
+  if (!opts.apiKey) {
+    throw new Error('transcribeBuffer: apiKey is required');
+  }
+  const mimeType = opts.mimeType || sniffMime(imageBuffer);
+  return runGemini(
+    { mimeType, data: imageBuffer.toString('base64') },
+    opts
+  );
+}
+
+/**
  * Baseline: single Gemini vision call, structured JSON output.
  * Returns raw_text + suggestions + wall clock + best-effort cost.
  */
@@ -103,6 +145,18 @@ export async function transcribeBaseline(
     throw new Error('transcribeBaseline: GEMINI_API_KEY (or opts.apiKey) is required');
   }
   const image = await readImage(imagePath);
+  return runGemini(image, opts);
+}
+
+/**
+ * Actual Gemini call. Shared by transcribeBaseline (file input) and
+ * transcribeBuffer (buffer input) so the request shape, JSON parsing,
+ * error handling, and cost calc stay in one place.
+ */
+async function runGemini(
+  image: { mimeType: string; data: string },
+  opts: TranscribeOptions
+): Promise<TranscribeResult> {
   const model = opts.model || 'gemini-2.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${opts.apiKey}`;
 
@@ -122,8 +176,8 @@ export async function transcribeBaseline(
       },
     ],
     generationConfig: {
-      temperature: 0,           // determinism — reruns should agree
-      maxOutputTokens: 8192,    // ~20 pages of dense Tamil; plenty of room for JSON + suggestions
+      temperature: 0,
+      maxOutputTokens: 8192,
       responseMimeType: 'application/json',
     },
   };

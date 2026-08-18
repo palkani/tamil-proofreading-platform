@@ -25,7 +25,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { transcribeBaseline } from './transcribe.js';
+import { runPipeline, PipelineMode } from './pipeline.js';
 import { graphemeCount } from './tamil.js';
 
 // Load env from repo-root .env.local (two directories up from src/).
@@ -88,6 +88,21 @@ const PAGE = `<!doctype html>
   header .badge { background: var(--panel-2); padding: 4px 10px; border-radius: 999px;
     font-size: 11px; color: var(--muted); font-family: ui-monospace, "SF Mono", monospace;
     border: 1px solid var(--border); }
+  header .header-right { display: flex; align-items: center; gap: 12px; }
+
+  /* Mode picker — segmented control in the header.
+     Lets users A/B pipeline variants against the same image without
+     needing separate URLs or endpoint changes. Selection persists in
+     localStorage so refreshes stick. */
+  .mode-picker { display: inline-flex; padding: 3px; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 999px; gap: 2px; }
+  .mode-picker button { background: transparent; border: none; color: var(--muted);
+    padding: 5px 12px; font-size: 11px; font-weight: 600; cursor: pointer;
+    border-radius: 999px; font-family: inherit; letter-spacing: 0.02em;
+    transition: all 0.15s; text-transform: uppercase; }
+  .mode-picker button:hover:not(.active) { color: var(--text); }
+  .mode-picker button.active { background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    color: #1a1a2e; }
 
   /* ── Layout ───────────────────────────────────────────────── */
   main { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; padding: 12px 24px 24px; }
@@ -320,7 +335,14 @@ const PAGE = `<!doctype html>
 <body>
 <header>
   <h1><span class="dot"></span> OCR v2 · Verbatim + Suggestions</h1>
-  <div class="badge">${MODEL}</div>
+  <div class="header-right">
+    <div class="mode-picker" role="tablist" aria-label="Pipeline mode">
+      <button data-mode="baseline"     class="active" title="Single Gemini call on raw image (fastest)">Baseline</button>
+      <button data-mode="preprocessed"                title="Deskew + contrast + resize before Gemini call">Preprocessed</button>
+      <button data-mode="full"                        title="Preprocess + strip cutting + parallel transcribe (highest accuracy)">Full Pipeline</button>
+    </div>
+    <div class="badge">${MODEL}</div>
+  </div>
 </header>
 ${!API_KEY ? '<div class="keywarn">⚠️ No GEMINI_API_KEY / GOOGLE_GENAI_API_KEY found in env. Set it in the repo-root .env.local and restart this server.</div>' : ''}
 
@@ -510,6 +532,22 @@ ${!API_KEY ? '<div class="keywarn">⚠️ No GEMINI_API_KEY / GOOGLE_GENAI_API_K
   let elapsedInterval = null;
   let startedAt = 0;
 
+  // Pipeline mode — persisted in localStorage so refreshes stick.
+  // Default 'baseline' for new visitors.
+  let pipelineMode = (function () {
+    try { return localStorage.getItem('ocr_v2_mode') || 'baseline'; }
+    catch (_) { return 'baseline'; }
+  })();
+  document.querySelectorAll('.mode-picker button').forEach((btn) => {
+    if (btn.getAttribute('data-mode') === pipelineMode) btn.classList.add('active');
+    else btn.classList.remove('active');
+    btn.addEventListener('click', () => {
+      pipelineMode = btn.getAttribute('data-mode') || 'baseline';
+      try { localStorage.setItem('ocr_v2_mode', pipelineMode); } catch (_) {}
+      document.querySelectorAll('.mode-picker button').forEach((b) => b.classList.toggle('active', b === btn));
+    });
+  });
+
   const STAGES = [
     { atMs:    0, label: 'Uploading image…' },
     { atMs: 1200, label: 'Analyzing page layout…' },
@@ -622,7 +660,9 @@ ${!API_KEY ? '<div class="keywarn">⚠️ No GEMINI_API_KEY / GOOGLE_GENAI_API_K
     try {
       const fd = new FormData();
       fd.append('image', currentFile);
-      const res = await fetch('/api/ocr', { method: 'POST', body: fd, signal: abortCtrl.signal });
+      fd.append('mode', pipelineMode);
+      const res = await fetch('/api/ocr?mode=' + encodeURIComponent(pipelineMode),
+        { method: 'POST', body: fd, signal: abortCtrl.signal });
       const wallMs = Date.now() - startedAt;
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
@@ -652,10 +692,20 @@ ${!API_KEY ? '<div class="keywarn">⚠️ No GEMINI_API_KEY / GOOGLE_GENAI_API_K
     els.btnCopy.disabled = !currentRaw.trim();   // enable copy once we have text
     els.status.textContent = 'done';
     els.meta.style.display = 'block';
+    const stageInfo = data.stages ? (function () {
+      var s = data.stages;
+      var parts = [];
+      if (s.preprocessMs != null) parts.push('pre: <b>' + s.preprocessMs + 'ms</b>');
+      if (s.stripCutMs   != null) parts.push('cut: <b>' + s.stripCutMs + 'ms</b>');
+      if (s.stripCount   != null) parts.push('strips: <b>' + s.stripCount + '</b>');
+      parts.push('gemini: <b>' + s.transcribeMs + 'ms</b>');
+      return '<span>' + parts.join(' · ') + '</span>';
+    })() : '';
     els.meta.innerHTML =
+      '<span>mode: <b>' + (data.mode || 'baseline') + '</b></span>' +
       '<span>graphemes: <b>' + data.graphemes + '</b></span>' +
       '<span>suggestions: <b>' + sugList.length + '</b></span>' +
-      '<span>server: <b>' + data.wallMs + 'ms</b></span>' +
+      stageInfo +
       '<span>total: <b>' + wallMs + 'ms</b></span>' +
       '<span>cost: <b>$' + (data.costUsd || 0).toFixed(4) + '</b></span>' +
       '<span class="ok">✓ ' + (data.model || '') + '</span>';
@@ -802,12 +852,20 @@ app.post('/api/ocr', upload.single('image'), async (req: Request, res: Response)
   if (!req.file) {
     return res.status(400).json({ error: 'no file uploaded (field "image")' });
   }
+  // Mode selection: baseline | preprocessed | full (defaults to baseline
+  // for backwards compat with existing bookmarks/embeds).
+  const modeRaw = String((req.query.mode ?? req.body.mode ?? 'baseline')).toLowerCase();
+  const mode: PipelineMode =
+    modeRaw === 'preprocessed' ? 'preprocessed' :
+    modeRaw === 'full' ? 'full' :
+    'baseline';
+
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ocr-v2-'));
   const ext = path.extname(req.file.originalname || '.jpg') || '.jpg';
   const tmpPath = path.join(tmpDir, 'upload' + ext);
   try {
     await fs.writeFile(tmpPath, req.file.buffer);
-    const r = await transcribeBaseline(tmpPath, { model: MODEL, apiKey: API_KEY });
+    const r = await runPipeline(tmpPath, { mode, model: MODEL, apiKey: API_KEY });
     res.json({
       raw_text: r.raw_text,
       suggestions: r.suggestions,
@@ -815,6 +873,9 @@ app.post('/api/ocr', upload.single('image'), async (req: Request, res: Response)
       wallMs: r.wallMs,
       costUsd: r.costUsd,
       model: MODEL,
+      mode: r.mode,
+      stages: r.stages,
+      meta: r.meta,
     });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });

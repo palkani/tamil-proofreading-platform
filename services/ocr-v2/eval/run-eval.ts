@@ -25,7 +25,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { cer, wer, summarize, formatReport, toCsv, PageScore } from '../src/metrics.js';
-import { transcribeBaseline } from '../src/transcribe.js';
+import { runPipeline, PipelineMode } from '../src/pipeline.js';
 import { graphemeCount } from '../src/tamil.js';
 
 interface CliArgs {
@@ -110,20 +110,18 @@ async function pool<T, R>(items: T[], limit: number, fn: (item: T, idx: number) 
   return results;
 }
 
-async function runBaseline(pairs: Array<{ image: string; groundTruth: string; page: string }>, args: CliArgs): Promise<PageScore[]> {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.AI_INTEGRATIONS_GEMINI_API_KEY || '';
+async function runMode(mode: PipelineMode, pairs: Array<{ image: string; groundTruth: string; page: string }>, args: CliArgs): Promise<PageScore[]> {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY || process.env.AI_INTEGRATIONS_GEMINI_API_KEY || '';
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY (or AI_INTEGRATIONS_GEMINI_API_KEY) must be set in the environment.');
+    throw new Error('GEMINI_API_KEY (or GOOGLE_GENAI_API_KEY / AI_INTEGRATIONS_GEMINI_API_KEY) must be set in the environment.');
   }
   const model = args.model || 'gemini-2.5-flash';
-  console.log(`[eval] Running baseline · model=${model} · pages=${pairs.length} · concurrency=${args.concurrency}`);
+  console.log(`[eval] Running ${mode} · model=${model} · pages=${pairs.length} · concurrency=${args.concurrency}`);
 
   let done = 0;
   return pool(pairs, args.concurrency, async ({ image, groundTruth, page }) => {
     try {
-      const r = await transcribeBaseline(image, { model, apiKey });
-      // Score against raw_text (verbatim) — suggestions are additive
-      // metadata, not part of the transcription being measured.
+      const r = await runPipeline(image, { mode, model, apiKey });
       const score: PageScore = {
         page,
         cer: cer(r.raw_text, groundTruth),
@@ -168,12 +166,16 @@ async function main() {
   let scores: PageScore[];
   switch (args.config) {
     case 'baseline':
-      scores = await runBaseline(pairs, args);
+      scores = await runMode('baseline', pairs, args);
       break;
-    // Later phases: 'preprocessed', 'tiled', 'tiled+2pass', 'full' — one
-    // case per pipeline variant so the ablation matches the plan doc.
+    case 'preprocessed':
+      scores = await runMode('preprocessed', pairs, args);
+      break;
+    case 'full':
+      scores = await runMode('full', pairs, args);
+      break;
     default:
-      console.error(`[eval] Unknown config: ${args.config}. Only "baseline" is implemented in phase 0.`);
+      console.error(`[eval] Unknown config: ${args.config}. Valid: baseline | preprocessed | full.`);
       process.exit(2);
   }
   process.stdout.write('\n');
