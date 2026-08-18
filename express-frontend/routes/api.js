@@ -13,6 +13,18 @@ const { keyRotator } = require('../utils/gemini-key-rotator');
 // Daily rate limit for handwriting OCR (2 free extractions per IP per day)
 const ocrMonthlyLimit = require('../middleware/ocrMonthlyLimit');
 
+// Per-IP rate limit for anonymous LLM endpoints. Cheap in-memory guard
+// against curl-loops that would drain the Gemini key pool. Real users
+// on the homepage try-it-now / workspace stay well under this ceiling;
+// scripted abuse hits 429 quickly. 15 req/min per IP is enough for a
+// person typing into the demo editor.
+const llmAnonRateLimit = require('../middleware/rateLimiter')(15, 60);
+
+// Require a signed-in user (verified JWT). Used to gate the auth-only
+// AI Content Writer sibling endpoints so anonymous callers can't drain
+// Gemini through them the way they could before this commit.
+const { authenticateJWT } = require('../middleware/auth');
+
 // Latency-based regional backend resolver (Asia vs US Cloud Run instances)
 const { getRegionalBackendUrl } = require('../utils/regional-backend');
 const { getV2Corrections } = require('../lib/v2-proofread');
@@ -247,8 +259,10 @@ function splitIntoSentences(text) {
   return chunks.length > 0 ? chunks : [{ text: text.trim(), offset: 0 }];
 }
 
-// Proxy to Gemini AI integration with improved accuracy via chunking
-router.post('/gemini/analyze', async (req, res) => {
+// Proxy to Gemini AI integration with improved accuracy via chunking.
+// Per-IP rate-limited (see llmAnonRateLimit import) — anonymous by design
+// (homepage demo) but the ceiling stops curl-loop abuse.
+router.post('/gemini/analyze', llmAnonRateLimit, async (req, res) => {
   try {
     const { text } = req.body;
     
@@ -439,13 +453,19 @@ const BACKEND_MAX_CHARS = 500000;
 const CORRECTIONS_CLOUD_RUN_MAX_CHARS = 2000;
 // For very long text we process in segments to avoid thousands of concurrent chunk requests.
 const EXPRESS_SEGMENT_CHARS = 80000;
-// Hard cap so one request cannot tie up the server indefinitely (~200k+ words).
-const MAX_CORRECTIONS_TEXT_CHARS = 2000000;
+// Hard cap so one request cannot tie up the server or drain the Gemini
+// key pool. 200,000 chars ≈ 30k Tamil words — enough for a book chapter,
+// tight enough that a curl loop can't sustain a big-batch attack. The
+// previous 2,000,000-char ceiling was ~10x larger than any legitimate
+// use case and let a single request chew through the pool.
+const MAX_CORRECTIONS_TEXT_CHARS = 200000;
 
 // Grammar/Corrections API for AI assistant - exact format: { success, corrections: [{ blockId, originalText, correction, reason, type }] }
 // Accepts { text } or { docJson } (TipTap/ProseMirror). Tries Cloud Run first; falls back to Express→Gemini.
 // Large payloads (e.g. 200k+ words) supported via chunking; body limit raised via app-level 50mb.
-router.post('/corrections', async (req, res) => {
+// Per-IP rate-limited (llmAnonRateLimit) so a curl loop can't drain the
+// Gemini key pool. Anonymous by design — homepage try-it-now needs it.
+router.post('/corrections', llmAnonRateLimit, async (req, res) => {
   // In-flight deduplication state — declared outside try so catch can clean up.
   let _inFlightKey = null;
   let _resolveInFlight = null;
@@ -913,7 +933,8 @@ EXAMPLES of CORRECT space-error flagging:
 // Streams each correction as its text chunk is processed — no waiting for all chunks to finish.
 // Frontend receives `event: correction` for each item and `event: done` at the end.
 // Client disconnect aborts all in-flight Gemini calls immediately.
-router.post('/corrections/stream', async (req, res) => {
+// Per-IP rate-limited (llmAnonRateLimit) — same reason as /corrections.
+router.post('/corrections/stream', llmAnonRateLimit, async (req, res) => {
   // Server-Sent Events headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -1337,8 +1358,9 @@ ${tamilStyle === 'formal' ? `• எண் பொருந்தல்: ❌ "அ
 });
 
 // English to Tamil Translation with Gemini AI
-// Pure translation only: returns translated Tamil text (no proofreading pass after)
-router.post('/gemini/translate', async (req, res) => {
+// Pure translation only: returns translated Tamil text (no proofreading pass after).
+// Per-IP rate-limited — used by both homepage anonymous and workspace authed.
+router.post('/gemini/translate', llmAnonRateLimit, async (req, res) => {
   try {
     const { text } = req.body;
     
@@ -1438,8 +1460,9 @@ RULES:
 // ── Sentence Rewrite endpoint ──────────────────────────────────────────────
 // POST /api/rewrite
 // Body: { text: string, tone?: 'formal'|'casual'|'simple' }
-// Returns: { rewrites: string[] } — up to 3 Tamil rewrites of the input
-router.post('/rewrite', async (req, res) => {
+// Returns: { rewrites: string[] } — up to 3 Tamil rewrites of the input.
+// Per-IP rate-limited — anonymous by design (workspace toolbar).
+router.post('/rewrite', llmAnonRateLimit, async (req, res) => {
   try {
     const { text, tone = 'formal' } = req.body;
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
@@ -2917,8 +2940,10 @@ router.post('/seo/extract-keywords', (req, res) => {
   }
 });
 
-// Generate social variants (LinkedIn/Facebook/Instagram Reels) - copy/export only
-router.post('/ai-content-writer/social-variants', async (req, res) => {
+// Generate social variants (LinkedIn/Facebook/Instagram Reels) - copy/export only.
+// Auth-required: previously unauthenticated, so any curl-loop could drain
+// the Gemini key pool. Sibling of /generate-content which is freemium-gated.
+router.post('/ai-content-writer/social-variants', authenticateJWT, async (req, res) => {
   try {
     if (!contentWriterService || typeof contentWriterService.generateSocialVariants !== 'function') {
       return res.status(503).json({
@@ -2936,8 +2961,11 @@ router.post('/ai-content-writer/social-variants', async (req, res) => {
   }
 });
 
-// Event name suggester (Tamil tool) - generate catchy event name ideas
-router.post('/event-name-suggester/suggest', async (req, res) => {
+// Event name suggester (Tamil tool) - generate catchy event name ideas.
+// Auth-required: this endpoint has no live frontend consumer today (orphan),
+// so any traffic hitting it is likely bot/curl abuse. Gate closed until a
+// real tool page is wired up.
+router.post('/event-name-suggester/suggest', authenticateJWT, async (req, res) => {
   try {
     if (!contentWriterService || typeof contentWriterService.generateEventNames !== 'function') {
       return res.status(503).json({
@@ -2955,8 +2983,10 @@ router.post('/event-name-suggester/suggest', async (req, res) => {
   }
 });
 
-// Improve content endpoint
-router.post('/ai-content-writer/improve-content', async (req, res) => {
+// Improve content endpoint. Auth-required: sibling of /generate-content
+// which is freemium-gated. Previously unauthenticated, so any curl-loop
+// could drain the Gemini key pool.
+router.post('/ai-content-writer/improve-content', authenticateJWT, async (req, res) => {
   try {
     if (ENABLE_PROXY_LOGS) {
       console.log('[AI-CONTENT-WRITER] POST /improve-content');
@@ -2980,8 +3010,10 @@ router.post('/ai-content-writer/improve-content', async (req, res) => {
   }
 });
 
-// Translate content endpoint
-router.post('/ai-content-writer/translate', async (req, res) => {
+// Translate content endpoint. Auth-required: sibling of /generate-content
+// which is freemium-gated. Previously unauthenticated, so any curl-loop
+// could drain the Gemini key pool.
+router.post('/ai-content-writer/translate', authenticateJWT, async (req, res) => {
   try {
     if (ENABLE_PROXY_LOGS) {
       console.log('[AI-CONTENT-WRITER] POST /translate');
