@@ -1,0 +1,22 @@
+{
+  "name": "ocr-v2",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "ProofTamil handwriting OCR v2 — benchmark harness (phase 0) + future pipeline. Isolated from the main app so it can be developed and rolled out without touching login, billing, drafts, or the current OCR maintenance page.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "eval": "tsx eval/run-eval.ts",
+    "eval:baseline": "tsx eval/run-eval.ts --config baseline",
+    "eval:baseline:smoke": "tsx eval/run-eval.ts --config baseline --limit 3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}

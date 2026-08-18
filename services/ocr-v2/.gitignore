@@ -1,0 +1,15 @@
+node_modules
+dist
+.env
+.env.local
+
+# Benchmark data — real user handwriting may be in here. Keep it local
+# only until we set up a proper zero-retention data store. The images
+# directory README explains the expected layout.
+data/images/*
+!data/images/.gitkeep
+data/ground-truth/*
+!data/ground-truth/.gitkeep
+
+# Eval outputs — regenerated on every run, no need to commit.
+eval-results/
