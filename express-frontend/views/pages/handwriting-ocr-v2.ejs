@@ -209,6 +209,30 @@
     background: linear-gradient(135deg, var(--ocr-purple), var(--ocr-purple-2)); color: white;
     border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.06em; margin-left: 8px; }
+
+  /* "What we support" info panel — always visible below the tool.
+     Sets expectations before the user uploads (file formats, size cap,
+     what the tool handles well, what it doesn't) and calls out the beta
+     status so accuracy limits are clear. Same navy palette as the tool. */
+  .ocr-info { padding: 24px 24px 32px; border-top: 1px solid var(--ocr-border);
+    background: var(--ocr-bg); }
+  .ocr-info-heading { font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--ocr-muted); margin: 0 0 16px; }
+  .ocr-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px; margin-bottom: 16px; }
+  .ocr-info-item { background: var(--ocr-panel); border: 1px solid var(--ocr-border);
+    border-radius: 10px; padding: 14px 16px; }
+  .ocr-info-item h3 { margin: 0 0 6px; font-size: 12px; font-weight: 700; color: var(--ocr-text-strong);
+    display: flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ocr-info-item h3 .icon { font-size: 15px; opacity: 0.9; }
+  .ocr-info-item p { margin: 0; font-size: 13px; color: var(--ocr-text); line-height: 1.55; }
+  .ocr-info-item p .muted { color: var(--ocr-muted); font-size: 12px; }
+  .ocr-beta-notice { display: flex; gap: 10px; padding: 12px 14px;
+    background: rgba(168, 85, 247, 0.06); border: 1px solid rgba(168, 85, 247, 0.25);
+    border-left: 3px solid var(--ocr-purple-2); border-radius: 10px;
+    font-size: 13px; color: var(--ocr-text); line-height: 1.55; }
+  .ocr-beta-notice .icon { font-size: 16px; flex-shrink: 0; line-height: 1.2; }
+  .ocr-beta-notice b { color: var(--ocr-text-strong); }
 </style>
 
 <div class="ocr-wrap">
@@ -245,7 +269,12 @@
         <label for="ocrFileInput" id="ocrDropZone" class="ocr-drop">
           <div class="ocr-drop-icon">📄</div>
           <div class="ocr-drop-title">Drop a handwritten Tamil image here</div>
-          <div class="ocr-drop-hint">or click to browse<br>jpg · png · webp · heic · up to 20MB</div>
+          <div class="ocr-drop-hint">
+            or click to browse<br>
+            <b>Formats:</b> JPG, PNG, WebP, HEIC &nbsp;·&nbsp;
+            <b>Max:</b> 20&nbsp;MB &nbsp;·&nbsp;
+            <b>Best:</b> 300px+ short edge, single page
+          </div>
         </label>
         <input type="file" id="ocrFileInput" accept="image/*" style="display:none" />
 
@@ -313,6 +342,58 @@
       </div>
     </section>
   </div>
+
+  <!-- What we support · limitations panel · always visible below the tool.
+       Sets expectations before upload + reminds users the tool is in beta. -->
+  <section class="ocr-info" aria-label="Supported files and limitations">
+    <h2 class="ocr-info-heading">What we support</h2>
+    <div class="ocr-info-grid">
+      <div class="ocr-info-item">
+        <h3><span class="icon">📁</span> File formats</h3>
+        <p>
+          JPG, PNG, WebP, HEIC (iPhone photos)<br>
+          <span class="muted">PDFs and multi-page documents not yet supported.</span>
+        </p>
+      </div>
+      <div class="ocr-info-item">
+        <h3><span class="icon">📏</span> File size</h3>
+        <p>
+          Up to 20&nbsp;MB per image, one page at a time.<br>
+          <span class="muted">Large images are auto-resized to 2200px long-edge.</span>
+        </p>
+      </div>
+      <div class="ocr-info-item">
+        <h3><span class="icon">✍️</span> What works best</h3>
+        <p>
+          Clear handwriting or printed Tamil on plain or ruled paper. English words, numbers, dates and punctuation are preserved verbatim.
+        </p>
+      </div>
+      <div class="ocr-info-item">
+        <h3><span class="icon">⚠️</span> Where accuracy drops</h3>
+        <p>
+          Very messy handwriting, low contrast, faded pencil, extreme skew, or images below 300&nbsp;px on the short edge. Always review before use.
+        </p>
+      </div>
+      <div class="ocr-info-item">
+        <h3><span class="icon">🌐</span> Language</h3>
+        <p>
+          Tamil script (உயிர் + மெய் + உயிர்மெய்). Tanglish and English mixed in are preserved as written.
+        </p>
+      </div>
+      <div class="ocr-info-item">
+        <h3><span class="icon">🔒</span> Privacy</h3>
+        <p>
+          Images are processed transiently for transcription and are not stored on our servers. See our <a href="/privacy" style="color: var(--ocr-purple-2); text-decoration: underline;">Privacy Policy</a>.
+        </p>
+      </div>
+    </div>
+    <div class="ocr-beta-notice">
+      <div class="icon">💡</div>
+      <div>
+        <b>Beta note:</b> Accuracy varies with handwriting quality. The tool flags suspected errors as suggestions — always review the extracted text before sharing or publishing.
+      </div>
+    </div>
+  </section>
 
   <div id="ocrToast" class="ocr-toast"></div>
 </div>
@@ -512,8 +593,17 @@
   els.btnCancel.addEventListener('click', () => { if (abortCtrl) abortCtrl.abort(); });
 
   function repaintRaw() {
+    // Only PENDING suggestions get the amber flag; applied ones get
+    // the green replacement; ignored ones render as plain raw text.
+    // Previously flagged.add() ran for every suggestion regardless of
+    // state, so ignoring didn't remove the highlight.
     const applied = new Map(), flagged = new Set();
-    sugList.forEach((s, i) => { if (!s.raw_word) return; flagged.add(s.raw_word); if (sugState[i] === 'applied') applied.set(s.raw_word, s.suggested_word); });
+    sugList.forEach((s, i) => {
+      if (!s.raw_word) return;
+      if (sugState[i] === 'applied') applied.set(s.raw_word, s.suggested_word);
+      else if (sugState[i] === 'pending') flagged.add(s.raw_word);
+      // rejected → not added to either set → renders as plain text
+    });
     els.rawText.innerHTML = esc(currentRaw).split(/(\s+)/).map((tok) => {
       const bare = tok.trim(); if (!bare) return tok;
       if (applied.has(bare)) return '<span class="applied">' + esc(applied.get(bare)) + '</span>';
