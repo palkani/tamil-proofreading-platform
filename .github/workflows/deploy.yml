@@ -161,6 +161,14 @@ jobs:
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/ocr-v2:latest
 
       - name: Deploy OCR v2 to Cloud Run
+        # Gemini key is passed from a GitHub Actions repo secret as
+        # a plain Cloud Run env var. Using GEMINI_API_KEY_2 (one of
+        # the rotator keys already used by the Express/frontend) so
+        # the OCR v2 service shares the same billing account and
+        # quota pool. Server reads GEMINI_API_KEY first, so we map
+        # secrets.GEMINI_API_KEY_2 → GEMINI_API_KEY inside the container.
+        # To add rotation later: pass all 4 keys and use a rotator
+        # in transcribe.ts (same pattern as gemini-key-rotator.js).
         run: |
           gcloud run deploy prooftamil-ocr-v2 \
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/ocr-v2:${{ github.sha }} \
@@ -174,8 +182,7 @@ jobs:
             --max-instances=20 \
             --concurrency=10 \
             --port=8080 \
-            --set-env-vars=NODE_ENV=production,OCR_V2_MODEL=gemini-2.5-flash \
-            --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest
+            --set-env-vars=NODE_ENV=production,OCR_V2_MODEL=gemini-2.5-flash,GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY_2 }}
 
       - name: Verify Backend Health (Both Regions)
         run: |
