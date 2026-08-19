@@ -1738,6 +1738,101 @@ try {
   console.warn('[AI-CONTENT-WRITER] Service not available:', error.message);
 }
 
+// ── OCR v2 · beta-gated pipeline (runs in-process on Vercel) ────
+// DECLARED FIRST — before the /ocr and /handwriting-ocr maintenance
+// gates below — so Express matches the more specific /ocr-v2/pipeline
+// route before the broader /ocr prefix handler. Ordering matters:
+// router.use('/ocr', ...) can win over router.post('/ocr-v2/...') if
+// declared later, depending on Express's mount-path matching.
+//
+// Anyone on OCR_V2_BETA_EMAILS (or the admin allowlist) can hit the
+// pipeline; everyone else stays hidden behind the maintenance gate
+// below. The pipeline itself lives in lib/ocr-v2/ — sharp
+// preprocessing + strip cutting + parallel Gemini calls, all in the
+// Express serverless function. Requires Vercel Pro (60s function
+// timeout — Hobby's 10s is not enough).
+//
+// POST /api/ocr-v2/pipeline
+//   multipart/form-data with field "image" (jpg/png/webp/heic, ≤20MB)
+//   → 200 { raw_text, suggestions[], wallMs, costUsd, mode, stages, meta }
+//   → 401 auth_required (not signed in)
+//   → 403 beta_only (signed in but not on allowlist)
+//   → 500 no_api_key (GEMINI_API_KEY* env var not set)
+{
+  const { requireOcrV2Beta } = require('../middleware/ocrV2Beta');
+  const { runPipeline } = require('../lib/ocr-v2/pipeline');
+  const ocrV2Upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 },
+  });
+
+  function getGeminiKey() {
+    return process.env.GEMINI_API_KEY_2
+      || process.env.GEMINI_API_KEY_1
+      || process.env.GEMINI_API_KEY_3
+      || process.env.GEMINI_API_KEY_4
+      || process.env.GEMINI_API_KEY
+      || process.env.GOOGLE_GENAI_API_KEY
+      || process.env.AI_INTEGRATIONS_GEMINI_API_KEY
+      || '';
+  }
+
+  // Diagnostic endpoint — quick way for the beta user to check
+  // whether the flag is picking them up. Auth + email check inside;
+  // returns 200 + a small JSON telling you exactly why access was
+  // granted or denied. Safe to leave enabled: no secrets leaked.
+  router.get('/ocr-v2/whoami', (req, res) => {
+    const email = String(req.user?.email || '').toLowerCase().trim();
+    const betaRaw = process.env.OCR_V2_BETA_EMAILS || '';
+    const betaList = betaRaw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+    const { isOcrV2BetaUser } = require('../middleware/ocrV2Beta');
+    res.json({
+      signed_in: Boolean(req.user),
+      email: email || null,
+      is_beta_user: isOcrV2BetaUser(req),
+      beta_list_count: betaList.length,
+      beta_list_includes_you: betaList.includes(email),
+      has_gemini_key: Boolean(getGeminiKey()),
+    });
+  });
+
+  router.post('/ocr-v2/pipeline', requireOcrV2Beta, ocrV2Upload.single('image'), async (req, res) => {
+    const apiKey = getGeminiKey();
+    if (!apiKey) {
+      return res.status(500).json({
+        error: 'no_api_key',
+        message: 'No Gemini API key configured (set GEMINI_API_KEY_1..4 or GOOGLE_GENAI_API_KEY).',
+      });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'no_file', message: 'Upload an image in the "image" field.' });
+    }
+    const mode = String(req.body.mode || req.query.mode || 'full').toLowerCase();
+    const model = process.env.OCR_V2_MODEL || 'gemini-2.5-flash';
+    try {
+      const r = await runPipeline(req.file.buffer, {
+        mode: mode === 'baseline' || mode === 'preprocessed' ? mode : 'full',
+        model,
+        apiKey,
+        timeoutMs: 55_000,
+      });
+      res.json({
+        raw_text: r.raw_text,
+        suggestions: r.suggestions,
+        wallMs: r.wallMs,
+        costUsd: r.costUsd,
+        mode: r.mode,
+        stages: r.stages,
+        meta: r.meta,
+        model,
+      });
+    } catch (err) {
+      console.error('[OCR-V2] pipeline failed:', err.message);
+      res.status(500).json({ error: 'pipeline_error', message: err.message });
+    }
+  });
+}
+
 // ── OCR maintenance gate ─────────────────────────────────────────
 // Both /ocr/* (printed) and /handwriting-ocr/* (handwriting) endpoints
 // are gated with 503 while the OCR pipeline is being upgraded. The
@@ -1765,76 +1860,6 @@ const ocrMaintenanceHandler = (req, res) => {
 // the res.render() targets in routes/index.js — see comment there.
 router.use('/ocr', ocrMaintenanceHandler);
 router.use('/handwriting-ocr', ocrMaintenanceHandler);
-
-// ── OCR v2 · beta-gated pipeline (runs in-process on Vercel) ────
-// Anyone on OCR_V2_BETA_EMAILS (or the admin allowlist) can hit the
-// pipeline; everyone else stays hidden behind the maintenance gate
-// above. The pipeline itself lives in lib/ocr-v2/ — sharp
-// preprocessing + strip cutting + parallel Gemini calls, all in the
-// Express serverless function. Requires Vercel Pro (60s function
-// timeout — Hobby's 10s is not enough).
-//
-// POST /api/ocr-v2/pipeline
-//   multipart/form-data with field "image" (jpg/png/webp/heic, ≤20MB)
-//   → 200 { raw_text, suggestions[], graphemes, wallMs, costUsd, mode, stages, meta }
-//   → 401 auth_required (not signed in)
-//   → 403 beta_only (signed in but not on allowlist)
-//   → 500 no_api_key (GEMINI_API_KEY* env var not set)
-{
-  const { requireOcrV2Beta } = require('../middleware/ocrV2Beta');
-  const { runPipeline } = require('../lib/ocr-v2/pipeline');
-  const ocrV2Upload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 20 * 1024 * 1024 },
-  });
-
-  function getGeminiKey() {
-    return process.env.GEMINI_API_KEY_2
-      || process.env.GEMINI_API_KEY_1
-      || process.env.GEMINI_API_KEY_3
-      || process.env.GEMINI_API_KEY_4
-      || process.env.GEMINI_API_KEY
-      || process.env.GOOGLE_GENAI_API_KEY
-      || process.env.AI_INTEGRATIONS_GEMINI_API_KEY
-      || '';
-  }
-
-  router.post('/ocr-v2/pipeline', requireOcrV2Beta, ocrV2Upload.single('image'), async (req, res) => {
-    const apiKey = getGeminiKey();
-    if (!apiKey) {
-      return res.status(500).json({
-        error: 'no_api_key',
-        message: 'No Gemini API key configured (set GEMINI_API_KEY_1..4 or GOOGLE_GENAI_API_KEY).',
-      });
-    }
-    if (!req.file) {
-      return res.status(400).json({ error: 'no_file', message: 'Upload an image in the "image" field.' });
-    }
-    const mode = String(req.body.mode || req.query.mode || 'full').toLowerCase();
-    const model = process.env.OCR_V2_MODEL || 'gemini-2.5-flash';
-    try {
-      const r = await runPipeline(req.file.buffer, {
-        mode: mode === 'baseline' || mode === 'preprocessed' ? mode : 'full',
-        model,
-        apiKey,
-        timeoutMs: 55_000,   // just under Vercel Pro's 60s cap
-      });
-      res.json({
-        raw_text: r.raw_text,
-        suggestions: r.suggestions,
-        wallMs: r.wallMs,
-        costUsd: r.costUsd,
-        mode: r.mode,
-        stages: r.stages,
-        meta: r.meta,
-        model,
-      });
-    } catch (err) {
-      console.error('[OCR-V2] pipeline failed:', err.message);
-      res.status(500).json({ error: 'pipeline_error', message: err.message });
-    }
-  });
-}
 // ─────────────────────────────────────────────────────────────────
 
 // OCR health check endpoint
