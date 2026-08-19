@@ -1,0 +1,69 @@
+<%- include('../../partials/header') %>
+
+<div class="min-h-screen bg-gray-50 py-10 sm:py-14">
+  <div class="max-w-2xl mx-auto px-4 sm:px-6">
+    <div class="mb-8">
+      <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+        <span>Setup</span><span>·</span><span>Step 3 of 4</span>
+      </div>
+      <div class="flex gap-1.5">
+        <div class="flex-1 h-1.5 rounded-full bg-primary-600"></div>
+        <div class="flex-1 h-1.5 rounded-full bg-primary-600"></div>
+        <div class="flex-1 h-1.5 rounded-full bg-primary-600"></div>
+        <div class="flex-1 h-1.5 rounded-full bg-gray-200"></div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 sm:p-10">
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-2">Try the grammar checker</h1>
+      <p class="text-gray-600 text-sm mb-6">Open the editor with this sample Tamil sentence, run the AI, and see the corrections. Takes about a minute.</p>
+
+      <div class="rounded-xl bg-gray-50 border border-gray-200 p-4 mb-6">
+        <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Sample text</p>
+        <p class="text-lg tamil-text text-gray-900 leading-relaxed">
+          குழந்தைகள் விளையாடுகிறது. இந்தக் கதையை படிசிட்டேன்.
+        </p>
+      </div>
+
+      <ol class="text-sm text-gray-700 space-y-2 mb-6 list-decimal list-inside">
+        <li>Open the workspace editor.</li>
+        <li>Paste (or type) the sample text above.</li>
+        <li>Click <b>Check grammar</b>. You should see two flagged errors and the AI's suggested fixes.</li>
+      </ol>
+
+      <div class="flex flex-wrap gap-3">
+        <a href="/workspace" target="_blank" rel="noopener" class="inline-flex items-center gap-2 rounded-full bg-primary-600 text-white text-sm font-semibold px-5 py-3 hover:bg-primary-700 transition">
+          Open workspace ↗
+        </a>
+        <button id="done-btn" class="rounded-full border border-gray-200 text-gray-700 text-sm font-semibold px-5 py-3 hover:bg-gray-50 transition">
+          I tried it — continue →
+        </button>
+      </div>
+      <p id="status" class="hidden mt-4 text-sm rounded-lg px-3 py-2"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var ORG_ID = <%- JSON.stringify(org.id) %>;
+  var btn = document.getElementById('done-btn');
+  var status = document.getElementById('status');
+  btn.addEventListener('click', async function () {
+    btn.disabled = true;
+    try {
+      var r = await fetch('/onboarding/' + ORG_ID + '/complete-step', { method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ step: 3 }) });
+      var data = await r.json();
+      if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+      window.location.href = data.redirect_to;
+    } catch (err) {
+      status.className = 'mt-4 text-sm rounded-lg px-3 py-2 bg-red-50 text-red-700';
+      status.textContent = err.message; status.classList.remove('hidden');
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+
+<%- include('../../partials/footer') %>

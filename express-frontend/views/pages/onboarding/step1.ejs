@@ -1,0 +1,101 @@
+<%- include('../../partials/header') %>
+
+<%
+  // step1 has two modes:
+  //   • no org yet          → show the "Create your organization" form
+  //   • coming back to step 1 with an org (rare) → prefill + link forward
+  var hasOrg = typeof org !== 'undefined' && org && org.id;
+%>
+
+<div class="min-h-screen bg-gray-50 py-10 sm:py-14">
+  <div class="max-w-2xl mx-auto px-4 sm:px-6">
+    <div class="mb-8">
+      <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+        <span>Setup</span><span>·</span><span>Step 1 of 4</span>
+      </div>
+      <div class="flex gap-1.5">
+        <div class="flex-1 h-1.5 rounded-full bg-primary-600"></div>
+        <div class="flex-1 h-1.5 rounded-full bg-gray-200"></div>
+        <div class="flex-1 h-1.5 rounded-full bg-gray-200"></div>
+        <div class="flex-1 h-1.5 rounded-full bg-gray-200"></div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 sm:p-10">
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-2">Name your organization</h1>
+      <p class="text-gray-600 text-sm mb-6">This is what your teammates will see when they join.</p>
+
+      <label class="block mb-4">
+        <span class="text-sm font-medium text-gray-700 block mb-1.5">Organization name</span>
+        <input id="org-name" type="text" value="<%= hasOrg ? org.name : '' %>" placeholder="e.g. Vikatan Publishing" class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none" />
+      </label>
+      <label class="block mb-6">
+        <span class="text-sm font-medium text-gray-700 block mb-1.5">Slug <span class="font-normal text-gray-400">(URL-safe, unique)</span></span>
+        <div class="flex rounded-xl overflow-hidden border border-gray-300 focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-200">
+          <span class="bg-gray-50 px-4 py-3 text-sm text-gray-500 select-none">prooftamil.com/org/</span>
+          <input id="org-slug" type="text" value="<%= hasOrg ? org.slug : '' %>" placeholder="vikatan" class="flex-1 px-3 py-3 text-sm outline-none" />
+        </div>
+      </label>
+
+      <button id="create-btn" class="w-full rounded-full bg-primary-600 text-white text-sm font-semibold px-5 py-3 hover:bg-primary-700 transition disabled:opacity-60">
+        Continue →
+      </button>
+      <p id="status" class="hidden mt-3 text-sm rounded-lg px-3 py-2"></p>
+
+      <div class="mt-6 pt-6 border-t border-gray-100 text-center">
+        <a href="/" class="text-sm text-gray-500 hover:text-gray-700">Skip for now — I'll set this up later</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var HAS_ORG = <%- JSON.stringify(hasOrg) %>;
+  var ORG_ID = <%- hasOrg ? JSON.stringify(org.id) : 'null' %>;
+  var btn = document.getElementById('create-btn');
+  var status = document.getElementById('status');
+  var nameInput = document.getElementById('org-name');
+  var slugInput = document.getElementById('org-slug');
+
+  // Auto-suggest slug from name
+  nameInput.addEventListener('input', function () {
+    if (slugInput.dataset.userEdited === '1') return;
+    slugInput.value = nameInput.value.trim().toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').slice(0, 40);
+  });
+  slugInput.addEventListener('input', function () { slugInput.dataset.userEdited = '1'; });
+
+  function show(cls, msg) { status.className = 'mt-3 text-sm rounded-lg px-3 py-2 ' + cls; status.textContent = msg; status.classList.remove('hidden'); }
+
+  btn.addEventListener('click', async function () {
+    var name = nameInput.value.trim();
+    var slug = slugInput.value.trim().toLowerCase();
+    if (!name || !slug) { show('bg-red-50 text-red-700', 'Name and slug are required.'); return; }
+    btn.disabled = true;
+    show('bg-gray-50 text-gray-600', 'Creating…');
+    try {
+      if (!HAS_ORG) {
+        var r = await fetch('/org', { method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, slug }) });
+        var data = await r.json();
+        if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+        window.location.href = '/onboarding/' + data.organization.id + '/step/2';
+      } else {
+        // resume path — just mark step_named done and move on
+        var r = await fetch('/onboarding/' + ORG_ID + '/complete-step', { method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ step: 1 }) });
+        var data = await r.json();
+        if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+        window.location.href = data.redirect_to;
+      }
+    } catch (err) {
+      show('bg-red-50 text-red-700', err.message === 'slug_taken' ? 'That slug is already taken — try another.' : ('Could not create: ' + err.message));
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+
+<%- include('../../partials/footer') %>

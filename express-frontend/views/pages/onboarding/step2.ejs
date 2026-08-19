@@ -1,0 +1,82 @@
+<%- include('../../partials/header') %>
+
+<div class="min-h-screen bg-gray-50 py-10 sm:py-14">
+  <div class="max-w-2xl mx-auto px-4 sm:px-6">
+    <div class="mb-8">
+      <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+        <span>Setup</span><span>·</span><span>Step 2 of 4</span>
+      </div>
+      <div class="flex gap-1.5">
+        <div class="flex-1 h-1.5 rounded-full bg-primary-600"></div>
+        <div class="flex-1 h-1.5 rounded-full bg-primary-600"></div>
+        <div class="flex-1 h-1.5 rounded-full bg-gray-200"></div>
+        <div class="flex-1 h-1.5 rounded-full bg-gray-200"></div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 sm:p-10">
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-2">Invite your teammates</h1>
+      <p class="text-gray-600 text-sm mb-6">Paste one email per line. Editors can create and edit drafts; Readers can view and comment.</p>
+
+      <textarea id="invite-emails" rows="4" class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none" placeholder="editor1@example.com&#10;editor2@example.com"></textarea>
+      <div class="flex items-center gap-4 mt-4">
+        <label class="text-sm font-medium text-gray-700">Role:
+          <select id="invite-role" class="ml-2 rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            <option value="editor" selected>Editor</option>
+            <option value="reader">Reader</option>
+          </select>
+        </label>
+      </div>
+      <p id="status" class="hidden mt-4 text-sm rounded-lg px-3 py-2"></p>
+
+      <div class="flex flex-wrap gap-3 mt-6">
+        <button id="send-btn" class="rounded-full bg-primary-600 text-white text-sm font-semibold px-5 py-3 hover:bg-primary-700 transition disabled:opacity-60">Send invites and continue →</button>
+        <button id="skip-btn" class="rounded-full border border-gray-200 text-gray-600 text-sm font-semibold px-5 py-3 hover:bg-gray-50 transition">Skip for now</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var ORG_ID = <%- JSON.stringify(org.id) %>;
+  var sendBtn = document.getElementById('send-btn');
+  var skipBtn = document.getElementById('skip-btn');
+  var status = document.getElementById('status');
+  function show(cls, msg) { status.className = 'mt-4 text-sm rounded-lg px-3 py-2 ' + cls; status.textContent = msg; status.classList.remove('hidden'); }
+
+  async function markStepDone() {
+    var r = await fetch('/onboarding/' + ORG_ID + '/complete-step', { method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ step: 2 }) });
+    var data = await r.json();
+    if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+    window.location.href = data.redirect_to;
+  }
+
+  sendBtn.addEventListener('click', async function () {
+    var emails = (document.getElementById('invite-emails').value || '').split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+    var role = document.getElementById('invite-role').value;
+    if (emails.length === 0) { show('bg-red-50 text-red-700', 'Add at least one email — or click Skip.'); return; }
+    sendBtn.disabled = true;
+    show('bg-gray-50 text-gray-600', 'Sending invites…');
+    try {
+      var r = await fetch('/org/' + ORG_ID + '/api/invites', { method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emails, role }) });
+      var data = await r.json();
+      if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+      show('bg-green-50 text-green-700', 'Sent ' + (data.created || []).length + ' invite(s). Continuing…');
+      await markStepDone();
+    } catch (err) {
+      show('bg-red-50 text-red-700', 'Could not send: ' + err.message);
+      sendBtn.disabled = false;
+    }
+  });
+
+  skipBtn.addEventListener('click', async function () {
+    skipBtn.disabled = true;
+    try { await markStepDone(); } catch (err) { show('bg-red-50 text-red-700', err.message); skipBtn.disabled = false; }
+  });
+})();
+</script>
+
+<%- include('../../partials/footer') %>

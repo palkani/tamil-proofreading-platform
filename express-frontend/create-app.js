@@ -34,6 +34,9 @@ const processRouter = require('./routes/process');
 const workspaceRouter = require('./routes/workspace');
 const adminRouter = require('./routes/admin');
 const chatbotRouter = require('./routes/chatbot');
+const orgRouter = require('./routes/org');
+const inviteRouter = require('./routes/invite');
+const onboardingRouter = require('./routes/onboarding');
 
 // JS files that must never be served from cache
 const NO_CACHE_JS = [
@@ -212,6 +215,12 @@ function createApp() {
   app.use('/auth', authRoutes);
   app.use('/admin', adminRouter);
   app.use('/workspace', workspaceRouter);
+  // Enterprise / team feature routes. Each guards itself behind
+  // ENTERPRISE_ENABLED (or ENTERPRISE_MOCK_MODE) so this mount is a no-op
+  // when the flag is off — /org, /invite/:token, /onboarding return 404.
+  app.use('/org', orgRouter);
+  app.use('/invite', inviteRouter);
+  app.use('/onboarding', onboardingRouter);
   app.use('/', indexRouter);
   // Before apiRouter so /api/chat and /api/leads resolve here rather than
   // falling through to whatever apiRouter does with unmatched paths.

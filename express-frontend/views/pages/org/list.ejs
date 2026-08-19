@@ -1,0 +1,40 @@
+<%- include('../../partials/header') %>
+
+<%- include('../../partials/nav', { active: '', user: user }) %>
+
+<div class="min-h-screen bg-gray-50 py-12">
+  <div class="max-w-3xl mx-auto px-6">
+    <header class="mb-8">
+      <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 mb-2">Your organizations</h1>
+      <p class="text-gray-600">Pick one to manage members, invites, and seats.</p>
+    </header>
+
+    <% if (mockMode) { %>
+      <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <b>Mock mode.</b> ENTERPRISE_MOCK_MODE=true — data is in-memory and resets on restart.
+      </div>
+    <% } %>
+
+    <div class="grid gap-4">
+      <% organizations.forEach(function (o) { %>
+        <a href="/org/<%= o.id %>" class="block bg-white border border-gray-200 rounded-2xl p-6 hover:border-primary-300 hover:shadow-md transition">
+          <div class="flex items-center justify-between gap-6 flex-wrap">
+            <div class="min-w-0">
+              <h2 class="text-lg font-bold text-gray-900"><%= o.name %></h2>
+              <p class="text-sm text-gray-500 mt-1"><%= o.member_count %> member<%= o.member_count === 1 ? '' : 's' %> · <%= o.seat_count %> seat<%= o.seat_count === 1 ? '' : 's' %></p>
+            </div>
+            <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider <%= o.role === 'owner' ? 'bg-indigo-100 text-indigo-700' : o.role === 'editor' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700' %>"><%= o.role %></span>
+          </div>
+        </a>
+      <% }); %>
+    </div>
+
+    <div class="mt-8">
+      <a href="/onboarding" class="inline-flex items-center gap-2 rounded-full border border-gray-200 px-5 py-2.5 text-sm font-semibold text-primary-600 hover:border-primary-500 hover:bg-blue-50 transition">
+        Create a new organization →
+      </a>
+    </div>
+  </div>
+</div>
+
+<%- include('../../partials/footer') %>
