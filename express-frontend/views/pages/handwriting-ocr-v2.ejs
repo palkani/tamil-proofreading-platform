@@ -1,0 +1,583 @@
+<%- include('../partials/header') %>
+<%- include('../partials/nav', { active: 'tools', user: user || null }) %>
+
+<!--
+  Production OCR v2 UI. Only rendered for users on the OCR_V2_BETA_EMAILS
+  allowlist (see routes/index.js /tools/handwriting-ocr). Everyone else
+  still sees the maintenance page.
+
+  Adapted from the localhost dev demo at services/ocr-v2/src/server.ts:
+    - Same UX: drop-zone → validate → auto-transcribe → lock-screen
+      progress → raw + suggestions panels with Apply/Ignore.
+    - Site-brand palette (navy structure + amber CTA + purple suggestions).
+    - No mode picker (locked to "full" pipeline in prod — best accuracy).
+    - No dev decorations (mode names, meta bar internals).
+    - Posts to /api/ocr-v2/pipeline instead of localhost /api/ocr.
+-->
+
+<style>
+  :root {
+    --ocr-bg: #0f0d2a; --ocr-panel: #1a1745; --ocr-panel-2: #221e56; --ocr-border: #2f2a6b;
+    --ocr-text: #e6ecf8; --ocr-text-strong: #f5f8ff; --ocr-muted: #9691c3;
+    --ocr-accent: #F59E0B; --ocr-accent-2: #D97706;
+    --ocr-purple: #7C3AED; --ocr-purple-2: #A855F7;
+    --ocr-ok: #10b981; --ocr-warn: #F59E0B; --ocr-err: #ef4444;
+  }
+  .ocr-wrap { background: var(--ocr-bg); color: var(--ocr-text); min-height: calc(100vh - 80px);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; }
+  .ocr-header { padding: 14px 24px; border-bottom: 1px solid var(--ocr-border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(180deg, var(--ocr-panel), var(--ocr-bg)); }
+  .ocr-header h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 8px; color: var(--ocr-text-strong); }
+  .ocr-header h1 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ocr-ok);
+    box-shadow: 0 0 8px var(--ocr-ok); animation: ocr-pulse 2s ease-in-out infinite; }
+  .ocr-header .badge { background: var(--ocr-panel-2); padding: 4px 10px; border-radius: 999px;
+    font-size: 11px; color: var(--ocr-muted); font-family: ui-monospace, "SF Mono", monospace;
+    border: 1px solid var(--ocr-border); }
+  @keyframes ocr-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .ocr-main { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; padding: 12px 24px 24px; }
+  @media (max-width: 1200px) { .ocr-main { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 800px)  { .ocr-main { grid-template-columns: 1fr; } }
+  .ocr-panel { background: var(--ocr-panel); border: 1px solid var(--ocr-border); border-radius: 12px;
+    overflow: hidden; display: flex; flex-direction: column; min-height: 620px; }
+  .ocr-ph { padding: 12px 16px; border-bottom: 1px solid var(--ocr-border);
+    font-size: 11px; color: var(--ocr-muted); font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent); }
+  .ocr-ph .sub { font-weight: 500; text-transform: none; letter-spacing: 0;
+    color: var(--ocr-muted); font-family: ui-monospace, monospace; font-size: 11px; }
+  .ocr-img-body { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .ocr-drop { flex: 1; border: 2px dashed var(--ocr-border); border-radius: 8px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 32px; cursor: pointer; transition: all 0.15s;
+    min-height: 260px; background: rgba(255,255,255,0.01); }
+  .ocr-drop:hover, .ocr-drop.dragover { border-color: var(--ocr-purple-2); background: rgba(168, 85, 247, 0.06); }
+  .ocr-drop-icon { font-size: 44px; margin-bottom: 12px; opacity: 0.55; transition: transform 0.2s; }
+  .ocr-drop:hover .ocr-drop-icon { transform: translateY(-3px) scale(1.05); opacity: 0.85; }
+  .ocr-drop-title { font-size: 15px; margin-bottom: 6px; color: var(--ocr-text-strong); font-weight: 600; }
+  .ocr-drop-hint { font-size: 12px; color: var(--ocr-muted); margin-bottom: 20px; line-height: 1.5; }
+  .ocr-preview-wrap { flex: 1; display: flex; align-items: center; justify-content: center;
+    min-height: 200px; overflow: hidden; border-radius: 8px; background: rgba(0,0,0,0.25); }
+  .ocr-preview-wrap img { max-width: 100%; max-height: 420px; border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.35); }
+  .ocr-file-meta { display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; color: var(--ocr-muted); font-family: ui-monospace, monospace; padding: 0 4px; }
+  .ocr-file-meta .filename { color: var(--ocr-text); font-weight: 500; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+  .ocr-actions-row { display: flex; gap: 8px; align-items: stretch; }
+  .ocr-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border: none; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 600;
+    transition: all 0.12s; padding: 12px 16px; font-size: 14px; user-select: none; }
+  .ocr-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ocr-btn-primary { flex: 1; background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+    color: #1E1B4B; font-weight: 700; font-size: 15px;
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.28); padding: 14px 20px; }
+  .ocr-btn-primary:hover:not(:disabled) { transform: translateY(-1px);
+    box-shadow: 0 12px 28px rgba(245, 158, 11, 0.42); }
+  .ocr-btn-secondary { background: transparent; color: var(--ocr-muted);
+    border: 1px solid var(--ocr-border); padding: 12px 14px; }
+  .ocr-btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.04);
+    color: var(--ocr-text); border-color: var(--ocr-muted); }
+  .ocr-btn kbd { display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 4px;
+    background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); color: inherit;
+    font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600; margin-left: 4px; opacity: 0.85; }
+  .ocr-btn-secondary kbd { background: rgba(255,255,255,0.05); border-color: var(--ocr-border);
+    color: var(--ocr-muted); }
+
+  /* Lock-screen processing */
+  .ocr-processing-wrap { position: relative; flex: 1; display: flex; align-items: center;
+    justify-content: center; overflow: hidden; border-radius: 8px;
+    background: rgba(0,0,0,0.35); min-height: 260px; }
+  .ocr-processing-wrap img { max-width: 100%; max-height: 100%;
+    filter: blur(6px) brightness(0.35); transform: scale(1.06); display: block; }
+  .ocr-processing-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 28px 36px;
+    min-width: 240px; max-width: 90%;
+    background: rgba(26, 23, 69, 0.88); backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(245, 158, 11, 0.22), 0 8px 24px rgba(0, 0, 0, 0.5);
+    animation: ocr-cardIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes ocr-cardIn {
+    from { opacity: 0; transform: translate(-50%, -46%) scale(0.94); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+  .ocr-ring { position: relative; width: 96px; height: 96px; }
+  .ocr-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ocr-ring .track { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 6; }
+  .ocr-ring .fill  { fill: none; stroke: url(#ocrRingGrad); stroke-width: 6; stroke-linecap: round;
+    stroke-dasharray: 264; stroke-dashoffset: 264;
+    animation: ocr-ringSpin 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  @keyframes ocr-ringSpin {
+    0%   { stroke-dashoffset: 264; transform: rotate(0deg); }
+    50%  { stroke-dashoffset: 66;  transform: rotate(180deg); }
+    100% { stroke-dashoffset: 264; transform: rotate(720deg); }
+  }
+  .ocr-ring svg .fill { transform-origin: 50% 50%; }
+  .ocr-ring-timer { position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; font-family: ui-monospace, monospace; font-size: 22px;
+    font-weight: 600; color: var(--ocr-text-strong); font-variant-numeric: tabular-nums; }
+  .ocr-stage-label { font-size: 15px; color: var(--ocr-text-strong); font-weight: 600;
+    text-align: center; line-height: 1.4; max-width: 240px; }
+  .ocr-stage-sub { font-size: 12px; color: var(--ocr-muted); text-align: center; line-height: 1.5; }
+  .ocr-cancel-btn { font-size: 12px; color: var(--ocr-muted); background: none;
+    border: 1px solid var(--ocr-border); padding: 6px 14px; border-radius: 999px; cursor: pointer;
+    transition: all 0.12s; font-family: inherit; font-weight: 500; }
+  .ocr-cancel-btn:hover { color: var(--ocr-err); border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.08); }
+
+  /* Validation + error banners */
+  .ocr-validation-banner { display: none; gap: 10px; padding: 10px 12px; margin-bottom: 12px;
+    border-radius: 8px; font-size: 13px; align-items: flex-start; line-height: 1.5; }
+  .ocr-vb-error { background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3);
+    border-left: 3px solid var(--ocr-err); color: #fca5a5; }
+  .ocr-vb-warn { background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3);
+    border-left: 3px solid var(--ocr-warn); color: #fcd34d; }
+  .ocr-vb-icon { font-size: 16px; flex-shrink: 0; }
+  .ocr-vb-text b { color: var(--ocr-text-strong); }
+  .ocr-error-banner { display: none; gap: 12px; padding: 14px; margin-bottom: 12px;
+    background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3);
+    border-left: 3px solid var(--ocr-err); border-radius: 8px; }
+  .ocr-error-title { font-size: 13px; font-weight: 600; color: #fca5a5; margin-bottom: 4px; }
+  .ocr-error-detail { font-size: 12px; color: var(--ocr-muted); font-family: ui-monospace, monospace;
+    word-break: break-word; margin-bottom: 10px; }
+
+  /* Raw + suggestions */
+  #ocrRawText { flex: 1; padding: 16px; overflow-y: auto; white-space: pre-wrap;
+    font-family: "Latha", "Noto Sans Tamil", sans-serif; font-size: 15px; line-height: 1.7;
+    color: var(--ocr-text); }
+  #ocrRawText.placeholder { color: var(--ocr-muted); font-style: italic; padding: 24px 16px; }
+  #ocrRawText .flagged { background: rgba(245, 158, 11, 0.14);
+    border-bottom: 1.5px dashed var(--ocr-warn); padding: 0 2px; border-radius: 2px; cursor: help; }
+  #ocrRawText .applied { background: rgba(16, 185, 129, 0.15); color: var(--ocr-ok);
+    border-bottom: 1.5px solid var(--ocr-ok); padding: 0 2px; border-radius: 2px; font-weight: 600; }
+  #ocrMeta { padding: 10px 16px; border-top: 1px solid var(--ocr-border); display: none;
+    font-family: ui-monospace, monospace; font-size: 11px; color: var(--ocr-muted);
+    background: rgba(0,0,0,0.15); }
+  #ocrMeta span { margin-right: 14px; }
+  #ocrSuggestions { flex: 1; padding: 8px; overflow-y: auto; }
+  #ocrSuggestions.placeholder { padding: 24px 16px; color: var(--ocr-muted); font-style: italic; }
+  .ocr-card { background: var(--ocr-panel-2); border: 1px solid var(--ocr-border);
+    border-left: 3px solid var(--ocr-purple); border-radius: 8px; padding: 12px 14px;
+    margin-bottom: 10px; transition: all 0.15s; }
+  .ocr-card:hover { border-color: var(--ocr-purple-2); }
+  .ocr-card .row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+    font-family: "Latha", "Noto Sans Tamil", sans-serif; font-size: 15px; }
+  .ocr-card .raw-word { color: var(--ocr-warn); text-decoration: line-through; }
+  .ocr-card .arrow { color: var(--ocr-muted); font-size: 13px; }
+  .ocr-card .sug-word { color: var(--ocr-ok); font-weight: 600; }
+  .ocr-card .reason { font-size: 12px; color: var(--ocr-muted); margin-top: 6px; line-height: 1.5; }
+  .ocr-card .conf-wrap { margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+  .ocr-card .conf-label { font-size: 10px; color: var(--ocr-muted); font-family: ui-monospace, monospace;
+    text-transform: uppercase; letter-spacing: 0.05em; }
+  .ocr-card .conf-bar { flex: 1; height: 4px; background: var(--ocr-border); border-radius: 2px; overflow: hidden; }
+  .ocr-card .conf-fill { height: 100%; background: linear-gradient(90deg, var(--ocr-warn), var(--ocr-ok)); }
+  .ocr-card .actions { display: flex; gap: 6px; margin-top: 10px; }
+  .ocr-card button { flex: 1; padding: 6px 10px; border-radius: 6px; font-size: 12px;
+    font-weight: 600; cursor: pointer; border: 1px solid var(--ocr-border); background: transparent;
+    color: var(--ocr-text); transition: all 0.12s; }
+  .ocr-card button.apply { border-color: var(--ocr-ok); color: var(--ocr-ok); }
+  .ocr-card button.apply:hover { background: var(--ocr-ok); color: #052e16; }
+  .ocr-card button.reject { border-color: var(--ocr-muted); color: var(--ocr-muted); }
+  .ocr-card.applied { border-left-color: var(--ocr-ok); opacity: 0.75; }
+  .ocr-card.applied button { display: none; }
+  .ocr-card.applied::after { content: "✓ APPLIED"; font-size: 10px; color: var(--ocr-ok);
+    display: block; margin-top: 8px; font-weight: 700; letter-spacing: 0.08em; }
+  .ocr-card.rejected { border-left-color: var(--ocr-muted); opacity: 0.35; }
+  .ocr-card.rejected button { display: none; }
+  .ocr-card.rejected::after { content: "✗ IGNORED"; font-size: 10px; color: var(--ocr-muted);
+    display: block; margin-top: 8px; font-weight: 700; letter-spacing: 0.08em; }
+
+  .ocr-btn-copy { padding: 5px 10px; border-radius: 6px; border: 1px solid var(--ocr-border);
+    background: transparent; color: var(--ocr-muted); font-size: 11px; font-weight: 700;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+    transition: all 0.12s; text-transform: uppercase; letter-spacing: 0.06em; font-family: inherit; }
+  .ocr-btn-copy:hover:not(:disabled) { background: rgba(255,255,255,0.05); color: var(--ocr-text);
+    border-color: var(--ocr-muted); }
+  .ocr-btn-copy:disabled { opacity: 0.4; cursor: not-allowed; }
+  .ocr-btn-copy.copied { color: var(--ocr-ok); border-color: var(--ocr-ok);
+    background: rgba(16, 185, 129, 0.1); }
+  .ocr-toast { position: fixed; top: 90px; right: 20px; z-index: 100;
+    display: flex; align-items: center; gap: 10px; padding: 12px 18px;
+    background: var(--ocr-ok); color: #052e16; border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.35);
+    font-weight: 600; font-size: 13px; transform: translateY(-8px); opacity: 0;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events: none; }
+  .ocr-toast.show { transform: translateY(0); opacity: 1; }
+  .ocr-beta-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
+    background: linear-gradient(135deg, var(--ocr-purple), var(--ocr-purple-2)); color: white;
+    border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; margin-left: 8px; }
+</style>
+
+<div class="ocr-wrap">
+  <div class="ocr-header">
+    <h1><span class="dot"></span> Handwriting to Text <span class="ocr-beta-pill">Beta</span></h1>
+    <div class="badge">powered by Gemini</div>
+  </div>
+
+  <div class="ocr-main">
+    <!-- Column 1: image + upload -->
+    <section class="ocr-panel">
+      <div class="ocr-ph">
+        <span>Image</span>
+        <span id="ocrFileMetaHeader" class="sub"></span>
+      </div>
+      <div class="ocr-img-body">
+        <div id="ocrValidationBanner" class="ocr-validation-banner">
+          <div class="ocr-vb-icon" id="ocrVbIcon">⚠️</div>
+          <div class="ocr-vb-text" id="ocrVbText"></div>
+        </div>
+
+        <div id="ocrErrorBanner" class="ocr-error-banner">
+          <div style="font-size: 20px;">⚠️</div>
+          <div style="flex:1">
+            <div class="ocr-error-title">Transcription failed</div>
+            <div id="ocrErrorDetail" class="ocr-error-detail"></div>
+            <div style="display:flex; gap:6px;">
+              <button id="ocrBtnRetry" class="ocr-btn ocr-btn-primary" style="padding: 6px 14px; font-size: 12px;">↻ Retry</button>
+              <button id="ocrBtnErrorReset" class="ocr-btn ocr-btn-secondary" style="padding: 6px 14px; font-size: 12px;">Change image</button>
+            </div>
+          </div>
+        </div>
+
+        <label for="ocrFileInput" id="ocrDropZone" class="ocr-drop">
+          <div class="ocr-drop-icon">📄</div>
+          <div class="ocr-drop-title">Drop a handwritten Tamil image here</div>
+          <div class="ocr-drop-hint">or click to browse<br>jpg · png · webp · heic · up to 20MB</div>
+        </label>
+        <input type="file" id="ocrFileInput" accept="image/*" style="display:none" />
+
+        <div id="ocrReadyState" style="display:none; flex-direction:column; gap:12px; flex:1;">
+          <div class="ocr-preview-wrap"><img id="ocrPreview" alt="preview" /></div>
+          <div class="ocr-file-meta">
+            <span id="ocrFilenameLabel" class="filename"></span>
+            <span id="ocrSizeLabel"></span>
+          </div>
+          <div class="ocr-actions-row">
+            <button id="ocrBtnChange" class="ocr-btn ocr-btn-secondary">← Change</button>
+            <button id="ocrBtnRun" class="ocr-btn ocr-btn-primary">Transcribe <kbd>↵</kbd></button>
+          </div>
+        </div>
+
+        <div id="ocrProcessingState" style="display:none; flex-direction:column; gap:12px; flex:1;">
+          <div class="ocr-processing-wrap">
+            <img id="ocrPreview2" alt="preview" />
+            <div class="ocr-processing-card">
+              <div class="ocr-ring">
+                <svg viewBox="0 0 96 96">
+                  <defs>
+                    <linearGradient id="ocrRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#F59E0B"/>
+                      <stop offset="100%" stop-color="#D97706"/>
+                    </linearGradient>
+                  </defs>
+                  <circle class="track" cx="48" cy="48" r="42"/>
+                  <circle class="fill"  cx="48" cy="48" r="42"/>
+                </svg>
+                <div id="ocrElapsed" class="ocr-ring-timer">0.0s</div>
+              </div>
+              <div id="ocrStageLabel" class="ocr-stage-label">Uploading image…</div>
+              <div class="ocr-stage-sub">Handwritten pages typically take 10–20 seconds</div>
+              <button id="ocrBtnCancel" class="ocr-cancel-btn">✕ Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Column 2: raw text -->
+    <section class="ocr-panel">
+      <div class="ocr-ph">
+        <span>Extracted Text <span class="sub">(verbatim)</span></span>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <span id="ocrStatus" class="sub"></span>
+          <button id="ocrBtnCopy" class="ocr-btn-copy" disabled>📋 Copy</button>
+        </div>
+      </div>
+      <div id="ocrRawText" class="placeholder">
+        Upload an image on the left. What appears here is exactly what the camera saw — no auto-correction. Suggestions appear on the right.
+      </div>
+      <div id="ocrMeta"></div>
+    </section>
+
+    <!-- Column 3: suggestions -->
+    <section class="ocr-panel">
+      <div class="ocr-ph">
+        <span>Corrections <span id="ocrSugCount" class="sub"></span></span>
+        <span class="sub">apply / ignore per word</span>
+      </div>
+      <div id="ocrSuggestions" class="placeholder">
+        If the model finds any words that may be misspelled or misread, it lists them here with proposed corrections. Click <b style="color: #10b981">✓ Apply</b> to patch the text, or <b style="color: #9691c3">✗ Ignore</b> to keep the original.
+      </div>
+    </section>
+  </div>
+
+  <div id="ocrToast" class="ocr-toast"></div>
+</div>
+
+<script>
+(function() {
+  const els = {
+    dropZone: document.getElementById('ocrDropZone'),
+    fileInput: document.getElementById('ocrFileInput'),
+    readyState: document.getElementById('ocrReadyState'),
+    processingState: document.getElementById('ocrProcessingState'),
+    errorBanner: document.getElementById('ocrErrorBanner'),
+    validationBanner: document.getElementById('ocrValidationBanner'),
+    vbIcon: document.getElementById('ocrVbIcon'),
+    vbText: document.getElementById('ocrVbText'),
+    preview: document.getElementById('ocrPreview'),
+    preview2: document.getElementById('ocrPreview2'),
+    filenameLabel: document.getElementById('ocrFilenameLabel'),
+    sizeLabel: document.getElementById('ocrSizeLabel'),
+    fileMetaHeader: document.getElementById('ocrFileMetaHeader'),
+    btnRun: document.getElementById('ocrBtnRun'),
+    btnChange: document.getElementById('ocrBtnChange'),
+    btnCancel: document.getElementById('ocrBtnCancel'),
+    btnRetry: document.getElementById('ocrBtnRetry'),
+    btnErrorReset: document.getElementById('ocrBtnErrorReset'),
+    btnCopy: document.getElementById('ocrBtnCopy'),
+    stageLabel: document.getElementById('ocrStageLabel'),
+    elapsed: document.getElementById('ocrElapsed'),
+    errorDetail: document.getElementById('ocrErrorDetail'),
+    rawText: document.getElementById('ocrRawText'),
+    suggestions: document.getElementById('ocrSuggestions'),
+    meta: document.getElementById('ocrMeta'),
+    status: document.getElementById('ocrStatus'),
+    sugCount: document.getElementById('ocrSugCount'),
+    toast: document.getElementById('ocrToast'),
+  };
+
+  let state = 'idle', currentFile = null, currentRaw = '', sugList = [], sugState = [];
+  let abortCtrl = null, stageInterval = null, elapsedInterval = null, startedAt = 0;
+
+  const STAGES = [
+    { atMs: 0,     label: 'Uploading image…' },
+    { atMs: 1200,  label: 'Analyzing page layout…' },
+    { atMs: 3000,  label: 'Transcribing Tamil text…' },
+    { atMs: 6000,  label: 'Detecting suggested corrections…' },
+    { atMs: 12000, label: 'Still working — long pages take a bit…' },
+    { atMs: 25000, label: 'Almost there…' },
+  ];
+
+  const MAX_BYTES = 20 * 1024 * 1024;
+  const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+  const ALLOWED_EXT = /\.(jpe?g|png|webp|heic|heif)$/i;
+  const MIN_SHORT_EDGE = 300;
+
+  function setState(newState) {
+    state = newState;
+    els.dropZone.style.display = (newState === 'idle') ? 'flex' : 'none';
+    els.readyState.style.display = (newState === 'ready' || newState === 'success') ? 'flex' : 'none';
+    els.processingState.style.display = (newState === 'processing') ? 'flex' : 'none';
+    els.errorBanner.style.display = (newState === 'error') ? 'flex' : 'none';
+    if (newState === 'idle') { els.fileMetaHeader.textContent = ''; els.validationBanner.style.display = 'none'; currentFile = null; }
+    if (newState === 'processing') els.validationBanner.style.display = 'none';
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function fmtSize(b) { if (b < 1024) return b+' B'; if (b < 1024*1024) return (b/1024).toFixed(1)+' KB'; return (b/1024/1024).toFixed(1)+' MB'; }
+  function showToast(msg, tone) {
+    els.toast.textContent = msg;
+    els.toast.style.background = tone === 'err' ? '#ef4444' : '#10b981';
+    els.toast.style.color = tone === 'err' ? '#fef2f2' : '#052e16';
+    els.toast.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => els.toast.classList.remove('show'), 2600);
+  }
+
+  async function validateFile(f) {
+    if (!f) return { ok: false, blocking: true, reason: 'No file selected.' };
+    const type = String(f.type || '').toLowerCase();
+    if (!ALLOWED_EXT.test(f.name || '') && !ALLOWED_TYPES.has(type)) {
+      return { ok: false, blocking: true, reason: '<b>Unsupported format.</b> Please upload a <b>JPG</b>, <b>PNG</b>, <b>WebP</b>, or <b>HEIC</b> image.' };
+    }
+    if (f.size > MAX_BYTES) return { ok: false, blocking: true, reason: '<b>File too large.</b> This file is ' + fmtSize(f.size) + '. Max is 20 MB.' };
+    if (f.size < 200) return { ok: false, blocking: true, reason: '<b>File is too small</b> — probably empty or corrupt.' };
+    try {
+      const dims = await new Promise((res, rej) => {
+        const u = URL.createObjectURL(f); const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(u); res({ w: img.naturalWidth, h: img.naturalHeight }); };
+        img.onerror = () => { URL.revokeObjectURL(u); rej(new Error('load')); };
+        setTimeout(() => { URL.revokeObjectURL(u); rej(new Error('timeout')); }, 5000);
+        img.src = u;
+      });
+      const shortEdge = Math.min(dims.w, dims.h);
+      if (shortEdge > 0 && shortEdge < MIN_SHORT_EDGE) {
+        return { ok: true, blocking: false, reason: '<b>Low resolution</b> (' + dims.w + '×' + dims.h + 'px). OCR accuracy will be lower.' };
+      }
+    } catch (_) {
+      if (type === 'image/heic' || type === 'image/heif') return { ok: true, blocking: false, reason: '' };
+      return { ok: false, blocking: true, reason: '<b>Corrupted or unreadable image.</b>' };
+    }
+    return { ok: true, blocking: false, reason: '' };
+  }
+
+  async function setFile(f) {
+    if (!f) return;
+    currentFile = f;
+    els.filenameLabel.textContent = f.name;
+    els.sizeLabel.textContent = fmtSize(f.size);
+    els.fileMetaHeader.textContent = f.name + ' · ' + fmtSize(f.size);
+    const url = URL.createObjectURL(f);
+    els.preview.src = url; els.preview2.src = url;
+    setState('ready');
+    els.rawText.className = 'placeholder';
+    els.rawText.innerHTML = 'Validating image…';
+    els.suggestions.className = 'placeholder';
+    els.suggestions.innerHTML = 'Waiting for transcription…';
+    els.sugCount.textContent = '';
+    els.meta.style.display = 'none';
+    els.btnCopy.disabled = true;
+    sugList = []; sugState = [];
+    els.validationBanner.style.display = 'none';
+    const v = await validateFile(f);
+    if (!v.ok && v.blocking) {
+      els.validationBanner.className = 'ocr-validation-banner ocr-vb-error';
+      els.vbText.innerHTML = v.reason;
+      els.validationBanner.style.display = 'flex';
+      els.rawText.innerHTML = 'Fix the validation issue on the left, then upload again.';
+      currentFile = null;
+      return;
+    }
+    if (v.reason) {
+      els.validationBanner.className = 'ocr-validation-banner ocr-vb-warn';
+      els.vbText.innerHTML = v.reason;
+      els.validationBanner.style.display = 'flex';
+    }
+    els.rawText.innerHTML = 'Auto-transcribing in a moment…';
+    setTimeout(() => { if (currentFile === f && state === 'ready') transcribe(); }, 400);
+  }
+
+  els.fileInput.addEventListener('change', () => setFile(els.fileInput.files[0]));
+  els.dropZone.addEventListener('dragover', (e) => { e.preventDefault(); els.dropZone.classList.add('dragover'); });
+  els.dropZone.addEventListener('dragleave', () => els.dropZone.classList.remove('dragover'));
+  els.dropZone.addEventListener('drop', (e) => { e.preventDefault(); els.dropZone.classList.remove('dragover'); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+  els.btnChange.addEventListener('click', () => els.fileInput.click());
+  els.btnErrorReset.addEventListener('click', () => { els.fileInput.value = ''; setState('idle'); });
+
+  async function transcribe() {
+    if (!currentFile || state === 'processing') return;
+    setState('processing');
+    startedAt = Date.now();
+    els.status.textContent = 'transcribing…';
+    els.stageLabel.textContent = STAGES[0].label;
+    stageInterval = setInterval(() => {
+      const el = Date.now() - startedAt;
+      const cur = STAGES.filter(s => s.atMs <= el).pop();
+      if (cur) els.stageLabel.textContent = cur.label;
+    }, 300);
+    elapsedInterval = setInterval(() => {
+      els.elapsed.textContent = ((Date.now() - startedAt) / 1000).toFixed(1) + 's';
+    }, 100);
+
+    abortCtrl = new AbortController();
+    try {
+      const fd = new FormData();
+      fd.append('image', currentFile);
+      const t0 = Date.now();
+      const res = await fetch('/api/ocr-v2/pipeline?mode=full', { method: 'POST', body: fd, signal: abortCtrl.signal, credentials: 'include' });
+      const wallMs = Date.now() - t0;
+      const data = await res.json();
+      clearInterval(stageInterval); clearInterval(elapsedInterval);
+      if (!res.ok) throw new Error(data.error || data.message || ('HTTP ' + res.status));
+      onSuccess(data, wallMs);
+    } catch (err) {
+      clearInterval(stageInterval); clearInterval(elapsedInterval);
+      if (err.name === 'AbortError') { setState('ready'); showToast('Cancelled', 'err'); }
+      else onError(err.message || 'Unknown error');
+    } finally { abortCtrl = null; }
+  }
+
+  function onSuccess(data, wallMs) {
+    currentRaw = data.raw_text || '';
+    sugList = Array.isArray(data.suggestions) ? data.suggestions : [];
+    sugState = sugList.map(() => 'pending');
+    els.rawText.className = '';
+    repaintRaw(); repaintSuggestions();
+    els.btnCopy.disabled = !currentRaw.trim();
+    els.status.textContent = 'done';
+    els.meta.style.display = 'block';
+    els.meta.innerHTML = '<span>words: <b>' + (currentRaw.split(/\s+/).filter(Boolean).length) + '</b></span>' +
+      '<span>corrections: <b>' + sugList.length + '</b></span>' +
+      '<span>time: <b>' + (wallMs / 1000).toFixed(1) + 's</b></span>';
+    setState('success');
+    showToast('Done in ' + (wallMs/1000).toFixed(1) + 's · ' + sugList.length + ' suggestion' + (sugList.length===1?'':'s'));
+  }
+  function onError(msg) { els.errorDetail.textContent = msg; setState('error'); els.status.innerHTML = '<span style="color:#ef4444">failed</span>'; showToast('Transcription failed', 'err'); }
+
+  els.btnRun.addEventListener('click', transcribe);
+  els.btnRetry.addEventListener('click', transcribe);
+  els.btnCancel.addEventListener('click', () => { if (abortCtrl) abortCtrl.abort(); });
+
+  function repaintRaw() {
+    const applied = new Map(), flagged = new Set();
+    sugList.forEach((s, i) => { if (!s.raw_word) return; flagged.add(s.raw_word); if (sugState[i] === 'applied') applied.set(s.raw_word, s.suggested_word); });
+    els.rawText.innerHTML = esc(currentRaw).split(/(\s+)/).map((tok) => {
+      const bare = tok.trim(); if (!bare) return tok;
+      if (applied.has(bare)) return '<span class="applied">' + esc(applied.get(bare)) + '</span>';
+      if (flagged.has(bare)) return '<span class="flagged">' + esc(tok) + '</span>';
+      return tok;
+    }).join('');
+  }
+  function repaintSuggestions() {
+    if (!sugList.length) {
+      els.suggestions.className = 'placeholder';
+      els.suggestions.textContent = 'No corrections — looks good.';
+      els.sugCount.textContent = '(0)';
+      return;
+    }
+    els.suggestions.className = '';
+    const pending = sugState.filter((s) => s === 'pending').length;
+    els.sugCount.textContent = '(' + pending + ' pending / ' + sugList.length + ' total)';
+    els.suggestions.innerHTML = sugList.map((s, i) => {
+      const conf = Math.round((s.confidence || 0) * 100);
+      const stateClass = sugState[i] === 'applied' ? ' applied' : sugState[i] === 'rejected' ? ' rejected' : '';
+      return '<div class="ocr-card' + stateClass + '" data-idx="' + i + '">' +
+        '<div class="row"><span class="raw-word">' + esc(s.raw_word) + '</span><span class="arrow">→</span><span class="sug-word">' + esc(s.suggested_word) + '</span></div>' +
+        '<div class="reason">' + esc(s.reason) + '</div>' +
+        '<div class="conf-wrap"><span class="conf-label">conf</span><div class="conf-bar"><div class="conf-fill" style="width:' + conf + '%"></div></div><span class="conf-label">' + conf + '%</span></div>' +
+        '<div class="actions"><button class="apply" data-action="apply" data-idx="' + i + '">✓ Apply</button><button class="reject" data-action="reject" data-idx="' + i + '">✗ Ignore</button></div>' +
+        '</div>';
+    }).join('');
+  }
+  els.suggestions.addEventListener('click', (e) => {
+    const btn = e.target.closest && e.target.closest('button[data-action]');
+    if (!btn) return;
+    const idx = Number(btn.getAttribute('data-idx'));
+    const action = btn.getAttribute('data-action');
+    if (Number.isFinite(idx) && sugState[idx] === 'pending') {
+      sugState[idx] = action === 'apply' ? 'applied' : 'rejected';
+      repaintRaw(); repaintSuggestions();
+    }
+  });
+
+  els.btnCopy.addEventListener('click', async () => {
+    if (els.btnCopy.disabled) return;
+    const text = els.rawText.innerText || '';
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      const orig = els.btnCopy.innerHTML;
+      els.btnCopy.classList.add('copied');
+      els.btnCopy.innerHTML = '✓ Copied!';
+      setTimeout(() => { els.btnCopy.classList.remove('copied'); els.btnCopy.innerHTML = orig; }, 1500);
+    } catch (err) { showToast('Copy failed: ' + err.message, 'err'); }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (e.key === 'Enter' && !e.shiftKey && (state === 'ready' || state === 'success' || state === 'error') && currentFile) {
+      e.preventDefault(); transcribe();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'u') { e.preventDefault(); els.fileInput.click(); }
+    if (e.key === 'Escape' && state === 'processing' && abortCtrl) abortCtrl.abort();
+  });
+
+  setState('idle');
+})();
+</script>
+
+<%- include('../partials/footer') %>

@@ -137,6 +137,46 @@ jobs:
             --update-secrets DODO_PRODUCT_ID_INDIA=DODO_PRODUCT_ID_INDIA:latest \
             --update-secrets DODO_PRODUCT_ID_GLOBAL=DODO_PRODUCT_ID_GLOBAL:latest || echo "US deployment skipped - may need setup"
 
+      # ── OCR v2 service (Node/TypeScript, sharp-based pipeline) ──
+      # Separate Cloud Run service so the OCR pipeline scales
+      # independently of the main Go backend. Runs in asia-south1 only
+      # for now — most OCR traffic is Indian, US latency isn't
+      # user-facing since /api/ocr-v2/* proxies through Express which
+      # already picks the nearest backend.
+      #
+      # min-instances=0 to keep cold-start cost down while the beta is
+      # small. Bump to 1 when traffic warrants it. Concurrency=10 per
+      # instance since each OCR request is I/O-bound on Gemini calls.
+      - name: Build OCR v2 Image
+        run: |
+          docker build \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/ocr-v2:${{ github.sha }} \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/ocr-v2:latest \
+            -f services/ocr-v2/Dockerfile \
+            services/ocr-v2
+
+      - name: Push OCR v2 Image
+        run: |
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/ocr-v2:${{ github.sha }}
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/ocr-v2:latest
+
+      - name: Deploy OCR v2 to Cloud Run
+        run: |
+          gcloud run deploy prooftamil-ocr-v2 \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/ocr-v2:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --memory=2Gi \
+            --cpu=2 \
+            --timeout=120 \
+            --min-instances=0 \
+            --max-instances=20 \
+            --concurrency=10 \
+            --port=8080 \
+            --set-env-vars=NODE_ENV=production,OCR_V2_MODEL=gemini-2.5-flash \
+            --update-secrets GOOGLE_GENAI_API_KEY=GOOGLE_GENAI_API_KEY:latest
+
       - name: Verify Backend Health (Both Regions)
         run: |
           sleep 10
@@ -239,6 +279,21 @@ jobs:
             # BACKEND_URL_PRIMARY is the fixed OAuth callback URL — always US.
             set_env BACKEND_URL_PRIMARY "$US_URL"
           fi
+
+          # OCR v2 Cloud Run service URL — the Express /api/ocr-v2/*
+          # proxy uses this to forward requests. Optional: falls back
+          # to no OCR v2 proxy if the service isn't deployed yet.
+          OCR_V2_URL=$(gcloud run services describe prooftamil-ocr-v2 \
+            --region=asia-south1 --format='value(status.url)' 2>/dev/null || echo "")
+          if [ -n "$OCR_V2_URL" ]; then
+            set_env OCR_V2_URL "$OCR_V2_URL"
+          fi
+
+          # OCR v2 beta allowlist — comma-separated emails that see the
+          # new pipeline UI at /tools/handwriting-ocr. Everyone else
+          # still sees the maintenance page. Expand this list as we
+          # roll out to more users.
+          set_env OCR_V2_BETA_EMAILS "contact@prooftamil.com"
 
           echo "Vercel env vars synced."
         env:

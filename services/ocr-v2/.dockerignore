@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+.env.local
+data
+eval-results
+eval
+*.log
+.git
+.gitignore
+README.md
+tsconfig.tsbuildinfo

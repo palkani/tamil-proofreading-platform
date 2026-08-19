@@ -160,8 +160,25 @@ router.get('/tools/ocr', (req, res) => {
   });
 });
 
+// /tools/handwriting-ocr — split by OCR v2 beta feature flag:
+//   - Beta users (email on OCR_V2_BETA_EMAILS or admin allowlist) →
+//     render the new OCR v2 UI, which POSTs to /api/ocr-v2/pipeline.
+//   - Everyone else → maintenance page as before.
+// When we open the beta to all Pro users, expand OCR_V2_BETA_EMAILS.
+// When we open to all users, revert this to always-render the OCR v2 UI.
 router.get('/tools/handwriting-ocr', (req, res) => {
   const user = getCurrentUser(req);
+  const { isOcrV2BetaUser } = require('../middleware/ocrV2Beta');
+  const inBeta = isOcrV2BetaUser(req);
+
+  if (inBeta) {
+    const seo = { ...(getSeoData('handwritingOcrTool') || {}), noIndex: true };
+    return res.render('pages/handwriting-ocr-v2', {
+      title: 'Handwriting OCR (Beta) | ProofTamil',
+      seo: seo,
+      user: user,
+    });
+  }
   const seo = { ...(getSeoData('handwritingOcrTool') || {}), noIndex: true };
   res.render('pages/ocr-maintenance', {
     title: 'Tamil Handwriting OCR — Under Maintenance | ProofTamil',
@@ -914,6 +931,33 @@ router.get('/pricing', async (req, res) => {
 // flipped. Two-signal check reduces the class of "URL says active but
 // DB says free" incidents (which would be an even sneakier version of
 // today's bug).
+// Interstitial before the Dodo Payments hosted checkout.
+//
+// Dodo's checkout.dodopayments.com page has no in-page "back to site"
+// button — users who land there and change their mind had no path
+// home except the browser back button. This route inserts a
+// one-second bounce page between /pricing and Dodo:
+//
+//   /pricing → /checkout/redirecting?url=<dodo>&plan=<code>
+//            → (1s + explicit Continue btn) → Dodo checkout
+//
+// From Dodo, browser-back returns to this page (with a persistent
+// "Back to pricing" button) instead of the pricing page directly
+// (which would re-trigger checkout on a misclick).
+//
+// The client-side JS validates the `url` param is on a real
+// dodopayments.com host — never blind-redirects, so this route
+// can't be abused as an open redirector for phishing.
+router.get('/checkout/redirecting', (req, res) => {
+  const user = getCurrentUser(req);
+  const seo = getSeoData('checkoutRedirecting') || getSeoData('home') || {};
+  res.render('pages/checkout-redirecting', {
+    title: 'Redirecting to secure checkout · ProofTamil',
+    seo: { ...seo, noIndex: true },   // interstitial — never index
+    user,
+  });
+});
+
 router.get('/billing/success', async (req, res) => {
   const user = getCurrentUser(req);
   const seo = getSeoData('billingSuccess');

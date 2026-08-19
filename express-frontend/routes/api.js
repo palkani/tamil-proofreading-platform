@@ -1765,6 +1765,60 @@ const ocrMaintenanceHandler = (req, res) => {
 // the res.render() targets in routes/index.js — see comment there.
 router.use('/ocr', ocrMaintenanceHandler);
 router.use('/handwriting-ocr', ocrMaintenanceHandler);
+
+// ── OCR v2 · beta-gated proxy to prooftamil-ocr-v2 Cloud Run service ─
+// Anyone on OCR_V2_BETA_EMAILS (or the admin allowlist) sees a live
+// OCR v2 endpoint here; everyone else stays hidden behind the
+// maintenance gate above.
+//
+// POST /api/ocr-v2/pipeline
+//   multipart/form-data with field "image" (jpg/png/webp/heic, ≤20MB)
+//   → 200 { raw_text, suggestions[], graphemes, wallMs, costUsd, mode, stages, meta }
+//   → 401 auth_required (not signed in)
+//   → 403 beta_only (signed in but not on allowlist)
+//   → 503 service_unavailable (Cloud Run service down or OCR_V2_URL not set)
+{
+  const { requireOcrV2Beta } = require('../middleware/ocrV2Beta');
+  const ocrV2Upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 },
+  });
+
+  router.post('/ocr-v2/pipeline', requireOcrV2Beta, ocrV2Upload.single('image'), async (req, res) => {
+    const target = (process.env.OCR_V2_URL || '').replace(/\/$/, '');
+    if (!target) {
+      return res.status(503).json({
+        error: 'service_unavailable',
+        message: 'OCR v2 service URL not configured (OCR_V2_URL env var).',
+      });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'no_file', message: 'Upload an image in the "image" field.' });
+    }
+    // Rebuild the multipart body to forward — we don't just pipe the
+    // request stream because multer has already consumed it.
+    const fd = new FormData();
+    fd.append('image', req.file.buffer, {
+      filename: req.file.originalname || 'upload.jpg',
+      contentType: req.file.mimetype || 'application/octet-stream',
+    });
+    // Forward mode (baseline | preprocessed | full). Default 'full'
+    // in prod — locked in based on phase-2 evaluation.
+    const mode = String(req.body.mode || req.query.mode || 'full').toLowerCase();
+    try {
+      const upstream = await axios.post(target + '/api/ocr?mode=' + encodeURIComponent(mode), fd, {
+        headers: fd.getHeaders(),
+        maxBodyLength: 25 * 1024 * 1024,
+        timeout: 120_000,
+        validateStatus: () => true,
+      });
+      res.status(upstream.status).json(upstream.data);
+    } catch (err) {
+      console.error('[OCR-V2] proxy failed:', err.message);
+      res.status(502).json({ error: 'upstream_error', message: err.message });
+    }
+  });
+}
 // ─────────────────────────────────────────────────────────────────
 
 // OCR health check endpoint
