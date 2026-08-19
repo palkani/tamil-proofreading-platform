@@ -1458,9 +1458,8 @@
         savingsEl.classList.remove('hidden');
       }
       if (badgeEl) {
-        badgeEl.textContent = cc === 'IN'
-          ? 'Payments via Razorpay · Secure · INR'
-          : 'Payments via Stripe · Secure · ' + (mPricing.currency || 'USD');
+        badgeEl.textContent = 'Payments via Dodo Payments · Secure · ' +
+          (cc === 'IN' ? 'INR' : (mPricing.currency || 'USD'));
       }
 
       if (loading) loading.classList.add('hidden');

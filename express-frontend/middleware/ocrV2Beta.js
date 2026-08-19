@@ -16,16 +16,27 @@
 
 const { isAdminEmail } = require('./admin');
 
+// Hardcoded default beta allowlist — always granted access regardless of
+// whether OCR_V2_BETA_EMAILS is propagated to this Vercel function. This
+// exists because env-var propagation has been intermittent in prod and we
+// don't want the site owner locked out of their own OCR beta by an env
+// hiccup. Everything else still relies on the env var, so this is not a
+// bypass — it's just a "never lock the owner out" floor.
+const HARDCODED_BETA = [
+  'contact@prooftamil.com',
+  'prooftamil@gmail.com',
+];
+
 let cachedList = null;
 
 function getBetaList() {
   if (cachedList) return cachedList;
   const raw = process.env.OCR_V2_BETA_EMAILS || '';
   cachedList = new Set(
-    raw
-      .split(',')
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean)
+    [
+      ...HARDCODED_BETA,
+      ...raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean),
+    ].map((e) => e.toLowerCase())
   );
   return cachedList;
 }
