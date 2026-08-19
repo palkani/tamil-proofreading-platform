@@ -1766,56 +1766,72 @@ const ocrMaintenanceHandler = (req, res) => {
 router.use('/ocr', ocrMaintenanceHandler);
 router.use('/handwriting-ocr', ocrMaintenanceHandler);
 
-// ── OCR v2 · beta-gated proxy to prooftamil-ocr-v2 Cloud Run service ─
-// Anyone on OCR_V2_BETA_EMAILS (or the admin allowlist) sees a live
-// OCR v2 endpoint here; everyone else stays hidden behind the
-// maintenance gate above.
+// ── OCR v2 · beta-gated pipeline (runs in-process on Vercel) ────
+// Anyone on OCR_V2_BETA_EMAILS (or the admin allowlist) can hit the
+// pipeline; everyone else stays hidden behind the maintenance gate
+// above. The pipeline itself lives in lib/ocr-v2/ — sharp
+// preprocessing + strip cutting + parallel Gemini calls, all in the
+// Express serverless function. Requires Vercel Pro (60s function
+// timeout — Hobby's 10s is not enough).
 //
 // POST /api/ocr-v2/pipeline
 //   multipart/form-data with field "image" (jpg/png/webp/heic, ≤20MB)
 //   → 200 { raw_text, suggestions[], graphemes, wallMs, costUsd, mode, stages, meta }
 //   → 401 auth_required (not signed in)
 //   → 403 beta_only (signed in but not on allowlist)
-//   → 503 service_unavailable (Cloud Run service down or OCR_V2_URL not set)
+//   → 500 no_api_key (GEMINI_API_KEY* env var not set)
 {
   const { requireOcrV2Beta } = require('../middleware/ocrV2Beta');
+  const { runPipeline } = require('../lib/ocr-v2/pipeline');
   const ocrV2Upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 20 * 1024 * 1024 },
   });
 
+  function getGeminiKey() {
+    return process.env.GEMINI_API_KEY_2
+      || process.env.GEMINI_API_KEY_1
+      || process.env.GEMINI_API_KEY_3
+      || process.env.GEMINI_API_KEY_4
+      || process.env.GEMINI_API_KEY
+      || process.env.GOOGLE_GENAI_API_KEY
+      || process.env.AI_INTEGRATIONS_GEMINI_API_KEY
+      || '';
+  }
+
   router.post('/ocr-v2/pipeline', requireOcrV2Beta, ocrV2Upload.single('image'), async (req, res) => {
-    const target = (process.env.OCR_V2_URL || '').replace(/\/$/, '');
-    if (!target) {
-      return res.status(503).json({
-        error: 'service_unavailable',
-        message: 'OCR v2 service URL not configured (OCR_V2_URL env var).',
+    const apiKey = getGeminiKey();
+    if (!apiKey) {
+      return res.status(500).json({
+        error: 'no_api_key',
+        message: 'No Gemini API key configured (set GEMINI_API_KEY_1..4 or GOOGLE_GENAI_API_KEY).',
       });
     }
     if (!req.file) {
       return res.status(400).json({ error: 'no_file', message: 'Upload an image in the "image" field.' });
     }
-    // Rebuild the multipart body to forward — we don't just pipe the
-    // request stream because multer has already consumed it.
-    const fd = new FormData();
-    fd.append('image', req.file.buffer, {
-      filename: req.file.originalname || 'upload.jpg',
-      contentType: req.file.mimetype || 'application/octet-stream',
-    });
-    // Forward mode (baseline | preprocessed | full). Default 'full'
-    // in prod — locked in based on phase-2 evaluation.
     const mode = String(req.body.mode || req.query.mode || 'full').toLowerCase();
+    const model = process.env.OCR_V2_MODEL || 'gemini-2.5-flash';
     try {
-      const upstream = await axios.post(target + '/api/ocr?mode=' + encodeURIComponent(mode), fd, {
-        headers: fd.getHeaders(),
-        maxBodyLength: 25 * 1024 * 1024,
-        timeout: 120_000,
-        validateStatus: () => true,
+      const r = await runPipeline(req.file.buffer, {
+        mode: mode === 'baseline' || mode === 'preprocessed' ? mode : 'full',
+        model,
+        apiKey,
+        timeoutMs: 55_000,   // just under Vercel Pro's 60s cap
       });
-      res.status(upstream.status).json(upstream.data);
+      res.json({
+        raw_text: r.raw_text,
+        suggestions: r.suggestions,
+        wallMs: r.wallMs,
+        costUsd: r.costUsd,
+        mode: r.mode,
+        stages: r.stages,
+        meta: r.meta,
+        model,
+      });
     } catch (err) {
-      console.error('[OCR-V2] proxy failed:', err.message);
-      res.status(502).json({ error: 'upstream_error', message: err.message });
+      console.error('[OCR-V2] pipeline failed:', err.message);
+      res.status(500).json({ error: 'pipeline_error', message: err.message });
     }
   });
 }
