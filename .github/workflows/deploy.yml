@@ -137,52 +137,13 @@ jobs:
             --update-secrets DODO_PRODUCT_ID_INDIA=DODO_PRODUCT_ID_INDIA:latest \
             --update-secrets DODO_PRODUCT_ID_GLOBAL=DODO_PRODUCT_ID_GLOBAL:latest || echo "US deployment skipped - may need setup"
 
-      # ── OCR v2 service (Node/TypeScript, sharp-based pipeline) ──
-      # Separate Cloud Run service so the OCR pipeline scales
-      # independently of the main Go backend. Runs in asia-south1 only
-      # for now — most OCR traffic is Indian, US latency isn't
-      # user-facing since /api/ocr-v2/* proxies through Express which
-      # already picks the nearest backend.
-      #
-      # min-instances=0 to keep cold-start cost down while the beta is
-      # small. Bump to 1 when traffic warrants it. Concurrency=10 per
-      # instance since each OCR request is I/O-bound on Gemini calls.
-      - name: Build OCR v2 Image
-        run: |
-          docker build \
-            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/ocr-v2:${{ github.sha }} \
-            -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/ocr-v2:latest \
-            -f services/ocr-v2/Dockerfile \
-            services/ocr-v2
-
-      - name: Push OCR v2 Image
-        run: |
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/ocr-v2:${{ github.sha }}
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/ocr-v2:latest
-
-      - name: Deploy OCR v2 to Cloud Run
-        # Gemini key is passed from a GitHub Actions repo secret as
-        # a plain Cloud Run env var. Using GEMINI_API_KEY_2 (one of
-        # the rotator keys already used by the Express/frontend) so
-        # the OCR v2 service shares the same billing account and
-        # quota pool. Server reads GEMINI_API_KEY first, so we map
-        # secrets.GEMINI_API_KEY_2 → GEMINI_API_KEY inside the container.
-        # To add rotation later: pass all 4 keys and use a rotator
-        # in transcribe.ts (same pattern as gemini-key-rotator.js).
-        run: |
-          gcloud run deploy prooftamil-ocr-v2 \
-            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/docker-repo/ocr-v2:${{ github.sha }} \
-            --region=${{ env.REGION }} \
-            --platform=managed \
-            --allow-unauthenticated \
-            --memory=2Gi \
-            --cpu=2 \
-            --timeout=120 \
-            --min-instances=0 \
-            --max-instances=20 \
-            --concurrency=10 \
-            --port=8080 \
-            --set-env-vars=NODE_ENV=production,OCR_V2_MODEL=gemini-2.5-flash,GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY_2 }}
+      # OCR v2 runs inline in Express on Vercel (see
+      # express-frontend/lib/ocr-v2/ and the /api/ocr-v2/pipeline
+      # route in routes/api.js). No separate Cloud Run deploy —
+      # the sharp preprocessing + strip cutting + parallel Gemini
+      # calls all execute in the Vercel serverless function. Requires
+      # Vercel Pro (60s timeout — Hobby's 10s isn't enough for a
+      # 15-20s pipeline). Consolidated here to keep infra simpler.
 
       - name: Verify Backend Health (Both Regions)
         run: |
@@ -287,19 +248,11 @@ jobs:
             set_env BACKEND_URL_PRIMARY "$US_URL"
           fi
 
-          # OCR v2 Cloud Run service URL — the Express /api/ocr-v2/*
-          # proxy uses this to forward requests. Optional: falls back
-          # to no OCR v2 proxy if the service isn't deployed yet.
-          OCR_V2_URL=$(gcloud run services describe prooftamil-ocr-v2 \
-            --region=asia-south1 --format='value(status.url)' 2>/dev/null || echo "")
-          if [ -n "$OCR_V2_URL" ]; then
-            set_env OCR_V2_URL "$OCR_V2_URL"
-          fi
-
           # OCR v2 beta allowlist — comma-separated emails that see the
           # new pipeline UI at /tools/handwriting-ocr. Everyone else
           # still sees the maintenance page. Expand this list as we
-          # roll out to more users.
+          # roll out to more users. (The pipeline itself now runs
+          # inline in Express — no separate service URL needed.)
           set_env OCR_V2_BETA_EMAILS "contact@prooftamil.com"
 
           echo "Vercel env vars synced."
