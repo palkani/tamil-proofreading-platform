@@ -909,12 +909,17 @@ ${!API_KEY ? '<div class="keywarn">⚠️ No GEMINI_API_KEY / GOOGLE_GENAI_API_K
 
   // ── Raw text + suggestions rendering ──────────────────────
   function repaintRaw() {
+    // Only PENDING suggestions get the amber flag; ignoring should
+    // clear the highlight. Previously `flagged.add()` ran for every
+    // suggestion regardless of state, so ignoring didn't visually
+    // dismiss the underline in the raw text.
     const applied = new Map();
     const flagged = new Set();
     sugList.forEach((s, i) => {
       if (!s.raw_word) return;
-      flagged.add(s.raw_word);
       if (sugState[i] === 'applied') applied.set(s.raw_word, s.suggested_word);
+      else if (sugState[i] === 'pending') flagged.add(s.raw_word);
+      // rejected → not added to either set → renders as plain text
     });
     els.rawText.innerHTML = esc(currentRaw).split(/(\\s+)/).map((tok) => {
       const bare = tok.trim();

@@ -512,8 +512,17 @@
   els.btnCancel.addEventListener('click', () => { if (abortCtrl) abortCtrl.abort(); });
 
   function repaintRaw() {
+    // Only PENDING suggestions get the amber flag; applied ones get
+    // the green replacement; ignored ones render as plain raw text.
+    // Previously flagged.add() ran for every suggestion regardless of
+    // state, so ignoring didn't remove the highlight.
     const applied = new Map(), flagged = new Set();
-    sugList.forEach((s, i) => { if (!s.raw_word) return; flagged.add(s.raw_word); if (sugState[i] === 'applied') applied.set(s.raw_word, s.suggested_word); });
+    sugList.forEach((s, i) => {
+      if (!s.raw_word) return;
+      if (sugState[i] === 'applied') applied.set(s.raw_word, s.suggested_word);
+      else if (sugState[i] === 'pending') flagged.add(s.raw_word);
+      // rejected → not added to either set → renders as plain text
+    });
     els.rawText.innerHTML = esc(currentRaw).split(/(\s+)/).map((tok) => {
       const bare = tok.trim(); if (!bare) return tok;
       if (applied.has(bare)) return '<span class="applied">' + esc(applied.get(bare)) + '</span>';
