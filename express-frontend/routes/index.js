@@ -753,14 +753,16 @@ router.get('/register', (req, res) => {
     return res.redirect(target);
   }
 
-  // Set ref_code cookie server-side when ?ref= is in URL (handles direct register links)
+  // Set ref_code cookie server-side when ?ref= is in URL (handles direct register links).
+  // Hardened: HttpOnly (only read server-side on /register POST), Secure in prod.
   if (req.query.ref) {
     const refCode = String(req.query.ref).replace(/[^A-Za-z0-9]/g, '').slice(0, 20);
     if (refCode) {
       res.cookie('ref_code', refCode, {
         maxAge: 30 * 24 * 60 * 60 * 1000,
-        httpOnly: false,
-        sameSite: 'lax'
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
       });
     }
   }
@@ -1098,10 +1100,40 @@ router.get('/contact', (req, res) => {
 router.get('/privacy', (req, res) => {
   const user = getCurrentUser(req);
   const seo = getSeoData('privacy');
-  res.render('pages/privacy', { 
+  res.render('pages/privacy', {
     title: seo.title,
     seo: seo,
     user: user
+  });
+});
+
+// Self-serve data page (GDPR Article 15/17): download a copy or request
+// deletion. Requires auth so we know whose data to export/delete.
+router.get('/account/data', requireAuth, (req, res) => {
+  res.render('pages/account-data', {
+    title: 'Your data | ProofTamil',
+    seo: {
+      title: 'Your data | ProofTamil',
+      description: 'Export or delete your ProofTamil account data.',
+      noIndex: true,
+    },
+    user: getCurrentUser(req),
+  });
+});
+
+// Public security page — encryption posture, sub-processors, incident
+// response, and vulnerability disclosure contact. Paired with
+// /.well-known/security.txt (RFC 9116) served by express.static.
+router.get('/security', (req, res) => {
+  const user = getCurrentUser(req);
+  res.render('pages/security', {
+    title: 'Security | ProofTamil',
+    seo: {
+      title: 'Security | ProofTamil',
+      description: 'How ProofTamil protects your account, drafts, and payments — encryption, sub-processors, incident response, and vulnerability disclosure.',
+      canonical: 'https://www.prooftamil.com/security',
+    },
+    user: user,
   });
 });
 
@@ -1127,6 +1159,7 @@ router.get('/sitemap.xml', (req, res) => {
     { url: '/contact',                priority: '0.60', changefreq: 'yearly',  lastmod: '2025-12-01' },
     { url: '/privacy',                priority: '0.30', changefreq: 'yearly',  lastmod: '2025-12-01' },
     { url: '/terms',                  priority: '0.30', changefreq: 'yearly',  lastmod: '2025-12-01' },
+    { url: '/security',               priority: '0.40', changefreq: 'yearly',  lastmod: '2026-08-19' },
   ];
 
   const escapeXml = (s) =>

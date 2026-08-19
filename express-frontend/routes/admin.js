@@ -14,6 +14,18 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 const { requireAdmin, isAdminEmail } = require('../middleware/admin');
+const { logAdminApi, adminAuditPageMiddleware } = require('../middleware/adminAudit');
+
+// Emit a `kind:admin_audit event:page` line for every admin page render.
+// Skipped for /admin/api/* — those go through the proxy handler below,
+// which emits its own richer `event:api` line with status + duration.
+router.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  return requireAdmin(req, res, (err) => {
+    if (err) return next(err);
+    adminAuditPageMiddleware(req, res, next);
+  });
+});
 
 // Backend base URL for admin API proxying. Falls back to the same
 // value the rest of the app uses; a dedicated ADMIN_BACKEND_URL var
@@ -140,6 +152,7 @@ router.all('/api/*', requireAdmin, async (req, res) => {
   const upstreamPath = req.path.replace(/^\/api/, '');
   const url = `${backendBase()}/api/v1/admin${upstreamPath}`;
   const method = req.method.toUpperCase();
+  const startedAt = Date.now();
 
   const token = req.cookies && req.cookies.access_token;
   const headers = {};
@@ -164,6 +177,7 @@ router.all('/api/*', requireAdmin, async (req, res) => {
 
   try {
     const response = await axios(config);
+    logAdminApi({ req, method, upstreamPath, status: response.status, durationMs: Date.now() - startedAt });
     let data = response.data;
 
     // Hide admin/staff accounts' own events from the Activity feed — repeated staff
@@ -185,6 +199,7 @@ router.all('/api/*', requireAdmin, async (req, res) => {
     }
     return res.send(data);
   } catch (err) {
+    logAdminApi({ req, method, upstreamPath, status: 502, durationMs: Date.now() - startedAt });
     console.error('[ADMIN] proxy error:', err.message);
     return res.status(502).json({ error: 'Backend unreachable', details: err.message });
   }

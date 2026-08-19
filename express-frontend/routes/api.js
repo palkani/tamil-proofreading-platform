@@ -3996,6 +3996,150 @@ router.get('/newsletter/count', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Account data — GDPR Article 15 (export) + Article 17 (deletion request).
+// Backs the /account/data page. MUST be declared before the router.all('/*')
+// catch-all proxy below or the proxy swallows both routes as backend calls.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/account/export
+ * Returns a JSON blob (as an attachment) with everything we can pull from
+ * the backend programmatically for the signed-in user. Missing sections
+ * degrade gracefully — an unavailable backend endpoint becomes a `null`
+ * field with a note, not a failed export.
+ */
+router.get('/account/export', async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'auth_required', message: 'Sign in to export your data.' });
+  }
+  const token = req.cookies?.access_token;
+  const backend = (req._backendUrl || BACKEND_URL || '').replace(/\/$/, '');
+  const generatedAt = new Date().toISOString();
+
+  const fetchJson = async (path) => {
+    if (!backend || !token) return { ok: false, reason: 'backend_or_token_missing' };
+    try {
+      const r = await axios.get(backend + path, {
+        headers: { Authorization: 'Bearer ' + token },
+        timeout: 8000,
+        validateStatus: () => true,
+      });
+      if (r.status >= 200 && r.status < 300) return { ok: true, data: r.data };
+      return { ok: false, reason: `http_${r.status}` };
+    } catch (err) {
+      return { ok: false, reason: err.message };
+    }
+  };
+
+  const [profile, billing] = await Promise.all([
+    fetchJson('/api/v1/me'),
+    fetchJson('/api/v1/billing/me'),
+  ]);
+
+  const bundle = {
+    export_metadata: {
+      generated_at: generatedAt,
+      requested_by: req.user.email,
+      requested_by_id: req.user.id,
+      note: 'Drafts, AI-content history, and OCR outputs are not bundled programmatically. Email contact@prooftamil.com for a full ZIP.',
+    },
+    profile: profile.ok ? profile.data : { unavailable: true, reason: profile.reason },
+    billing: billing.ok ? billing.data : { unavailable: true, reason: billing.reason },
+  };
+
+  const filename = `prooftamil-data-${(req.user.email || req.user.id).replace(/[^A-Za-z0-9._-]/g, '_')}-${generatedAt.slice(0, 10)}.json`;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Cache-Control', 'no-store');
+  return res.send(JSON.stringify(bundle, null, 2));
+});
+
+/**
+ * POST /api/account/delete-request
+ * Records a deletion request. We DO NOT delete inline here — deletion is a
+ * 30-day processed request so we (a) have a paper trail, (b) can honour
+ * legal-hold obligations if any, and (c) can email the user a confirmation
+ * when it completes. Body: { email: "user's own email, typed to confirm" }.
+ */
+router.post('/account/delete-request', async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'auth_required', message: 'Sign in to request deletion.' });
+  }
+  const typed = String((req.body && req.body.email) || '').trim().toLowerCase();
+  const owned = String(req.user.email || '').trim().toLowerCase();
+  if (!typed || !owned || typed !== owned) {
+    return res.status(400).json({ error: 'email_mismatch', message: 'Typed email does not match the signed-in account.' });
+  }
+
+  const submittedAt = new Date().toISOString();
+  const notifyTo = process.env.CONTACT_TO_EMAIL || 'contact@prooftamil.com';
+  const fromEmail = process.env.EMAIL_FROM_ADDRESS || 'noreply@prooftamil.com';
+  const resendKey = (process.env.RESEND_API_KEY || '').trim();
+  const sgApiKey = (process.env.SENDGRID_API_KEY || '').trim();
+
+  const notifyText = [
+    'ACCOUNT DELETION REQUEST',
+    '',
+    `User email : ${owned}`,
+    `User ID    : ${req.user.id}`,
+    `Submitted  : ${submittedAt}`,
+    `IP         : ${req.ip || req.headers['x-forwarded-for'] || 'unknown'}`,
+    `UA         : ${req.headers['user-agent'] || 'unknown'}`,
+    '',
+    'Action required: delete the user in Supabase (auth.users + related rows),',
+    'confirm within 30 days per privacy policy, then email the user at the address above.',
+  ].join('\n');
+  const notifyHtml = `<pre style="font-family:ui-monospace,monospace;font-size:13px">${notifyText.replace(/</g, '&lt;')}</pre>`;
+
+  // Fire-and-forget email; the request itself succeeds even if email transport is offline.
+  (async () => {
+    try {
+      if (resendKey) {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: `ProofTamil <${fromEmail}>`,
+            to: [notifyTo],
+            reply_to: owned,
+            subject: `[ACCOUNT DELETION] ${owned}`,
+            text: notifyText,
+            html: notifyHtml,
+          }),
+        });
+      } else if (sgApiKey) {
+        await fetch('https://api.sendgrid.com/v3/mail/send', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${sgApiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            personalizations: [{ to: [{ email: notifyTo }], subject: `[ACCOUNT DELETION] ${owned}` }],
+            from: { email: fromEmail, name: 'ProofTamil' },
+            reply_to: { email: owned },
+            content: [{ type: 'text/plain', value: notifyText }],
+          }),
+        });
+      }
+    } catch (err) {
+      console.error('[ACCOUNT-DELETE] notification email failed:', err.message);
+    }
+  })();
+
+  console.log('[ACCOUNT-DELETE] request:', JSON.stringify({
+    email: owned,
+    user_id: req.user.id,
+    submitted_at: submittedAt,
+    ip: req.ip,
+    ua: req.headers['user-agent'],
+  }));
+
+  return res.json({
+    ok: true,
+    submitted_at: submittedAt,
+    message: 'Deletion request received. We will process it within 30 days and email a confirmation.',
+  });
+});
+
 // Proxy other API calls to Go backend
 // IMPORTANT: This catch-all must be LAST to avoid intercepting specific routes like /submit
 router.all('/*', async (req, res) => {
