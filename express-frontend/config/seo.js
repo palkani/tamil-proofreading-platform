@@ -264,7 +264,18 @@ const seoConfig = {
     canonical: BASE_URL + '/terms',
     ogTitle: 'Terms of Service - ProofTamil',
     ogDescription: 'Terms of service for using ProofTamil Tamil grammar checker.',
-    pageType: 'legal'
+    pageType: 'legal',
+    // WebPage JSON-LD — served via the seo.jsonLd hook in header.ejs.
+    // Stringified here so it lands directly inside <script type="application/ld+json">.
+    jsonLd: JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: 'Terms of Service',
+      url: BASE_URL + '/terms',
+      description: 'Terms of Service governing use of ProofTamil, an AI-assisted Tamil writing and OCR platform.',
+      inLanguage: 'en',
+      isPartOf: { '@type': 'WebSite', name: 'ProofTamil', url: BASE_URL },
+    }),
   },
 
   drafts: {

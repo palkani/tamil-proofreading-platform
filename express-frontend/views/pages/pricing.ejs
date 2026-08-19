@@ -172,14 +172,14 @@
         <div>
           <h3 class="font-semibold text-gray-900">Which payment methods are accepted?</h3>
           <% if (countryCode === 'IN') { %>
-          <p class="mt-1 text-sm text-gray-600">UPI, Credit/Debit cards, Netbanking, and Wallets via Razorpay.</p>
+          <p class="mt-1 text-sm text-gray-600">UPI, Credit/Debit cards, Netbanking, and Wallets — securely processed by Dodo Payments.</p>
           <% } else { %>
-          <p class="mt-1 text-sm text-gray-600">Credit / Debit cards, Apple Pay, and Google Pay via Stripe.</p>
+          <p class="mt-1 text-sm text-gray-600">Credit / Debit cards, Apple Pay, and Google Pay — securely processed by Dodo Payments.</p>
           <% } %>
         </div>
         <div>
           <h3 class="font-semibold text-gray-900">Is my data secure?</h3>
-          <p class="mt-1 text-sm text-gray-600">Yes. Payments are processed by <%= countryCode === 'IN' ? 'Razorpay' : 'Stripe' %>, a PCI-DSS Level 1 certified payment processor. We never store your card details.</p>
+          <p class="mt-1 text-sm text-gray-600">Yes. Payments are processed by Dodo Payments, a PCI-DSS compliant payment processor. We never store your card details.</p>
         </div>
         <div>
           <h3 class="font-semibold text-gray-900">What happens to my drafts if I downgrade?</h3>

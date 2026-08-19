@@ -233,8 +233,7 @@
       document.getElementById('pro-section').classList.remove('hidden');
 
       var statusVal = (sub && sub.status) || 'active';
-      var provider  = (billing.provider || '').toLowerCase();
-      document.getElementById('sub-provider').textContent    = provider === 'razorpay' ? 'Razorpay' : 'Stripe';
+      document.getElementById('sub-provider').textContent    = 'Dodo Payments';
       document.getElementById('sub-status-text').textContent = statusVal.charAt(0).toUpperCase() + statusVal.slice(1);
 
       if (billing.current_period_end) {

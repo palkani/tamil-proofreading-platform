@@ -22,6 +22,7 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
+const { securityHeaders } = require('./middleware/securityHeaders');
 const querystring = require('querystring');
 const compression = require('compression');
 const { getSeoData } = require('./config/seo');
@@ -114,6 +115,10 @@ function createApp() {
   };
 
   app.use(ensureReadyMiddleware);
+
+  // Applied before compression so headers are set even when responses are
+  // served from cache / short-circuit paths (health checks, redirects).
+  app.use(securityHeaders);
 
   app.use(compression({ level: 6, threshold: 1024 }));
 

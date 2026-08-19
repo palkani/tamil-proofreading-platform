@@ -1,0 +1,164 @@
+<%- include('../partials/header') %>
+
+<%- include('../partials/nav', { active: 'account', user: user }) %>
+
+<div class="min-h-screen bg-gray-50 py-12">
+  <div class="max-w-3xl mx-auto px-6">
+    <div class="mb-8">
+      <a href="/account" class="text-sm text-primary-600 hover:underline">← Back to account</a>
+      <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 mt-3 mb-2">Your data</h1>
+      <p class="text-gray-600">Export a copy of what we store about you, or permanently delete your account.</p>
+    </div>
+
+    <!-- Export card -->
+    <section class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 md:p-8 mb-6">
+      <div class="flex items-start justify-between gap-6 flex-wrap">
+        <div class="min-w-0 flex-1">
+          <h2 class="text-lg font-bold text-gray-900 mb-2">Export your data</h2>
+          <p class="text-gray-600 text-sm mb-4">
+            Download a JSON file containing your profile, subscription info, and account metadata.
+            Includes everything ProofTamil holds that we can bundle programmatically.
+          </p>
+          <p class="text-gray-500 text-xs">
+            Need drafts, AI-content history, or OCR outputs included? Email
+            <a href="mailto:contact@prooftamil.com" class="text-primary-600">contact@prooftamil.com</a>
+            and we'll send you a full ZIP within 30 days.
+          </p>
+        </div>
+        <button id="export-btn" type="button"
+          class="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-primary-600 text-white font-semibold text-sm hover:bg-primary-700 transition disabled:opacity-60">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Download JSON
+        </button>
+      </div>
+      <div id="export-status" class="hidden mt-4 text-sm rounded-lg px-3 py-2"></div>
+    </section>
+
+    <!-- Delete card -->
+    <section class="bg-white rounded-2xl border border-red-200 shadow-sm p-6 md:p-8">
+      <div class="flex items-start justify-between gap-6 flex-wrap">
+        <div class="min-w-0 flex-1">
+          <h2 class="text-lg font-bold text-red-700 mb-2">Delete your account</h2>
+          <p class="text-gray-600 text-sm mb-2">
+            Permanently deletes your profile, drafts, AI-content history, and OCR outputs.
+            Backups age out within 7 days.
+          </p>
+          <p class="text-gray-500 text-xs">
+            Requests are processed within 30 days. You'll receive a confirmation email at
+            <b><%= user.email %></b> when the deletion completes.
+          </p>
+        </div>
+        <button id="delete-btn" type="button"
+          class="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition">
+          Request deletion
+        </button>
+      </div>
+
+      <!-- Inline confirmation form (hidden by default) -->
+      <div id="delete-form" class="hidden mt-6 border-t border-red-100 pt-6">
+        <p class="text-sm text-gray-700 mb-3">To confirm, type your email <b><%= user.email %></b> below:</p>
+        <input id="delete-email" type="email" autocomplete="off"
+               class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none"
+               placeholder="<%= user.email %>" />
+        <div class="flex flex-wrap gap-3 mt-4">
+          <button id="delete-confirm-btn" type="button"
+                  class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition disabled:opacity-60">
+            Yes, delete my account
+          </button>
+          <button id="delete-cancel-btn" type="button"
+                  class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition">
+            Cancel
+          </button>
+        </div>
+        <div id="delete-status" class="hidden mt-4 text-sm rounded-lg px-3 py-2"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  var USER_EMAIL = <%- JSON.stringify(user.email || '') %>;
+
+  function show(el, cls, msg) {
+    el.className = 'mt-4 text-sm rounded-lg px-3 py-2 ' + cls;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+
+  // ── Export ────────────────────────────────────────────────────────────────
+  var exportBtn = document.getElementById('export-btn');
+  var exportStatus = document.getElementById('export-status');
+  exportBtn.addEventListener('click', async function () {
+    exportBtn.disabled = true;
+    show(exportStatus, 'bg-gray-50 text-gray-600', 'Preparing your data…');
+    try {
+      var r = await fetch('/api/account/export', { credentials: 'include' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var blob = await r.blob();
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'prooftamil-data-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      show(exportStatus, 'bg-green-50 text-green-700', 'Downloaded. Check your Downloads folder.');
+    } catch (err) {
+      show(exportStatus, 'bg-red-50 text-red-700', 'Export failed: ' + err.message + '. Please try again or email contact@prooftamil.com.');
+    } finally {
+      exportBtn.disabled = false;
+    }
+  });
+
+  // ── Delete ────────────────────────────────────────────────────────────────
+  var deleteBtn = document.getElementById('delete-btn');
+  var deleteForm = document.getElementById('delete-form');
+  var deleteCancel = document.getElementById('delete-cancel-btn');
+  var deleteConfirm = document.getElementById('delete-confirm-btn');
+  var deleteEmail = document.getElementById('delete-email');
+  var deleteStatus = document.getElementById('delete-status');
+
+  deleteBtn.addEventListener('click', function () {
+    deleteForm.classList.remove('hidden');
+    deleteEmail.focus();
+  });
+  deleteCancel.addEventListener('click', function () {
+    deleteForm.classList.add('hidden');
+    deleteEmail.value = '';
+    deleteStatus.classList.add('hidden');
+  });
+
+  deleteConfirm.addEventListener('click', async function () {
+    var typed = (deleteEmail.value || '').trim().toLowerCase();
+    if (typed !== USER_EMAIL.toLowerCase()) {
+      show(deleteStatus, 'bg-red-50 text-red-700', 'Email does not match. Type ' + USER_EMAIL + ' exactly.');
+      return;
+    }
+    deleteConfirm.disabled = true;
+    show(deleteStatus, 'bg-gray-50 text-gray-600', 'Submitting request…');
+    try {
+      var r = await fetch('/api/account/delete-request', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: typed }),
+      });
+      var data = await r.json().catch(function () { return {}; });
+      if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+      show(deleteStatus, 'bg-green-50 text-green-700',
+        'Request received. We\'ll process the deletion within 30 days and email a confirmation to ' + USER_EMAIL + '.');
+      deleteConfirm.style.display = 'none';
+      deleteCancel.textContent = 'Close';
+    } catch (err) {
+      show(deleteStatus, 'bg-red-50 text-red-700', 'Could not submit: ' + err.message);
+      deleteConfirm.disabled = false;
+    }
+  });
+})();
+</script>
+
+<%- include('../partials/footer') %>
