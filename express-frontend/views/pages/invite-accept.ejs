@@ -1,0 +1,80 @@
+<%- include('../partials/header') %>
+
+<div class="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-6">
+  <div class="w-full max-w-md bg-white rounded-2xl border border-gray-200 shadow-lg p-8">
+
+    <% if (state === 'error' || !invite) { %>
+      <div class="text-center">
+        <div class="mx-auto w-14 h-14 rounded-full bg-red-100 flex items-center justify-center mb-4">
+          <svg class="w-7 h-7 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </div>
+        <h1 class="text-xl font-bold text-gray-900 mb-2">Invite unavailable</h1>
+        <p class="text-sm text-gray-600 mb-6"><%= typeof errorMessage !== 'undefined' ? errorMessage : 'Something went wrong.' %></p>
+        <a href="/" class="inline-flex items-center gap-2 rounded-full bg-primary-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-primary-700 transition">Back to home</a>
+      </div>
+    <% } else { %>
+      <div class="text-center mb-6">
+        <div class="mx-auto w-14 h-14 rounded-full bg-indigo-100 flex items-center justify-center mb-4">
+          <svg class="w-7 h-7 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1a4 4 0 100-8 4 4 0 000 8z"/></svg>
+        </div>
+        <p class="text-sm text-gray-500 uppercase tracking-wider font-semibold">You're invited</p>
+        <h1 class="text-2xl font-extrabold text-gray-900 mt-2"><%= invite.organization.name %></h1>
+        <p class="text-sm text-gray-600 mt-2">
+          As <b class="text-gray-900"><%= invite.role %></b> · sent to
+          <b class="text-gray-900"><%= invite.email %></b>
+        </p>
+      </div>
+
+      <% if (state === 'anonymous') { %>
+        <p class="text-sm text-gray-600 mb-4 text-center">Sign in or create an account with <b><%= invite.email %></b> to accept.</p>
+        <div class="grid gap-2">
+          <a href="/login?redirect=<%= encodeURIComponent('/invite/' + token) %>" class="block w-full text-center rounded-full bg-primary-600 text-white text-sm font-semibold px-5 py-3 hover:bg-primary-700 transition">Sign in</a>
+          <a href="/register?redirect=<%= encodeURIComponent('/invite/' + token) %>&email=<%= encodeURIComponent(invite.email) %>" class="block w-full text-center rounded-full border border-gray-300 text-gray-700 text-sm font-semibold px-5 py-3 hover:bg-gray-50 transition">Create an account</a>
+        </div>
+      <% } else if (state === 'wrong_user') { %>
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 mb-4">
+          You're signed in as <b><%= user.email %></b>, but this invite is for <b><%= invite.email %></b>. Sign out and sign in with the invited email to accept.
+        </div>
+        <form action="/auth/logout" method="POST" class="text-center">
+          <button type="submit" class="rounded-full bg-primary-600 text-white text-sm font-semibold px-5 py-2.5 hover:bg-primary-700 transition">Sign out</button>
+        </form>
+      <% } else if (state === 'ready') { %>
+        <button id="accept-btn" class="w-full rounded-full bg-primary-600 text-white text-sm font-semibold px-5 py-3 hover:bg-primary-700 transition disabled:opacity-60">
+          Accept and join <%= invite.organization.name %>
+        </button>
+        <p id="accept-status" class="hidden mt-3 text-sm rounded-lg px-3 py-2"></p>
+      <% } %>
+
+      <p class="mt-6 text-xs text-gray-400 text-center">
+        Invite expires <%= new Date(invite.expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) %>.
+      </p>
+    <% } %>
+
+  </div>
+</div>
+
+<% if (state === 'ready') { %>
+<script>
+(function () {
+  var TOKEN = <%- JSON.stringify(token) %>;
+  var btn = document.getElementById('accept-btn');
+  var status = document.getElementById('accept-status');
+  function show(cls, msg) { status.className = 'mt-3 text-sm rounded-lg px-3 py-2 ' + cls; status.textContent = msg; status.classList.remove('hidden'); }
+  btn.addEventListener('click', async function () {
+    btn.disabled = true;
+    show('bg-gray-50 text-gray-600', 'Accepting…');
+    try {
+      var r = await fetch('/invite/' + TOKEN + '/accept', { method: 'POST', credentials: 'include' });
+      var data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+      window.location.href = data.redirect_to || '/org';
+    } catch (err) {
+      show('bg-red-50 text-red-700', 'Could not accept: ' + err.message);
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+<% } %>
+
+<%- include('../partials/footer') %>
