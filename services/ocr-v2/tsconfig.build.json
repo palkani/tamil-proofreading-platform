@@ -1,0 +1,17 @@
+{
+  // Build-only tsconfig used by the Docker image. Compiles ONLY src/
+  // (not eval/) so the runtime image ships the server code without
+  // the dev-only eval CLI. rootDir=./src collapses the output path
+  // so dist/server.js exists (not dist/src/server.js), matching what
+  // the Dockerfile CMD expects.
+  //
+  // The base tsconfig.json stays for local IDE/tsx use (includes
+  // eval/ for the smoke tests and CLI).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "data", "eval-results", "eval"]
+}

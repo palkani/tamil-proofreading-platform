@@ -20,10 +20,12 @@ RUN apk add --no-cache python3 make g++ vips-dev
 COPY package.json package-lock.json* ./
 RUN npm ci --include=dev --no-audit --no-fund
 
-# Copy source + compile
-COPY tsconfig.json ./
+# Copy source + compile using the build-only tsconfig so the output
+# path is dist/server.js (not dist/src/server.js) and eval/ is
+# excluded from the runtime image.
+COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
-RUN npx tsc
+RUN npx tsc -p tsconfig.build.json
 
 # ── Stage 2 · Runtime ────────────────────────────────────────────
 FROM node:20-alpine AS runtime
