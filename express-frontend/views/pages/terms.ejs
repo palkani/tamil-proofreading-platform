@@ -1,136 +1,633 @@
+<!-- Reviewed by legal: NO — this is a template and must be reviewed by a qualified lawyer before publication. -->
+<%
+  // Section list (id, title). Order is mandated by the spec — do not reorder
+  // without a legal review. IDs are stable so /ta/terms can mirror them.
+  const sections = [
+    ['who-we-are',            '1. Who We Are and What This Agreement Covers'],
+    ['service-description',   '2. Service Description'],
+    ['accounts',              '3. Accounts and Subscriptions'],
+    ['acceptable-use',        '4. Acceptable Use Policy'],
+    ['user-content',          '5. User Content and Ownership'],
+    ['ip-rights',             '6. Intellectual Property Rights'],
+    ['payment-terms',         '7. Payment Terms'],
+    ['refund-policy',         '8. Refund Policy'],
+    ['cancellations',         '9. Cancellations'],
+    ['fair-use',              '10. Fair Use and Rate Limits'],
+    ['privacy',               '11. Privacy and Data Protection'],
+    ['security',              '12. Security'],
+    ['third-parties',         '13. Third-Party Services and Processors'],
+    ['beta-features',         '14. Beta Features'],
+    ['no-professional-advice','15. Accuracy, No Professional Advice'],
+    ['accuracy-of-materials', '16. Accuracy of Materials'],
+    ['support',               '17. Support and Availability'],
+    ['copyright-trademark',   '18. Copyright and Trademark Policy'],
+    ['feedback',              '19. Feedback'],
+    ['termination',           '20. Right to Terminate'],
+    ['disclaimers',           '21. Disclaimers'],
+    ['liability',             '22. Limitation of Liability'],
+    ['indemnification',       '23. Indemnification'],
+    ['confidentiality',       '24. Confidentiality'],
+    ['export-controls',       '25. Export Controls and Sanctions'],
+    ['communications',        '26. Communications'],
+    ['modifications-terms',   '27. Modifications of Terms'],
+    ['modifications-services','28. Modifications to Services and Software'],
+    ['governing-law',         '29. Governing Law and Dispute Resolution'],
+    ['miscellaneous',         '30. Miscellaneous'],
+  ];
+%>
+
 <%- include('../partials/header') %>
 
 <% if (user) { %>
   <%- include('../partials/nav', { active: '', user: user }) %>
 <% } %>
 
-<div class="min-h-screen bg-gray-50 py-12">
-  <div class="max-w-4xl mx-auto px-6">
-    <!-- Header -->
-    <div class="mb-12">
-      <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
-        Terms of Service
-      </h1>
-      <p class="text-gray-600">
-        Last updated: November 17, 2025
-      </p>
-    </div>
+<div class="min-h-screen bg-gray-50 py-10 sm:py-12">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6">
 
-    <!-- Content -->
-    <div class="bg-white rounded-xl p-8 md:p-12 shadow-lg border border-gray-200 prose prose-lg max-w-none">
-      <h2 class="text-2xl font-bold text-gray-900 mb-4">Agreement to Terms</h2>
-      <p class="text-gray-700 mb-6">
-        By accessing or using ProofTamil, you agree to be bound by these Terms of Service. If you do not agree with any part of these terms, you may not use our service.
+    <!-- Page header -->
+    <header class="mb-8 sm:mb-10">
+      <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 tracking-tight">Terms of Service</h1>
+      <dl class="mt-4 flex flex-wrap gap-x-8 gap-y-2 text-sm text-gray-600">
+        <div><dt class="inline font-semibold text-gray-700">Effective date:</dt> <dd class="inline">[TODO: EFFECTIVE_DATE]</dd></div>
+        <div><dt class="inline font-semibold text-gray-700">Last modified:</dt> <dd class="inline">[TODO: LAST_MODIFIED]</dd></div>
+      </dl>
+      <p class="mt-3 text-sm text-gray-500">
+        This English version controls in the event of any conflict with a translation.
+        A Tamil version may be published in the future at <code class="bg-gray-100 px-1.5 py-0.5 rounded">/ta/terms</code>.
       </p>
+    </header>
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Description of Service</h2>
-      <p class="text-gray-700 mb-6">
-        ProofTamil is a free AI-powered Tamil text editing and proofreading platform that provides:
-      </p>
-      <ul class="list-disc list-inside text-gray-700 mb-6 ml-4">
-        <li>Tamil grammar checking and correction</li>
-        <li>Spelling and punctuation suggestions</li>
-        <li>Phonetic transliteration (English to Tamil)</li>
-        <li>Autocomplete and typing assistance</li>
-        <li>Draft management and cloud storage</li>
-      </ul>
+    <div class="lg:grid lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)] lg:gap-10">
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">User Accounts</h2>
-      
-      <h3 class="text-xl font-semibold text-gray-900 mb-3">Account Registration</h3>
-      <p class="text-gray-700 mb-6">
-        To use certain features of ProofTamil, you must create an account. You agree to provide accurate, current, and complete information during registration and to update such information to keep it accurate, current, and complete.
-      </p>
+      <!-- Sticky ToC (desktop) / collapsed details (mobile) -->
+      <aside aria-label="Table of contents" class="lg:sticky lg:top-24 lg:self-start mb-6 lg:mb-0">
+        <details class="lg:open lg:block bg-white lg:bg-transparent rounded-xl lg:rounded-none border border-gray-200 lg:border-0 lg:shadow-none shadow-sm" open>
+          <summary class="lg:hidden cursor-pointer list-none px-4 py-3 font-semibold text-gray-900 flex items-center justify-between">
+            <span>Contents (30 sections)</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <nav class="px-4 pb-4 lg:p-0">
+            <p class="hidden lg:block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">On this page</p>
+            <ol class="space-y-1.5 text-sm">
+              <% sections.forEach(function(s){ %>
+                <li>
+                  <a href="#<%= s[0] %>" class="block text-gray-600 hover:text-primary-600 focus:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded"><%= s[1] %></a>
+                </li>
+              <% }); %>
+            </ol>
+          </nav>
+        </details>
+      </aside>
 
-      <h3 class="text-xl font-semibold text-gray-900 mb-3">Account Security</h3>
-      <p class="text-gray-700 mb-6">
-        You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to notify us immediately of any unauthorized access or use of your account.
-      </p>
+      <!-- Body -->
+      <article class="bg-white rounded-2xl p-6 sm:p-10 shadow-lg border border-gray-200">
+        <div class="prose prose-lg max-w-[70ch] text-gray-800 prose-headings:scroll-mt-24 prose-headings:text-gray-900 prose-a:text-primary-600 hover:prose-a:text-primary-700 prose-h2:text-2xl prose-h2:font-bold prose-h2:mt-10 prose-h2:mb-4 prose-h3:text-lg prose-h3:font-semibold prose-h3:text-gray-900 prose-h3:mt-6 prose-h3:mb-2">
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Acceptable Use Policy</h2>
-      <p class="text-gray-700 mb-4">
-        You agree NOT to use ProofTamil to:
-      </p>
-      <ul class="list-disc list-inside text-gray-700 mb-6 ml-4">
-        <li>Violate any applicable laws or regulations</li>
-        <li>Infringe upon intellectual property rights of others</li>
-        <li>Upload or transmit viruses, malware, or harmful code</li>
-        <li>Harass, abuse, or harm others</li>
-        <li>Spam or send unsolicited communications</li>
-        <li>Attempt to gain unauthorized access to our systems</li>
-        <li>Impersonate another person or entity</li>
-        <li>Use automated tools to access the service without permission</li>
-      </ul>
+          <!-- 1 -->
+          <h2 id="who-we-are">1. Who We Are and What This Agreement Covers</h2>
+          <p>
+            These Terms of Service (the "Terms") are a binding agreement between you and
+            <strong>[TODO: LEGAL_ENTITY_NAME]</strong>, registered at
+            <strong>[TODO: REGISTERED_ADDRESS]</strong> ("ProofTamil", "we", "us", "our").
+            They apply to your access to and use of the website at
+            <a href="https://www.prooftamil.com">prooftamil.com</a> and all related products,
+            APIs, and tools that link to these Terms (together, the "Service").
+          </p>
+          <p>
+            By creating an account, uploading content, or otherwise using the Service, you
+            confirm that you have read, understood, and agree to these Terms. If you do not
+            agree, please do not use the Service.
+          </p>
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Your Content</h2>
-      
-      <h3 class="text-xl font-semibold text-gray-900 mb-3">Ownership</h3>
-      <p class="text-gray-700 mb-6">
-        You retain all rights to the Tamil text and content you create using ProofTamil. We do not claim ownership of your content.
-      </p>
+          <!-- 2 -->
+          <h2 id="service-description">2. Service Description</h2>
+          <p>ProofTamil provides a set of AI-assisted tools for reading, writing, and correcting Tamil:</p>
+          <ul>
+            <li><strong>Tamil grammar and spelling checker</strong> — detects grammar, spelling, and style errors in Tamil text and offers suggested corrections.</li>
+            <li><strong>Free Tamil editor</strong> — a browser-based editor with autocomplete, transliteration (English → Tamil / Tanglish), and inline suggestions.</li>
+            <li><strong>Printed-text OCR</strong> — extracts machine-printed Tamil text from images and PDFs.</li>
+            <li><strong>Handwritten Tamil OCR</strong> — extracts handwritten Tamil text from images. This feature may be offered in beta from time to time.</li>
+            <li><strong>AI content writer</strong> — generates draft Tamil (or English) articles, essays, and blog posts from a topic or brief.</li>
+            <li><strong>Export</strong> — download your drafts as PDF, Microsoft Word (.docx), or plain text.</li>
+          </ul>
+          <p>
+            Some features are available on the free tier; others require an active paid
+            subscription. The paid tier is marketed as <strong>ProofTamil PRO</strong>.
+            Feature availability, quotas, and pricing may change over time — see current
+            details on our pricing page.
+          </p>
+          <p>
+            <strong>Outputs from AI features may be inaccurate.</strong> The Service uses
+            probabilistic AI models that can produce wrong suggestions, hallucinated content,
+            or errors, particularly for handwriting, uncommon dialects, technical vocabulary,
+            or proper nouns. You are responsible for reviewing any AI output before relying on it.
+          </p>
 
-      <h3 class="text-xl font-semibold text-gray-900 mb-3">License to Process</h3>
-      <p class="text-gray-700 mb-6">
-        By using ProofTamil, you grant us a limited license to process your text through AI models to provide grammar checking and proofreading services. This license terminates when you delete your content or close your account.
-      </p>
+          <!-- 3 -->
+          <h2 id="accounts">3. Accounts and Subscriptions</h2>
+          <h3>Account creation</h3>
+          <p>
+            You may need an account to use certain features. You agree to provide accurate
+            information, keep it up to date, and keep your credentials confidential. You are
+            responsible for all activity under your account.
+          </p>
+          <h3>Age requirements</h3>
+          <p>
+            The Service is intended for users aged <strong>16 and above</strong>. Users
+            under 18 must have the consent of a parent or legal guardian to register or use
+            the Service. ProofTamil is frequently used for schoolwork; parents and guardians
+            are responsible for supervising a minor's use of the Service and for the content
+            the minor uploads or generates. We may terminate accounts of users who do not
+            meet the age requirement.
+          </p>
+          <h3>Subscriptions</h3>
+          <p>
+            Paid subscriptions renew automatically at the end of each billing period unless
+            cancelled. You may manage or cancel a subscription from your account page. See
+            Sections 7, 8, and 9 for billing details.
+          </p>
 
-      <h3 class="text-xl font-semibold text-gray-900 mb-3">Privacy and Confidentiality</h3>
-      <p class="text-gray-700 mb-6">
-        We treat your content as confidential and do not share it with third parties except as necessary to provide our services (e.g., sending text to AI processors). See our <a href="/privacy" class="text-primary-600 hover:text-primary-500">Privacy Policy</a> for more details.
-      </p>
+          <!-- 4 -->
+          <h2 id="acceptable-use">4. Acceptable Use Policy</h2>
+          <p>You agree not to use the Service to:</p>
+          <ul>
+            <li>break any applicable law or regulation;</li>
+            <li>infringe anyone's intellectual property, privacy, publicity, or other rights;</li>
+            <li>upload malware, run vulnerability scans against our systems without written permission, or attempt to gain unauthorised access;</li>
+            <li>harass, threaten, defame, or harm any person or group;</li>
+            <li>send spam, chain messages, or unsolicited commercial content;</li>
+            <li>generate content that is unlawful, sexual content involving minors, incitement to violence, or content that promotes self-harm;</li>
+            <li>impersonate any person or entity, or misrepresent your affiliation with anyone;</li>
+            <li>reverse engineer, scrape, or use automated tools against the Service beyond documented APIs and reasonable rate limits;</li>
+            <li>resell, sublicense, or provide the Service to third parties as a stand-alone offering without our written permission.</li>
+          </ul>
+          <p>We may suspend or terminate accounts that breach this policy, with or without notice, at our reasonable discretion.</p>
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Free Service and Future Pricing</h2>
-      <p class="text-gray-700 mb-6">
-        ProofTamil is currently offered as a free service. We reserve the right to introduce paid plans or premium features in the future. We will provide advance notice before implementing any pricing changes that affect your account.
-      </p>
+          <!-- 5 -->
+          <h2 id="user-content">5. User Content and Ownership</h2>
+          <p>
+            "User Content" means anything you upload, type, paste, generate, or otherwise
+            submit to the Service — including text, images, PDFs, and AI-generated drafts.
+          </p>
+          <h3>Your ownership</h3>
+          <p>
+            You keep all rights in your User Content. We do not claim ownership of anything
+            you create using the Service.
+          </p>
+          <h3>Licence you grant us</h3>
+          <p>
+            You grant ProofTamil a worldwide, non-exclusive, royalty-free licence to host,
+            store, transmit, transform, and process your User Content strictly for the
+            purpose of operating and improving the Service for you — for example, sending
+            your text or image to an AI model to produce corrections, transcriptions, or
+            suggestions, and rendering the result in your browser. This licence ends when
+            you delete the User Content or your account, subject to Section 11 (backups age
+            out within the window described in the Privacy Policy).
+          </p>
+          <h3>Your warranties</h3>
+          <p>
+            You represent and warrant that you own your User Content or have the necessary
+            rights and permissions to upload it, and that using it through the Service will
+            not infringe or breach the rights of any third party or any law.
+          </p>
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">AI-Generated Suggestions</h2>
-      <p class="text-gray-700 mb-6">
-        ProofTamil uses AI to provide grammar and writing suggestions. While we strive for accuracy, AI suggestions may not always be perfect. You are responsible for reviewing and accepting or rejecting suggestions. We are not liable for any errors in AI-generated content.
-      </p>
+          <h3 id="ocr-and-image-uploads">Image uploads and OCR — specific terms</h3>
+          <p>
+            Because our OCR features accept images and PDFs, additional terms apply. By
+            uploading an image or PDF to any OCR feature, you specifically agree that:
+          </p>
+          <ul>
+            <li>
+              <strong>Rights.</strong> You own the image or have the lawful right to upload
+              it. You are solely responsible for the content of the images you submit.
+            </li>
+            <li>
+              <strong>No third-party sensitive data without a lawful basis.</strong> You must
+              not upload images that contain another person's personal data, medical records,
+              financial records, government identity documents (Aadhaar, PAN, passport,
+              driving licence, voter ID, and equivalents), or other sensitive information
+              unless you have a lawful basis to do so and, where required by law, that
+              person's informed consent. If you are unsure, do not upload the image.
+            </li>
+            <li>
+              <strong>Transient processing.</strong> Uploaded images are processed
+              transiently to extract text and are deleted immediately after processing
+              completes. ProofTamil does not retain the image after the response is returned
+              to you. The extracted text may be retained in your account only if you save it
+              as a draft.
+            </li>
+            <li>
+              <strong>Transmission to AI providers.</strong> To perform text extraction, the
+              image is transmitted to third-party AI model providers (see Section 13). Those
+              providers process the image under their own terms and privacy commitments.
+            </li>
+            <li>
+              <strong>Machine output; verify before use.</strong> OCR output is machine-
+              generated and may contain errors, including wrong characters, wrong vowel
+              signs (உயிர்மெய் / குறில் / நெடில் mistakes), split or merged words,
+              misread line breaks, and missing punctuation. You must review and correct the
+              output before using it in any context where accuracy matters (academic
+              submissions, legal filings, medical records, printed publications, and the
+              like).
+            </li>
+          </ul>
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Service Availability</h2>
-      <p class="text-gray-700 mb-6">
-        We strive to maintain 99% uptime but do not guarantee uninterrupted access to ProofTamil. We may perform maintenance, updates, or experience technical issues that temporarily affect service availability.
-      </p>
+          <!-- 6 -->
+          <h2 id="ip-rights">6. Intellectual Property Rights</h2>
+          <p>
+            The Service — including its software, source code, models, prompts, user
+            interface, design, logos, and the "ProofTamil" name and brand — is owned by
+            <strong>[TODO: LEGAL_ENTITY_NAME]</strong> or its licensors and is protected by
+            copyright, trademark, and other laws. Subject to your compliance with these
+            Terms, we grant you a limited, revocable, non-exclusive, non-transferable
+            licence to use the Service for your personal or internal business purposes.
+          </p>
+          <p>
+            You may not copy, modify, distribute, sell, or lease any part of the Service, or
+            create derivative works from it, except as expressly permitted by these Terms or
+            by applicable law that cannot be excluded by contract.
+          </p>
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Termination</h2>
-      <p class="text-gray-700 mb-6">
-        We reserve the right to suspend or terminate your account if you violate these Terms of Service or engage in fraudulent or illegal activities. You may delete your account at any time through your account settings.
-      </p>
+          <!-- 7 -->
+          <h2 id="payment-terms">7. Payment Terms</h2>
+          <p>
+            Paid subscriptions and any one-off purchases are billed by our payment
+            processor, <strong>Dodo Payments</strong> (see Section 13). Prices shown on the
+            pricing page are the amount you will be charged before any taxes assessed at
+            checkout. You are responsible for keeping your payment method valid.
+          </p>
+          <p>
+            <strong>Taxes.</strong> Dodo Payments acts as the merchant of record for your
+            purchase. It calculates, collects, and remits any GST, VAT, sales tax, or other
+            transaction taxes required for your jurisdiction, and issues the corresponding
+            tax invoice or receipt directly to you. ProofTamil is not the merchant of
+            record and does not itself issue tax invoices for these transactions. If you
+            need a copy of your invoice or receipt, download it from your Dodo Payments
+            account or contact us and we will help you retrieve it.
+          </p>
+          <p>
+            If a charge fails, we may retry the charge, downgrade your plan, or suspend
+            access after a reasonable grace period.
+          </p>
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Disclaimer of Warranties</h2>
-      <p class="text-gray-700 mb-6">
-        ProofTamil is provided "as is" and "as available" without warranties of any kind, either express or implied. We do not warrant that the service will be error-free, secure, or uninterrupted.
-      </p>
+          <!-- 8 -->
+          <h2 id="refund-policy">8. Refund Policy</h2>
+          <p>
+            Except where required by law, subscription fees are <strong>non-refundable</strong>.
+            We do not provide prorated refunds for unused time in the middle of a billing
+            cycle. If you believe you have been charged in error, contact us at
+            <strong>[TODO: LEGAL_CONTACT_EMAIL]</strong> within 30 days of the charge and we
+            will investigate in good faith. Nothing in this Section limits statutory
+            consumer rights that you may have under your local law.
+          </p>
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Limitation of Liability</h2>
-      <p class="text-gray-700 mb-6">
-        To the maximum extent permitted by law, ProofTamil shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use or inability to use the service.
-      </p>
+          <!-- 9 -->
+          <h2 id="cancellations">9. Cancellations</h2>
+          <p>
+            You may cancel a subscription at any time from your account page or by emailing
+            us. Cancellation takes effect at the <strong>end of the current billing period</strong> —
+            you keep paid features until then. Cancelling does not delete your account or
+            your drafts; to delete your account and data, use the
+            <a href="/account/data">Data &amp; privacy</a> page or email us.
+          </p>
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Changes to Terms</h2>
-      <p class="text-gray-700 mb-6">
-        We may modify these Terms of Service at any time. We will notify users of material changes by email or through the platform. Continued use of ProofTamil after changes constitutes acceptance of the new terms.
-      </p>
+          <!-- 10 -->
+          <h2 id="fair-use">10. Fair Use and Rate Limits</h2>
+          <p>
+            Free and paid plans have per-day and per-month usage limits. Limits exist to
+            keep the Service fast and affordable for everyone; current limits are shown on
+            the pricing page and may change with reasonable notice. If your usage pattern
+            appears automated, abusive, or materially exceeds what a single human user would
+            generate, we may throttle, warn, downgrade, or suspend your account.
+          </p>
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Governing Law</h2>
-      <p class="text-gray-700 mb-6">
-        These Terms shall be governed by and construed in accordance with applicable laws, without regard to conflict of law principles.
-      </p>
+          <!-- 11 -->
+          <h2 id="privacy">11. Privacy and Data Protection</h2>
+          <p>
+            Our <a href="[TODO: PRIVACY_POLICY_URL]">Privacy Policy</a> explains what
+            personal data we collect, how we use it, who we share it with, and your rights.
+            It forms part of these Terms.
+          </p>
+          <p>
+            We handle personal data in accordance with the <strong>Digital Personal Data
+            Protection Act 2023</strong> of India, and, where applicable, the EU / UK
+            General Data Protection Regulation. Depending on where you are located, you may
+            have rights to access, correct, export, restrict, object to, or delete personal
+            data we hold about you, and to withdraw consent.
+          </p>
+          <h3>Retention</h3>
+          <ul>
+            <li><strong>Account metadata</strong> (email, display name, plan status): retained while your account is active, then deleted within 30 days of account deletion, subject to backup ageing.</li>
+            <li><strong>Drafts and generated content</strong>: retained while your account is active; you can delete individual items at any time.</li>
+            <li><strong>Server and processing logs</strong>: retained for up to 30 days for security, debugging, and abuse investigation.</li>
+            <li><strong>OCR uploads</strong>: not retained — deleted immediately after processing (see Section 5).</li>
+            <li><strong>Payment records</strong>: retained for the period required by tax and accounting law (typically up to 7 years).</li>
+            <li><strong>Backups</strong>: deleted data ages out of backups within 7 days.</li>
+          </ul>
+          <h3>How to make a deletion request</h3>
+          <p>
+            Use the <a href="/account/data">Data &amp; privacy</a> page to export or request
+            deletion of your account, or email
+            <strong>[TODO: LEGAL_CONTACT_EMAIL]</strong>. We will confirm and complete the
+            request within 30 days, subject to any legal retention obligations.
+          </p>
 
-      <h2 class="text-2xl font-bold text-gray-900 mb-4 mt-8">Contact Information</h2>
-      <p class="text-gray-700 mb-6">
-        If you have questions about these Terms of Service, please contact us at:
-        <a href="mailto:contact@prooftamil.com" class="text-primary-600 hover:text-primary-500">contact@prooftamil.com</a>
-      </p>
-    </div>
+          <!-- 12 -->
+          <h2 id="security">12. Security</h2>
+          <p>
+            We take reasonable technical and organisational measures to protect the Service
+            and your data: HTTPS in transit, encryption at rest at our infrastructure
+            providers, access controls, audit logging of administrative actions, and regular
+            dependency updates. See our public <a href="/security">Security page</a> for
+            more detail. No system is perfectly secure; you are also responsible for
+            protecting your account credentials and device.
+          </p>
+          <p>
+            To report a suspected vulnerability, please email
+            <strong>[TODO: LEGAL_CONTACT_EMAIL]</strong> or see
+            <a href="/.well-known/security.txt">/.well-known/security.txt</a>.
+          </p>
 
-    <!-- Back to Home -->
-    <div class="text-center mt-12">
-      <a href="/" class="inline-block px-8 py-3 bg-primary-600 text-white rounded-full font-semibold hover:bg-primary-500 transition">
-        Back to Home
-      </a>
+          <!-- 13 -->
+          <h2 id="third-parties">13. Third-Party Services and Processors</h2>
+          <p>
+            To operate the Service we rely on the following categories of sub-processor:
+          </p>
+          <ul>
+            <li><strong>AI model providers</strong> — used for grammar checking, transliteration, content generation, and OCR. Your text and, for OCR, your images are transmitted to these providers for processing. [TODO: SUB_PROCESSOR_AI_PROVIDERS]</li>
+            <li><strong>Hosting and infrastructure providers</strong> — used to host the website, APIs, and databases. [TODO: SUB_PROCESSOR_HOSTING]</li>
+            <li><strong>Payment processor</strong> — <strong>Dodo Payments</strong> acts as our merchant of record; it accepts and processes payments, manages subscriptions, and calculates and remits applicable taxes. Card details are handled by Dodo Payments and are never seen or stored by ProofTamil.</li>
+            <li><strong>Analytics and product-experience providers</strong> — used to measure aggregate usage and detect broken flows. [TODO: SUB_PROCESSOR_ANALYTICS]</li>
+            <li><strong>Email delivery providers</strong> — used for transactional email such as sign-in, password reset, and billing receipts. [TODO: SUB_PROCESSOR_EMAIL]</li>
+          </ul>
+          <p>
+            A current list of named sub-processors is available on request from
+            <strong>[TODO: LEGAL_CONTACT_EMAIL]</strong> or at
+            <a href="/security#sub-processors">/security</a>. Each sub-processor is bound by
+            terms consistent with these Terms and our Privacy Policy.
+          </p>
+
+          <!-- 14 -->
+          <h2 id="beta-features">14. Beta Features</h2>
+          <p>
+            We may offer features labelled "beta", "preview", "experimental", or similar.
+            Beta features are provided <strong>as-is</strong>, may change or be discontinued
+            without notice, may not be as reliable as generally available features, and are
+            excluded from any service-level commitments. Do not rely on a beta feature for
+            anything critical.
+          </p>
+
+          <!-- 15 -->
+          <h2 id="no-professional-advice">15. Accuracy, No Professional Advice</h2>
+          <p>
+            The Service provides language tools, not professional advice. Nothing produced
+            by ProofTamil constitutes legal, medical, financial, tax, academic, or
+            translation advice. Where accuracy matters — including exams, publications,
+            court filings, medical records, or official communications — a qualified human
+            must review and, where appropriate, certify the output.
+          </p>
+
+          <!-- 16 -->
+          <h2 id="accuracy-of-materials">16. Accuracy of Materials</h2>
+          <p>
+            Marketing pages, help articles, blog posts, and other materials on the Service
+            are provided for general information. We try to keep them accurate and
+            up-to-date but do not warrant that they are free of errors, omissions, or
+            outdated information. We may change or remove any material at any time without
+            notice.
+          </p>
+
+          <!-- 17 -->
+          <h2 id="support">17. Support and Availability</h2>
+          <p>
+            We aim to keep the Service available and responsive, and to answer support
+            emails within a reasonable time. However, we do not guarantee any specific
+            uptime, response time, or resolution time unless a separate written agreement
+            says otherwise. Planned maintenance, third-party outages, and unforeseen events
+            may affect availability. For support, contact us at
+            <strong>[TODO: LEGAL_CONTACT_EMAIL]</strong>.
+          </p>
+
+          <!-- 18 -->
+          <h2 id="copyright-trademark">18. Copyright and Trademark Policy</h2>
+          <p>
+            If you believe content on the Service infringes your copyright or trademark,
+            send a notice to <strong>[TODO: DMCA_COPYRIGHT_EMAIL]</strong> including:
+          </p>
+          <ul>
+            <li>your contact information and a physical or electronic signature;</li>
+            <li>identification of the copyrighted work or trademark you claim is infringed;</li>
+            <li>the URL or specific location of the allegedly infringing material on the Service;</li>
+            <li>a statement, made in good faith, that the use is not authorised by the rights holder, its agent, or the law;</li>
+            <li>a statement, under penalty of perjury, that the information in the notice is accurate and that you are authorised to act on behalf of the rights holder.</li>
+          </ul>
+          <p>
+            We may remove or disable access to material that is the subject of a valid
+            notice, and terminate accounts of users who repeatedly infringe.
+          </p>
+
+          <!-- 19 -->
+          <h2 id="feedback">19. Feedback</h2>
+          <p>
+            If you send us ideas, suggestions, bug reports, or other feedback about the
+            Service, you agree that we may use that feedback for any purpose without
+            obligation to you, and without any need to credit or compensate you.
+          </p>
+
+          <!-- 20 -->
+          <h2 id="termination">20. Right to Terminate</h2>
+          <p>
+            You may stop using the Service and delete your account at any time from the
+            <a href="/account/data">Data &amp; privacy</a> page or by emailing us.
+          </p>
+          <p>
+            We may suspend or terminate your access to all or part of the Service, with or
+            without notice, if we reasonably believe you have breached these Terms, if
+            required by law, to protect other users or third parties, or to protect the
+            security or integrity of the Service. We will try to give you reasonable notice
+            where practical.
+          </p>
+          <p>
+            Sections that by their nature should survive termination — including 5
+            (ownership), 6 (IP), 8 (refunds), 21–23 (disclaimers, liability, indemnity),
+            24 (confidentiality), and 29 (governing law) — will survive.
+          </p>
+
+          <!-- 21 -->
+          <h2 id="disclaimers">21. Disclaimers</h2>
+          <p>
+            To the maximum extent permitted by law, the Service is provided
+            <strong>"as is" and "as available"</strong>. We disclaim all warranties, whether
+            express, implied, or statutory, including any warranty of merchantability,
+            fitness for a particular purpose, non-infringement, accuracy, or that the
+            Service will be uninterrupted, secure, or error-free. AI outputs and OCR results
+            may be inaccurate — you are responsible for reviewing them before use.
+          </p>
+
+          <!-- 22 -->
+          <h2 id="liability">22. Limitation of Liability</h2>
+          <p>
+            To the maximum extent permitted by law, ProofTamil and its officers, employees,
+            and contractors will not be liable for any indirect, incidental, special,
+            consequential, exemplary, or punitive damages, or for any loss of profits,
+            revenue, data, goodwill, or business opportunity, arising out of or related to
+            your use of the Service — even if we have been advised of the possibility of
+            such damages.
+          </p>
+          <p>
+            Our total aggregate liability arising out of or related to the Service in any
+            twelve-month period will not exceed the greater of:
+            (a) the fees you actually paid to ProofTamil in that twelve-month period, or
+            (b) INR 5,000.
+          </p>
+          <p>
+            Nothing in these Terms excludes or limits liability that cannot be excluded or
+            limited by law — including, where applicable, liability for death or personal
+            injury caused by negligence, fraud, or fraudulent misrepresentation.
+          </p>
+
+          <!-- 23 -->
+          <h2 id="indemnification">23. Indemnification</h2>
+          <p>
+            You agree to defend, indemnify, and hold harmless ProofTamil and its officers,
+            employees, and contractors from and against any claims, damages, liabilities,
+            losses, and expenses (including reasonable legal fees) arising out of or related
+            to (i) your User Content, (ii) your use of the Service in breach of these Terms
+            or applicable law, or (iii) your infringement of any third-party right. We will
+            promptly notify you of any such claim and reasonably cooperate in the defence.
+          </p>
+
+          <!-- 24 -->
+          <h2 id="confidentiality">24. Confidentiality</h2>
+          <p>
+            "Confidential Information" means non-public information disclosed by one party
+            to the other in connection with the Service that is marked confidential or that
+            a reasonable person would understand to be confidential. Each party will (a) use
+            the other's Confidential Information only to perform under these Terms, and (b)
+            protect it with the same care it uses for its own confidential information, and
+            in no event less than a reasonable standard of care. This does not apply to
+            information that is public, independently developed, lawfully received from a
+            third party without restriction, or required to be disclosed by law or court
+            order (with reasonable prior notice where legally permitted).
+          </p>
+
+          <!-- 25 -->
+          <h2 id="export-controls">25. Export Controls and Sanctions</h2>
+          <p>
+            You may not use the Service in violation of applicable export control or
+            sanctions laws, including those of India, the United States, the United
+            Kingdom, and the European Union. You represent that you are not located in, and
+            not a national or resident of, a country subject to comprehensive sanctions, and
+            that you are not on any restricted-party or denied-persons list.
+          </p>
+
+          <!-- 26 -->
+          <h2 id="communications">26. Communications</h2>
+          <p>
+            By creating an account, you agree that we may contact you by email at the
+            address you registered with for transactional messages such as sign-in
+            confirmations, security alerts, billing receipts, and important changes to the
+            Service or these Terms. You may opt out of marketing emails at any time using
+            the unsubscribe link in those emails; you cannot opt out of essential
+            transactional emails while you have an account.
+          </p>
+
+          <!-- 27 -->
+          <h2 id="modifications-terms">27. Modifications of Terms</h2>
+          <p>
+            We may update these Terms from time to time. If a change is material, we will
+            notify you by email or through the Service and give you a reasonable opportunity
+            to review before the change takes effect. Your continued use of the Service
+            after the effective date of the updated Terms means you accept them. If you do
+            not accept the change, you must stop using the Service.
+          </p>
+
+          <!-- 28 -->
+          <h2 id="modifications-services">28. Modifications to Services and Software</h2>
+          <p>
+            The Service evolves. We may add, change, deprecate, or remove features, models,
+            interfaces, or entire products at any time. Where a change is likely to have a
+            material adverse effect on paying customers, we will give reasonable prior
+            notice. Beta features may change at any time (Section 14).
+          </p>
+
+          <!-- 29 -->
+          <h2 id="governing-law">29. Governing Law and Dispute Resolution</h2>
+          <p>
+            These Terms are governed by the laws of <strong>India</strong>, without regard
+            to conflict-of-laws principles.
+          </p>
+          <p>
+            Before starting formal proceedings, you agree to try to resolve any dispute
+            informally with us for at least <strong>60 days</strong>. Send a written notice
+            of the dispute to <strong>[TODO: LEGAL_CONTACT_EMAIL]</strong> describing the
+            issue and the remedy you are seeking. We will try to resolve the dispute in
+            good faith within that period.
+          </p>
+          <p>
+            If we cannot resolve a dispute informally, the courts of
+            <strong>[TODO: JURISDICTION_CITY], India</strong> will have exclusive
+            jurisdiction, and both parties submit to their personal jurisdiction and venue.
+          </p>
+          <p>
+            If you are a consumer resident in the European Union or the United Kingdom, you
+            keep the benefit of any mandatory consumer-protection rules of the country where
+            you live, and you may bring proceedings in the courts of that country where the
+            law requires.
+          </p>
+
+          <!-- 30 -->
+          <h2 id="miscellaneous">30. Miscellaneous</h2>
+          <p>
+            <strong>Entire agreement.</strong> These Terms, together with the Privacy Policy
+            and any policies referenced here, are the entire agreement between you and
+            ProofTamil about the Service.
+          </p>
+          <p>
+            <strong>No waiver.</strong> Our failure to enforce any right or provision is not
+            a waiver of that right or provision.
+          </p>
+          <p>
+            <strong>Severability.</strong> If any provision is held invalid or
+            unenforceable, the rest of the Terms remain in effect and the invalid provision
+            will be replaced with a valid one that most closely reflects the original intent.
+          </p>
+          <p>
+            <strong>Assignment.</strong> You may not assign or transfer these Terms without
+            our prior written consent. We may assign these Terms in connection with a
+            merger, acquisition, financing, or sale of assets, or by operation of law.
+          </p>
+          <p>
+            <strong>Force majeure.</strong> Neither party is liable for failure or delay
+            caused by events beyond its reasonable control, including natural disasters,
+            war, government action, third-party network or infrastructure outages, or
+            failures of AI model providers.
+          </p>
+          <p>
+            <strong>Notices.</strong> Legal notices to ProofTamil must be sent to
+            <strong>[TODO: LEGAL_CONTACT_EMAIL]</strong> and, if requested by us, also to
+            our registered address. Notices to you may be sent to your account email.
+          </p>
+          <p>
+            <strong>Language.</strong> These Terms are written in English. A Tamil
+            translation may be provided for convenience; in the event of any conflict
+            between the English version and any translation, the English version controls.
+          </p>
+          <p>
+            <strong>Contact.</strong> Questions about these Terms:
+            <strong>[TODO: LEGAL_CONTACT_EMAIL]</strong>.
+          </p>
+
+        </div>
+
+        <div class="mt-10 pt-6 border-t border-gray-200 flex flex-wrap items-center justify-between gap-4">
+          <a href="/" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 transition">
+            ← Back to Home
+          </a>
+          <a href="#" class="text-sm text-gray-500 hover:text-primary-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded">Back to top ↑</a>
+        </div>
+      </article>
     </div>
   </div>
 </div>
