@@ -113,8 +113,9 @@ const seoConfig = {
   handwritingOcrTool: {
     // Title: 56 chars — "handwritten Tamil to text" is the high-intent query phrase
     title: 'Handwritten Tamil to Text — Free Online OCR | ProofTamil',
-    // Description: 156 chars — specific use cases (notes, letters, exam answers) for keyword surface
-    description: 'Convert handwritten Tamil notes, letters, and exam answers to editable text in seconds. Free Tamil handwriting OCR — no app, no download, no sign-up.',
+    // Description: specific use cases (notes, letters, exam answers) for keyword surface.
+    // Removed "no sign-up" (2026-08-20 relaunch — free tier now requires sign-in to enforce the 1/month limit).
+    description: 'Convert handwritten Tamil notes, letters, and exam answers to editable text in seconds. Free Tamil handwriting OCR — no app, no download, 1 free conversion per month.',
     keywords: 'handwritten tamil to text, tamil handwriting ocr, tamil handwriting to text, convert handwritten tamil notes, tamil notes to digital text, tamil handwriting recognition, tamil ocr handwriting online, photograph tamil notes, tamil whiteboard to text, tamil exam answer ocr',
     canonical: BASE_URL + '/tools/handwriting-ocr',
     ogTitle: 'Handwritten Tamil to Text — Free OCR | ProofTamil',
