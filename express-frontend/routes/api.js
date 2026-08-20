@@ -1755,11 +1755,10 @@ try {
 // POST /api/ocr-v2/pipeline
 //   multipart/form-data with field "image" (jpg/png/webp/heic, ≤20MB)
 //   → 200 { raw_text, suggestions[], wallMs, costUsd, mode, stages, meta }
-//   → 401 auth_required (not signed in)
-//   → 403 beta_only (signed in but not on allowlist)
+//   → 401 login_required (not signed in)
+//   → 429 monthly quota exceeded (free = 1/mo, pro = 20/mo — see middleware/ocrMonthlyLimit.js)
 //   → 500 no_api_key (GEMINI_API_KEY* env var not set)
 {
-  const { requireOcrV2Beta } = require('../middleware/ocrV2Beta');
   const { runPipeline } = require('../lib/ocr-v2/pipeline');
   const ocrV2Upload = multer({
     storage: multer.memoryStorage(),
@@ -1777,60 +1776,63 @@ try {
       || '';
   }
 
-  // Diagnostic endpoint — quick way for the beta user to check
-  // whether the flag is picking them up. Auth + email check inside;
-  // returns 200 + a small JSON telling you exactly why access was
-  // granted or denied. Safe to leave enabled: no secrets leaked.
-  router.get('/ocr-v2/whoami', (req, res) => {
-    const email = String(req.user?.email || '').toLowerCase().trim();
-    const betaRaw = process.env.OCR_V2_BETA_EMAILS || '';
-    const betaList = betaRaw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-    const { isOcrV2BetaUser } = require('../middleware/ocrV2Beta');
-    res.json({
-      signed_in: Boolean(req.user),
-      email: email || null,
-      is_beta_user: isOcrV2BetaUser(req),
-      beta_list_count: betaList.length,
-      beta_list_includes_you: betaList.includes(email),
-      has_gemini_key: Boolean(getGeminiKey()),
-    });
+  // Public usage snapshot — powers the "N/1 uploads left this month" badge in
+  // the OCR v2 UI. No credit is consumed here. Anonymous callers get
+  // { loggedIn:false } — the UI shows a "Sign in to use OCR" nudge instead of
+  // a badge.
+  router.get('/ocr-v2/usage', async (req, res) => {
+    try {
+      const usage = await ocrMonthlyLimit.getUsage(req);
+      res.json({ success: true, ...usage });
+    } catch (err) {
+      console.error('[OCR-V2] usage read failed:', err.message);
+      res.status(500).json({ success: false, error: 'usage_error' });
+    }
   });
 
-  router.post('/ocr-v2/pipeline', requireOcrV2Beta, ocrV2Upload.single('image'), async (req, res) => {
-    const apiKey = getGeminiKey();
-    if (!apiKey) {
-      return res.status(500).json({
-        error: 'no_api_key',
-        message: 'No Gemini API key configured (set GEMINI_API_KEY_1..4 or GOOGLE_GENAI_API_KEY).',
-      });
+  router.post(
+    '/ocr-v2/pipeline',
+    ocrMonthlyLimit(),                 // gates access + attaches req.ocrQuota
+    ocrV2Upload.single('image'),
+    async (req, res) => {
+      const apiKey = getGeminiKey();
+      if (!apiKey) {
+        return res.status(500).json({
+          error: 'no_api_key',
+          message: 'No Gemini API key configured (set GEMINI_API_KEY_1..4 or GOOGLE_GENAI_API_KEY).',
+        });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: 'no_file', message: 'Upload an image in the "image" field.' });
+      }
+      const mode = String(req.body.mode || req.query.mode || 'full').toLowerCase();
+      const model = process.env.OCR_V2_MODEL || 'gemini-2.5-flash';
+      try {
+        const r = await runPipeline(req.file.buffer, {
+          mode: mode === 'baseline' || mode === 'preprocessed' ? mode : 'full',
+          model,
+          apiKey,
+          timeoutMs: 55_000,
+        });
+        // Consume one monthly credit ONLY on a successful extraction — a failed
+        // upload never burns the user's single free upload.
+        await ocrMonthlyLimit.recordSuccess(req);
+        res.json({
+          raw_text: r.raw_text,
+          suggestions: r.suggestions,
+          wallMs: r.wallMs,
+          costUsd: r.costUsd,
+          mode: r.mode,
+          stages: r.stages,
+          meta: r.meta,
+          model,
+        });
+      } catch (err) {
+        console.error('[OCR-V2] pipeline failed:', err.message);
+        res.status(500).json({ error: 'pipeline_error', message: err.message });
+      }
     }
-    if (!req.file) {
-      return res.status(400).json({ error: 'no_file', message: 'Upload an image in the "image" field.' });
-    }
-    const mode = String(req.body.mode || req.query.mode || 'full').toLowerCase();
-    const model = process.env.OCR_V2_MODEL || 'gemini-2.5-flash';
-    try {
-      const r = await runPipeline(req.file.buffer, {
-        mode: mode === 'baseline' || mode === 'preprocessed' ? mode : 'full',
-        model,
-        apiKey,
-        timeoutMs: 55_000,
-      });
-      res.json({
-        raw_text: r.raw_text,
-        suggestions: r.suggestions,
-        wallMs: r.wallMs,
-        costUsd: r.costUsd,
-        mode: r.mode,
-        stages: r.stages,
-        meta: r.meta,
-        model,
-      });
-    } catch (err) {
-      console.error('[OCR-V2] pipeline failed:', err.message);
-      res.status(500).json({ error: 'pipeline_error', message: err.message });
-    }
-  });
+  );
 }
 
 // ── OCR maintenance gate ─────────────────────────────────────────

@@ -265,15 +265,10 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
             Start Free — No Credit Card
           </a>
-          <!-- OCR offline for maintenance — CTA disabled site-wide.
-               Restore: swap <span> back to <a href="/tools/handwriting-ocr">
-               with the original btn-hero-outline classes. -->
-          <span aria-disabled="true" title="Handwritten Notes into Text is under maintenance — coming back soon"
-                class="btn-hero-outline w-full sm:w-auto justify-center relative opacity-60 cursor-not-allowed pointer-events-none">
+          <a href="/tools/handwriting-ocr" class="btn-hero-outline w-full sm:w-auto justify-center">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             Handwritten Notes into Text
-            <span class="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded-full font-semibold uppercase tracking-wider">Coming soon</span>
-          </span>
+          </a>
         <% } %>
       </div>
 
@@ -704,17 +699,16 @@
             Photograph your handwritten Tamil notes and get clean editable text in seconds. Class notes, letters, whiteboards — all supported.
           </p>
           <ul class="space-y-2 mb-6">
-            <li class="flex items-center gap-2 text-sm text-gray-600"><span class="w-4 h-4 rounded-full flex items-center justify-center text-xs" style="background:#FEF3C7;color:#D97706;">✓</span> 3 free · 20/month on Pro</li>
+            <li class="flex items-center gap-2 text-sm text-gray-600"><span class="w-4 h-4 rounded-full flex items-center justify-center text-xs" style="background:#FEF3C7;color:#D97706;">✓</span> 1 free / month · 20 / month on Pro</li>
             <li class="flex items-center gap-2 text-sm text-gray-600"><span class="w-4 h-4 rounded-full flex items-center justify-center text-xs" style="background:#FEF3C7;color:#D97706;">✓</span> JPG, PNG supported</li>
             <li class="flex items-center gap-2 text-sm text-gray-600"><span class="w-4 h-4 rounded-full flex items-center justify-center text-xs" style="background:#FEF3C7;color:#D97706;">✓</span> Handwritten &amp; printed Tamil</li>
           </ul>
-          <!-- OCR under maintenance — CTA disabled with "coming soon" badge. -->
-          <span aria-disabled="true" title="Under maintenance — coming back soon"
-                class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm opacity-60 cursor-not-allowed pointer-events-none"
-                style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#ffffff;">
-            OCR Coming Soon
-            <span class="text-[10px] px-1.5 py-0.5 bg-white/30 text-white rounded-full uppercase tracking-wider">Maintenance</span>
-          </span>
+          <a href="/tools/handwriting-ocr"
+             class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm hover:brightness-95 transition"
+             style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#ffffff;">
+            Try Handwriting OCR
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+          </a>
         </div>
 
         <!-- CARD 3: AI Content Writer -->

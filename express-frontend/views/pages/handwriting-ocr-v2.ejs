@@ -237,8 +237,11 @@
 
 <div class="ocr-wrap">
   <div class="ocr-header">
-    <h1><span class="dot"></span> Handwriting to Text <span class="ocr-beta-pill">Beta</span></h1>
-    <div class="badge">powered by Gemini</div>
+    <h1><span class="dot"></span> Handwriting to Text</h1>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <div id="ocrQuotaBadge" class="badge" style="display:none;"></div>
+      <div class="badge">powered by Gemini</div>
+    </div>
   </div>
 
   <div class="ocr-main">
@@ -399,6 +402,36 @@
 </div>
 
 <script>
+// ── Monthly quota badge — free = 1/mo, pro = 20/mo, admin = unlimited.
+// Loaded on page mount + after every successful conversion so the count
+// stays in sync without a page refresh.
+(function () {
+  const badge = document.getElementById('ocrQuotaBadge');
+  if (!badge) return;
+  async function refresh() {
+    try {
+      const r = await fetch('/api/ocr-v2/usage', { credentials: 'include' });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (!d || !d.loggedIn) { badge.style.display = 'none'; return; }
+      if (d.unlimited) {
+        badge.textContent = 'Admin · unlimited';
+        badge.style.background = 'rgba(124,58,237,0.15)';
+        badge.style.color = '#5b21b6';
+      } else {
+        const rem = Number(d.remaining ?? 0);
+        const lim = Number(d.limit ?? 0);
+        badge.textContent = `${rem} of ${lim} left this month · ${d.tier === 'pro' ? 'Pro' : 'Free'}`;
+        if (rem === 0) { badge.style.background = 'rgba(220,38,38,0.12)'; badge.style.color = '#b91c1c'; }
+        else if (d.tier === 'free') { badge.style.background = 'rgba(245,158,11,0.15)'; badge.style.color = '#92400e'; }
+        else { badge.style.background = 'rgba(16,185,129,0.15)'; badge.style.color = '#065f46'; }
+      }
+      badge.style.display = 'inline-flex';
+    } catch (_) { /* silent */ }
+  }
+  window.__ocrQuotaRefresh = refresh;
+  refresh();
+})();
 (function() {
   const els = {
     dropZone: document.getElementById('ocrDropZone'),
@@ -562,8 +595,18 @@
       const wallMs = Date.now() - t0;
       const data = await res.json();
       clearInterval(stageInterval); clearInterval(elapsedInterval);
+      // Monthly quota exhausted → dedicated UX with an upgrade nudge for
+      // free-tier users. Never counts against the quota (nothing was consumed).
+      if (res.status === 429) {
+        const isFree = data && data.limit && data.limit.tier === 'free';
+        const msg = (data && data.error) || 'You have used your monthly quota.';
+        onError(msg + (isFree ? '  Upgrade at /pricing for 20 conversions per month.' : ''));
+        if (window.__ocrQuotaRefresh) window.__ocrQuotaRefresh();
+        return;
+      }
       if (!res.ok) throw new Error(data.error || data.message || ('HTTP ' + res.status));
       onSuccess(data, wallMs);
+      if (window.__ocrQuotaRefresh) window.__ocrQuotaRefresh();
     } catch (err) {
       clearInterval(stageInterval); clearInterval(elapsedInterval);
       if (err.name === 'AbortError') { setState('ready'); showToast('Cancelled', 'err'); }

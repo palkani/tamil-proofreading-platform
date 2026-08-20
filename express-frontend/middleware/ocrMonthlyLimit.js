@@ -1,12 +1,11 @@
 /**
  * Handwriting OCR access + usage quota.
  *
- * Policy:
- *   - Anonymous:            NO access — 401 login_required (the page route also
- *                           redirects to /login before the tool ever renders).
- *   - Admin allowlist / JWT admin: unlimited.
- *   - Free (logged in):     3 extractions TOTAL (lifetime, until upgrade — never resets).
- *   - Paid (backend is_premium): 20 extractions per MONTH (resets the 1st, UTC).
+ * Policy (2026-08-20 change: free tier moved from lifetime → monthly):
+ *   - Anonymous:                    NO access — 401 login_required.
+ *   - Admin allowlist / JWT admin:  unlimited.
+ *   - Free (logged in):             1 extraction per calendar MONTH (resets 1st, UTC).
+ *   - Paid (backend is_premium):    20 extractions per MONTH (resets 1st, UTC).
  *
  * Paid status source of truth: the Go backend `GET /api/v1/billing/me`
  * (-> billing.is_premium) — the JWT in req.user carries no subscription field.
@@ -14,9 +13,11 @@
  * Quota storage: reuses the existing `increment_ocr_usage(p_ip, p_date)` Supabase RPC
  * and the handwriting_ocr_usage table (PK ip+usage_date) with NO schema change. The
  * `p_ip` column is used as a generic key:
- *   - Paid monthly:  p_ip = "user:<email>",   p_date = first day of the month.
- *   - Free weekly:   p_ip = "userwk:<email>", p_date = Monday of the week.
- * A new row per period = automatic reset; the two namespaces never collide.
+ *   - Paid monthly:   p_ip = "user:<email>",       p_date = first day of the month.
+ *   - Free monthly:   p_ip = "usermofree:<email>", p_date = first day of the month.
+ * The `usermofree:` namespace is deliberately new — the old `userfree:` counter used
+ * a fixed 2000-01-01 bucket for lifetime tracking; switching namespace gives every
+ * existing free user a clean slate at 0/1 for the current month.
  *
  * The quota is CHECKED here (a read) and only INCREMENTED on a successful extraction
  * (handler calls recordSuccess), so a failed upload never burns a credit.
@@ -29,10 +30,8 @@
 
 const axios = require('axios');
 
-const MONTHLY_LIMIT = 20;    // paid, per calendar month
-const FREE_TOTAL_LIMIT = 3;  // free, LIFETIME (until upgrade) — not a periodic reset
-// Fixed bucket "date" so the free counter never rolls over: one row per user, forever.
-const FREE_LIFETIME_KEY = '2000-01-01';
+const MONTHLY_LIMIT = 20;      // paid, per calendar month
+const FREE_MONTHLY_LIMIT = 1;  // free, per calendar month
 
 // Delegate to the shared admin allowlist (middleware/admin.js reads
 // ADMIN_ALLOWED_EMAILS env var). Previously this file kept its own
@@ -146,12 +145,12 @@ function ocrMonthlyLimit() {
 
     // Tier → (namespace, bucket, limit). A billing hiccup degrades to the free tier
     // rather than locking anyone out.
-    //   pro  → 20 per calendar month (resets the 1st)
-    //   free → 3 LIFETIME, until they upgrade (fixed bucket key = never resets)
+    //   pro  → 20 per calendar month (resets the 1st, UTC)
+    //   free → 1  per calendar month (resets the 1st, UTC)
     const tier = premium ? 'pro' : 'free';
-    const pIp = premium ? `user:${email}` : `userfree:${email}`;
-    const pDate = premium ? monthKey() : FREE_LIFETIME_KEY;
-    const limit = premium ? MONTHLY_LIMIT : FREE_TOTAL_LIMIT;
+    const pIp = premium ? `user:${email}` : `usermofree:${email}`;
+    const pDate = monthKey();
+    const limit = premium ? MONTHLY_LIMIT : FREE_MONTHLY_LIMIT;
 
     const used = await readCount(pIp, pDate);
     if (used >= limit) {
@@ -159,8 +158,8 @@ function ocrMonthlyLimit() {
         return res.status(429).json({
           success: false,
           upgrade_required: true, // shows the upgrade card in the tool UI
-          error: `You've used all ${FREE_TOTAL_LIMIT} free conversions. Upgrade to Pro for ${MONTHLY_LIMIT} per month.`,
-          limit: { tier: 'free', total_limit: FREE_TOTAL_LIMIT, used, remaining: 0, resets_at: 'never (one-time free allowance)' },
+          error: `You've used your ${FREE_MONTHLY_LIMIT} free conversion this month. Upgrade to Pro for ${MONTHLY_LIMIT} per month, or wait until the 1st.`,
+          limit: { tier: 'free', monthly_limit: FREE_MONTHLY_LIMIT, used, remaining: 0, resets_at: 'the 1st of next month (UTC)' },
         });
       }
       return res.status(429).json({
@@ -202,9 +201,9 @@ async function getUsage(req) {
 
   const { premium } = await verifyPremium(req);
   const tier = premium ? 'pro' : 'free';
-  const pIp = premium ? `user:${email}` : `userfree:${email}`;
-  const pDate = premium ? monthKey() : FREE_LIFETIME_KEY;
-  const limit = premium ? MONTHLY_LIMIT : FREE_TOTAL_LIMIT;
+  const pIp = premium ? `user:${email}` : `usermofree:${email}`;
+  const pDate = monthKey();
+  const limit = premium ? MONTHLY_LIMIT : FREE_MONTHLY_LIMIT;
   const used = await readCount(pIp, pDate);
   return {
     loggedIn: true,
@@ -213,7 +212,7 @@ async function getUsage(req) {
     used,
     limit,
     remaining: Math.max(0, limit - used),
-    period: premium ? 'month' : 'total',
+    period: 'month',
   };
 }
 
@@ -221,4 +220,4 @@ module.exports = ocrMonthlyLimit;
 module.exports.recordSuccess = recordSuccess;
 module.exports.getUsage = getUsage;
 module.exports.MONTHLY_LIMIT = MONTHLY_LIMIT;
-module.exports.FREE_TOTAL_LIMIT = FREE_TOTAL_LIMIT;
+module.exports.FREE_MONTHLY_LIMIT = FREE_MONTHLY_LIMIT;

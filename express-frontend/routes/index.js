@@ -160,30 +160,21 @@ router.get('/tools/ocr', (req, res) => {
   });
 });
 
-// /tools/handwriting-ocr — split by OCR v2 beta feature flag:
-//   - Beta users (email on OCR_V2_BETA_EMAILS or admin allowlist) →
-//     render the new OCR v2 UI, which POSTs to /api/ocr-v2/pipeline.
-//   - Everyone else → maintenance page as before.
-// When we open the beta to all Pro users, expand OCR_V2_BETA_EMAILS.
-// When we open to all users, revert this to always-render the OCR v2 UI.
+// /tools/handwriting-ocr — LIVE (2026-08-20):
+//   - Anonymous          → redirect to /login with return-to path
+//   - Signed-in (any tier)→ render the OCR v2 UI (posts to /api/ocr-v2/pipeline).
+//     Free tier gets 1 upload/month, Pro gets 20/month — enforced in
+//     middleware/ocrMonthlyLimit.js. UI shows the current quota.
 router.get('/tools/handwriting-ocr', (req, res) => {
   const user = getCurrentUser(req);
-  const { isOcrV2BetaUser } = require('../middleware/ocrV2Beta');
-  const inBeta = isOcrV2BetaUser(req);
-
-  if (inBeta) {
-    const seo = { ...(getSeoData('handwritingOcrTool') || {}), noIndex: true };
-    return res.render('pages/handwriting-ocr-v2', {
-      title: 'Handwriting OCR (Beta) | ProofTamil',
-      seo: seo,
-      user: user,
-    });
+  if (!user) {
+    return res.redirect('/login?redirect=' + encodeURIComponent('/tools/handwriting-ocr'));
   }
-  const seo = { ...(getSeoData('handwritingOcrTool') || {}), noIndex: true };
-  res.render('pages/ocr-maintenance', {
-    title: 'Tamil Handwriting OCR — Under Maintenance | ProofTamil',
+  const seo = getSeoData('handwritingOcrTool') || {};
+  return res.render('pages/handwriting-ocr-v2', {
+    title: 'Handwriting OCR — Tamil handwriting to text | ProofTamil',
     seo: seo,
-    user: user
+    user: user,
   });
 });
 
@@ -1146,11 +1137,9 @@ router.get('/sitemap.xml', (req, res) => {
   const pages = [
     { url: '/',                       priority: '1.0',  changefreq: 'weekly',  lastmod: currentDate },
     { url: '/free-tamil-editor',      priority: '0.95', changefreq: 'weekly',  lastmod: '2026-04-19' },
-    // OCR URLs removed from sitemap while the feature is offline. The
-    // pages still return 200 with a maintenance view (see /tools/ocr
-    // and /tools/handwriting-ocr routes above) + <meta robots noindex>
-    // so Google will drop them from the index within a few weeks. Add
-    // both entries back when OCR is restored.
+    // /tools/handwriting-ocr is LIVE (2026-08-20) — restored to sitemap.
+    // /tools/ocr (printed) is still offline and stays out of the sitemap.
+    { url: '/tools/handwriting-ocr',  priority: '0.90', changefreq: 'weekly',  lastmod: '2026-08-20' },
     { url: '/tools/ai-content-writer',priority: '0.80', changefreq: 'monthly', lastmod: '2026-02-01' },
     { url: '/how-to-use',             priority: '0.80', changefreq: 'monthly', lastmod: '2026-03-01' },
     { url: '/blog',                   priority: '0.80', changefreq: 'weekly',  lastmod: currentDate },
