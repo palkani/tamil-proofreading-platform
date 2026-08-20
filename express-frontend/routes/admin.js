@@ -142,6 +142,53 @@ router.get('/communications', requireAdmin, (req, res) => {
   });
 });
 
+// ── Marketing campaigns ────────────────────────────────────────────
+// Currently ships one campaign: the handwriting-OCR launch email.
+// The page renders a live preview, sends a test to any address, and
+// (once wired to the backend recipient-list endpoint) can trigger a
+// batched send to newsletter subscribers on the Free plan.
+router.get('/campaigns/ocr-launch', requireAdmin, (req, res) => {
+  const campaign = require('../lib/email/campaigns/ocr-launch');
+  const preview = campaign.render({
+    name: req.user?.name || 'Preview',
+    email: req.user?.email || 'preview@example.com',
+  });
+  res.render('pages/admin/campaign-ocr-launch', {
+    title: 'Admin · OCR launch campaign',
+    ...commonLocals(req, 'communications'),
+    subject: preview.subject,
+    previewHtml: preview.html,
+    previewText: preview.text,
+    unsubscribeUrl: preview.listUnsubscribe,
+  });
+});
+
+// Send the exact campaign email to one address for review. Uses the
+// shared sendEmail helper (Resend → SendGrid → SMTP).
+router.post('/api/campaigns/ocr-launch/test-send', requireAdmin, express.json(), async (req, res) => {
+  const to = String(req.body?.to || '').trim().toLowerCase();
+  const name = String(req.body?.name || '').trim() || 'there';
+  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    return res.status(400).json({ ok: false, error: 'invalid_email' });
+  }
+  try {
+    const campaign = require('../lib/email/campaigns/ocr-launch');
+    const { sendEmail } = require('../lib/email/send');
+    const { subject, html, text, listUnsubscribe } = campaign.render({ name, email: to });
+    const result = await sendEmail({ to, subject, html, text, listUnsubscribe });
+    console.log(JSON.stringify({
+      kind: 'admin_audit', event: 'campaign_test_send',
+      ts: new Date().toISOString(),
+      actor: req.user?.email || null,
+      campaign: campaign.CAMPAIGN, to, transport: result.transport, ok: result.ok,
+    }));
+    return res.json({ ok: result.ok, transport: result.transport, error: result.error || null });
+  } catch (err) {
+    console.error('[campaign-test-send] failed:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ---------- API proxy ----------
 //
 // The frontend sends fetch() calls to /admin/api/* which we forward
