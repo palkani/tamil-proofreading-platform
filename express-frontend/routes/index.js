@@ -1122,8 +1122,7 @@ router.get('/account/data', requireAuth, (req, res) => {
 });
 
 // Public security page — encryption posture, sub-processors, incident
-// response, and vulnerability disclosure contact. Paired with
-// /.well-known/security.txt (RFC 9116) served by express.static.
+// response, and vulnerability disclosure contact.
 router.get('/security', (req, res) => {
   const user = getCurrentUser(req);
   res.render('pages/security', {
