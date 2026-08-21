@@ -508,10 +508,6 @@
             <span class="metadata-label">Type:</span>
             <span class="metadata-value">${escapeHtml(data.metadata.content_type || '')}</span>
           </div>
-          <div class="metadata-item">
-            <span class="metadata-label">Model:</span>
-            <span class="metadata-value">${escapeHtml(data.metadata.model || 'gpt-4')}</span>
-          </div>
         `;
       }
 
