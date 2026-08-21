@@ -1805,9 +1805,9 @@ class HomeEditor {
         data = {};
       }
 
-      // Match Workspace: handle 503 (all Gemini keys rate limited) with clear message
+      // Match Workspace: handle 503 (upstream provider rate limited) with clear message
       if (response.status === 503) {
-        const msg = (data.error || data.message || 'All Gemini keys are temporarily rate limited. Please try again in 1–2 minutes.').trim();
+        const msg = (data.error || data.message || 'ProofTamil AI is temporarily busy. Please try again in 1–2 minutes.').trim();
         const retrySecs = data.retry_after_seconds;
         this.showError(retrySecs ? `${msg} (Retry after ${retrySecs}s)` : msg);
         return;

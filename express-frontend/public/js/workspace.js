@@ -5382,7 +5382,7 @@ class WorkspaceController {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <span class="text-sm font-medium">Analyzing with Gemini AI...</span>
+            <span class="text-sm font-medium">Analyzing with ProofTamil AI...</span>
           </div>
         `;
         break;
@@ -5940,8 +5940,8 @@ class WorkspaceController {
         this.showNotification(`Found ${suggestions.length} transliteration suggestion${suggestions.length > 1 ? 's' : ''}`, 'success');
       }
     } catch (error) {
-      console.error('Gemini AI error:', error);
-      this.showNotification('Failed to analyze text with Gemini AI. Please try again.', 'error');
+      console.error('ProofTamil AI error:', error);
+      this.showNotification('Failed to analyze text. Please try again.', 'error');
     } finally {
       this.loading = false;
       if (geminiBtn) {
@@ -5950,7 +5950,7 @@ class WorkspaceController {
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
           </svg>
-          Check with Gemini AI
+          Check with ProofTamil AI
         `;
       }
     }
