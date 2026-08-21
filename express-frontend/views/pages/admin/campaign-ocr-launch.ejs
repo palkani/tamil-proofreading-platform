@@ -18,6 +18,17 @@
     </dl>
   </section>
 
+  <!-- Transport diagnostic — shows which sender is active + which env vars
+       are configured. Filled by the JS block below. -->
+  <section id="transport-panel" class="rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-lg font-semibold text-slate-900">Email transport</h2>
+    <p class="mt-1 text-sm text-slate-600">Priority: Resend → SendGrid → SMTP. The first configured one wins.</p>
+    <div id="transport-rows" class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3 text-sm">
+      <div class="text-slate-400">Loading…</div>
+    </div>
+    <p id="transport-warning" class="hidden mt-3 rounded px-3 py-2 text-sm bg-red-100 text-red-800"></p>
+  </section>
+
   <!-- Test send -->
   <section class="rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-lg font-semibold text-slate-900">1 · Send yourself a test</h2>
@@ -71,6 +82,34 @@
 
 <script>
 (function () {
+  // ── Transport diagnostic ──
+  (async function () {
+    try {
+      const r = await fetch('/admin/api/campaigns/email-transports', { credentials: 'include' });
+      const d = await r.json();
+      const active = d.resend ? 'Resend' : d.sendgrid ? 'SendGrid' : d.smtp ? 'SMTP' : null;
+      const rows = document.getElementById('transport-rows');
+      const row = (label, ok, note) =>
+        `<div class="flex items-center gap-2"><span class="inline-block h-2.5 w-2.5 rounded-full ${ok ? 'bg-green-500' : 'bg-slate-300'}"></span>` +
+        `<b class="text-slate-900">${label}</b><span class="text-slate-500">${ok ? note : '— not configured'}</span></div>`;
+      rows.innerHTML =
+        row('Resend',   d.resend,   d.resend   ? '(active — RESEND_API_KEY set)' : '') +
+        row('SendGrid', d.sendgrid, d.sendgrid ? (d.resend ? '(configured, would be used if Resend removed)' : '(active — SENDGRID_API_KEY set)') : '') +
+        row('SMTP',     d.smtp,     d.smtp     ? `(fallback — host: ${d.smtpHost || 'default'})` : '');
+      if (!active) {
+        const w = document.getElementById('transport-warning');
+        w.textContent = 'NO email transport is configured on this environment. Set RESEND_API_KEY (recommended) in Vercel and redeploy.';
+        w.classList.remove('hidden');
+      } else if (active === 'SMTP' && !d.resend && !d.sendgrid) {
+        const w = document.getElementById('transport-warning');
+        w.textContent = 'Only SMTP is configured. Zoho/Gmail SMTP passwords expire and are less reliable on serverless. Consider setting RESEND_API_KEY for better deliverability.';
+        w.classList.remove('hidden');
+      }
+    } catch (err) {
+      document.getElementById('transport-rows').innerHTML = '<div class="text-red-600">Could not load transport status: ' + err.message + '</div>';
+    }
+  })();
+
   // ── Test send ──
   const form = document.getElementById('test-send-form');
   const btn  = document.getElementById('test-send-btn');

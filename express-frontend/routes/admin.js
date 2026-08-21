@@ -163,6 +163,20 @@ router.get('/campaigns/ocr-launch', requireAdmin, (req, res) => {
   });
 });
 
+// Diagnostic: which email transports are configured on this env? Returns
+// booleans only — never leaks the keys themselves. Used by the campaign
+// admin page to explain why a test-send failed / which env var to set.
+router.get('/api/campaigns/email-transports', requireAdmin, (req, res) => {
+  const smtpPass = process.env.SMTP_PASSWORD || process.env.SENDGRID_SMTP_PASSWORD || '';
+  res.json({
+    resend:   Boolean((process.env.RESEND_API_KEY || '').trim()),
+    sendgrid: Boolean((process.env.SENDGRID_API_KEY || (smtpPass.startsWith('SG.') ? smtpPass : '')).trim()),
+    smtp:     Boolean(smtpPass),
+    smtpHost: process.env.SMTP_HOST || process.env.SENDGRID_SMTP_HOST || null,
+    fromEmail: process.env.EMAIL_FROM_ADDRESS || 'noreply@prooftamil.com',
+  });
+});
+
 // Send the exact campaign email to one address for review. Uses the
 // shared sendEmail helper (Resend → SendGrid → SMTP).
 router.post('/api/campaigns/ocr-launch/test-send', requireAdmin, express.json(), async (req, res) => {
