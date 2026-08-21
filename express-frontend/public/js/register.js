@@ -3,6 +3,85 @@
 let registeredEmail = '';
 let resendTimeout = null;
 
+// ── Email validity tracking ───────────────────────────────────────────
+// Populated by the /auth/validate-email fetch on blur. `emailStatus` is
+// one of: 'unknown' (not yet checked), 'checking' (fetch in flight),
+// 'valid', 'invalid'. Submit button stays disabled unless 'valid'.
+let emailStatus = 'unknown';
+let lastCheckedEmail = '';
+let emailCheckInFlight = null;
+
+function showEmailFeedback(kind, message, suggestion) {
+  const el = document.getElementById('email-feedback');
+  if (!el) return;
+  if (!message && !suggestion) { el.classList.add('hidden'); el.textContent = ''; return; }
+  const colour =
+    kind === 'valid'    ? 'text-green-700 bg-green-50 border-green-200' :
+    kind === 'invalid'  ? 'text-red-700 bg-red-50 border-red-200' :
+                          'text-gray-600 bg-gray-50 border-gray-200';
+  el.className = 'mt-1.5 text-xs px-3 py-2 rounded-lg border ' + colour;
+  el.innerHTML = '';
+  if (message) el.appendChild(document.createTextNode(message));
+  if (suggestion) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ml-2 underline font-semibold hover:opacity-80';
+    btn.textContent = 'Use ' + suggestion;
+    btn.addEventListener('click', () => {
+      document.getElementById('email').value = suggestion;
+      checkEmail(suggestion);
+    });
+    el.appendChild(btn);
+  }
+  el.classList.remove('hidden');
+}
+
+async function checkEmail(email) {
+  const value = String(email || '').trim().toLowerCase();
+  if (!value) {
+    emailStatus = 'unknown';
+    showEmailFeedback('info', '');
+    updateSubmitButton();
+    return;
+  }
+  if (value === lastCheckedEmail && emailStatus !== 'unknown') return;
+  lastCheckedEmail = value;
+  emailStatus = 'checking';
+  showEmailFeedback('info', 'Checking email…');
+  updateSubmitButton();
+
+  if (emailCheckInFlight && emailCheckInFlight.abort) emailCheckInFlight.abort();
+  const ctrl = ('AbortController' in window) ? new AbortController() : null;
+  emailCheckInFlight = ctrl;
+  try {
+    const r = await fetch('/auth/validate-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: value }),
+      signal: ctrl ? ctrl.signal : undefined,
+    });
+    const d = await r.json();
+    if (value !== (document.getElementById('email').value || '').trim().toLowerCase()) {
+      return; // user typed something else while we were checking
+    }
+    if (d && d.valid) {
+      emailStatus = 'valid';
+      showEmailFeedback('valid', d.suggestion ? '' : '', d.suggestion || undefined);
+    } else {
+      emailStatus = 'invalid';
+      showEmailFeedback('invalid', (d && d.message) || 'This email is not accepted.', d && d.suggestion);
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+    // Network error — allow submit and let server-side revalidate.
+    emailStatus = 'valid';
+    showEmailFeedback('info', '');
+  } finally {
+    emailCheckInFlight = null;
+    updateSubmitButton();
+  }
+}
+
 // Resolve the post-auth redirect target once at load time.
 // Mirrors the same safe-redirect logic used in login.js.
 var _registerRedirectTarget = (function () {
@@ -95,10 +174,13 @@ function updateSubmitButton() {
   const email = document.getElementById('email').value;
   const terms = document.getElementById('terms-checkbox').checked;
   const submitBtn = document.getElementById('submit-btn');
-  
+
   const passwordResult = validatePasswordStrength(password);
-  
-  const isValid = name.trim() && email.trim() && passwordResult.isValid && terms;
+  // Only enable submit when the async email check has explicitly said OK.
+  // 'unknown' and 'checking' both keep the button disabled to prevent
+  // racy submits with junk emails.
+  const emailOk = emailStatus === 'valid';
+  const isValid = name.trim() && email.trim() && emailOk && passwordResult.isValid && terms;
   submitBtn.disabled = !isValid;
 }
 
@@ -108,10 +190,29 @@ document.getElementById('password')?.addEventListener('input', (e) => {
   updatePasswordUI(result);
 });
 
-// Other form inputs
+// Name + terms toggle re-check the submit button; email has its own
+// listeners below because it needs both the debounced check and an
+// immediate state reset when the user starts editing.
 document.getElementById('name')?.addEventListener('input', updateSubmitButton);
-document.getElementById('email')?.addEventListener('input', updateSubmitButton);
 document.getElementById('terms-checkbox')?.addEventListener('change', updateSubmitButton);
+
+// Debounced auto-check after 800 ms of idle typing + immediate check on
+// blur. Resets status the moment the value changes so the button re-locks.
+let emailIdleTimer = null;
+document.getElementById('email')?.addEventListener('input', (e) => {
+  if (e.target.value.trim().toLowerCase() !== lastCheckedEmail) {
+    emailStatus = 'unknown';
+    showEmailFeedback('info', '');
+  }
+  updateSubmitButton();
+  if (emailIdleTimer) clearTimeout(emailIdleTimer);
+  const v = e.target.value;
+  emailIdleTimer = setTimeout(() => checkEmail(v), 800);
+});
+document.getElementById('email')?.addEventListener('blur', (e) => {
+  if (emailIdleTimer) { clearTimeout(emailIdleTimer); emailIdleTimer = null; }
+  checkEmail(e.target.value);
+});
 
 // Registration form submit
 document.getElementById('register-form')?.addEventListener('submit', async (e) => {
@@ -142,36 +243,41 @@ document.getElementById('register-form')?.addEventListener('submit', async (e) =
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password })
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       const errorMessage = data?.error || data?.message || 'Registration failed';
       throw new Error(String(errorMessage));
     }
-    
-    // Registration successful - user is immediately logged in
-    // Use centralized auth utility if available
-    if (window.authUtils && window.authUtils.handleAuthSuccess) {
-      window.authUtils.handleAuthSuccess(data.access_token, _registerRedirectTarget);
-    } else {
-      // Fallback if auth-utils not loaded
-      localStorage.removeItem('access_token');
-      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
 
-      if (data.access_token) {
-        localStorage.setItem('access_token', data.access_token);
-        document.cookie = `access_token=${data.access_token}; path=/; SameSite=Lax; Max-Age=900`;
-      }
+    // 2026-08-21 policy: NEVER auto-log-in on register. Users must verify
+    // their email via OTP first. This gates junk-mail signups even if the
+    // strict email validator (syntax + disposable blocklist + MX check)
+    // somehow lets one through. If the backend still returns an
+    // access_token in the register response, we DELIBERATELY ignore it —
+    // the token that logs the user in comes from /auth/otp/verify only.
+    registeredEmail = email;
 
-      window.location.href = _registerRedirectTarget;
-    }
+    // Fire an OTP request. If the backend already sent one automatically
+    // during /auth/register, this second call is idempotent — the user
+    // still ends up on the verification step either way. If the backend
+    // requires an explicit send, this call kicks it off.
+    try {
+      await fetch('/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, purpose: 'register' })
+      });
+    } catch (_) { /* the verification step will show a Resend button */ }
+
+    showVerificationStep(email);
   } catch (error) {
     const errorMessage = error?.message || 'An unexpected error occurred';
     errorDiv.textContent = errorMessage;
     errorDiv.classList.remove('hidden');
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Create free account';
+    submitBtn.textContent = 'Create account';
   }
 });
 

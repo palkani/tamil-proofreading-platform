@@ -80,7 +80,40 @@ const forward = async (req, res, path, method = 'post') => {
   }
 };
 
-router.post('/register', (req, res) => forward(req, res, '/auth/register', 'post'));
+// ── Email strictness pre-checks ───────────────────────────────────────
+// The register form calls validate-email on blur so the user gets
+// immediate feedback ("Enter a valid email", "Disposable emails are not
+// allowed", "Did you mean gmail.com?"). Same validator ALSO gates the
+// /register proxy below so a curl caller can't skip the check.
+const { validateEmail } = require('../lib/email-validation/validate');
+
+router.post('/validate-email', async (req, res) => {
+  const email = String(req.body?.email || '').trim();
+  if (!email) return res.status(400).json({ valid: false, reason: 'missing', message: 'Email is required.' });
+  try {
+    const result = await validateEmail(email);
+    return res.json(result);
+  } catch (err) {
+    // Never fail the endpoint — degrade to skipMx behaviour if DNS explodes.
+    console.warn('[auth/validate-email] validator threw:', err.message);
+    const fallback = await validateEmail(email, { skipMx: true });
+    return res.json(fallback);
+  }
+});
+
+router.post('/register', async (req, res) => {
+  const email = String(req.body?.email || '').trim();
+  const check = await validateEmail(email).catch(() => null);
+  if (check && !check.valid) {
+    console.log(`[AUTH-PROXY] /register rejected: ${check.reason} for ${email}`);
+    return res.status(400).json({
+      error: check.reason || 'invalid_email',
+      message: check.message,
+      ...(check.suggestion ? { suggestion: check.suggestion } : {}),
+    });
+  }
+  return forward(req, res, '/auth/register', 'post');
+});
 router.post('/login', (req, res) => forward(req, res, '/auth/login', 'post'));
 router.post('/refresh', (req, res) => forward(req, res, '/auth/refresh', 'post'));
 router.post('/otp/send', (req, res) => forward(req, res, '/auth/otp/send', 'post'));
