@@ -164,16 +164,53 @@ router.get('/campaigns/ocr-launch', requireAdmin, (req, res) => {
 });
 
 // Diagnostic: which email transports are configured on this env? Returns
-// booleans only — never leaks the keys themselves. Used by the campaign
-// admin page to explain why a test-send failed / which env var to set.
+// booleans + non-secret metadata (host, port, user, password source,
+// masked hint of the key) — NEVER leaks the actual API key or password.
+// Enough signal for an admin to verify Vercel is serving the values
+// they set and to compare against what they just pasted upstream.
 router.get('/api/campaigns/email-transports', requireAdmin, (req, res) => {
-  const smtpPass = process.env.SMTP_PASSWORD || process.env.SENDGRID_SMTP_PASSWORD || '';
+  const resendKey    = (process.env.RESEND_API_KEY || '').trim();
+  const sendgridKey  = (process.env.SENDGRID_API_KEY || '').trim();
+  const smtpPassRaw  = process.env.SMTP_PASSWORD || '';
+  const smtpPassAlias = process.env.SENDGRID_SMTP_PASSWORD || '';
+  const smtpPass     = smtpPassRaw || smtpPassAlias;
+  const sendgridDerivedFromSmtp = !sendgridKey && smtpPass.startsWith('SG.');
+
+  // Masked hint so the operator can eyeball "does that match what I
+  // just pasted upstream?" without revealing the secret. Always
+  // 6 chars + length, never more.
+  const mask = (v) => {
+    if (!v) return null;
+    if (v.length <= 8) return '***';
+    return v.slice(0, 3) + '...' + v.slice(-3) + ' (' + v.length + ' chars)';
+  };
+
   res.json({
-    resend:   Boolean((process.env.RESEND_API_KEY || '').trim()),
-    sendgrid: Boolean((process.env.SENDGRID_API_KEY || (smtpPass.startsWith('SG.') ? smtpPass : '')).trim()),
-    smtp:     Boolean(smtpPass),
-    smtpHost: process.env.SMTP_HOST || process.env.SENDGRID_SMTP_HOST || null,
-    fromEmail: process.env.EMAIL_FROM_ADDRESS || 'noreply@prooftamil.com',
+    resend: {
+      configured: Boolean(resendKey),
+      key_hint: mask(resendKey),
+    },
+    sendgrid: {
+      configured: Boolean(sendgridKey) || sendgridDerivedFromSmtp,
+      key_hint: mask(sendgridKey || (sendgridDerivedFromSmtp ? smtpPass : '')),
+      derived_from_smtp: sendgridDerivedFromSmtp,
+    },
+    smtp: {
+      configured: Boolean(smtpPass),
+      host: process.env.SMTP_HOST || process.env.SENDGRID_SMTP_HOST || null,
+      port: parseInt(process.env.SMTP_PORT || process.env.SENDGRID_SMTP_PORT || '587', 10),
+      user: process.env.SMTP_USER || process.env.SENDGRID_SMTP_USER || null,
+      pass_hint: mask(smtpPass),
+      pass_env_source: smtpPassRaw ? 'SMTP_PASSWORD' : (smtpPassAlias ? 'SENDGRID_SMTP_PASSWORD' : null),
+    },
+    from: {
+      address: process.env.EMAIL_FROM_ADDRESS || 'noreply@prooftamil.com',
+      name:    process.env.EMAIL_FROM_NAME    || 'ProofTamil',
+    },
+    // Non-secret runtime info to catch "new env, old function" bugs.
+    // A high uptime after you added env vars means this instance is
+    // still running with the previous values — force a redeploy.
+    process_uptime_seconds: Math.round(process.uptime()),
   });
 });
 
