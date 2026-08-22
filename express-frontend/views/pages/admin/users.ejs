@@ -33,8 +33,15 @@
         </select>
       </div>
     </div>
-    <div class="mt-3 flex items-center justify-between text-xs text-slate-500">
-      <div data-count>Loading…</div>
+    <div class="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+      <div class="flex items-center gap-4">
+        <div data-count>Loading…</div>
+        <label class="inline-flex items-center gap-1.5 text-slate-700">
+          <input type="checkbox" id="suspicious-only" class="rounded border-slate-300" />
+          Only suspicious emails
+          <span id="suspicious-status" class="text-slate-400"></span>
+        </label>
+      </div>
       <button type="button" data-clear-filters class="text-blue-600 hover:underline">Clear filters</button>
     </div>
   </section>
@@ -105,6 +112,29 @@
     return '<span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ' + (tones[tone] || tones.slate) + '">' + text + '</span>';
   }
 
+  // Cache of email → { valid, reason } from /admin/api/users/audit-suspicious.
+  // Populated lazily whenever the current page is rendered so we don't
+  // re-audit rows we already checked. Cleared when a page reload happens.
+  const suspiciousCache = new Map();
+  let suspiciousOnly = false;
+
+  async function auditPageEmails(users) {
+    const toCheck = users.map((u) => (u.email || '').toLowerCase()).filter((e) => e && !suspiciousCache.has(e));
+    if (toCheck.length === 0) return;
+    const statusEl = document.getElementById('suspicious-status');
+    if (statusEl) statusEl.textContent = '(checking ' + toCheck.length + ' emails…)';
+    try {
+      const r = await fetch('/admin/api/users/audit-suspicious', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails: toCheck }),
+      });
+      const d = await r.json();
+      Object.keys(d.results || {}).forEach((k) => suspiciousCache.set(k, d.results[k]));
+    } catch (_) { /* fail-open */ }
+    if (statusEl) statusEl.textContent = '';
+  }
+
   function render(data) {
     state.total = data.total;
     const rows = data.users || [];
@@ -112,7 +142,21 @@
     if (!rows.length) {
       tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">No users match.</td></tr>';
     } else {
-      tbody.innerHTML = rows.map(function (u) {
+      // Kick off async audit; a second render() call will happen once
+      // the results land, so filtering will apply automatically.
+      auditPageEmails(rows).then(() => { if (suspiciousOnly) render(data); });
+
+      const visibleRows = suspiciousOnly
+        ? rows.filter((u) => {
+            const v = suspiciousCache.get((u.email || '').toLowerCase());
+            return v && v.valid === false;
+          })
+        : rows;
+
+      if (!visibleRows.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">No suspicious users on this page. Try Next.</td></tr>';
+      } else {
+      tbody.innerHTML = visibleRows.map(function (u) {
         const planBadge = u.subscription === 'pro'
           ? badge('Pro', 'green')
           : badge('Free', 'slate');
@@ -121,6 +165,13 @@
         if (!u.is_active) statusBits.push(badge('disabled', 'red'));
         if (!u.email_verified) statusBits.push(badge('unverified', 'amber'));
         if (u.role === 'admin') statusBits.push(badge('admin', 'blue'));
+        const susp = suspiciousCache.get((u.email || '').toLowerCase());
+        if (susp && susp.valid === false) {
+          const label = susp.reason === 'disposable' ? 'disposable' :
+                        susp.reason === 'no_mx'      ? 'no MX'      :
+                        susp.reason === 'syntax'     ? 'bad syntax' : 'suspicious';
+          statusBits.push(badge(label, 'red'));
+        }
         const status = statusBits.length ? statusBits.join(' ') : badge('active', 'green');
 
         return '<tr class="hover:bg-slate-50">' +
@@ -133,6 +184,7 @@
           '<td class="px-4 py-2 text-right"><a href="/admin/users/' + u.id + '" class="text-blue-600 hover:underline">View →</a></td>' +
           '</tr>';
       }).join('');
+      }
     }
     const start = state.offset + 1;
     const end = Math.min(state.offset + pageSize, state.total);
@@ -143,6 +195,7 @@
     document.querySelector('[data-page-next]').disabled = end >= state.total;
   }
 
+  let lastData = null;
   function load() {
     const params = new URLSearchParams({
       email: state.email,
@@ -155,13 +208,20 @@
     });
     fetch('/admin/api/users?' + params.toString(), { credentials: 'include' })
       .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
-      .then(render)
+      .then((d) => { lastData = d; render(d); })
       .catch(function (err) {
         console.error('[ADMIN/USERS] load failed', err);
         document.querySelector('[data-users-body]').innerHTML =
           '<tr><td colspan="7" class="px-4 py-6 text-center text-red-600">Failed to load: ' + err.message + '</td></tr>';
       });
   }
+
+  // Suspicious-only filter runs entirely client-side against the audit
+  // cache — toggling doesn't refetch the users list, just re-renders it.
+  document.getElementById('suspicious-only')?.addEventListener('change', function () {
+    suspiciousOnly = this.checked;
+    if (lastData) render(lastData);
+  });
 
   const runLoad = debounced(load, 250);
   document.querySelectorAll('[data-filter]').forEach(function (el) {

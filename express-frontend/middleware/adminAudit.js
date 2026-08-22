@@ -22,6 +22,22 @@ const SENSITIVE_QUERY_KEYS = new Set([
   'refresh_token', 'authorization', 'auth',
 ]);
 
+// In-memory ring buffer of the most recent audit entries. Reset on
+// every cold start; on Vercel there are many concurrent function
+// instances, so this view is a PARTIAL local slice — the authoritative
+// audit log is Vercel's captured stdout (filter by kind:admin_audit).
+// Use this for spot-checks; for full history read Vercel logs.
+const RING_MAX = 500;
+const ringBuffer = [];
+function pushToRing(entry) {
+  ringBuffer.push(entry);
+  if (ringBuffer.length > RING_MAX) ringBuffer.shift();
+}
+function getRingSnapshot() {
+  // Newest first — reverse a copy so we don't mutate the buffer.
+  return ringBuffer.slice().reverse();
+}
+
 function redactQuery(query) {
   if (!query || typeof query !== 'object') return undefined;
   const out = {};
@@ -60,6 +76,7 @@ function logAdminApi({ req, method, upstreamPath, status, durationMs }) {
       ua: req.headers['user-agent'] || undefined,
     };
     console.log(JSON.stringify(entry));
+    pushToRing(entry);
   } catch (err) {
     console.warn('[admin_audit] emit failed:', err.message);
   }
@@ -71,7 +88,7 @@ function logAdminApi({ req, method, upstreamPath, status, durationMs }) {
  */
 function logAdminPage(req) {
   try {
-    console.log(JSON.stringify({
+    const entry = {
       kind: 'admin_audit',
       event: 'page',
       ts: new Date().toISOString(),
@@ -80,7 +97,9 @@ function logAdminPage(req) {
       path: req.originalUrl || req.path,
       ip: clientIp(req),
       ua: req.headers['user-agent'] || undefined,
-    }));
+    };
+    console.log(JSON.stringify(entry));
+    pushToRing(entry);
   } catch (err) {
     console.warn('[admin_audit] emit failed:', err.message);
   }
@@ -95,4 +114,4 @@ function adminAuditPageMiddleware(req, res, next) {
   next();
 }
 
-module.exports = { logAdminApi, logAdminPage, adminAuditPageMiddleware };
+module.exports = { logAdminApi, logAdminPage, adminAuditPageMiddleware, getRingSnapshot };

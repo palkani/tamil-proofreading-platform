@@ -54,6 +54,7 @@ function commonLocals(req, activeTab) {
       { key: 'ai-requests', label: 'AI requests', href: '/admin/ai-requests', icon: 'chart' },
       { key: 'blog-generator', label: 'Blog generator', href: '/admin/blog-generator', icon: 'chart' },
       { key: 'communications', label: 'Communications', href: '/admin/communications', icon: 'mail' },
+      { key: 'audit', label: 'Audit log', href: '/admin/audit', icon: 'alert' },
     ],
   };
 }
@@ -140,6 +141,50 @@ router.get('/communications', requireAdmin, (req, res) => {
     title: 'Admin · Communications',
     ...commonLocals(req, 'communications'),
   });
+});
+
+// Audit log viewer — reads the in-memory ring buffer of the current
+// function instance. The authoritative history lives in Vercel logs
+// (filter by kind:admin_audit); this UI is a fast local slice.
+router.get('/audit', requireAdmin, (req, res) => {
+  res.render('pages/admin/audit', {
+    title: 'Admin · Audit log',
+    ...commonLocals(req, 'audit'),
+  });
+});
+
+// JSON snapshot for the /admin/audit page.
+router.get('/api/audit/snapshot', requireAdmin, (req, res) => {
+  const { getRingSnapshot } = require('../middleware/adminAudit');
+  res.json({
+    entries: getRingSnapshot(),
+    process_uptime_seconds: Math.round(process.uptime()),
+    note: 'This is a per-function-instance ring buffer (last 500 events). The authoritative audit log is Vercel logs — filter by `kind:admin_audit`.',
+  });
+});
+
+// ── User email auditing ────────────────────────────────────────────
+// Client posts a batch of user emails; we run each through the same
+// email validator that gates registration (syntax + disposable
+// blocklist + MX check) and return { email: {valid, reason} }. Powers
+// the "Suspicious" filter on /admin/users so admins can spot and
+// clean up junk accounts created before the strict validator shipped.
+router.post('/api/users/audit-suspicious', requireAdmin, express.json(), async (req, res) => {
+  const emails = Array.isArray(req.body?.emails) ? req.body.emails.slice(0, 200) : [];
+  if (emails.length === 0) return res.json({ results: {} });
+  const { validateEmail } = require('../lib/email-validation/validate');
+  const results = {};
+  await Promise.all(emails.map(async (raw) => {
+    const email = String(raw || '').trim().toLowerCase();
+    if (!email) return;
+    try {
+      const r = await validateEmail(email);
+      results[email] = { valid: r.valid, reason: r.reason || null };
+    } catch (_) {
+      results[email] = { valid: true, reason: 'check_failed' };
+    }
+  }));
+  return res.json({ results });
 });
 
 // ── Marketing campaigns ────────────────────────────────────────────

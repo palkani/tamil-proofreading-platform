@@ -1,15 +1,21 @@
 <%- include('../../partials/admin/layout-header') %>
 
 <div class="mx-auto max-w-6xl space-y-6" id="admin-user-detail" data-user-id="<%= userId %>">
-  <div class="flex items-center justify-between">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <a href="/admin/users" class="text-sm text-blue-600 hover:underline">← Back to users</a>
-    <div class="space-x-2">
+    <div class="flex flex-wrap gap-2">
       <button type="button" data-action="send-email"
               class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Send email</button>
       <button type="button" data-action="toggle-pro"
               class="rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Grant Pro</button>
       <button type="button" data-action="impersonate"
               class="rounded-md border border-amber-500 bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600">Impersonate</button>
+      <button type="button" data-action="force-logout"
+              class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Force logout</button>
+      <button type="button" data-action="toggle-block"
+              class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Block</button>
+      <button type="button" data-action="delete-user"
+              class="rounded-md border border-red-600 bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700">Delete</button>
     </div>
   </div>
 
@@ -160,6 +166,19 @@
       proBtn.textContent = 'Grant Pro';
       proBtn.dataset.currentState = 'not-pro';
     }
+    // Block button reflects current state (backend sends p.is_blocked, or
+    // is_active=false as a legacy signal — treat both as "blocked").
+    const blockBtn = document.querySelector('[data-action="toggle-block"]');
+    const isBlocked = p.is_blocked === true || p.is_active === false;
+    if (isBlocked) {
+      blockBtn.textContent = 'Unblock';
+      blockBtn.dataset.currentState = 'blocked';
+      blockBtn.classList.add('border-emerald-600', 'bg-emerald-600', 'text-white', 'hover:bg-emerald-700');
+      blockBtn.classList.remove('border-slate-300', 'bg-white', 'text-slate-700', 'hover:bg-slate-50');
+    } else {
+      blockBtn.textContent = 'Block';
+      blockBtn.dataset.currentState = 'active';
+    }
   }
 
   function renderList(sel, rows, fmt, emptyText) {
@@ -274,6 +293,66 @@
       .then(() => location.reload())
       .catch((err) => alert('Failed: ' + err.message));
   });
+  // ── Force logout — invalidate every active session for this user.
+  //    Doesn't lock the account; the user just has to sign in again.
+  document.querySelector('[data-action="force-logout"]').addEventListener('click', function () {
+    if (!confirm('Force logout ' + (recipientEmail || 'user #' + userId) + '?\n\n' +
+                 'All of their active sessions will be invalidated immediately. ' +
+                 'They can sign back in normally — this is not a block.')) return;
+    fetch('/admin/api/users/' + encodeURIComponent(userId) + '/sessions/revoke', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    })
+      .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error(j.error || 'HTTP ' + r.status))))
+      .then((d) => alert('Force logout complete. ' + (d && d.revoked_count != null ? d.revoked_count + ' session(s) invalidated.' : '')))
+      .catch((err) => alert('Force logout failed: ' + err.message));
+  });
+
+  // ── Block / Unblock — soft. Account + data remain; login is refused
+  //    with a clear "account suspended" message until unblocked. Reason
+  //    is captured for the audit log.
+  document.querySelector('[data-action="toggle-block"]').addEventListener('click', function () {
+    const currentlyBlocked = this.dataset.currentState === 'blocked';
+    const action = currentlyBlocked ? 'unblock' : 'block';
+    const reason = prompt('Reason for ' + action + ' (shown to the user, saved to audit log):',
+      currentlyBlocked ? 'Access restored.' : 'Account suspended for policy violation.');
+    if (reason == null) return;
+    fetch('/admin/api/users/' + encodeURIComponent(userId) + '/blocked', {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blocked: !currentlyBlocked, reason: reason }),
+    })
+      .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error(j.error || 'HTTP ' + r.status))))
+      .then(() => location.reload())
+      .catch((err) => alert(action + ' failed: ' + err.message));
+  });
+
+  // ── Delete user — permanent. Double confirmation: type the email to
+  //    confirm, plus the standard confirm dialog. Deletes user + all
+  //    of their drafts, AI content, and OCR history. Audit-logged.
+  document.querySelector('[data-action="delete-user"]').addEventListener('click', function () {
+    const email = recipientEmail || ('user #' + userId);
+    const typed = prompt('DELETE this user permanently.\n\n' +
+      'This removes the account, all drafts, all AI content, all OCR history, ' +
+      'and cancels any active subscription. It cannot be undone.\n\n' +
+      'To confirm, type the user\'s email exactly:\n' + email);
+    if (typed == null) return;
+    if (typed.trim().toLowerCase() !== String(email).toLowerCase()) {
+      alert('Email did not match. Deletion cancelled.');
+      return;
+    }
+    if (!confirm('Final check — DELETE ' + email + '? This cannot be undone.')) return;
+    fetch('/admin/api/users/' + encodeURIComponent(userId), {
+      method: 'DELETE', credentials: 'include',
+    })
+      .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error(j.error || 'HTTP ' + r.status))))
+      .then(() => {
+        alert('User deleted. Returning to the users list.');
+        window.location.href = '/admin/users';
+      })
+      .catch((err) => alert('Delete failed: ' + err.message));
+  });
+
   document.querySelector('[data-action="impersonate"]').addEventListener('click', function () {
     if (!confirm('Start impersonation session as ' + (recipientEmail || 'user #' + userId) + '?\n\n' +
                  'You will browse the site AS this user for 30 minutes. Every action is audit-logged.\n' +
