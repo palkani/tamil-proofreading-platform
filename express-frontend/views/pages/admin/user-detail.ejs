@@ -65,6 +65,49 @@
   </section>
 </div>
 
+<!-- Delete user modal — replaces the fragile prompt()+confirm() double-
+     dialog. The email you must type is shown in the modal (not just in
+     the prompt text) so it's impossible to accidentally type a typo of
+     what you thought the email was. The Delete button stays disabled
+     until the typed email matches exactly (trimmed + lowercased). -->
+<div id="delete-user-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4">
+  <div class="w-full max-w-lg rounded-lg bg-white shadow-xl">
+    <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+      <h2 class="text-lg font-semibold text-red-700">Delete user permanently</h2>
+      <button type="button" data-close-delete-modal class="text-slate-400 hover:text-slate-600" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+      </button>
+    </div>
+    <div class="px-6 py-5 space-y-4 text-sm">
+      <p class="text-slate-700">
+        This will permanently remove <b data-delete-modal-email class="text-slate-900 select-all font-mono">—</b>
+        plus every draft, AI content item, OCR event, and active subscription.
+        Payment records are kept for accounting. <b class="text-red-700">This cannot be undone.</b>
+      </p>
+      <div>
+        <label class="block text-xs font-medium text-slate-600">Type the email to confirm</label>
+        <input type="text" id="delete-modal-input" autocomplete="off" spellcheck="false"
+               class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none"
+               placeholder="Type the email above" />
+        <p class="mt-1 text-xs text-slate-500">Whitespace and case are ignored.</p>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600">Reason (audit log)</label>
+        <input type="text" id="delete-modal-reason"
+               class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+               placeholder="e.g. Junk signup from disposable domain" />
+      </div>
+      <div id="delete-modal-status" class="hidden rounded px-3 py-2 text-sm"></div>
+    </div>
+    <div class="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
+      <button type="button" data-close-delete-modal
+              class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+      <button type="button" id="delete-modal-confirm" disabled
+              class="rounded-md border border-red-600 bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">Delete permanently</button>
+    </div>
+  </div>
+</div>
+
 <!-- Send-email modal (hidden by default). Rendered inline so no JS bundle
      needed. Opens via [data-action="send-email"]; closes on backdrop click
      or Escape. -->
@@ -327,30 +370,77 @@
       .catch((err) => alert(action + ' failed: ' + err.message));
   });
 
-  // ── Delete user — permanent. Double confirmation: type the email to
-  //    confirm, plus the standard confirm dialog. Deletes user + all
-  //    of their drafts, AI content, and OCR history. Audit-logged.
-  document.querySelector('[data-action="delete-user"]').addEventListener('click', function () {
-    const email = recipientEmail || ('user #' + userId);
-    const typed = prompt('DELETE this user permanently.\n\n' +
-      'This removes the account, all drafts, all AI content, all OCR history, ' +
-      'and cancels any active subscription. It cannot be undone.\n\n' +
-      'To confirm, type the user\'s email exactly:\n' + email);
-    if (typed == null) return;
-    if (typed.trim().toLowerCase() !== String(email).toLowerCase()) {
-      alert('Email did not match. Deletion cancelled.');
+  // ── Delete user — permanent. Uses a proper modal (replaces the
+  //    fragile prompt()+confirm() double-dialog which was easy to
+  //    mistype because the email lived in the prompt text). The
+  //    modal SHOWS the email; the operator just re-types it to
+  //    confirm, and the confirm button stays disabled until the
+  //    typed value matches. Whitespace / NBSP / case are normalised.
+  const delModal   = document.getElementById('delete-user-modal');
+  const delInput   = document.getElementById('delete-modal-input');
+  const delReason  = document.getElementById('delete-modal-reason');
+  const delStatus  = document.getElementById('delete-modal-status');
+  const delConfirm = document.getElementById('delete-modal-confirm');
+  const delEmailEl = document.querySelector('[data-delete-modal-email]');
+  // Robust normaliser: strips regular + non-breaking whitespace, then lowercases.
+  const norm = (s) => String(s || '').replace(/[\s ​‌‍﻿]+/g, '').toLowerCase();
+
+  function openDeleteModal() {
+    const email = recipientEmail || '';
+    if (!email) {
+      alert('User email not loaded yet. Wait for the profile to appear and try again.');
       return;
     }
-    if (!confirm('Final check — DELETE ' + email + '? This cannot be undone.')) return;
-    fetch('/admin/api/users/' + encodeURIComponent(userId), {
-      method: 'DELETE', credentials: 'include',
-    })
-      .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error(j.error || 'HTTP ' + r.status))))
-      .then(() => {
-        alert('User deleted. Returning to the users list.');
-        window.location.href = '/admin/users';
-      })
-      .catch((err) => alert('Delete failed: ' + err.message));
+    delEmailEl.textContent = email;
+    delInput.value = '';
+    delReason.value = '';
+    delConfirm.disabled = true;
+    delStatus.classList.add('hidden');
+    delStatus.innerHTML = '';
+    delModal.classList.remove('hidden');
+    delModal.classList.add('flex');
+    setTimeout(() => delInput.focus(), 50);
+  }
+  function closeDeleteModal() {
+    delModal.classList.add('hidden');
+    delModal.classList.remove('flex');
+  }
+  delModal.addEventListener('click', (e) => { if (e.target === delModal) closeDeleteModal(); });
+  delModal.querySelectorAll('[data-close-delete-modal]').forEach((b) => b.addEventListener('click', closeDeleteModal));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !delModal.classList.contains('hidden')) closeDeleteModal();
+  });
+
+  // Live enable/disable the confirm button as the user types.
+  delInput.addEventListener('input', function () {
+    const email = recipientEmail || '';
+    delConfirm.disabled = !email || norm(delInput.value) !== norm(email);
+  });
+
+  document.querySelector('[data-action="delete-user"]').addEventListener('click', openDeleteModal);
+
+  delConfirm.addEventListener('click', async function () {
+    delConfirm.disabled = true;
+    delStatus.className = 'rounded px-3 py-2 text-sm bg-slate-100 text-slate-700';
+    delStatus.textContent = 'Deleting…';
+    delStatus.classList.remove('hidden');
+    try {
+      const r = await fetch('/admin/api/users/' + encodeURIComponent(userId) + '?reason=' + encodeURIComponent(delReason.value.trim()), {
+        method: 'DELETE', credentials: 'include',
+      });
+      if (!r.ok) {
+        let msg = 'HTTP ' + r.status;
+        try { const j = await r.json(); if (j.error || j.message) msg = j.error || j.message; } catch (_) {}
+        throw new Error(msg);
+      }
+      delStatus.className = 'rounded px-3 py-2 text-sm bg-emerald-100 text-emerald-800';
+      delStatus.textContent = '✓ User deleted. Returning to users list…';
+      setTimeout(() => { window.location.href = '/admin/users'; }, 1200);
+    } catch (err) {
+      delStatus.className = 'rounded px-3 py-2 text-sm bg-red-100 text-red-800';
+      delStatus.textContent = 'Delete failed: ' + err.message;
+      delConfirm.disabled = false;
+    }
   });
 
   document.querySelector('[data-action="impersonate"]').addEventListener('click', function () {
