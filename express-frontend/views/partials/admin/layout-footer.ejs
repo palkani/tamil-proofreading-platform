@@ -1,5 +1,23 @@
       </div>
     </main>
   </div>
+  <script>
+    // Sidebar logout — POSTs to /auth/logout (same endpoint the main site
+    // navbar uses), clears local storage, then redirects to /login.
+    (function () {
+      var btn = document.getElementById('admin-logout-btn');
+      if (!btn) return;
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        btn.textContent = 'Signing out…';
+        try {
+          await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+        } catch (_) { /* ignore — cookies are cleared server-side and we're leaving anyway */ }
+        try { localStorage.removeItem('access_token'); } catch (_) {}
+        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        window.location.href = '/login';
+      });
+    })();
+  </script>
 </body>
 </html>

@@ -33,8 +33,15 @@
         </select>
       </div>
     </div>
-    <div class="mt-3 flex items-center justify-between text-xs text-slate-500">
-      <div data-count>Loading…</div>
+    <div class="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+      <div class="flex items-center gap-4">
+        <div data-count>Loading…</div>
+        <label class="inline-flex items-center gap-1.5 text-slate-700">
+          <input type="checkbox" id="suspicious-only" class="rounded border-slate-300" />
+          Only suspicious emails
+          <span id="suspicious-status" class="text-slate-400"></span>
+        </label>
+      </div>
       <button type="button" data-clear-filters class="text-blue-600 hover:underline">Clear filters</button>
     </div>
   </section>
@@ -45,6 +52,9 @@
     <table class="min-w-full divide-y divide-slate-200 text-sm">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
         <tr>
+          <th class="w-10 px-3 py-2 text-left">
+            <input type="checkbox" id="select-all-page" class="rounded border-slate-300" title="Select all on this page" />
+          </th>
           <th class="px-4 py-2 text-left">Email</th>
           <th class="px-4 py-2 text-left">Name</th>
           <th class="px-4 py-2 text-left">Plan</th>
@@ -55,7 +65,7 @@
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100" data-users-body>
-        <tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">Loading…</td></tr>
+        <tr><td colspan="8" class="px-4 py-6 text-center text-slate-400">Loading…</td></tr>
       </tbody>
     </table>
 
@@ -71,10 +81,71 @@
   </section>
 </div>
 
+<!-- Sticky bulk action bar. Appears at bottom of viewport when 1+ rows
+     are selected. Persists selection across pagination (state.selectedIds
+     is a Set of user ids, not tied to the visible rows). -->
+<div id="bulk-bar" class="hidden fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white shadow-lg md:left-64">
+  <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
+    <div class="text-sm font-semibold text-slate-900">
+      <span id="bulk-count">0</span> user(s) selected
+    </div>
+    <div class="flex-1"></div>
+    <button type="button" id="bulk-force-logout" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Force logout</button>
+    <button type="button" id="bulk-block" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Block</button>
+    <button type="button" id="bulk-delete" class="rounded-md border border-red-600 bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700">Delete</button>
+    <button type="button" id="bulk-clear" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Clear</button>
+  </div>
+</div>
+
+<!-- Bulk confirmation modal. Reused for delete / block / force-logout;
+     the currently-open action is stored in modal state at open-time. -->
+<div id="bulk-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4">
+  <div class="w-full max-w-2xl rounded-lg bg-white shadow-xl">
+    <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+      <h2 id="bulk-modal-title" class="text-lg font-semibold text-slate-900">Confirm bulk action</h2>
+      <button type="button" data-bulk-modal-close class="text-slate-400 hover:text-slate-600" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+      </button>
+    </div>
+    <div class="px-6 py-5 space-y-4">
+      <p id="bulk-modal-summary" class="text-sm text-slate-700"></p>
+      <div id="bulk-modal-reason-wrap" class="hidden">
+        <label class="block text-xs font-medium text-slate-600">Reason (audit log)</label>
+        <input type="text" id="bulk-modal-reason" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none" placeholder="e.g. Junk signups from disposable domains" />
+      </div>
+      <details class="rounded-md border border-slate-200 bg-slate-50">
+        <summary class="cursor-pointer px-3 py-2 text-xs font-medium text-slate-600">Show selected users (<span id="bulk-modal-count-inline">0</span>)</summary>
+        <ul id="bulk-modal-list" class="max-h-64 overflow-y-auto px-3 py-2 text-xs text-slate-700 font-mono"></ul>
+      </details>
+      <div id="bulk-modal-progress" class="hidden rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+        <div class="flex items-center justify-between">
+          <span id="bulk-modal-progress-text">Processing…</span>
+          <span id="bulk-modal-progress-count" class="font-mono text-xs">0 / 0</span>
+        </div>
+        <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-blue-100">
+          <div id="bulk-modal-progress-bar" class="h-full bg-blue-600 transition-all" style="width:0%"></div>
+        </div>
+      </div>
+      <div id="bulk-modal-result" class="hidden text-sm"></div>
+    </div>
+    <div class="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
+      <button type="button" data-bulk-modal-close class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+      <button type="button" id="bulk-modal-confirm" class="rounded-md border border-red-600 bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   const pageSize = 25;
   const state = { email: '', subscription: '', country: '', sort: 'created_desc', since_days: '', offset: 0, total: 0 };
+  // Selected user ids for bulk actions. Persists across pagination so
+  // "select 25 → next → select 25 → delete" acts on all 50.
+  const selectedIds = new Set();
+  // Cache of id → { email, name } for rows that have scrolled off the
+  // page — the confirmation modal needs to show ALL selected emails,
+  // not just those currently rendered.
+  const knownUsers = new Map();
 
   // Pre-fill filters from the URL query (drill-downs from the admin dashboard, e.g.
   // /admin/users?subscription=pro, or ?since_days=30 for the Signups tiles).
@@ -105,14 +176,54 @@
     return '<span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ' + (tones[tone] || tones.slate) + '">' + text + '</span>';
   }
 
+  // Cache of email → { valid, reason } from /admin/api/users/audit-suspicious.
+  // Populated lazily whenever the current page is rendered so we don't
+  // re-audit rows we already checked. Cleared when a page reload happens.
+  const suspiciousCache = new Map();
+  let suspiciousOnly = false;
+
+  async function auditPageEmails(users) {
+    const toCheck = users.map((u) => (u.email || '').toLowerCase()).filter((e) => e && !suspiciousCache.has(e));
+    if (toCheck.length === 0) return;
+    const statusEl = document.getElementById('suspicious-status');
+    if (statusEl) statusEl.textContent = '(checking ' + toCheck.length + ' emails…)';
+    try {
+      const r = await fetch('/admin/api/users/audit-suspicious', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails: toCheck }),
+      });
+      const d = await r.json();
+      Object.keys(d.results || {}).forEach((k) => suspiciousCache.set(k, d.results[k]));
+    } catch (_) { /* fail-open */ }
+    if (statusEl) statusEl.textContent = '';
+  }
+
   function render(data) {
     state.total = data.total;
     const rows = data.users || [];
     const tbody = document.querySelector('[data-users-body]');
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">No users match.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-slate-400">No users match.</td></tr>';
     } else {
-      tbody.innerHTML = rows.map(function (u) {
+      // Kick off async audit; a second render() call will happen once
+      // the results land, so filtering will apply automatically.
+      auditPageEmails(rows).then(() => { if (suspiciousOnly) render(data); });
+
+      const visibleRows = suspiciousOnly
+        ? rows.filter((u) => {
+            const v = suspiciousCache.get((u.email || '').toLowerCase());
+            return v && v.valid === false;
+          })
+        : rows;
+
+      if (!visibleRows.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-slate-400">No suspicious users on this page. Try Next.</td></tr>';
+      } else {
+      // Remember every seen user so bulk-action confirmation can still
+      // show emails after the page has moved on.
+      visibleRows.forEach((u) => knownUsers.set(u.id, { email: u.email || '', name: u.name || '' }));
+      tbody.innerHTML = visibleRows.map(function (u) {
         const planBadge = u.subscription === 'pro'
           ? badge('Pro', 'green')
           : badge('Free', 'slate');
@@ -121,9 +232,18 @@
         if (!u.is_active) statusBits.push(badge('disabled', 'red'));
         if (!u.email_verified) statusBits.push(badge('unverified', 'amber'));
         if (u.role === 'admin') statusBits.push(badge('admin', 'blue'));
+        const susp = suspiciousCache.get((u.email || '').toLowerCase());
+        if (susp && susp.valid === false) {
+          const label = susp.reason === 'disposable' ? 'disposable' :
+                        susp.reason === 'no_mx'      ? 'no MX'      :
+                        susp.reason === 'syntax'     ? 'bad syntax' : 'suspicious';
+          statusBits.push(badge(label, 'red'));
+        }
         const status = statusBits.length ? statusBits.join(' ') : badge('active', 'green');
 
-        return '<tr class="hover:bg-slate-50">' +
+        const isSelected = selectedIds.has(u.id);
+        return '<tr class="hover:bg-slate-50 ' + (isSelected ? 'bg-blue-50' : '') + '" data-user-row data-user-id="' + u.id + '" data-user-email="' + (u.email || '') + '">' +
+          '<td class="px-3 py-2"><input type="checkbox" class="row-check rounded border-slate-300" ' + (isSelected ? 'checked' : '') + ' /></td>' +
           '<td class="px-4 py-2 font-medium text-slate-900">' + (u.email || '—') + '</td>' +
           '<td class="px-4 py-2 text-slate-700">' + (u.name || '—') + '</td>' +
           '<td class="px-4 py-2">' + planBadge + overrideBadge + '</td>' +
@@ -133,6 +253,7 @@
           '<td class="px-4 py-2 text-right"><a href="/admin/users/' + u.id + '" class="text-blue-600 hover:underline">View →</a></td>' +
           '</tr>';
       }).join('');
+      }
     }
     const start = state.offset + 1;
     const end = Math.min(state.offset + pageSize, state.total);
@@ -141,8 +262,14 @@
       state.total + ' total' + (state.since_days ? ' · registered in last ' + state.since_days + ' days' : '');
     document.querySelector('[data-page-prev]').disabled = state.offset === 0;
     document.querySelector('[data-page-next]').disabled = end >= state.total;
+    // Re-sync the sticky bulk-action bar with the current selection
+    // set after every render (pagination + filter changes both re-render).
+    // Defined further down in the same IIFE; guarded so calling render()
+    // during initial load (before updateBulkBar is defined) is safe.
+    if (typeof updateBulkBar === 'function') updateBulkBar();
   }
 
+  let lastData = null;
   function load() {
     const params = new URLSearchParams({
       email: state.email,
@@ -155,13 +282,20 @@
     });
     fetch('/admin/api/users?' + params.toString(), { credentials: 'include' })
       .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
-      .then(render)
+      .then((d) => { lastData = d; render(d); })
       .catch(function (err) {
         console.error('[ADMIN/USERS] load failed', err);
         document.querySelector('[data-users-body]').innerHTML =
-          '<tr><td colspan="7" class="px-4 py-6 text-center text-red-600">Failed to load: ' + err.message + '</td></tr>';
+          '<tr><td colspan="8" class="px-4 py-6 text-center text-red-600">Failed to load: ' + err.message + '</td></tr>';
       });
   }
+
+  // Suspicious-only filter runs entirely client-side against the audit
+  // cache — toggling doesn't refetch the users list, just re-renders it.
+  document.getElementById('suspicious-only')?.addEventListener('change', function () {
+    suspiciousOnly = this.checked;
+    if (lastData) render(lastData);
+  });
 
   const runLoad = debounced(load, 250);
   document.querySelectorAll('[data-filter]').forEach(function (el) {
@@ -192,6 +326,207 @@
   document.querySelector('[data-page-next]').addEventListener('click', function () {
     state.offset += pageSize;
     load();
+  });
+
+  // ── Bulk selection + action bar ─────────────────────────────────────
+  function updateBulkBar() {
+    const bar = document.getElementById('bulk-bar');
+    const countEl = document.getElementById('bulk-count');
+    if (selectedIds.size === 0) {
+      bar.classList.add('hidden');
+    } else {
+      countEl.textContent = String(selectedIds.size);
+      bar.classList.remove('hidden');
+    }
+    // Sync the header "select all" checkbox with current page state.
+    const rows = document.querySelectorAll('[data-user-row]');
+    const selAll = document.getElementById('select-all-page');
+    if (rows.length > 0 && selAll) {
+      const allChecked = Array.from(rows).every((r) => selectedIds.has(r.dataset.userId));
+      selAll.checked = allChecked;
+      selAll.indeterminate = !allChecked && Array.from(rows).some((r) => selectedIds.has(r.dataset.userId));
+    }
+  }
+
+  // Delegate row-checkbox changes (rows are re-rendered on every load,
+  // so a single delegated listener is cheaper than re-binding per row).
+  document.querySelector('[data-users-body]').addEventListener('change', function (e) {
+    if (!e.target.classList.contains('row-check')) return;
+    const row = e.target.closest('[data-user-row]');
+    if (!row) return;
+    const id = row.dataset.userId;
+    if (e.target.checked) { selectedIds.add(id); row.classList.add('bg-blue-50'); }
+    else { selectedIds.delete(id); row.classList.remove('bg-blue-50'); }
+    updateBulkBar();
+  });
+
+  document.getElementById('select-all-page')?.addEventListener('change', function () {
+    const rows = document.querySelectorAll('[data-user-row]');
+    rows.forEach((row) => {
+      const cb = row.querySelector('.row-check');
+      if (!cb) return;
+      cb.checked = this.checked;
+      const id = row.dataset.userId;
+      if (this.checked) { selectedIds.add(id); row.classList.add('bg-blue-50'); }
+      else { selectedIds.delete(id); row.classList.remove('bg-blue-50'); }
+    });
+    updateBulkBar();
+  });
+
+  document.getElementById('bulk-clear').addEventListener('click', function () {
+    selectedIds.clear();
+    document.querySelectorAll('.row-check').forEach((cb) => { cb.checked = false; });
+    document.querySelectorAll('[data-user-row]').forEach((r) => r.classList.remove('bg-blue-50'));
+    updateBulkBar();
+  });
+
+  // Bulk action modal — one modal handles all three actions. Config
+  // dictates title, confirm-button colour, whether reason is required,
+  // and which per-user endpoint to call.
+  const modal = document.getElementById('bulk-modal');
+  const modalTitle = document.getElementById('bulk-modal-title');
+  const modalSummary = document.getElementById('bulk-modal-summary');
+  const modalReasonWrap = document.getElementById('bulk-modal-reason-wrap');
+  const modalReason = document.getElementById('bulk-modal-reason');
+  const modalCountInline = document.getElementById('bulk-modal-count-inline');
+  const modalList = document.getElementById('bulk-modal-list');
+  const modalProgress = document.getElementById('bulk-modal-progress');
+  const modalProgressText = document.getElementById('bulk-modal-progress-text');
+  const modalProgressCount = document.getElementById('bulk-modal-progress-count');
+  const modalProgressBar = document.getElementById('bulk-modal-progress-bar');
+  const modalResult = document.getElementById('bulk-modal-result');
+  const modalConfirm = document.getElementById('bulk-modal-confirm');
+  let currentAction = null;
+
+  const ACTIONS = {
+    'force-logout': {
+      title: 'Force logout selected users',
+      summary: (n) => 'Every active session for ' + n + ' user(s) will be invalidated. They can sign back in with their existing credentials.',
+      needsReason: false,
+      confirmClass: 'border-slate-600 bg-slate-700 hover:bg-slate-800',
+      confirmLabel: 'Force logout',
+      call: (id, reason) => fetch('/admin/api/users/' + encodeURIComponent(id) + '/sessions/revoke', { method: 'POST', credentials: 'include' }),
+    },
+    'block': {
+      title: 'Block selected users',
+      summary: (n) => n + ' user(s) will be blocked. Their data is preserved; they cannot sign in until unblocked. Active sessions are invalidated automatically.',
+      needsReason: true,
+      confirmClass: 'border-amber-600 bg-amber-600 hover:bg-amber-700',
+      confirmLabel: 'Block',
+      call: (id, reason) => fetch('/admin/api/users/' + encodeURIComponent(id) + '/blocked', {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blocked: true, reason: reason }),
+      }),
+    },
+    'delete': {
+      title: 'PERMANENTLY DELETE selected users',
+      summary: (n) => n + ' user(s) — plus every draft, AI content item, OCR event, and active subscription — will be permanently deleted. Payment records are kept for accounting. This cannot be undone.',
+      needsReason: true,
+      confirmClass: 'border-red-600 bg-red-600 hover:bg-red-700',
+      confirmLabel: 'Delete permanently',
+      call: (id, reason) => fetch('/admin/api/users/' + encodeURIComponent(id), { method: 'DELETE', credentials: 'include' }),
+    },
+  };
+
+  function openBulkModal(action) {
+    if (selectedIds.size === 0) return;
+    currentAction = action;
+    const cfg = ACTIONS[action];
+    modalTitle.textContent = cfg.title;
+    modalSummary.textContent = cfg.summary(selectedIds.size);
+    modalReasonWrap.classList.toggle('hidden', !cfg.needsReason);
+    modalReason.value = '';
+    modalCountInline.textContent = String(selectedIds.size);
+    modalList.innerHTML = Array.from(selectedIds)
+      .map((id) => {
+        const u = knownUsers.get(id);
+        const label = u ? (u.email || '(no email)') + (u.name ? ' · ' + u.name : '') : '(user ' + id + ')';
+        return '<li>' + label.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])) + '</li>';
+      }).join('');
+    modalProgress.classList.add('hidden');
+    modalResult.classList.add('hidden');
+    modalResult.innerHTML = '';
+    modalConfirm.className = 'rounded-md border px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 ' + cfg.confirmClass;
+    modalConfirm.textContent = cfg.confirmLabel;
+    modalConfirm.disabled = false;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function closeBulkModal() {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    currentAction = null;
+  }
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeBulkModal(); });
+  modal.querySelectorAll('[data-bulk-modal-close]').forEach((b) => b.addEventListener('click', closeBulkModal));
+
+  document.getElementById('bulk-force-logout').addEventListener('click', () => openBulkModal('force-logout'));
+  document.getElementById('bulk-block').addEventListener('click', () => openBulkModal('block'));
+  document.getElementById('bulk-delete').addEventListener('click', () => openBulkModal('delete'));
+
+  modalConfirm.addEventListener('click', async function () {
+    if (!currentAction) return;
+    const cfg = ACTIONS[currentAction];
+    const reason = modalReason.value.trim();
+    if (cfg.needsReason && !reason) {
+      modalReason.focus();
+      modalReason.classList.add('border-red-500');
+      return;
+    }
+    modalReason.classList.remove('border-red-500');
+    modalConfirm.disabled = true;
+
+    const ids = Array.from(selectedIds);
+    modalProgress.classList.remove('hidden');
+    modalProgressText.textContent = 'Processing ' + cfg.confirmLabel.toLowerCase() + '…';
+    modalProgressCount.textContent = '0 / ' + ids.length;
+    modalProgressBar.style.width = '0%';
+
+    let done = 0, ok = 0, failed = 0;
+    const errors = [];
+    // Sequential — safest for backend load and rate limits. Fast enough
+    // for typical bulk cleanups of a few dozen accounts.
+    for (const id of ids) {
+      try {
+        const r = await cfg.call(id, reason);
+        if (r.ok) { ok++; }
+        else {
+          failed++;
+          let msg = 'HTTP ' + r.status;
+          try { const j = await r.json(); if (j.error) msg = j.error; } catch (_) {}
+          const u = knownUsers.get(id);
+          errors.push((u && u.email ? u.email : id) + ' — ' + msg);
+        }
+      } catch (err) {
+        failed++;
+        const u = knownUsers.get(id);
+        errors.push((u && u.email ? u.email : id) + ' — ' + err.message);
+      }
+      done++;
+      modalProgressCount.textContent = done + ' / ' + ids.length;
+      modalProgressBar.style.width = (100 * done / ids.length).toFixed(1) + '%';
+    }
+
+    modalProgress.classList.add('hidden');
+    modalResult.classList.remove('hidden');
+    if (failed === 0) {
+      modalResult.innerHTML = '<div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800">✓ ' + ok + ' user(s) ' + cfg.confirmLabel.toLowerCase() + '. Refreshing list…</div>';
+      selectedIds.clear();
+      setTimeout(() => { closeBulkModal(); load(); }, 1200);
+    } else {
+      modalResult.innerHTML =
+        '<div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">' +
+        '<b>' + ok + ' succeeded · ' + failed + ' failed.</b>' +
+        '<ul class="mt-2 list-disc ml-5 text-xs">' +
+        errors.slice(0, 20).map((e) => '<li>' + e.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])) + '</li>').join('') +
+        (errors.length > 20 ? '<li>… ' + (errors.length - 20) + ' more</li>' : '') +
+        '</ul></div>';
+      modalConfirm.disabled = false;
+      modalConfirm.textContent = 'Close';
+      modalConfirm.onclick = () => { closeBulkModal(); load(); };
+    }
   });
 
   load();

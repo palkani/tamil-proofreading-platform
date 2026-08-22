@@ -47,6 +47,34 @@
     </a>
   </section>
 
+  <!-- Health at a glance: email transport + signup quality. Both link
+       out to the deep-dive page for the metric. -->
+  <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <a href="/admin/campaigns/ocr-launch" class="block rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:bg-blue-50" id="tile-email-transport">
+      <div class="text-xs font-medium text-slate-500">Email transport</div>
+      <div class="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-900">
+        <span id="tile-email-dot" class="inline-block h-2.5 w-2.5 rounded-full bg-slate-300"></span>
+        <span id="tile-email-label">Checking…</span>
+      </div>
+      <div class="mt-0.5 text-xs text-slate-400" id="tile-email-detail">Loading transport status…</div>
+    </a>
+    <a href="/admin/users?sort=created_desc&since_days=7" class="block rounded-lg border border-slate-200 bg-white p-4 hover:border-red-300 hover:bg-red-50" id="tile-suspicious">
+      <div class="text-xs font-medium text-slate-500">Suspicious signups · 7d</div>
+      <div class="mt-1 text-lg font-semibold text-slate-900" id="tile-suspicious-value">—</div>
+      <div class="mt-0.5 text-xs text-slate-400">Would fail current email validator</div>
+    </a>
+    <a href="/admin/audit" class="block rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:bg-blue-50">
+      <div class="text-xs font-medium text-slate-500">Audit log</div>
+      <div class="mt-1 text-sm font-semibold text-slate-900">Recent admin actions</div>
+      <div class="mt-0.5 text-xs text-slate-400">Page views + API calls · last 500</div>
+    </a>
+    <a href="/admin/issues" class="block rounded-lg border border-slate-200 bg-white p-4 hover:border-red-300 hover:bg-red-50">
+      <div class="text-xs font-medium text-slate-500">Issues</div>
+      <div class="mt-1 text-sm font-semibold text-slate-900">Payment failures &amp; drift</div>
+      <div class="mt-0.5 text-xs text-slate-400">Manual review queue</div>
+    </a>
+  </section>
+
   <!-- Demo activity — anonymous submissions from the homepage. Answers
        "is the demo getting traffic even when nobody signs up?" -->
   <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -78,8 +106,11 @@
       <h3 class="text-sm font-semibold text-slate-900">Quick actions</h3>
       <ul class="mt-3 space-y-2 text-sm">
         <li><a href="/admin/users" class="text-blue-600 hover:underline">Search users</a></li>
-        <li><a href="/admin/communications" class="text-blue-600 hover:underline">Send a broadcast email</a></li>
+        <li><a href="/admin/users?sort=created_desc&since_days=7" class="text-blue-600 hover:underline">Review recent signups (7d)</a></li>
+        <li><a href="/admin/campaigns/ocr-launch" class="text-blue-600 hover:underline">Send OCR launch broadcast</a></li>
+        <li><a href="/admin/audit" class="text-blue-600 hover:underline">View admin audit log</a></li>
         <li><a href="/admin/issues" class="text-blue-600 hover:underline">Review open issues</a></li>
+        <li><a href="/admin/communications" class="text-blue-600 hover:underline">Communications history</a></li>
       </ul>
       <hr class="my-4 border-slate-100" />
       <h3 class="text-sm font-semibold text-slate-900">System health</h3>
@@ -178,6 +209,59 @@
       const recent = document.querySelector('[data-recent-activity]');
       if (recent) recent.innerHTML = '<div class="py-3 text-sm text-red-600">Failed to load: ' + err.message + '</div>';
     });
+
+  // ── Email transport tile — health-at-a-glance for the send path ──
+  fetch('/admin/api/campaigns/email-transports', { credentials: 'include' })
+    .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then((d) => {
+      const dot   = document.getElementById('tile-email-dot');
+      const label = document.getElementById('tile-email-label');
+      const detail = document.getElementById('tile-email-detail');
+      const active = d.resend.configured ? 'Resend'
+                   : d.sendgrid.configured ? 'SendGrid'
+                   : d.smtp.configured ? 'SMTP'
+                   : null;
+      if (!active) {
+        dot.className = 'inline-block h-2.5 w-2.5 rounded-full bg-red-500';
+        label.textContent = 'Not configured';
+        detail.textContent = 'No transport set — email is disabled sitewide.';
+      } else if (active === 'SMTP' && !d.resend.configured && !d.sendgrid.configured) {
+        dot.className = 'inline-block h-2.5 w-2.5 rounded-full bg-amber-500';
+        label.textContent = 'SMTP only';
+        detail.textContent = 'Fragile on serverless — consider Resend for better deliverability.';
+      } else {
+        dot.className = 'inline-block h-2.5 w-2.5 rounded-full bg-emerald-500';
+        label.textContent = active;
+        detail.textContent = 'HTTP transport · From: ' + (d.from.address || '—');
+      }
+    })
+    .catch(() => {
+      const label = document.getElementById('tile-email-label');
+      if (label) label.textContent = 'Unavailable';
+    });
+
+  // ── Suspicious signups (7d) — count how many recent registrations
+  //    would fail today's email validator. Cheap: /admin/api/users
+  //    already exists; we just page through the newest 100 and audit.
+  (function loadSuspiciousCount() {
+    const valueEl = document.getElementById('tile-suspicious-value');
+    if (!valueEl) return;
+    fetch('/admin/api/users?sort=created_desc&since_days=7&limit=100&offset=0', { credentials: 'include' })
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then(async (data) => {
+        const rows = (data.users || []).filter((u) => u.email);
+        const total = data.total || 0;
+        if (rows.length === 0) { valueEl.textContent = '0'; return; }
+        const audit = await fetch('/admin/api/users/audit-suspicious', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emails: rows.map((u) => u.email.toLowerCase()) }),
+        }).then((r) => r.json());
+        const bad = Object.values(audit.results || {}).filter((v) => v && v.valid === false).length;
+        valueEl.textContent = String(bad) + (total > rows.length ? ' / ' + rows.length + ' checked' : '');
+      })
+      .catch(() => { valueEl.textContent = '?'; });
+  })();
 })();
 </script>
 
