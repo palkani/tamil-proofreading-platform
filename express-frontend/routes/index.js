@@ -1136,18 +1136,18 @@ router.get('/sitemap.xml', (req, res) => {
 
   const pages = [
     { url: '/',                       priority: '1.0',  changefreq: 'weekly',  lastmod: currentDate },
-    { url: '/free-tamil-editor',      priority: '0.95', changefreq: 'weekly',  lastmod: '2026-04-19' },
+    { url: '/free-tamil-editor',      priority: '0.95', changefreq: 'weekly',  lastmod: '2026-08-24' },
     // /tools/handwriting-ocr is LIVE (2026-08-20) — restored to sitemap.
     // /tools/ocr (printed) is still offline and stays out of the sitemap.
-    { url: '/tools/handwriting-ocr',  priority: '0.90', changefreq: 'weekly',  lastmod: '2026-08-20' },
-    { url: '/tools/ai-content-writer',priority: '0.80', changefreq: 'monthly', lastmod: '2026-02-01' },
-    { url: '/how-to-use',             priority: '0.80', changefreq: 'monthly', lastmod: '2026-03-01' },
+    { url: '/tools/handwriting-ocr',  priority: '0.90', changefreq: 'weekly',  lastmod: '2026-08-24' },
+    { url: '/tools/ai-content-writer',priority: '0.80', changefreq: 'monthly', lastmod: '2026-08-21' },
+    { url: '/how-to-use',             priority: '0.80', changefreq: 'monthly', lastmod: '2026-08-21' },
     { url: '/blog',                   priority: '0.80', changefreq: 'weekly',  lastmod: currentDate },
-    { url: '/pricing',                priority: '0.75', changefreq: 'monthly', lastmod: '2026-03-01' },
-    { url: '/contact',                priority: '0.60', changefreq: 'yearly',  lastmod: '2025-12-01' },
-    { url: '/privacy',                priority: '0.30', changefreq: 'yearly',  lastmod: '2025-12-01' },
-    { url: '/terms',                  priority: '0.30', changefreq: 'yearly',  lastmod: '2025-12-01' },
-    { url: '/security',               priority: '0.40', changefreq: 'yearly',  lastmod: '2026-08-19' },
+    { url: '/pricing',                priority: '0.75', changefreq: 'monthly', lastmod: '2026-08-21' },
+    { url: '/contact',                priority: '0.60', changefreq: 'monthly', lastmod: '2026-08-21' },
+    { url: '/privacy',                priority: '0.30', changefreq: 'monthly', lastmod: '2026-08-21' },
+    { url: '/terms',                  priority: '0.30', changefreq: 'monthly', lastmod: '2026-08-19' },
+    { url: '/security',               priority: '0.40', changefreq: 'monthly', lastmod: '2026-08-19' },
   ];
 
   const escapeXml = (s) =>

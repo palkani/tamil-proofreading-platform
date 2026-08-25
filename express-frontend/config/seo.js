@@ -321,7 +321,10 @@ const seoConfig = {
     ogDescription: 'Upgrade to ProofTamil Pro — unlimited words, unlimited AI checks per day, all correction types. Simple pricing, cancel anytime.',
     pageType: 'pricing',
     // These must mirror the visible FAQ on views/pages/pricing.ejs (same questions
-    // and substantially the same answers) — mismatched FAQ markup is a spam-policy risk.
+    // and substantially the same answers) — mismatched FAQ markup is a spam-policy
+    // risk and Google will strip the rich result if it drifts.
+    // (2026-08-24 audit) Razorpay/Stripe wording removed to match the visible
+    // pricing page — payment processor was consolidated to Dodo Payments on Aug 19.
     faqItems: [
       {
         q: 'Can I cancel anytime?',
@@ -329,11 +332,11 @@ const seoConfig = {
       },
       {
         q: 'Which payment methods are accepted?',
-        a: 'In India: UPI, Credit/Debit cards, Netbanking, and Wallets via Razorpay. Elsewhere: Credit/Debit cards, Apple Pay, and Google Pay via Stripe.'
+        a: 'UPI, Credit/Debit cards, Netbanking, Wallets, Apple Pay, and Google Pay — all securely processed by Dodo Payments.'
       },
       {
         q: 'Is my data secure?',
-        a: 'Yes. Payments are processed by Razorpay (India) or Stripe (other regions), both PCI-DSS Level 1 certified payment processors. We never store your card details.'
+        a: 'Yes. Payments are processed by Dodo Payments, a PCI-DSS compliant payment processor. We never store your card details.'
       },
       {
         q: 'What happens to my drafts if I downgrade?',

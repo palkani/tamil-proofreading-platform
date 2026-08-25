@@ -5,7 +5,8 @@
 User-agent: *
 Allow: /
 
-# Public pages - fully crawlable (SEO optimized)
+# Public pages — fully crawlable. Kept explicit for readability even
+# though the wildcard Allow: / at the top of the section covers them.
 Allow: /
 Allow: /free-tamil-editor
 Allow: /how-to-use
@@ -13,43 +14,49 @@ Allow: /pricing
 Allow: /contact
 Allow: /privacy
 Allow: /terms
+Allow: /security
 Allow: /login
 Allow: /register
 Allow: /blog
 Allow: /blog/
 Allow: /tools/
-Allow: /tools/ocr
 Allow: /tools/handwriting-ocr
-Allow: /tools/converter
 Allow: /tools/ai-content-writer
-Allow: /tools/event-name-suggester
-Allow: /tools/email-spam-detector
 Allow: /sitemap.xml
 
-# Disallow private/authenticated pages from indexing
+# Disallow private / authenticated pages from indexing.
 Disallow: /dashboard
 Disallow: /drafts
 Disallow: /workspace
 Disallow: /account
+Disallow: /account/
 Disallow: /archive
 Disallow: /api/
 Disallow: /admin/
 Disallow: /my-blogs
 Disallow: /billing/
+Disallow: /checkout/
+Disallow: /onboarding
+Disallow: /onboarding/
+Disallow: /org
+Disallow: /org/
+Disallow: /invite/
 Disallow: /tools/ai-content-writer/drafts
 
-# Disallow redirect aliases — these 301 to canonical URLs.
-# Disallowing prevents crawl budget waste on non-canonical paths.
-Disallow: /signup
-Disallow: /home
-Disallow: /tamil-typing
-Disallow: /tamil-editor
-Disallow: /tanglish-to-tamil
+# NOTE (2026-08-24 SEO audit): the following redirect aliases used to
+# be Disallow'd here — /signup, /home, /tamil-typing, /tamil-editor,
+# /tanglish-to-tamil. That was wrong: blocking them prevents Google
+# from crawling to see the 301 and consolidating link signals to the
+# canonical URL. Removed so the redirects can do their job.
+#
+# The following stub tool paths — /tools/converter, /tools/event-name-suggester,
+# /tools/email-spam-detector — were also Allow'd here but no route
+# renders them (never shipped). Removed to keep the file honest.
 
 # Sitemap location (submit in Google Search Console > Sitemaps)
 Sitemap: https://www.prooftamil.com/sitemap.xml
 
-# Google - no crawl delay for faster indexing
+# Google — no crawl delay for faster indexing.
 User-agent: Googlebot
 Allow: /
 Allow: /pricing
