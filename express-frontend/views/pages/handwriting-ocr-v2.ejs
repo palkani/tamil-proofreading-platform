@@ -577,11 +577,25 @@
   els.btnErrorReset.addEventListener('click', () => { els.fileInput.value = ''; setState('idle'); });
 
   async function transcribe() {
-    if (!currentFile || state === 'processing') return;
+    if (!currentFile) return;
+    if (state === 'processing') return;
+    // Belt-and-suspenders reset — kills any timer/abort-controller that
+    // leaked from a previous run before we start new ones. Fixes the
+    // "27.3s11.9s4.2s" stacked-timer paint reported on repeated Retry
+    // clicks after a pipeline_error: a leaked interval + new interval
+    // both fire on #ocrElapsed and the browser captures mid-swap paints.
+    if (stageInterval)   { clearInterval(stageInterval);   stageInterval = null; }
+    if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+    if (abortCtrl)       { try { abortCtrl.abort(); } catch (_) {} abortCtrl = null; }
+
     setState('processing');
     startedAt = Date.now();
     els.status.textContent = 'transcribing…';
     els.stageLabel.textContent = STAGES[0].label;
+    // Reset the visible elapsed value so even if a stale paint from a
+    // dying timer sneaks in one more time, it lands on a fresh number.
+    els.elapsed.textContent = '0.0s';
+
     stageInterval = setInterval(() => {
       const el = Date.now() - startedAt;
       const cur = STAGES.filter(s => s.atMs <= el).pop();
@@ -600,6 +614,7 @@
       const wallMs = Date.now() - t0;
       const data = await res.json();
       clearInterval(stageInterval); clearInterval(elapsedInterval);
+      stageInterval = null; elapsedInterval = null;
       // Monthly quota exhausted → dedicated UX with an upgrade nudge for
       // free-tier users. Never counts against the quota (nothing was consumed).
       if (res.status === 429) {
@@ -614,6 +629,7 @@
       if (window.__ocrQuotaRefresh) window.__ocrQuotaRefresh();
     } catch (err) {
       clearInterval(stageInterval); clearInterval(elapsedInterval);
+      stageInterval = null; elapsedInterval = null;
       if (err.name === 'AbortError') { setState('ready'); showToast('Cancelled', 'err'); }
       else onError(err.message || 'Unknown error');
     } finally { abortCtrl = null; }
@@ -632,7 +648,20 @@
       '<span>corrections: <b>' + sugList.length + '</b></span>' +
       '<span>time: <b>' + (wallMs / 1000).toFixed(1) + 's</b></span>';
     setState('success');
-    showToast('Done in ' + (wallMs/1000).toFixed(1) + 's · ' + sugList.length + ' suggestion' + (sugList.length===1?'':'s'));
+    // Surface partial-failure warnings from the pipeline. Server may
+    // now return successfully even when some strips could not be
+    // transcribed (post-2026-08-26 change); the user needs to know so
+    // they can re-photograph the affected page or check the output
+    // extra carefully.
+    var failed = (data && data.meta && data.meta.failedStripCount) || 0;
+    var retried = (data && data.meta && data.meta.retriedStripCount) || 0;
+    if (failed > 0) {
+      showToast('Done in ' + (wallMs/1000).toFixed(1) + 's · ' + failed + ' strip(s) failed — output may be incomplete', 'err');
+    } else if (retried > 0) {
+      showToast('Done in ' + (wallMs/1000).toFixed(1) + 's · ' + sugList.length + ' suggestion' + (sugList.length===1?'':'s') + ' · recovered ' + retried + ' strip(s) after retry');
+    } else {
+      showToast('Done in ' + (wallMs/1000).toFixed(1) + 's · ' + sugList.length + ' suggestion' + (sugList.length===1?'':'s'));
+    }
   }
   function onError(msg) { els.errorDetail.textContent = msg; setState('error'); els.status.innerHTML = '<span style="color:#ef4444">failed</span>'; showToast('Transcription failed', 'err'); }
 
