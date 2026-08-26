@@ -286,6 +286,20 @@
         </label>
         <input type="file" id="ocrFileInput" accept="image/*" style="display:none" />
 
+        <!-- Document-mode opt-in. Unchecked = existing prose OCR path
+             byte-for-byte. Checked = new pipeline that skips strip-cutting
+             and extracts labeled fields (Survey No, Village, etc.).
+             Persists across page loads via localStorage — users who
+             regularly upload forms shouldn't have to click it every time. -->
+        <label id="ocrDocModeWrap" style="display:flex; align-items:flex-start; gap:8px; margin-top:12px; padding:10px 12px; border:1px solid rgba(255,255,255,0.08); border-radius:10px; background:rgba(255,255,255,0.02); cursor:pointer; font-size:13px; line-height:1.45; color:var(--ocr-text-muted,#5b5b73);">
+          <input id="ocrDocMode" type="checkbox" style="margin-top:3px;" />
+          <span>
+            <b style="color:var(--ocr-text-strong,#e5e7fa);">This is an official document</b>
+            <span style="opacity:0.85;"> — patta, chitta, EC, VAO report, sale deed, stamp-paper agreement, government form. Preserves table layout and extracts field values. </span>
+            <span style="display:block; opacity:0.65; font-size:11px; margin-top:2px;">Very old British-era manuscripts may still transcribe partially.</span>
+          </span>
+        </label>
+
         <div id="ocrReadyState" style="display:none; flex-direction:column; gap:12px; flex:1;">
           <div class="ocr-preview-wrap"><img id="ocrPreview" alt="preview" /></div>
           <div class="ocr-file-meta">
@@ -610,7 +624,12 @@
       const fd = new FormData();
       fd.append('image', currentFile);
       const t0 = Date.now();
-      const res = await fetch('/api/ocr-v2/pipeline?mode=full', { method: 'POST', body: fd, signal: abortCtrl.signal, credentials: 'include' });
+      // Route to the document pipeline when the user opted in; otherwise
+      // the existing prose pipeline runs, byte-for-byte the same as
+      // before this change shipped.
+      var isDoc = !!(document.getElementById('ocrDocMode') && document.getElementById('ocrDocMode').checked);
+      var pipelineMode = isDoc ? 'document' : 'full';
+      const res = await fetch('/api/ocr-v2/pipeline?mode=' + pipelineMode, { method: 'POST', body: fd, signal: abortCtrl.signal, credentials: 'include' });
       const wallMs = Date.now() - t0;
       const data = await res.json();
       clearInterval(stageInterval); clearInterval(elapsedInterval);
@@ -640,12 +659,26 @@
     sugList = Array.isArray(data.suggestions) ? data.suggestions : [];
     sugState = sugList.map(() => 'pending');
     els.rawText.className = '';
-    repaintRaw(); repaintSuggestions();
+    repaintRaw();
+
+    // Document mode returns fields[] instead of suggestions[]. Repaint
+    // the right-hand panel accordingly. When fields is present + non-
+    // empty, we show an "Extracted fields" list; otherwise the panel
+    // falls back to the classic suggestions repaint (existing behaviour).
+    var fields = Array.isArray(data.fields) ? data.fields : [];
+    if (data.mode === 'document') {
+      repaintFields(fields);
+    } else {
+      repaintSuggestions();
+    }
+
     els.btnCopy.disabled = !currentRaw.trim();
     els.status.textContent = 'done';
     els.meta.style.display = 'block';
     els.meta.innerHTML = '<span>words: <b>' + (currentRaw.split(/\s+/).filter(Boolean).length) + '</b></span>' +
-      '<span>corrections: <b>' + sugList.length + '</b></span>' +
+      (data.mode === 'document'
+        ? '<span>fields: <b>' + fields.length + '</b></span>'
+        : '<span>corrections: <b>' + sugList.length + '</b></span>') +
       '<span>time: <b>' + (wallMs / 1000).toFixed(1) + 's</b></span>';
     setState('success');
     // Surface partial-failure warnings from the pipeline. Server may
@@ -667,6 +700,36 @@
 
   els.btnRun.addEventListener('click', transcribe);
   els.btnRetry.addEventListener('click', transcribe);
+
+  // Document-mode checkbox: persist across page loads (users who
+  // regularly process forms shouldn't have to click it every time)
+  // and re-label the right-hand panel header accordingly so it's
+  // obvious what the next transcription will produce.
+  (function () {
+    var cb = document.getElementById('ocrDocMode');
+    if (!cb) return;
+    var STORAGE_KEY = 'prooftamil.ocr.docMode';
+    try { if (localStorage.getItem(STORAGE_KEY) === '1') cb.checked = true; } catch (_) {}
+    var panelHeader = document.querySelector('.ocr-panel:nth-of-type(3) .ocr-ph span:first-child');
+    var sub = document.querySelector('.ocr-panel:nth-of-type(3) .ocr-ph span.sub:last-child');
+    function syncHeader() {
+      if (!panelHeader) return;
+      if (cb.checked) {
+        panelHeader.innerHTML = 'Extracted fields <span id="ocrSugCount" class="sub"></span>';
+        if (sub) sub.textContent = 'click Copy per field';
+      } else {
+        panelHeader.innerHTML = 'Corrections <span id="ocrSugCount" class="sub"></span>';
+        if (sub) sub.textContent = 'apply / ignore per word';
+      }
+      // Rebind sugCount because we clobbered it via innerHTML.
+      els.sugCount = document.getElementById('ocrSugCount');
+    }
+    cb.addEventListener('change', function () {
+      try { localStorage.setItem(STORAGE_KEY, cb.checked ? '1' : '0'); } catch (_) {}
+      syncHeader();
+    });
+    syncHeader();
+  })();
   els.btnCancel.addEventListener('click', () => { if (abortCtrl) abortCtrl.abort(); });
 
   function repaintRaw() {
@@ -688,6 +751,52 @@
       return tok;
     }).join('');
   }
+  // Document-mode fields renderer. Reuses the same panel slot as
+  // suggestions but with a completely different card layout: labeled
+  // key + value + confidence pill + click-to-copy on the value.
+  // Fired from onSuccess() only when data.mode === 'document'.
+  function repaintFields(fields) {
+    fields = Array.isArray(fields) ? fields : [];
+    els.sugCount.textContent = '(' + fields.length + ')';
+    if (!fields.length) {
+      els.suggestions.className = 'placeholder';
+      els.suggestions.textContent = 'No labeled fields detected. The full text is on the left — you can copy it and edit manually.';
+      return;
+    }
+    els.suggestions.className = '';
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+    const confBadge = (c) => {
+      var bg = c === 'high' ? '#065f46' : c === 'low' ? '#7f1d1d' : '#78350f';
+      var fg = c === 'high' ? '#a7f3d0' : c === 'low' ? '#fecaca' : '#fde68a';
+      return '<span style="display:inline-flex;align-items:center;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.02em;background:' + bg + ';color:' + fg + ';">' + esc(c) + '</span>';
+    };
+    els.suggestions.innerHTML = fields.map((f, i) => (
+      '<div class="ocr-field" data-idx="' + i + '" style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px;">' +
+          '<span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--ocr-muted,#9691c3);">' + esc(f.label) + '</span>' +
+          confBadge(f.confidence) +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+          '<span class="field-value" style="font-size:14px;color:var(--ocr-text-strong,#e5e7fa);line-height:1.4;word-break:break-word;">' + esc(f.value) + '</span>' +
+          '<button type="button" class="field-copy" data-copy="' + esc(f.value) + '" title="Copy value" style="flex-shrink:0;padding:4px 8px;font-size:11px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--ocr-muted,#9691c3);border-radius:6px;cursor:pointer;">Copy</button>' +
+        '</div>' +
+        (f.hint ? '<div style="font-size:11px;color:var(--ocr-muted,#9691c3);margin-top:2px;opacity:0.7;">' + esc(f.hint) + '</div>' : '') +
+      '</div>'
+    )).join('');
+    // Wire up per-field copy buttons (one delegated click handler
+    // would be cleaner, but this keeps the render self-contained).
+    els.suggestions.querySelectorAll('.field-copy').forEach((btn) => {
+      btn.addEventListener('click', function () {
+        var val = this.getAttribute('data-copy') || '';
+        navigator.clipboard.writeText(val).then(() => {
+          var orig = this.textContent;
+          this.textContent = 'Copied ✓';
+          setTimeout(() => { this.textContent = orig; }, 1200);
+        }).catch(() => showToast('Copy failed — select manually', 'err'));
+      });
+    });
+  }
+
   function repaintSuggestions() {
     if (!sugList.length) {
       els.suggestions.className = 'placeholder';

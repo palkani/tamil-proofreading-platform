@@ -12,6 +12,7 @@
 const { readFile } = require('node:fs/promises');
 const path = require('node:path');
 const { TRANSCRIPTION_PROMPT } = require('./prompt');
+const { DOCUMENT_PROMPT } = require('./documentPrompt');
 
 async function readImage(imagePath) {
   const buf = await readFile(imagePath);
@@ -80,6 +81,13 @@ function parseOcrResponse(text) {
 
 /**
  * Actual Gemini call. Shared by both file-input and buffer-input paths.
+ *
+ * opts.prompt         optional — defaults to TRANSCRIPTION_PROMPT (prose)
+ * opts.maxTokens      optional — defaults to 16384 (prose). Document
+ *                     mode passes 24576 because forms + tables + full
+ *                     fields[] extraction can be denser than prose.
+ * opts.parser         optional — defaults to parseOcrResponse. Document
+ *                     mode passes parseDocumentResponse.
  */
 async function runGemini(image, opts) {
   const model = opts.model || 'gemini-2.5-flash';
@@ -89,13 +97,13 @@ async function runGemini(image, opts) {
     contents: [{
       role: 'user',
       parts: [
-        { text: TRANSCRIPTION_PROMPT },
+        { text: opts.prompt || TRANSCRIPTION_PROMPT },
         { inline_data: { mime_type: image.mimeType, data: image.data } },
       ],
     }],
     generationConfig: {
       temperature: 0,
-      maxOutputTokens: 16384,
+      maxOutputTokens: opts.maxTokens || 16384,
       responseMimeType: 'application/json',
     },
   };
@@ -146,4 +154,80 @@ async function transcribeBuffer(imageBuffer, opts) {
   return runGemini({ mimeType, data: imageBuffer.toString('base64') }, opts);
 }
 
-module.exports = { transcribeBaseline, transcribeBuffer };
+/**
+ * Parse the document-mode Gemini response — different shape than
+ * prose transcription: no `suggestions[]` (typo-flagging doesn't
+ * apply to forms) and instead a `fields[]` of extracted labeled
+ * values with confidence. Salvage logic matches parseOcrResponse:
+ * if the JSON is truncated we still recover partial raw_text.
+ */
+function parseDocumentResponse(text) {
+  if (!text || !text.trim()) return { raw_text: '', fields: [], suggestions: [] };
+  let cleaned = text.trim();
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+  if (cleaned.charCodeAt(0) === 0xFEFF) cleaned = cleaned.slice(1);
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (err) {
+    console.warn('[ocr-v2/transcribe] Document JSON parse failed, likely truncated. length:', text.length, 'last 200:', text.slice(-200));
+    const rawMatch = cleaned.match(/"raw_text"\s*:\s*"((?:[^"\\]|\\.)*)/);
+    if (rawMatch) {
+      const partial = rawMatch[1]
+        .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      return { raw_text: partial + '\n\n[⚠️ Response was truncated — try again]', fields: [], suggestions: [] };
+    }
+    return { raw_text: text, fields: [], suggestions: [] };
+  }
+  const obj = parsed && typeof parsed === 'object' ? parsed : {};
+  const raw_text = typeof obj.raw_text === 'string' ? obj.raw_text : '';
+  const fields = Array.isArray(obj.fields)
+    ? obj.fields
+        .filter((f) => f && typeof f === 'object')
+        .map((f) => ({
+          label: String(f.label || '').slice(0, 200),
+          value: String(f.value || '').slice(0, 500),
+          confidence: (['high', 'medium', 'low'].includes(String(f.confidence)))
+            ? String(f.confidence) : 'medium',
+          hint: f.hint ? String(f.hint).slice(0, 100) : '',
+        }))
+        .filter((f) => f.label && f.value)
+    : [];
+  // Suggestions always [] for document mode (form fields aren't typos).
+  // Keeping the field in the payload preserves the shape existing UI
+  // code assumes so the raw-text panel + copy button behave the same.
+  return { raw_text, fields, suggestions: [] };
+}
+
+/**
+ * Whole-page document transcription — used by pipeline mode='document'.
+ * Skips strip-cutting (bad idea for forms/tables), sends the full
+ * preprocessed image in a single call with the form-aware prompt +
+ * a higher output-token cap, and parses the fields[]-shape response.
+ */
+async function transcribeDocumentBuffer(imageBuffer, opts) {
+  if (!opts.apiKey) throw new Error('transcribeDocumentBuffer: apiKey required');
+  const mimeType = opts.mimeType || sniffMime(imageBuffer);
+  // Merge over runGemini defaults: swap prompt to DOCUMENT_PROMPT and
+  // bump the output-token budget. Everything else (model, timeout,
+  // temperature) inherits from the caller.
+  const result = await runGemini(
+    { mimeType, data: imageBuffer.toString('base64') },
+    { ...opts, prompt: DOCUMENT_PROMPT, maxTokens: 24576 }
+  );
+  // runGemini returned via parseOcrResponse (prose shape); re-parse
+  // the raw payload text via the document parser to get fields[].
+  const docParsed = parseDocumentResponse(
+    result.raw?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  );
+  return {
+    raw_text: docParsed.raw_text,
+    fields: docParsed.fields,
+    suggestions: docParsed.suggestions,
+    wallMs: result.wallMs,
+    costUsd: result.costUsd,
+    raw: result.raw,
+  };
+}
+
+module.exports = { transcribeBaseline, transcribeBuffer, transcribeDocumentBuffer };

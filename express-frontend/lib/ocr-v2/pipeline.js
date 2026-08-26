@@ -9,7 +9,7 @@
 // Prod default: 'full' (best accuracy). Latency budget on Vercel Pro:
 // ~15-20s for a typical page (well within the 60s serverless timeout).
 
-const { transcribeBaseline, transcribeBuffer } = require('./transcribe');
+const { transcribeBaseline, transcribeBuffer, transcribeDocumentBuffer } = require('./transcribe');
 const { preprocessImage } = require('./preprocess');
 const { cutIntoStrips } = require('./strip-cut');
 
@@ -88,8 +88,32 @@ async function runPipeline(input, opts) {
     }
   }
 
-  // preprocessed + full both start with the sharp-clean.
+  // preprocessed + full + document all start with the sharp-clean.
   const pre = await preprocessImage(input);
+
+  // Document mode — for land records, patta/chitta, deeds on stamp
+  // paper, VAO reports, and other structured official documents.
+  // Skips strip-cutting (which mangles tables + multi-column layouts)
+  // and sends the whole preprocessed image to Gemini in a single call
+  // with the form-aware prompt (documentPrompt.js). Returns fields[]
+  // in addition to raw_text. Opt-in via ?mode=document on the API.
+  // Existing 'full' mode is UNTOUCHED.
+  if (opts.mode === 'document') {
+    const r = await transcribeDocumentBuffer(pre.buffer, {
+      model: opts.model, apiKey: opts.apiKey, mimeType: pre.mimeType,
+      timeoutMs: opts.timeoutMs,
+    });
+    return {
+      raw_text: r.raw_text,
+      suggestions: r.suggestions,   // always [] for document mode
+      fields: r.fields,             // NEW — key-value pairs extracted from the form
+      wallMs: Date.now() - started,
+      costUsd: r.costUsd,
+      mode: 'document',
+      stages: { preprocessMs: pre.wallMs, transcribeMs: r.wallMs },
+      meta: { deskewDeg: pre.meta.deskewDeg, fieldCount: r.fields.length },
+    };
+  }
 
   if (opts.mode === 'preprocessed') {
     const r = await transcribeBuffer(pre.buffer, {
