@@ -35,8 +35,52 @@
 
 // Keys are UPPER-CASE for lookup. Codes are case-insensitive on the
 // wire — the validator upper-cases the input before lookup.
+// One Dodo checkout URL is shared across all three codes below (the
+// single ₹600/month "ProofTamil Pro Lite" product created 2026-08-29).
+// Each code specifies distinct plan LABEL + ENTITLEMENTS so the
+// pricing page's plan-summary card shows the right message, but the
+// underlying charge is the same ₹600 for now.
+//
+// When you're ready to actually enforce different feature access:
+//   1. Create 2 more Dodo products (e.g., "Proofreading Pro Lite"
+//      and "OCR Pro Lite") at whatever prices you want
+//   2. Paste their checkout URLs into the two entries below
+//   3. Ship the dynamic backend system per PROMO_CODES_BACKEND_CONTRACT.md
+//      so entitlements auto-attach on Dodo webhook
+// Until then, all Lite customers get Full Pro via the backend BC path
+// (see lib/entitlements.js). Acceptable for the first ~10 customers.
+const SHARED_LITE_CHECKOUT = 'https://checkout.dodopayments.com/buy/pdt_0NmSZ8Clcj8nUjpvixwq2?quantity=1';
+
 const STATIC_CODES = {
-  // ── Pro Lite — proofreading + export, no OCR ──────────────────────
+  // ── Proofreading-only Pro Lite ────────────────────────────────────
+  'PROOFPROLITE': {
+    plan_code:        'PRO_PROOFREAD_LITE',
+    label:            'Proofreading Pro Lite',
+    price_cents:      60000,             // ₹600.00
+    display_price:    '600',
+    currency:         'INR',
+    billing_interval: 'month',
+    entitlements:     ['proofreading', 'export', 'ai_writer'],
+    recurring_terms:  'Billed monthly. Unlimited proofreading, no OCR. Cancel anytime — access continues until the end of your current period.',
+    checkout_url:     SHARED_LITE_CHECKOUT,
+  },
+
+  // ── OCR-only Pro Lite ─────────────────────────────────────────────
+  'OCRPROLITE': {
+    plan_code:        'PRO_OCR_LITE',
+    label:            'OCR Pro Lite',
+    price_cents:      60000,             // ₹600.00
+    display_price:    '600',
+    currency:         'INR',
+    billing_interval: 'month',
+    entitlements:     ['ocr'],
+    recurring_terms:  'Billed monthly. 20 Handwriting-OCR conversions per month. Cancel anytime — access continues until the end of your current period.',
+    checkout_url:     SHARED_LITE_CHECKOUT,
+  },
+
+  // ── Original catch-all Pro Lite (kept for backward compat) ────────
+  //     Delete this entry once no in-flight customer conversations
+  //     reference the PROOFTAMIL-LITE code.
   'PROOFTAMIL-LITE': {
     plan_code:        'PRO_LITE',
     label:            'ProofTamil Pro Lite',
@@ -46,7 +90,7 @@ const STATIC_CODES = {
     billing_interval: 'month',
     entitlements:     ['proofreading', 'export', 'ai_writer'],
     recurring_terms:  'Billed monthly. Cancel anytime — access continues until the end of your current period.',
-    checkout_url:     'https://checkout.dodopayments.com/buy/pdt_0NmSZ8Clcj8nUjpvixwq2?quantity=1',
+    checkout_url:     SHARED_LITE_CHECKOUT,
   },
 };
 
