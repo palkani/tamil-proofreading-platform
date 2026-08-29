@@ -414,17 +414,30 @@
     if (!lastValidatedPlan) return;
     if (!USER_LOGGED_IN) {
       // Route through login → post-auth auto-checkout, same pattern as
-      // the old plan-card CTAs.
+      // the old plan-card CTAs. Login preserves the code so we can
+      // re-validate + redirect after auth.
       var target = encodeURIComponent('/pricing?activate=' + encodeURIComponent(input.value.trim()));
       window.location.href = '/login?redirect=' + target;
       return;
     }
-    // Signed-in: hand off to payment.js with the promo code so backend
-    // creates the Dodo checkout at the code-specific plan + price.
+    // PATH A — static registry hit: plan.checkout_url is a direct Dodo
+    // link. Redirect through the /checkout/redirecting interstitial so
+    // (a) the user sees a "you're leaving to secure checkout" screen
+    // and (b) the Back button after Dodo returns them to prooftamil,
+    // not out of the app.
+    if (lastValidatedPlan.checkout_url) {
+      var url = lastValidatedPlan.checkout_url;
+      window.location.href = '/checkout/redirecting?url=' + encodeURIComponent(url) +
+        '&plan=' + encodeURIComponent(lastValidatedPlan.plan_code || 'PROMO');
+      return;
+    }
+    // PATH B — dynamic backend system: hand off to payment.js which
+    // calls /api/v1/billing/checkout with promo_code so backend builds
+    // the Dodo session with a price override. See
+    // PROMO_CODES_BACKEND_CONTRACT.md.
     if (typeof startCheckout === 'function') {
       startCheckout(lastValidatedPlan.plan_code || 'PROMO', COUNTRY, { promo_code: input.value.trim() });
     } else {
-      // payment.js not loaded — very unlikely on this page; degrade gracefully.
       window.location.href = '/api/v1/billing/checkout?plan_code=' + encodeURIComponent(lastValidatedPlan.plan_code || 'PROMO') +
         '&promo_code=' + encodeURIComponent(input.value.trim()) +
         '&country_code=' + COUNTRY;

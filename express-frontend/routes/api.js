@@ -4180,9 +4180,24 @@ router.post('/promo-code/validate', express.json(), async (req, res) => {
   const countryCode = String(req.body?.country_code || '').toUpperCase().slice(0, 2) || 'US';
   if (!code) return res.status(400).json({ valid: false, error: 'code_required', message: 'Enter your activation code.' });
 
+  // 1) Static registry — the MVP path. Ships with a handful of
+  //    hand-curated codes, each pointing at a specific Dodo checkout
+  //    URL. See lib/promo-codes.js for the trade-off vs the full
+  //    dynamic backend system.
+  const { findCode } = require('../lib/promo-codes');
+  const staticEntry = findCode(code);
+  if (staticEntry) {
+    return res.json({ valid: true, plan: staticEntry });
+  }
+
+  // 2) Fall back to the backend's dynamic promo-code system. When the
+  //    full contract (PROMO_CODES_BACKEND_CONTRACT.md) is
+  //    implemented, this path handles unlimited codes with
+  //    per-code price + entitlement lookups. Until then it returns
+  //    501 which surfaces the "codes not active yet" UI message.
   const backend = (req._backendUrl || BACKEND_URL || '').replace(/\/$/, '');
   if (!backend) {
-    return res.status(501).json({ valid: false, error: 'backend_unreachable', message: 'Promo codes are not yet available. Please contact us for pricing.' });
+    return res.status(404).json({ valid: false, error: 'code_not_found', message: 'That code is not valid or has expired. Please double-check with us.' });
   }
 
   try {
@@ -4191,11 +4206,11 @@ router.post('/promo-code/validate', express.json(), async (req, res) => {
       { code, country_code: countryCode },
       { timeout: 8000, validateStatus: () => true }
     );
-    // 404 or 501 = backend hasn't shipped the endpoint yet. Turn into
-    // a UI-friendly 501 so the client shows the "contact us" nudge
-    // rather than a raw HTTP status.
+    // Backend hasn't shipped the dynamic endpoint yet → tell the user
+    // the code isn't valid (which is true — we don't recognise it in
+    // either the static or dynamic registries).
     if (upstream.status === 404 || upstream.status === 501) {
-      return res.status(501).json({ valid: false, error: 'not_implemented', message: 'Promo codes are not yet active. Please use the "Request a custom quote" link above.' });
+      return res.status(404).json({ valid: false, error: 'code_not_found', message: 'That code is not valid or has expired. Please double-check with us.' });
     }
     return res.status(upstream.status).json(upstream.data);
   } catch (err) {
