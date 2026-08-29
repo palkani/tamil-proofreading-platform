@@ -35,13 +35,13 @@
     <div class="text-center mb-12">
       <h1 class="text-4xl font-bold text-gray-900 mb-4">Plans built for how you actually work.</h1>
       <p class="text-lg text-gray-600 max-w-2xl mx-auto">
-        Start free. When you're ready for more, we'll quote a plan that fits your needs — writers, publishers, schools, and enterprises all get custom pricing.
+        Start free. Go Pro to unlock everything. Or reach out for a custom plan built around just the features you need.
       </p>
     </div>
 
-    <!-- Two-card layout — Free (anon only) + Custom / activation code.
-         Logged-in users see just the Custom card (they already have Free). -->
-    <div class="grid gap-6 items-stretch max-w-5xl mx-auto <%= (user && user.email) ? 'md:grid-cols-1' : 'md:grid-cols-2' %>">
+    <!-- Three-card layout — Free (anon only) + Pro Full + Custom.
+         Logged-in users see just Pro + Custom (they already have Free). -->
+    <div class="grid gap-6 items-stretch max-w-6xl mx-auto <%= (user && user.email) ? 'md:grid-cols-2' : 'md:grid-cols-3' %>">
 
       <!-- Free Plan (hidden for logged-in users who already have an account) -->
       <% if (!user || !user.email) { %>
@@ -90,6 +90,64 @@
         </a>
       </div>
       <% } %>
+
+      <!-- Pro (Full) — public plan that unlocks every premium feature.
+           Uses the existing PRO_MONTHLY plan code; no backend changes. -->
+      <div class="bg-white rounded-2xl border-2 border-primary-600 shadow-xl p-8 flex flex-col relative">
+        <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span class="bg-primary-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Most Popular</span>
+        </div>
+        <div class="mb-6">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-900 text-white flex-shrink-0">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            </span>
+            <span class="text-xl font-bold text-gray-900">Pro</span>
+          </div>
+          <div class="flex items-end gap-1">
+            <% if (monthly && monthly.display_price) { %>
+            <span class="text-4xl font-bold text-gray-900"><%= monthly.currency === 'INR' ? '₹' : '$' %><%= monthly.display_price %></span>
+            <% } else { %>
+            <span class="text-4xl font-bold text-gray-900">—</span>
+            <% } %>
+            <span class="text-gray-500 mb-1">/ month</span>
+          </div>
+          <p class="mt-2 text-sm text-gray-500">Everything unlocked — proofreading, OCR, exports, and more.</p>
+        </div>
+        <ul class="space-y-3 text-sm text-gray-600 flex-1 mb-8">
+          <li class="flex items-start gap-2">
+            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
+            Unlimited AI proofreading — no word cap, no daily cap
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
+            20 Handwriting OCR conversions per month
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
+            Deep இலக்கணம், நடை &amp; எழுத்துப்பிழை fixes + AI rewrites
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
+            Voice typing — speak Tamil, AI types it
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
+            Import + export .docx, .pdf, .txt
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
+            All drafts saved &amp; synced across devices
+          </li>
+        </ul>
+        <button
+          id="checkout-btn-PRO_MONTHLY"
+          onclick="startCheckout('PRO_MONTHLY', '<%= countryCode %>')"
+          class="block w-full text-center px-5 py-3.5 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Get Pro
+        </button>
+      </div>
 
       <!-- Custom plans — no public rate card. Users get a quote via
            contact + a promo/activation code that unlocks a specific

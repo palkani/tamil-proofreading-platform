@@ -56,6 +56,32 @@
     </div>
   </section>
 
+  <!-- Feature access — computed from the user's billing state via the
+       same hasFeature() semantics the app uses at runtime. Answers
+       "what can this user actually do in the app right now?" One row
+       per canonical feature; green ✓ / red ✕ per access. Read-only —
+       the source of truth is the user's subscription / promo code. -->
+  <section class="rounded-lg border border-slate-200 bg-white p-5">
+    <div class="flex items-baseline justify-between">
+      <h3 class="text-sm font-semibold text-slate-900">Feature access <span class="ml-1 text-xs font-normal text-slate-400">what this user can use in the app</span></h3>
+      <span id="feature-access-source" class="text-xs text-slate-500"></span>
+    </div>
+    <div class="mt-3 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="text-xs uppercase tracking-wide text-slate-500">
+          <tr class="border-b border-slate-100">
+            <th class="py-2 pr-4 text-left font-semibold">Feature</th>
+            <th class="py-2 pr-4 text-left font-semibold">Access</th>
+            <th class="py-2 pr-4 text-left font-semibold">Note</th>
+          </tr>
+        </thead>
+        <tbody id="feature-access-body" class="text-slate-700">
+          <tr><td colspan="3" class="py-3 text-sm text-slate-400">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <!-- Checkouts (usually short) -->
   <section class="rounded-lg border border-slate-200 bg-white p-5">
     <h3 class="text-sm font-semibold text-slate-900">Checkout attempts</h3>
@@ -224,6 +250,60 @@
     }
   }
 
+  // Client-side mirror of lib/entitlements.js (same BC rules). Kept
+  // inline so the admin table shows accurate per-feature access with
+  // zero extra fetches. Source-of-truth remains the backend billing
+  // record; when backend eventually populates `entitlements` on the
+  // user profile, this table reflects it automatically.
+  const ADMIN_FEATURES = [
+    { key: 'proofreading', label: 'Proofreading (unlimited)', note: 'AI grammar/spell checks with no word cap or daily cap' },
+    { key: 'ocr',          label: 'Handwriting OCR',          note: '20 conversions per month + document mode' },
+    { key: 'export',       label: 'Export (DOCX / PDF / TXT)',note: 'Download drafts as formatted documents' },
+    { key: 'ai_writer',    label: 'AI content writer',        note: 'Premium quota for the blog/article generator' },
+  ];
+  function clientHasFeature(billing, feature) {
+    if (!billing || billing.is_premium !== true) return false;
+    if (!Array.isArray(billing.entitlements))    return true;   // BC path
+    return billing.entitlements.includes(feature);
+  }
+  function renderFeatureAccess(profile, subscriptions, isProActive) {
+    const tbody = document.getElementById('feature-access-body');
+    const sourceEl = document.getElementById('feature-access-source');
+    if (!tbody) return;
+    // Build a synthetic billing object from what the profile endpoint
+    // returns today. When backend adds entitlements to this endpoint
+    // (or a dedicated /admin/api/users/:id/entitlements), we swap
+    // this construction in one place.
+    const isPremium = !!(isProActive || profile.premium_override);
+    const billing = {
+      is_premium:   isPremium,
+      plan_code:    profile.subscription && profile.subscription !== 'free' ? String(profile.subscription).toUpperCase() : null,
+      entitlements: Array.isArray(profile.entitlements) ? profile.entitlements : undefined,
+    };
+    // Header line — where the data came from
+    if (!isPremium) {
+      sourceEl.textContent = 'Free tier';
+    } else if (Array.isArray(profile.entitlements)) {
+      sourceEl.textContent = 'From subscription — entitlements: [' + profile.entitlements.join(', ') + ']';
+    } else if (profile.premium_override) {
+      sourceEl.textContent = 'Granted via admin override (Pro Full)';
+    } else {
+      // Existing Pro subscriber, no entitlements field yet — BC path
+      sourceEl.textContent = 'Existing Pro subscriber — all features via backward-compat (backend has not populated entitlements yet)';
+    }
+    // Rows
+    const dot = (on) => on
+      ? '<span class="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200">✓ Yes</span>'
+      : '<span class="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200">✕ No</span>';
+    tbody.innerHTML = ADMIN_FEATURES.map((f) => (
+      '<tr class="border-b border-slate-50">' +
+        '<td class="py-2 pr-4 font-medium text-slate-900">' + escape(f.label) + '</td>' +
+        '<td class="py-2 pr-4">' + dot(clientHasFeature(billing, f.key)) + '</td>' +
+        '<td class="py-2 pr-4 text-xs text-slate-500">' + escape(f.note) + '</td>' +
+      '</tr>'
+    )).join('');
+  }
+
   function renderList(sel, rows, fmt, emptyText) {
     const el = document.querySelector('[data-panel="' + sel + '"]');
     if (!rows || rows.length === 0) {
@@ -237,6 +317,7 @@
     .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
     .then((data) => {
       renderProfile(data.profile, data.is_pro_active);
+      renderFeatureAccess(data.profile, data.subscriptions, data.is_pro_active);
       renderList('subscriptions', data.subscriptions,
         (s) => '<div class="py-2 text-sm"><div class="flex items-baseline justify-between"><span class="font-medium">' + escape(s.plan_code) + '</span>' + badge(s.status, s.status === 'active' ? 'green' : 'slate') + '</div>' +
                '<div class="mt-1 text-xs text-slate-500">' + escape(s.provider) + ' · ' + escape(s.provider_subscription_id || '—') + '</div>' +
@@ -264,6 +345,8 @@
     .catch((err) => {
       document.querySelector('[data-panel="profile"]').innerHTML =
         '<div class="text-sm text-red-600">Failed to load user: ' + escape(err.message) + '</div>';
+      const fab = document.getElementById('feature-access-body');
+      if (fab) fab.innerHTML = '<tr><td colspan="3" class="py-3 text-sm text-red-600">Failed to load — see profile card above.</td></tr>';
     });
 
   // ---- Send-email modal ----
