@@ -56,7 +56,20 @@ function isAdmin(req) {
   return isAdminEmail(req.user?.email) || req.user?.isAdmin === true;
 }
 
-/** Ask the backend whether this user is premium. { premium, ok }. */
+/**
+ * Ask the backend whether this user has the OCR entitlement. { premium, ok }.
+ *
+ * "premium" here means "has premium OCR quota" — 20/month instead of 1.
+ * Under the new tier system (2026-08-29):
+ *   Full Pro                → hasFeature(billing, 'ocr') → true  → 20/mo
+ *   Pro Proofreading Lite   → hasFeature(billing, 'ocr') → false → 1/mo
+ *   Pro OCR Lite            → hasFeature(billing, 'ocr') → true  → 20/mo
+ *   Free                    → hasFeature(billing, 'ocr') → false → 1/mo
+ *
+ * Backward-compat: existing subscribers have is_premium:true and no
+ * entitlements field; hasFeature() returns true for them so they keep
+ * their 20/mo quota until backend populates entitlements.
+ */
 async function verifyPremium(req) {
   const token = req.cookies && req.cookies.access_token;
   if (!token) return { premium: false, ok: true };
@@ -67,7 +80,8 @@ async function verifyPremium(req) {
       validateStatus: () => true,
     });
     if (resp.status === 200 && resp.data && resp.data.billing) {
-      return { premium: !!resp.data.billing.is_premium, ok: true };
+      const { hasFeature, FEATURES } = require('../lib/entitlements');
+      return { premium: hasFeature(resp.data.billing, FEATURES.OCR), ok: true };
     }
     if (resp.status === 200 || resp.status === 401 || resp.status === 403) {
       return { premium: false, ok: true };
