@@ -27,6 +27,7 @@ const querystring = require('querystring');
 const compression = require('compression');
 const { getSeoData } = require('./config/seo');
 const { attachUser } = require('./middleware/auth');
+const { attachEntitlements } = require('./middleware/attachEntitlements');
 const authRoutes = require('./routes/auth');
 const indexRouter = require('./routes/index');
 const apiRouter = require('./routes/api');
@@ -132,6 +133,13 @@ function createApp() {
         if (PRODUCTION_ORIGINS.includes(origin)) return callback(null, true);
         // Allow all Vercel preview deployments (*.vercel.app)
         if (origin.endsWith('.vercel.app')) return callback(null, true);
+        // Always allow local dev origins (any port). Safe: localhost is
+        // only reachable from the same machine. Without this, having
+        // FRONTEND_URL set to a prod URL in .env broke `npm start` locally
+        // because the origin was neither prod nor in the allowlist —
+        // manifested as an HTML "Not allowed by CORS" error page being
+        // returned to fetch() calls and blowing up as "Unexpected token '<'".
+        if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) return callback(null, true);
         if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) return callback(null, true);
         return callback(new Error('Not allowed by CORS'));
       },
@@ -145,6 +153,28 @@ function createApp() {
   app.use(cookieParser());
   // attachUser must run for /workspace so requireAuth works and draft links don't loop.
   app.use((req, res, next) => attachUser(req, res, next));
+
+  // attachEntitlements — makes hasFeature() available inside EJS
+  // templates so nav bar and CTAs can hide features the user's plan
+  // doesn't include (least-privilege UI). Only runs for page-render
+  // routes to avoid a per-API-call HTTP hop to billing/me. Static
+  // assets and API endpoints skip via the early return.
+  app.use((req, res, next) => {
+    const p = req.path || '';
+    if (
+      p.startsWith('/api/') ||
+      p.startsWith('/js/') ||
+      p.startsWith('/css/') ||
+      p.startsWith('/images/') ||
+      p.startsWith('/font-maps/') ||
+      p.startsWith('/.well-known/') ||
+      p === '/robots.txt' ||
+      p === '/sitemap.xml' ||
+      p === '/manifest.json' ||
+      p.startsWith('/blog/rss.xml')
+    ) return next();
+    return attachEntitlements(req, res, next);
+  });
 
   // Serve frequently-updated JS files with no-cache headers before the
   // general static middleware so the headers are applied correctly.
@@ -237,10 +267,13 @@ function createApp() {
   // Error handler
   app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
     console.error(err.stack);
-    // API routes must always return JSON — never HTML.
-    // HTML error pages cause JSON.parse failures in the browser client.
-    const isApiRequest = req.path.startsWith('/api/');
-    if (isApiRequest) {
+    // Any client-parsed-as-JSON endpoint must return JSON — never HTML.
+    // Both /api/* and /auth/* are called via fetch() and the client
+    // pipes the response through res.json(); an HTML error page there
+    // surfaces to the user as the misleading "Unexpected token '<'"
+    // instead of the real error.
+    const wantsJson = req.path.startsWith('/api/') || req.path.startsWith('/auth/');
+    if (wantsJson) {
       const status = err.status || err.statusCode || 500;
       return res.status(status).json({
         error: err.message || 'Internal server error',

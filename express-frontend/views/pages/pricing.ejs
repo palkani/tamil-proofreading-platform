@@ -26,18 +26,22 @@
     </div>
 
     <% } else { %>
-    <!-- Pricing header -->
+    <!-- Pricing header — code-gated custom plans (2026-08-29). Public
+         pricing intentionally shows Free + a "contact us / enter code"
+         card only. Every paid plan is quoted per-customer with a promo
+         code that grants specific features + a specific price. This
+         lets us bespoke-price for publishers, schools, and pilots
+         without publishing a rate card. -->
     <div class="text-center mb-12">
-      <h1 class="text-4xl font-bold text-gray-900 mb-4">Pick the plan that fits how you use ProofTamil.</h1>
+      <h1 class="text-4xl font-bold text-gray-900 mb-4">Plans built for how you actually work.</h1>
       <p class="text-lg text-gray-600 max-w-2xl mx-auto">
-        Full Pro if you use both writing and OCR. Or pick a Lite tier — half the price — if you only need one.
+        Start free. When you're ready for more, we'll quote a plan that fits your needs — writers, publishers, schools, and enterprises all get custom pricing.
       </p>
     </div>
 
-
-    <!-- Plan cards — 4-up on desktop, 2×2 on tablets, stacked on mobile.
-         Free is hidden for logged-in users (they already have a Free account). -->
-    <div class="grid gap-6 items-stretch max-w-6xl mx-auto <%= (user && user.email) ? 'md:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-4' %>">
+    <!-- Two-card layout — Free (anon only) + Custom / activation code.
+         Logged-in users see just the Custom card (they already have Free). -->
+    <div class="grid gap-6 items-stretch max-w-5xl mx-auto <%= (user && user.email) ? 'md:grid-cols-1' : 'md:grid-cols-2' %>">
 
       <!-- Free Plan (hidden for logged-in users who already have an account) -->
       <% if (!user || !user.email) { %>
@@ -87,177 +91,105 @@
       </div>
       <% } %>
 
-      <!-- Pro Proofreading Lite — only proofreading features, no OCR -->
-      <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 flex flex-col">
-        <div class="mb-6">
-          <div class="flex items-center gap-3 mb-3">
-            <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white flex-shrink-0">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-            </span>
-            <span class="text-xl font-bold text-gray-900">Proofreading Lite</span>
-          </div>
-          <div class="flex items-end gap-1">
-            <% if (proofreadLiteMonthly && proofreadLiteMonthly.display_price) { %>
-            <span class="text-4xl font-bold text-gray-900"><%= proofreadLiteMonthly.currency === 'INR' ? '₹' : '$' %><%= proofreadLiteMonthly.display_price %></span>
-            <% } else { %>
-            <span class="text-4xl font-bold text-gray-900">—</span>
-            <% } %>
-            <span class="text-gray-500 mb-1">/ month</span>
-          </div>
-          <p class="mt-2 text-sm text-gray-500">For writers who only need proofreading.</p>
-        </div>
-        <ul class="space-y-3 text-sm text-gray-600 flex-1 mb-8">
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
-            Proofread entire articles — no word cap
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
-            Unlimited AI grammar &amp; spelling checks
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
-            AI rewrites, tone switch, voice typing
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
-            Import + export .docx, .pdf, .txt
-          </li>
-          <li class="flex items-start gap-2 text-gray-400">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-200 text-gray-500 flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></span>
-            <span>Handwriting OCR — <b>not included</b></span>
-          </li>
-        </ul>
-        <button
-          id="checkout-btn-PRO_PROOFREAD_LITE_MONTHLY"
-          onclick="startCheckout('PRO_PROOFREAD_LITE_MONTHLY', '<%= countryCode %>')"
-          class="block w-full text-center px-5 py-3.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition disabled:opacity-50"
-        >
-          Get Proofreading Lite
-        </button>
-      </div>
-
-      <!-- Pro OCR Lite — only OCR, no proofreading pro features, no export -->
-      <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 flex flex-col">
-        <div class="mb-6">
-          <div class="flex items-center gap-3 mb-3">
-            <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-amber-600 text-white flex-shrink-0">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-            </span>
-            <span class="text-xl font-bold text-gray-900">OCR Lite</span>
-          </div>
-          <div class="flex items-end gap-1">
-            <% if (ocrLiteMonthly && ocrLiteMonthly.display_price) { %>
-            <span class="text-4xl font-bold text-gray-900"><%= ocrLiteMonthly.currency === 'INR' ? '₹' : '$' %><%= ocrLiteMonthly.display_price %></span>
-            <% } else { %>
-            <span class="text-4xl font-bold text-gray-900">—</span>
-            <% } %>
-            <span class="text-gray-500 mb-1">/ month</span>
-          </div>
-          <p class="mt-2 text-sm text-gray-500">For students, researchers, and archivists.</p>
-        </div>
-        <ul class="space-y-3 text-sm text-gray-600 flex-1 mb-8">
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
-            20 Handwritten Notes → text / month
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
-            Document mode — patta, EC, deeds, VAO reports
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
-            Field extraction with per-value copy buttons
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
-            Priority OCR processing
-          </li>
-          <li class="flex items-start gap-2 text-gray-400">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-200 text-gray-500 flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></span>
-            <span>Unlimited proofreading — <b>not included</b></span>
-          </li>
-        </ul>
-        <button
-          id="checkout-btn-PRO_OCR_LITE_MONTHLY"
-          onclick="startCheckout('PRO_OCR_LITE_MONTHLY', '<%= countryCode %>')"
-          class="block w-full text-center px-5 py-3.5 rounded-xl bg-amber-600 text-white font-semibold hover:bg-amber-700 transition disabled:opacity-50"
-        >
-          Get OCR Lite
-        </button>
-      </div>
-
-      <!-- Pro Monthly -->
-      <div class="bg-white rounded-2xl border-2 border-primary-600 shadow-xl p-8 flex flex-col relative">
+      <!-- Custom plans — no public rate card. Users get a quote via
+           contact + a promo/activation code that unlocks a specific
+           feature bundle at a specific price. Anonymous users see
+           this card too so they know how to reach us. -->
+      <div id="custom-plan-card" class="bg-white rounded-2xl border-2 border-primary-600 shadow-xl p-8 flex flex-col relative">
         <div class="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span class="bg-primary-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Most Popular</span>
+          <span class="bg-primary-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Custom Plans</span>
         </div>
-        <div class="mb-6">
+
+        <!-- Default state: contact + code entry. Hidden once a valid code is entered. -->
+        <div id="custom-plan-default" class="flex flex-col flex-1">
+          <div class="mb-6">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary-600 text-white flex-shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+              </span>
+              <span class="text-xl font-bold text-gray-900">Custom Plan</span>
+            </div>
+            <p class="text-sm text-gray-600">Every paid plan is quoted to fit — pick the features you want, pay only for those. Writers, publishers, schools, and enterprise pilots all get bespoke pricing.</p>
+          </div>
+
+          <div class="space-y-3 text-sm text-gray-700 mb-8">
+            <div class="flex items-start gap-2">
+              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
+              <span>Pick only the features you need — proofreading, OCR, exports, or all</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
+              <span>Volume + team discounts for schools and publishers</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-600 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
+              <span>Cancel anytime — Dodo Payments handles billing</span>
+            </div>
+          </div>
+
+          <!-- Contact primary CTA -->
+          <a href="/contact?topic=custom-pricing" class="block w-full text-center px-5 py-3.5 rounded-xl bg-primary-600 text-white font-semibold hover:bg-primary-700 transition mb-3">
+            Request a custom quote
+          </a>
+
+          <!-- Divider -->
           <div class="flex items-center gap-3 mb-3">
-            <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-900 text-white flex-shrink-0">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-            </span>
-            <span class="text-xl font-bold text-gray-900">Pro (Full)</span>
+            <span class="h-px flex-1 bg-gray-200"></span>
+            <span class="text-xs uppercase tracking-wider text-gray-400">or</span>
+            <span class="h-px flex-1 bg-gray-200"></span>
           </div>
-          <div class="flex items-end gap-1">
-            <% if (monthly && monthly.display_price) { %>
-            <span class="text-4xl font-bold text-gray-900"><%= monthly.currency === 'INR' ? '₹' : '$' %><%= monthly.display_price %></span>
-            <% } else { %>
-            <span class="text-4xl font-bold text-gray-900">—</span>
-            <% } %>
-            <span class="text-gray-500 mb-1">/ month</span>
-          </div>
-          <p class="mt-2 text-sm text-gray-500">Everything — proofreading + OCR + export.</p>
+
+          <!-- Activation code entry -->
+          <label class="block">
+            <span class="text-sm font-medium text-gray-700">Have an activation code?</span>
+            <div class="mt-2 flex gap-2">
+              <input id="promo-code-input" type="text" autocomplete="off" spellcheck="false"
+                     class="flex-1 min-w-0 rounded-lg border border-gray-300 px-3 py-2.5 font-mono uppercase text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none"
+                     placeholder="e.g. VIKATAN-Q3" maxlength="60" />
+              <button id="promo-code-btn" type="button"
+                      class="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 transition disabled:opacity-60">
+                Apply
+              </button>
+            </div>
+          </label>
+          <p id="promo-code-status" class="hidden mt-2 text-xs rounded px-2 py-1.5"></p>
         </div>
-        <ul class="space-y-3 text-sm text-gray-600 flex-1 mb-8">
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Proofread entire articles — no word cap, ever
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Unlimited AI checks — no daily cap
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Deep இலக்கணம், நடை &amp; எழுத்துப்பிழை fixes
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            AI rewrites weak sentences in natural Tamil
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Speak Tamil aloud — AI types it for you
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            20 Handwritten Notes into Text conversions / month
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Import .docx, .txt, .pdf — edit in Tamil
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Export finished work as TXT, DOCX or PDF
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            Tone switch — formal, conversational or literary
-          </li>
-          <li class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-900 text-white flex-shrink-0 mt-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></span>
-            All drafts saved &amp; synced across your devices
-          </li>
-        </ul>
-        <button
-          id="checkout-btn-PRO_MONTHLY"
-          onclick="startCheckout('PRO_MONTHLY', '<%= countryCode %>')"
-          class="block w-full text-center px-5 py-3.5 rounded-xl bg-gray-900 text-white font-semibold hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Get Pro Full
-        </button>
+
+        <!-- Revealed state: locked-in plan summary. Populated by JS after
+             /api/promo-code/validate returns a valid plan. Hidden by default. -->
+        <div id="custom-plan-reveal" class="hidden flex-col flex-1">
+          <div class="mb-6">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-600 text-white flex-shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+              </span>
+              <span class="text-xl font-bold text-gray-900" id="promo-plan-label">—</span>
+            </div>
+            <p class="text-sm text-emerald-700 font-medium">Activation code accepted.</p>
+          </div>
+
+          <div class="rounded-xl bg-gray-50 border border-gray-200 p-4 mb-6">
+            <div class="flex items-baseline gap-1 mb-1">
+              <span class="text-3xl font-bold text-gray-900" id="promo-plan-price">—</span>
+              <span class="text-gray-500" id="promo-plan-interval">/ month</span>
+            </div>
+            <p class="text-xs text-gray-500" id="promo-plan-recurring">This is a recurring charge. Cancel any time from your account page.</p>
+          </div>
+
+          <div class="mb-6">
+            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">You'll get</p>
+            <ul id="promo-plan-features" class="space-y-2 text-sm text-gray-700"></ul>
+          </div>
+
+          <button id="promo-checkout-btn" type="button"
+                  class="block w-full text-center px-5 py-3.5 rounded-xl bg-primary-600 text-white font-semibold hover:bg-primary-700 transition disabled:opacity-60">
+            Continue to secure checkout
+          </button>
+          <button id="promo-reset-btn" type="button"
+                  class="mt-2 block w-full text-center text-xs text-gray-500 hover:text-gray-700 underline">
+            ← Use a different code
+          </button>
+        </div>
       </div>
 
     </div><!-- /plan cards -->
@@ -321,6 +253,140 @@
       }
     }, 200);
   })();
+</script>
+
+<!-- Promo-code redemption on /pricing. Client-side validate call:
+     POST /api/promo-code/validate { code } → { valid, plan: {...} }.
+     Backend contract lives in PROMO_CODES_BACKEND_CONTRACT.md.
+     Until the backend endpoint ships, the client gets a 501/400 and
+     shows a friendly "codes aren't active yet — contact us" nudge. -->
+<script>
+(function () {
+  var COUNTRY = '<%= countryCode %>';
+  var USER_LOGGED_IN = window.USER_LOGGED_IN;
+  var input   = document.getElementById('promo-code-input');
+  var applyBtn = document.getElementById('promo-code-btn');
+  var status  = document.getElementById('promo-code-status');
+  var defaultBlock = document.getElementById('custom-plan-default');
+  var revealBlock  = document.getElementById('custom-plan-reveal');
+  if (!input || !applyBtn) return;
+
+  var lastValidatedPlan = null;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]); }); }
+  function show(cls, msg) {
+    status.className = 'mt-2 text-xs rounded px-2 py-1.5 ' + cls;
+    status.textContent = msg;
+    status.classList.remove('hidden');
+  }
+  function hideStatus() { status.classList.add('hidden'); }
+
+  function labelFeature(f) {
+    return ({
+      proofreading: 'Unlimited proofreading (grammar, spelling, style)',
+      ocr:          'Handwriting + document OCR',
+      export:       'Export as PDF, DOCX, TXT',
+      ai_writer:    'AI content writer premium quota'
+    })[f] || f;
+  }
+
+  function reveal(plan) {
+    lastValidatedPlan = plan;
+    document.getElementById('promo-plan-label').textContent    = plan.label || 'Custom plan';
+    var currencySym = (plan.currency === 'INR') ? '₹' : '$';
+    document.getElementById('promo-plan-price').textContent    = currencySym + (plan.display_price || (plan.price_cents ? (plan.price_cents / 100).toFixed(2) : '—'));
+    document.getElementById('promo-plan-interval').textContent = '/ ' + (plan.billing_interval || 'month');
+    document.getElementById('promo-plan-recurring').textContent = plan.recurring_terms ||
+      (plan.billing_interval === 'one_time'
+        ? 'One-time charge. No auto-renewal.'
+        : 'This is a recurring charge, billed every ' + (plan.billing_interval || 'month') + '. Cancel any time from your account page — access continues until the end of your current period.');
+    var featuresEl = document.getElementById('promo-plan-features');
+    featuresEl.innerHTML = (plan.entitlements || []).map(function (f) {
+      return '<li class="flex items-start gap-2"><span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-600 text-white flex-shrink-0 mt-0.5"><svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>' + esc(labelFeature(f)) + '</li>';
+    }).join('');
+    defaultBlock.classList.add('hidden');
+    revealBlock.classList.remove('hidden');
+    revealBlock.classList.add('flex');
+  }
+
+  function resetToDefault() {
+    lastValidatedPlan = null;
+    revealBlock.classList.add('hidden');
+    revealBlock.classList.remove('flex');
+    defaultBlock.classList.remove('hidden');
+    input.value = '';
+    input.focus();
+    hideStatus();
+  }
+
+  applyBtn.addEventListener('click', validate);
+  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); validate(); } });
+  document.getElementById('promo-reset-btn').addEventListener('click', resetToDefault);
+
+  async function validate() {
+    var code = (input.value || '').trim();
+    if (!code) { show('bg-red-50 text-red-700', 'Enter your activation code.'); return; }
+    applyBtn.disabled = true;
+    show('bg-gray-50 text-gray-600', 'Checking code…');
+    try {
+      var r = await fetch('/api/promo-code/validate', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code, country_code: COUNTRY })
+      });
+      var d = await r.json().catch(function () { return {}; });
+      if (r.status === 501 || r.status === 404) {
+        show('bg-amber-50 text-amber-800', 'Activation codes are not yet active. Please use "Request a custom quote" above and we\'ll set you up.');
+        return;
+      }
+      if (!r.ok || !d.valid) {
+        show('bg-red-50 text-red-700', (d && (d.message || d.error)) || 'That code is not valid or has expired. Please double-check with us.');
+        return;
+      }
+      hideStatus();
+      reveal(d.plan || d);
+    } catch (err) {
+      show('bg-red-50 text-red-700', 'Could not validate the code: ' + err.message);
+    } finally {
+      applyBtn.disabled = false;
+    }
+  }
+
+  document.getElementById('promo-checkout-btn').addEventListener('click', function () {
+    if (!lastValidatedPlan) return;
+    if (!USER_LOGGED_IN) {
+      // Route through login → post-auth auto-checkout, same pattern as
+      // the old plan-card CTAs.
+      var target = encodeURIComponent('/pricing?activate=' + encodeURIComponent(input.value.trim()));
+      window.location.href = '/login?redirect=' + target;
+      return;
+    }
+    // Signed-in: hand off to payment.js with the promo code so backend
+    // creates the Dodo checkout at the code-specific plan + price.
+    if (typeof startCheckout === 'function') {
+      startCheckout(lastValidatedPlan.plan_code || 'PROMO', COUNTRY, { promo_code: input.value.trim() });
+    } else {
+      // payment.js not loaded — very unlikely on this page; degrade gracefully.
+      window.location.href = '/api/v1/billing/checkout?plan_code=' + encodeURIComponent(lastValidatedPlan.plan_code || 'PROMO') +
+        '&promo_code=' + encodeURIComponent(input.value.trim()) +
+        '&country_code=' + COUNTRY;
+    }
+  });
+
+  // Auto-validate when landing from /login?redirect=/pricing?activate=CODE
+  (function () {
+    var params = new URLSearchParams(window.location.search);
+    var activate = params.get('activate');
+    if (activate) {
+      input.value = activate;
+      validate();
+      // Clean the URL so a refresh doesn't re-trigger.
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    }
+  })();
+})();
 </script>
 <% } %>
 
