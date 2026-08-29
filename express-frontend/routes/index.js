@@ -170,6 +170,20 @@ router.get('/tools/handwriting-ocr', (req, res) => {
   if (!user) {
     return res.redirect('/login?redirect=' + encodeURIComponent('/tools/handwriting-ocr'));
   }
+  // Least-privilege gate: a user on a PAID plan that does not include
+  // OCR (e.g. Pro Proofreading Lite) gets a "not in your plan" page
+  // instead of the tool. Free users are NOT blocked here — they see
+  // the tool with their 1/month free-tier quota (existing behaviour).
+  const { isPaidWithoutFeature, FEATURES } = require('../lib/entitlements');
+  if (isPaidWithoutFeature(res.locals.billing, FEATURES.OCR)) {
+    return res.render('pages/plan-blocked', {
+      title: 'OCR is not in your plan | ProofTamil',
+      seo: { title: 'OCR is not in your plan | ProofTamil', noIndex: true },
+      user,
+      feature: 'Handwriting OCR',
+      addOn: 'add OCR to your plan',
+    });
+  }
   const seo = getSeoData('handwritingOcrTool') || {};
   return res.render('pages/handwriting-ocr-v2', {
     title: 'Handwriting OCR — Tamil handwriting to text | ProofTamil',

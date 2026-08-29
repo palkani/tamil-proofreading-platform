@@ -4165,6 +4165,45 @@ router.post('/account/delete-request', async (req, res) => {
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────
+// Promo / activation code validation (2026-08-29)
+// Full contract in PROMO_CODES_BACKEND_CONTRACT.md. Client-side (see
+// pricing.ejs) POSTs { code, country_code }; we forward to backend
+// which returns { valid, plan: { label, plan_code, price_cents,
+// display_price, currency, billing_interval, entitlements, recurring_terms } }.
+// If the backend hasn't shipped this endpoint yet, we return 501 so
+// the UI can show a friendly "codes not active yet, contact us"
+// message instead of crashing. MUST be declared before the catch-all.
+// ─────────────────────────────────────────────────────────────────────
+router.post('/promo-code/validate', express.json(), async (req, res) => {
+  const code = String(req.body?.code || '').trim();
+  const countryCode = String(req.body?.country_code || '').toUpperCase().slice(0, 2) || 'US';
+  if (!code) return res.status(400).json({ valid: false, error: 'code_required', message: 'Enter your activation code.' });
+
+  const backend = (req._backendUrl || BACKEND_URL || '').replace(/\/$/, '');
+  if (!backend) {
+    return res.status(501).json({ valid: false, error: 'backend_unreachable', message: 'Promo codes are not yet available. Please contact us for pricing.' });
+  }
+
+  try {
+    const upstream = await axios.post(
+      backend + '/api/v1/billing/promo-code/validate',
+      { code, country_code: countryCode },
+      { timeout: 8000, validateStatus: () => true }
+    );
+    // 404 or 501 = backend hasn't shipped the endpoint yet. Turn into
+    // a UI-friendly 501 so the client shows the "contact us" nudge
+    // rather than a raw HTTP status.
+    if (upstream.status === 404 || upstream.status === 501) {
+      return res.status(501).json({ valid: false, error: 'not_implemented', message: 'Promo codes are not yet active. Please use the "Request a custom quote" link above.' });
+    }
+    return res.status(upstream.status).json(upstream.data);
+  } catch (err) {
+    console.error('[PROMO-VALIDATE] backend call failed:', err.message);
+    return res.status(502).json({ valid: false, error: 'validation_service_unavailable', message: 'Could not check the code right now — please try again in a moment.' });
+  }
+});
+
 // Proxy other API calls to Go backend
 // IMPORTANT: This catch-all must be LAST to avoid intercepting specific routes like /submit
 router.all('/*', async (req, res) => {

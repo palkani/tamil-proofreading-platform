@@ -58,6 +58,30 @@ function hasFeature(billing, feature) {
 }
 
 /**
+ * Least-privilege helper — "is the user on a paid plan that DOES NOT
+ * include this feature?" Semantics distinct from !hasFeature():
+ *
+ *   Free user (no paid plan)           → false  (they get free-tier access
+ *                                                to every feature via
+ *                                                free-tier quotas — no
+ *                                                block, just quota)
+ *   Paid user WITH the feature         → false  (allow, they're entitled)
+ *   Paid user WITHOUT the feature      → true   (block: they explicitly
+ *                                                bought a plan that excludes
+ *                                                this feature; showing the
+ *                                                free-tier version would
+ *                                                nag them for another upgrade)
+ *
+ * Use to hard-gate tool pages so a Pro Proofread Lite user doesn't see
+ * the OCR tool and a Pro OCR Lite user doesn't see workspace pro
+ * features. Free users are never blocked — they always get free-tier.
+ */
+function isPaidWithoutFeature(billing, feature) {
+  if (!billing || billing.is_premium !== true) return false;
+  return !hasFeature(billing, feature);
+}
+
+/**
  * Convenience: which named plan this billing object represents,
  * for admin UIs and analytics. Falls back to 'unknown' if the
  * plan_code isn't recognised so future backend plans don't crash
@@ -72,4 +96,4 @@ function planLabel(billing) {
   return 'Pro'; // BC: existing subscribers without a lite prefix
 }
 
-module.exports = { hasFeature, planLabel, FEATURES };
+module.exports = { hasFeature, planLabel, isPaidWithoutFeature, FEATURES };
