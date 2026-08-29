@@ -824,6 +824,13 @@ router.get('/pricing', async (req, res) => {
       paymentsEnabled: false,
       monthly: null,
       yearly: null,
+      // Passed through so the view can always safely reference these
+      // fields without an EJS ReferenceError on the payments-disabled
+      // preview render.
+      proofreadLiteMonthly: null,
+      proofreadLiteYearly: null,
+      ocrLiteMonthly: null,
+      ocrLiteYearly: null,
       countryCode: 'US',
       error: false
     });
@@ -852,41 +859,60 @@ router.get('/pricing', async (req, res) => {
     return { ...p, display_price: displayPrice, currency };
   };
 
-  // Fallback pricing when API fails (based on plan defaults)
+  // Fallback pricing when API fails. Lite prices default to ~60% of
+  // Full Pro (each Lite covers one feature area). Backend can override
+  // via /api/v1/billing/pricing?plan_code=... at any time — these
+  // constants are only used when that endpoint is unreachable.
   const fallbackPricing = (countryCode) => {
     const isIndia = countryCode === 'IN';
     return {
-      monthly: isIndia
-        ? { display_price: '1000', currency: 'INR' }
-        : { display_price: '12.00', currency: 'USD' },
-      yearly: isIndia
-        ? { display_price: '9599', currency: 'INR' }
-        : { display_price: '115.20', currency: 'USD' }
+      monthly: isIndia ? { display_price: '1000', currency: 'INR' } : { display_price: '12.00', currency: 'USD' },
+      yearly:  isIndia ? { display_price: '9599', currency: 'INR' } : { display_price: '115.20', currency: 'USD' },
+      proofreadLiteMonthly: isIndia ? { display_price: '599', currency: 'INR' } : { display_price: '7.00',  currency: 'USD' },
+      proofreadLiteYearly:  isIndia ? { display_price: '5750', currency: 'INR' } : { display_price: '69.00', currency: 'USD' },
+      ocrLiteMonthly:       isIndia ? { display_price: '599', currency: 'INR' } : { display_price: '7.00',  currency: 'USD' },
+      ocrLiteYearly:        isIndia ? { display_price: '5750', currency: 'INR' } : { display_price: '69.00', currency: 'USD' },
     };
   };
 
   try {
     const backendUrl = (process.env.BACKEND_URL_PRIMARY || process.env.BACKEND_URL || 'http://localhost:8080').replace(/\/$/, '');
-    const [monthlyRes, yearlyRes] = await Promise.all([
-      axiosWithPool.get(`${backendUrl}/api/v1/billing/pricing?plan_code=PRO_MONTHLY&country_code=${countryCode}`, { validateStatus: () => true }),
-      axiosWithPool.get(`${backendUrl}/api/v1/billing/pricing?plan_code=PRO_YEARLY&country_code=${countryCode}`, { validateStatus: () => true })
+    // Fetch all six plan codes in parallel. Each call is best-effort —
+    // if the backend hasn't provisioned a plan yet, we fall back to the
+    // constant above for that specific plan without blocking the page.
+    const fetchPlan = (code) => axiosWithPool.get(
+      `${backendUrl}/api/v1/billing/pricing?plan_code=${code}&country_code=${countryCode}`,
+      { validateStatus: () => true }
+    ).then((r) => normalizePricing(r.status === 200 ? r.data : null)).catch(() => null);
+
+    const [
+      monthly, yearly,
+      proofreadLiteMonthly, proofreadLiteYearly,
+      ocrLiteMonthly, ocrLiteYearly,
+    ] = await Promise.all([
+      fetchPlan('PRO_MONTHLY'),
+      fetchPlan('PRO_YEARLY'),
+      fetchPlan('PRO_PROOFREAD_LITE_MONTHLY'),
+      fetchPlan('PRO_PROOFREAD_LITE_YEARLY'),
+      fetchPlan('PRO_OCR_LITE_MONTHLY'),
+      fetchPlan('PRO_OCR_LITE_YEARLY'),
     ]);
-    let monthly = normalizePricing(monthlyRes.status === 200 ? monthlyRes.data : null);
-    let yearly = normalizePricing(yearlyRes.status === 200 ? yearlyRes.data : null);
-    const apiFailed = !monthly && !yearly;
-    if (apiFailed) {
-      const fallback = fallbackPricing(countryCode);
-      monthly = fallback.monthly;
-      yearly = fallback.yearly;
-    }
+
+    const fallback = fallbackPricing(countryCode);
+    const apiFailed = !monthly && !yearly && !proofreadLiteMonthly && !ocrLiteMonthly;
+
     res.render('pages/pricing', {
       title: seo.title,
       seo,
       user,
       paymentsEnabled: true,
       countryCode,
-      monthly,
-      yearly,
+      monthly:              monthly              || fallback.monthly,
+      yearly:               yearly               || fallback.yearly,
+      proofreadLiteMonthly: proofreadLiteMonthly || fallback.proofreadLiteMonthly,
+      proofreadLiteYearly:  proofreadLiteYearly  || fallback.proofreadLiteYearly,
+      ocrLiteMonthly:       ocrLiteMonthly       || fallback.ocrLiteMonthly,
+      ocrLiteYearly:        ocrLiteYearly        || fallback.ocrLiteYearly,
       error: false,
       pricingFromCache: apiFailed
     });
@@ -900,6 +926,10 @@ router.get('/pricing', async (req, res) => {
       paymentsEnabled: true,
       monthly: fallback.monthly,
       yearly: fallback.yearly,
+      proofreadLiteMonthly: fallback.proofreadLiteMonthly,
+      proofreadLiteYearly: fallback.proofreadLiteYearly,
+      ocrLiteMonthly: fallback.ocrLiteMonthly,
+      ocrLiteYearly: fallback.ocrLiteYearly,
       countryCode,
       error: false,
       pricingFromCache: true

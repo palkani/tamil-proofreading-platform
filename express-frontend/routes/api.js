@@ -1816,9 +1816,15 @@ try {
           apiKey,
           timeoutMs: 55_000,
         });
-        // Consume one monthly credit ONLY on a successful extraction — a failed
-        // upload never burns the user's single free upload.
-        await ocrMonthlyLimit.recordSuccess(req);
+        // Consume one monthly credit ONLY on a successful extraction — a
+        // failed upload never burns the user's single free upload. An
+        // "illegible" document-mode response is also treated as a
+        // non-consuming failure: Gemini honestly refused to transcribe
+        // (typical for pre-1947 cursive manuscripts), so charging the
+        // user's monthly quota for a refusal would feel like a bug.
+        if (!r.illegible) {
+          await ocrMonthlyLimit.recordSuccess(req);
+        }
         res.json({
           raw_text: r.raw_text,
           suggestions: r.suggestions,
@@ -1826,6 +1832,11 @@ try {
           // as-is (undefined for prose modes so clients that don't
           // check for it see the same shape as before).
           fields: r.fields,
+          // Anti-hallucination signals — populated only when document
+          // mode's Prime Directive triggered a refusal. Frontend
+          // shows a dedicated error state instead of the raw_text.
+          illegible: r.illegible,
+          illegible_reason: r.illegible_reason,
           wallMs: r.wallMs,
           costUsd: r.costUsd,
           mode: r.mode,
@@ -2443,7 +2454,7 @@ router.post('/document/export-docx', async (req, res) => {
     // four passing paths (paid subscription, PremiumOverride grant,
     // admin role, operator email).
     const isAdmin = isAdminEmail(req.user?.email);
-    let isPaidTier = false;
+    let hasExportEntitlement = false;
     if (!isAdmin && req.cookies?.access_token) {
       try {
         const backend = (req._backendUrl || BACKEND_URL || '').replace(/\/$/, '');
@@ -2453,21 +2464,27 @@ router.post('/document/export-docx', async (req, res) => {
             timeout: 5000,
             validateStatus: () => true,
           });
-          if (meResp.status === 200 && meResp.data?.billing?.is_premium) {
-            isPaidTier = true;
+          if (meResp.status === 200 && meResp.data?.billing) {
+            // Per-feature check via the entitlements helper. Existing
+            // Full Pro users (no entitlements field yet) get true via
+            // the BC guarantee in lib/entitlements.js. New Lite tiers:
+            //   Pro Proofread Lite → true  (export included)
+            //   Pro OCR Lite       → false (export NOT included)
+            const { hasFeature, FEATURES } = require('../lib/entitlements');
+            hasExportEntitlement = hasFeature(meResp.data.billing, FEATURES.EXPORT);
           }
         }
       } catch (err) {
-        // Fail-closed: if the backend can't confirm Pro status, treat
-        // as free rather than granting export on a network hiccup.
+        // Fail-closed: if the backend can't confirm entitlement, treat
+        // as no-export rather than granting on a network hiccup.
         console.warn('[DOCX-EXPORT] billing/me check failed:', err.message);
       }
     }
 
-    if (!isPaidTier && !isAdmin) {
+    if (!hasExportEntitlement && !isAdmin) {
       return res.status(402).json({
-        error: 'pro_required',
-        message: 'Document export is available on Pro plans. Upgrade at /pricing to unlock DOCX, PDF, and TXT downloads.',
+        error: 'export_not_in_plan',
+        message: 'Document export is available on Pro (Full) and Pro Proofreading Lite plans. Upgrade at /pricing to unlock DOCX, PDF, and TXT downloads.',
         upgrade_url: '/pricing',
       });
     }
