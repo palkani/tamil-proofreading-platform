@@ -228,6 +228,27 @@
           ? badge('Pro', 'green')
           : badge('Free', 'slate');
         const overrideBadge = u.premium_override ? ' ' + badge('override', 'amber') : '';
+        // Feature-access dots under the plan badge — one letter per
+        // canonical feature. Green = has, gray = doesn't. Computed from
+        // the same BC rules the runtime uses (missing entitlements +
+        // is_premium=true → grant all). Full detail is on the user
+        // detail page's Feature Access table.
+        const isPremium = !!(u.subscription === 'pro' || u.premium_override);
+        const ents = Array.isArray(u.entitlements) ? u.entitlements : null;
+        const hasF = (f) => isPremium && (!ents || ents.includes(f));
+        const dot = (letter, on, title) =>
+          '<span title="' + title + (on ? ': yes' : ': no') + '" ' +
+            'class="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ' +
+            (on ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400') + '">' +
+            letter + '</span>';
+        const featureDots = isPremium
+          ? '<div class="mt-1 flex items-center gap-1">' +
+              dot('P', hasF('proofreading'), 'Proofreading') +
+              dot('O', hasF('ocr'),          'OCR') +
+              dot('E', hasF('export'),       'Export') +
+              dot('A', hasF('ai_writer'),    'AI content writer') +
+            '</div>'
+          : '';
         const statusBits = [];
         if (!u.is_active) statusBits.push(badge('disabled', 'red'));
         if (!u.email_verified) statusBits.push(badge('unverified', 'amber'));
@@ -246,7 +267,7 @@
           '<td class="px-3 py-2"><input type="checkbox" class="row-check rounded border-slate-300" ' + (isSelected ? 'checked' : '') + ' /></td>' +
           '<td class="px-4 py-2 font-medium text-slate-900">' + (u.email || '—') + '</td>' +
           '<td class="px-4 py-2 text-slate-700">' + (u.name || '—') + '</td>' +
-          '<td class="px-4 py-2">' + planBadge + overrideBadge + '</td>' +
+          '<td class="px-4 py-2">' + planBadge + overrideBadge + featureDots + '</td>' +
           '<td class="px-4 py-2 text-slate-700">' + (u.country_code || '—') + '</td>' +
           '<td class="px-4 py-2">' + status + '</td>' +
           '<td class="px-4 py-2 text-slate-500">' + fmtDate(u.created_at) + '</td>' +
