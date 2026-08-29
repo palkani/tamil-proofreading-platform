@@ -1,5 +1,45 @@
 # Backend contract — promo/activation codes for custom pricing
 
+## Architecture at a glance (READ THIS FIRST)
+
+Two-layer separation to avoid the "one Dodo product per customer" trap:
+
+  Layer 1 — Dodo Products (5 total, created ONCE):
+    PRO_MONTHLY                      (existing, unchanged)
+    PRO_YEARLY                       (existing, unchanged)
+    PROOFTAMIL_CUSTOM_MONTHLY        (new; placeholder price ₹1)
+    PROOFTAMIL_CUSTOM_YEARLY         (new; placeholder price ₹1)
+    PROOFTAMIL_CUSTOM_ONETIME        (new; placeholder price ₹1)
+
+  Layer 2 — promo_codes table (unlimited rows):
+    Every custom-priced customer = one row. Row specifies which Dodo
+    product to route through + the ACTUAL price to charge (price_cents).
+    Backend creates Dodo checkout sessions with a PRICE OVERRIDE using
+    the promo code's price, not the product's placeholder.
+
+## The one thing you MUST verify with Dodo docs before implementing
+
+Does Dodo's `create checkout session` API accept a per-session price
+override? Look for one of these fields on the session-create call:
+  - `custom_price` / `price_override` / `unit_amount_override`
+  - Or Stripe-style `price_data: { unit_amount, currency, recurring: { interval } }`
+
+If YES → the 3 CUSTOM products above are enough forever. Every promo
+code creates a session at that product with the overridden price.
+
+If NO → fall back to a small price-tier product set. Standardise on
+5-8 tiers per currency+interval:
+    PROOFTAMIL_299INR_MONTHLY / PROOFTAMIL_599INR_MONTHLY / …
+    PROOFTAMIL_7USD_MONTHLY / PROOFTAMIL_12USD_MONTHLY / …
+Promo codes reference the tier they should use. Still finite,
+still no per-customer Dodo work.
+
+Contact Dodo support if the docs are unclear — this decision shapes
+everything below. The rest of this contract assumes price override IS
+supported.
+
+
+
 Frontend shipped: `/pricing` no longer publishes rate cards. Users see
 **"Request a custom quote"** + **"Have an activation code?"** input.
 Entering a code validates via `POST /api/promo-code/validate` (Express
@@ -124,13 +164,32 @@ When `promo_code` is present, backend must:
 1. Re-validate the code server-side (never trust that the client
    validated it — someone can call this endpoint directly with a
    made-up promo code + fake plan).
-2. Create the Dodo subscription at the price/interval from the
-   `promo_codes` row (NOT the plan_code's default price).
-3. Insert a `promo_code_redemptions` row.
-4. Increment `redemption_count` atomically.
-5. Persist `entitlements` from the code onto the subscription so
-   `billing/me` returns them for this user.
-6. Return the same `{ checkout_url }` shape as today.
+2. Pick the right Dodo product from Layer 1 based on the code's
+   `billing_interval`:
+     month    → PROOFTAMIL_CUSTOM_MONTHLY
+     year     → PROOFTAMIL_CUSTOM_YEARLY
+     one_time → PROOFTAMIL_CUSTOM_ONETIME
+3. Create a Dodo checkout session with:
+     - product/price_id: the Layer-1 product from step 2
+     - PRICE OVERRIDE:   promo_codes.price_cents (NOT the product's
+                         placeholder price)
+     - currency:         promo_codes.currency
+     - metadata:         { promo_code, user_id, entitlements: JSON.stringify(...) }
+   The metadata is what makes the webhook (step 4 below) able to
+   attach the right entitlements to the resulting subscription. Do NOT
+   rely on the plan_code alone — Dodo webhooks strip URL params.
+4. Return `{ checkout_url }` — SAME shape as the existing non-promo path.
+5. On the Dodo webhook (`subscription.created` / `payment_succeeded`):
+     - Read metadata.promo_code
+     - Look up promo_codes row again (server-side truth)
+     - Insert `subscriptions` row with entitlements from the code
+     - Insert `promo_code_redemptions` row
+     - Increment `promo_codes.redemption_count` atomically
+     - (Send welcome email)
+
+If re-validation fails (code expired between /validate and /checkout,
+or the code+plan_code don't match), respond 409 and Express surfaces
+the error to the user cleanly.
 
 If re-validation fails (code expired between /validate and /checkout,
 or the code+plan_code don't match), respond 409 and Express surfaces
@@ -193,6 +252,39 @@ Free users (no paid plan) are never blocked by these gates — they
 always get free-tier access. The block only fires when the user
 explicitly bought a plan that doesn't include the feature, so the
 UI doesn't nag a paying customer for a second upgrade.
+
+## Ecommerce edge cases to design for
+
+Before going live, decide the policy for each:
+
+- **Plan changes** — customer wants to switch from CODE-A to CODE-B
+  mid-subscription. Two options:
+    (a) Cancel + create new subscription (brief access gap; simpler)
+    (b) Proration via Dodo's subscription-update API (more code)
+  Ship (a) first, add (b) only if customers complain about the gap.
+- **Currency** — a promo code should fix the currency it's redeemed in
+  (INR-only or USD-only). Do NOT let Dodo auto-convert your ₹599 code
+  into "$7.10 USD" for a US buyer — you'll lose precision and confuse
+  the customer. Create separate codes per currency if a plan should
+  be available in multiple.
+- **Refunds & chargebacks** — the Dodo webhook for `refund.created`
+  should:
+    - Mark the subscription cancelled
+    - Decrement `promo_codes.redemption_count` so a refund abuser
+      doesn't eat your max_redemptions
+    - Send the user an "access has ended" email
+- **VAT / GST** — Dodo as merchant of record adds VAT/GST at
+  checkout. Your `promo_codes.price_cents` should be the PRE-TAX
+  amount. The pricing page's recurring-terms note already says
+  "billed monthly" — Dodo shows the tax breakdown on their
+  checkout page.
+- **Trial periods** — add a `trial_days` column to `promo_codes` and
+  pass to Dodo's `trial_period_days` on session creation. Ship later
+  if there's demand; not needed for MVP.
+- **Auto-renewal disclosure** — regulatory requirement in India
+  (RBI auto-debit rules) and the EU (consumer directive). The
+  pricing page shows "This is a recurring charge, billed every
+  month" — sufficient. Dodo also shows it on their checkout.
 
 ## Rollout order
 
