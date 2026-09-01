@@ -1765,15 +1765,25 @@ try {
     limits: { fileSize: 20 * 1024 * 1024 },
   });
 
-  function getGeminiKey() {
-    return process.env.GEMINI_API_KEY_2
-      || process.env.GEMINI_API_KEY_1
-      || process.env.GEMINI_API_KEY_3
-      || process.env.GEMINI_API_KEY_4
-      || process.env.GEMINI_API_KEY
-      || process.env.GOOGLE_GENAI_API_KEY
-      || process.env.AI_INTEGRATIONS_GEMINI_API_KEY
-      || '';
+  // Returns ALL configured Gemini keys so the OCR pipeline can rotate them
+  // across parallel strip calls. Previously returned a single key, which meant
+  // 6 parallel strips hammered one key and instantly hit its 15 RPM free-tier
+  // limit → 429s → retries → 55s pipeline abort. Rotating one key per strip
+  // uses your key pool the way it was meant to be used.
+  function getGeminiKeys() {
+    const keys = [];
+    // Numbered rotator keys — pick up any GEMINI_API_KEY_1..10 that's set.
+    for (let i = 1; i <= 10; i++) {
+      const v = process.env['GEMINI_API_KEY_' + i];
+      if (v) keys.push(v);
+    }
+    // Legacy single-key fallbacks (still supported)
+    for (const name of ['GEMINI_API_KEY', 'GOOGLE_GENAI_API_KEY', 'AI_INTEGRATIONS_GEMINI_API_KEY']) {
+      const v = process.env[name];
+      if (v) keys.push(v);
+    }
+    // Dedupe — env sometimes has the same key under two names
+    return Array.from(new Set(keys));
   }
 
   // Public usage snapshot — powers the "N/1 uploads left this month" badge in
@@ -1795,11 +1805,11 @@ try {
     ocrMonthlyLimit(),                 // gates access + attaches req.ocrQuota
     ocrV2Upload.single('image'),
     async (req, res) => {
-      const apiKey = getGeminiKey();
-      if (!apiKey) {
+      const apiKeys = getGeminiKeys();
+      if (!apiKeys.length) {
         return res.status(500).json({
           error: 'no_api_key',
-          message: 'No Gemini API key configured (set GEMINI_API_KEY_1..4 or GOOGLE_GENAI_API_KEY).',
+          message: 'No Gemini API key configured (set GEMINI_API_KEY_1..10 or GOOGLE_GENAI_API_KEY).',
         });
       }
       if (!req.file) {
@@ -1811,7 +1821,7 @@ try {
         const r = await runPipeline(req.file.buffer, {
           mode: mode === 'baseline' || mode === 'preprocessed' ? mode : 'full',
           model,
-          apiKey,
+          apiKeys,
           timeoutMs: 55_000,
         });
         // Consume one monthly credit ONLY on a successful extraction — a failed
