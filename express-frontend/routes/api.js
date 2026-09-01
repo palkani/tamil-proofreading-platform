@@ -1806,10 +1806,12 @@ try {
         return res.status(400).json({ error: 'no_file', message: 'Upload an image in the "image" field.' });
       }
       const mode = String(req.body.mode || req.query.mode || 'full').toLowerCase();
+      // Valid modes: baseline, preprocessed, full (prose default),
+      // document (opt-in, for forms / land records / official documents).
       const model = process.env.OCR_V2_MODEL || 'gemini-2.5-flash';
       try {
         const r = await runPipeline(req.file.buffer, {
-          mode: mode === 'baseline' || mode === 'preprocessed' ? mode : 'full',
+          mode: ['baseline', 'preprocessed', 'document'].includes(mode) ? mode : 'full',
           model,
           apiKey,
           timeoutMs: 55_000,
@@ -1820,6 +1822,10 @@ try {
         res.json({
           raw_text: r.raw_text,
           suggestions: r.suggestions,
+          // fields is only populated by document mode; passed through
+          // as-is (undefined for prose modes so clients that don't
+          // check for it see the same shape as before).
+          fields: r.fields,
           wallMs: r.wallMs,
           costUsd: r.costUsd,
           mode: r.mode,

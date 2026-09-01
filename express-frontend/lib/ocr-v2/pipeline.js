@@ -9,10 +9,16 @@
 // Prod default: 'full' (best accuracy). Latency budget on Vercel Pro:
 // ~15-20s for a typical page (well within the 60s serverless timeout).
 
-const { transcribeBaseline, transcribeBuffer } = require('./transcribe');
+const { transcribeBaseline, transcribeBuffer, transcribeDocumentBuffer } = require('./transcribe');
 const { preprocessImage } = require('./preprocess');
 const { cutIntoStrips } = require('./strip-cut');
 
+// Concurrency-limited fan-out. Per-item errors DO NOT reject the whole
+// batch — they land in results[idx] as { __error: err }. Fail-fast was
+// biting us because any one transient Gemini rate-limit or 500 on a
+// single strip killed the whole 6-strip transcription and forced the
+// user to retry the entire page. Now the caller sees which strips
+// failed and decides whether to keep going or hard-fail.
 async function pool(items, limit, fn) {
   const results = new Array(items.length);
   let cursor = 0;
@@ -20,7 +26,11 @@ async function pool(items, limit, fn) {
     while (true) {
       const idx = cursor++;
       if (idx >= items.length) return;
-      results[idx] = await fn(items[idx], idx);
+      try {
+        results[idx] = await fn(items[idx], idx);
+      } catch (err) {
+        results[idx] = { __error: err };
+      }
     }
   });
   await Promise.all(workers);
@@ -78,8 +88,32 @@ async function runPipeline(input, opts) {
     }
   }
 
-  // preprocessed + full both start with the sharp-clean.
+  // preprocessed + full + document all start with the sharp-clean.
   const pre = await preprocessImage(input);
+
+  // Document mode — for land records, patta/chitta, deeds on stamp
+  // paper, VAO reports, and other structured official documents.
+  // Skips strip-cutting (which mangles tables + multi-column layouts)
+  // and sends the whole preprocessed image to Gemini in a single call
+  // with the form-aware prompt (documentPrompt.js). Returns fields[]
+  // in addition to raw_text. Opt-in via ?mode=document on the API.
+  // Existing 'full' mode is UNTOUCHED.
+  if (opts.mode === 'document') {
+    const r = await transcribeDocumentBuffer(pre.buffer, {
+      model: opts.model, apiKey: opts.apiKey, mimeType: pre.mimeType,
+      timeoutMs: opts.timeoutMs,
+    });
+    return {
+      raw_text: r.raw_text,
+      suggestions: r.suggestions,   // always [] for document mode
+      fields: r.fields,             // NEW — key-value pairs extracted from the form
+      wallMs: Date.now() - started,
+      costUsd: r.costUsd,
+      mode: 'document',
+      stages: { preprocessMs: pre.wallMs, transcribeMs: r.wallMs },
+      meta: { deskewDeg: pre.meta.deskewDeg, fieldCount: r.fields.length },
+    };
+  }
 
   if (opts.mode === 'preprocessed') {
     const r = await transcribeBuffer(pre.buffer, {
@@ -98,7 +132,8 @@ async function runPipeline(input, opts) {
   const cut = await cutIntoStrips(pre.buffer, { linesPerStrip: opts.linesPerStrip || 4 });
 
   const stripStarted = Date.now();
-  const stripResults = await pool(
+  // First pass — parallel transcribe.
+  let stripResults = await pool(
     cut.strips,
     opts.concurrency || 6,
     (strip) => transcribeBuffer(strip.buffer, {
@@ -106,11 +141,46 @@ async function runPipeline(input, opts) {
       timeoutMs: opts.timeoutMs,
     })
   );
+
+  // Retry any strip that errored, once, sequentially. Transient Gemini
+  // 429s / 500s / connection resets clear on a re-request in the vast
+  // majority of cases; retrying only the failed strips (rather than
+  // making the user re-upload the whole page) is much cheaper on wall
+  // clock and on their monthly quota.
+  const failedIdx = stripResults
+    .map((r, i) => (r && r.__error) ? i : -1)
+    .filter((i) => i >= 0);
+  const retriedIdx = [];
+  for (const i of failedIdx) {
+    try {
+      stripResults[i] = await transcribeBuffer(cut.strips[i].buffer, {
+        model: opts.model, apiKey: opts.apiKey, mimeType: 'image/png',
+        timeoutMs: opts.timeoutMs,
+      });
+      retriedIdx.push(i);
+    } catch (err) {
+      // Keep the original error record; we'll surface it as a warning
+      // rather than failing the whole pipeline.
+      stripResults[i] = { __error: err };
+    }
+  }
   const transcribeMs = Date.now() - stripStarted;
 
-  const raw_text = stripResults.map((r) => (r.raw_text || '').trim()).filter(Boolean).join('\n\n');
-  const suggestions = mergeSuggestions(stripResults.map((r) => r.suggestions || []));
-  const costUsd = stripResults.reduce((sum, r) => sum + (r.costUsd || 0), 0);
+  // Only hard-fail if EVERY strip errored — otherwise the user gets
+  // useful text for the strips that worked plus a warning listing the
+  // ones that didn't. Failing on ANY error (the old behaviour) was
+  // biting users on multi-strip pages where any single transient
+  // Gemini error killed the whole run.
+  const stillErrored = stripResults.filter((r) => r && r.__error);
+  if (stillErrored.length === stripResults.length && stripResults.length > 0) {
+    const first = stillErrored[0].__error;
+    throw new Error('All strips failed to transcribe: ' + (first && first.message ? first.message : 'unknown error'));
+  }
+
+  const okResults = stripResults.map((r) => (r && !r.__error) ? r : { raw_text: '', suggestions: [] });
+  const raw_text = okResults.map((r) => (r.raw_text || '').trim()).filter(Boolean).join('\n\n');
+  const suggestions = mergeSuggestions(okResults.map((r) => r.suggestions || []));
+  const costUsd = okResults.reduce((sum, r) => sum + (r.costUsd || 0), 0);
 
   return {
     raw_text, suggestions,
@@ -120,12 +190,15 @@ async function runPipeline(input, opts) {
       stripCutMs: cut.wallMs,
       stripCount: cut.strips.length,
       transcribeMs,
-      perStripMs: stripResults.map((r) => r.wallMs),
+      perStripMs: okResults.map((r) => r.wallMs || null),
     },
     meta: {
       deskewDeg: pre.meta.deskewDeg,
       detectedLines: cut.meta.detectedLines,
       fallbackUsed: cut.meta.fallbackUsed,
+      failedStripCount: stillErrored.length,
+      retriedStripCount: retriedIdx.length,
+      partial: stillErrored.length > 0,
     },
   };
 }
