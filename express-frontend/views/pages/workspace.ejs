@@ -1496,20 +1496,6 @@
   window.COUNTRY_CODE     = '<%= countryCode || "US" %>';
   window.PAYMENTS_ENABLED = <%= locals.paymentsEnabled ? 'true' : 'false' %>;
 </script>
-<!-- Expose transliterator base URL to browser (multi-region) -->
-<script>
-  // Multi-region runner URLs for low latency
-  window.TRANSLITERATOR_URLS = {
-    'asia': 'https://prooftamil-runner-991187041222.asia-south1.run.app',
-    'us': 'https://prooftamil-runner-us-991187041222.us-central1.run.app',
-    'default': 'https://prooftamil-runner-991187041222.asia-south1.run.app'
-  };
-  // Auto-detect region based on timezone (rough approximation)
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-  const isAsia = tz.includes('Asia') || tz.includes('India') || tz.includes('Singapore') || tz.includes('Hong_Kong');
-  window.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL = isAsia ? window.TRANSLITERATOR_URLS.asia : window.TRANSLITERATOR_URLS.us;
-  console.log('[RUNNER] Selected region:', isAsia ? 'Asia' : 'US', 'URL:', window.NEXT_PUBLIC_TRANSLITERATOR_BASE_URL);
-</script>
 <!-- Include Tamil utilities and editor scripts -->
 <!-- TipTap Editor Bootstrap (loaded before other scripts for migration) -->
 <script type="module" src="/js/tiptap-editor.js"></script>
