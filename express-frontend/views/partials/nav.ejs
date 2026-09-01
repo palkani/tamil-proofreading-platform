@@ -15,6 +15,9 @@
           <a href="/drafts" id="my-drafts-link" class="nav-link <%= active === 'drafts' ? 'active' : '' %> inline-flex items-center px-2.5 py-1.5 rounded-lg whitespace-nowrap">
             My Drafts
           </a>
+          <a href="/tools/handwriting-ocr" class="nav-link <%= active === 'handwritingOcr' ? 'active' : '' %> inline-flex items-center px-2.5 py-1.5 rounded-lg whitespace-nowrap">
+            Handwriting to Text
+          </a>
           <% if (['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com', 'contact@prooftamil.com'].includes(String(user.email || '').toLowerCase())) { %>
             <a href="/my-blogs" class="nav-link <%= active === 'myBlogs' ? 'active' : '' %> inline-flex items-center px-2.5 py-1.5 rounded-lg whitespace-nowrap">
               My Blogs
@@ -136,6 +139,11 @@
          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors <%= active === 'drafts' ? 'bg-primary-50 text-primary-700 font-semibold' : '' %>">
         <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         My Drafts
+      </a>
+      <a href="/tools/handwriting-ocr"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors <%= active === 'handwritingOcr' ? 'bg-primary-50 text-primary-700 font-semibold' : '' %>">
+        <span class="w-4 h-4 flex-shrink-0 text-center text-base leading-none">✍️</span>
+        Handwriting to Text
       </a>
       <a href="/workspace"
          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors <%= active === 'workspace' ? 'bg-primary-50 text-primary-700 font-semibold' : '' %>">

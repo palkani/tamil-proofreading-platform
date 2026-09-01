@@ -175,6 +175,7 @@ router.get('/tools/handwriting-ocr', (req, res) => {
     title: 'Handwriting OCR — Tamil handwriting to text | ProofTamil',
     seo: seo,
     user: user,
+    active: 'handwritingOcr',
   });
 });
 
