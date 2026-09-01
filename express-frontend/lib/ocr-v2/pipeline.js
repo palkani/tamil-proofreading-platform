@@ -27,6 +27,15 @@ async function pool(items, limit, fn) {
   return results;
 }
 
+// Backward-compat + rotator: prefers opts.apiKeys[idx % N] when an array was
+// supplied, falls back to opts.apiKey. Callers that only have one key can
+// still pass opts.apiKey and everything works as before.
+function pickKey(opts, idx) {
+  const keys = Array.isArray(opts.apiKeys) ? opts.apiKeys.filter(Boolean) : [];
+  if (keys.length) return keys[idx % keys.length];
+  return opts.apiKey;
+}
+
 /** Merge suggestions from multiple strips, dedup on raw+suggested. */
 function mergeSuggestions(perStrip) {
   const seen = new Set(), out = [];
@@ -66,7 +75,7 @@ async function runPipeline(input, opts) {
     }
     try {
       const r = await transcribeBaseline(imagePath, {
-        model: opts.model, apiKey: opts.apiKey, timeoutMs: opts.timeoutMs,
+        model: opts.model, apiKey: pickKey(opts, 0), timeoutMs: opts.timeoutMs,
       });
       return {
         raw_text: r.raw_text, suggestions: r.suggestions,
@@ -83,7 +92,7 @@ async function runPipeline(input, opts) {
 
   if (opts.mode === 'preprocessed') {
     const r = await transcribeBuffer(pre.buffer, {
-      model: opts.model, apiKey: opts.apiKey, mimeType: pre.mimeType,
+      model: opts.model, apiKey: pickKey(opts, 0), mimeType: pre.mimeType,
       timeoutMs: opts.timeoutMs,
     });
     return {
@@ -98,11 +107,14 @@ async function runPipeline(input, opts) {
   const cut = await cutIntoStrips(pre.buffer, { linesPerStrip: opts.linesPerStrip || 4 });
 
   const stripStarted = Date.now();
+  // pickKey(opts, idx) rotates through opts.apiKeys — strip i uses key i mod N.
+  // With ~6 strips and 6 keys, each strip hits a different key → no single-key
+  // rate-limit collision. Falls back to opts.apiKey when apiKeys not supplied.
   const stripResults = await pool(
     cut.strips,
     opts.concurrency || 6,
-    (strip) => transcribeBuffer(strip.buffer, {
-      model: opts.model, apiKey: opts.apiKey, mimeType: 'image/png',
+    (strip, idx) => transcribeBuffer(strip.buffer, {
+      model: opts.model, apiKey: pickKey(opts, idx), mimeType: 'image/png',
       timeoutMs: opts.timeoutMs,
     })
   );
