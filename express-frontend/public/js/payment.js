@@ -32,6 +32,11 @@
     var btn = document.getElementById('checkout-btn-' + planCode);
     var origText = btn ? btn.textContent : '';
     if (btn) {
+      // Stash the original text on the element itself, not just the closure,
+      // so the pageshow handler below can restore it after BFCache restore
+      // (user clicks Pay, redirects to Dodo, hits browser-back → the DOM comes
+      // back frozen at "Processing…" and the closure is gone).
+      if (!btn.dataset.origText) btn.dataset.origText = origText;
       btn.disabled = true;
       btn.textContent = 'Processing…';
     }
@@ -76,4 +81,20 @@
       }
     }
   };
+
+  // Reset checkout buttons on BFCache restore. Without this, a user who
+  // clicks Pay → is redirected to Dodo → hits browser-back sees the button
+  // stuck at "Processing…" (the state was frozen in BFCache and the closure
+  // that would restore it is gone).
+  window.addEventListener('pageshow', function (event) {
+    if (!event.persisted) return; // only trigger on BFCache restore, not initial load
+    var stuck = document.querySelectorAll('[id^="checkout-btn-"]');
+    for (var i = 0; i < stuck.length; i++) {
+      var b = stuck[i];
+      if (b.disabled || b.textContent === 'Processing…') {
+        b.disabled = false;
+        if (b.dataset.origText) b.textContent = b.dataset.origText;
+      }
+    }
+  });
 })();
