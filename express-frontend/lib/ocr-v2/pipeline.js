@@ -13,6 +13,12 @@ const { transcribeBaseline, transcribeBuffer } = require('./transcribe');
 const { preprocessImage } = require('./preprocess');
 const { cutIntoStrips } = require('./strip-cut');
 
+// Concurrency-limited fan-out. Per-item errors DO NOT reject the whole
+// batch — they land in results[idx] as { __error: err }. Fail-fast was
+// biting us: one transient Gemini 429/500/timeout on a single strip
+// killed the whole 6-strip transcription and the user lost everything
+// the other 5 strips had already extracted. Now the caller sees which
+// strips failed and decides whether to keep going or hard-fail.
 async function pool(items, limit, fn) {
   const results = new Array(items.length);
   let cursor = 0;
@@ -20,7 +26,11 @@ async function pool(items, limit, fn) {
     while (true) {
       const idx = cursor++;
       if (idx >= items.length) return;
-      results[idx] = await fn(items[idx], idx);
+      try {
+        results[idx] = await fn(items[idx], idx);
+      } catch (err) {
+        results[idx] = { __error: err };
+      }
     }
   });
   await Promise.all(workers);
@@ -107,10 +117,10 @@ async function runPipeline(input, opts) {
   const cut = await cutIntoStrips(pre.buffer, { linesPerStrip: opts.linesPerStrip || 4 });
 
   const stripStarted = Date.now();
-  // pickKey(opts, idx) rotates through opts.apiKeys — strip i uses key i mod N.
-  // With ~6 strips and 6 keys, each strip hits a different key → no single-key
-  // rate-limit collision. Falls back to opts.apiKey when apiKeys not supplied.
-  const stripResults = await pool(
+  // First pass — parallel transcribe. pickKey(opts, idx) rotates through
+  // opts.apiKeys so strip i uses key i mod N (each strip lands on its own
+  // key, avoiding single-key rate limits).
+  let stripResults = await pool(
     cut.strips,
     opts.concurrency || 6,
     (strip, idx) => transcribeBuffer(strip.buffer, {
@@ -118,11 +128,48 @@ async function runPipeline(input, opts) {
       timeoutMs: opts.timeoutMs,
     })
   );
+
+  // Retry any strip that errored, once, sequentially, on a DIFFERENT key.
+  // Transient Gemini 429s / 500s / connection resets clear on a re-request
+  // in the vast majority of cases; retrying only the failed strips (rather
+  // than making the user re-upload the whole page) is much cheaper on wall
+  // clock and on their monthly quota. Shifting the key by (i + N) means
+  // retry never hits the same key that just failed.
+  const failedIdx = stripResults
+    .map((r, i) => (r && r.__error) ? i : -1)
+    .filter((i) => i >= 0);
+  const retriedIdx = [];
+  for (const i of failedIdx) {
+    try {
+      stripResults[i] = await transcribeBuffer(cut.strips[i].buffer, {
+        model: opts.model,
+        apiKey: pickKey(opts, i + cut.strips.length + 1),
+        mimeType: 'image/png',
+        timeoutMs: opts.timeoutMs,
+      });
+      retriedIdx.push(i);
+    } catch (err) {
+      // Keep the original error record; surfaced as a warning in meta
+      // rather than failing the whole pipeline.
+      stripResults[i] = { __error: err };
+    }
+  }
   const transcribeMs = Date.now() - stripStarted;
 
-  const raw_text = stripResults.map((r) => (r.raw_text || '').trim()).filter(Boolean).join('\n\n');
-  const suggestions = mergeSuggestions(stripResults.map((r) => r.suggestions || []));
-  const costUsd = stripResults.reduce((sum, r) => sum + (r.costUsd || 0), 0);
+  // Only hard-fail if EVERY strip errored — otherwise the user gets useful
+  // text for the strips that worked plus a warning listing the ones that
+  // didn't. Failing on ANY error (the old behaviour) was biting users on
+  // multi-strip pages where any single transient error killed the whole run.
+  const stillErrored = stripResults.filter((r) => r && r.__error);
+  if (stillErrored.length === stripResults.length && stripResults.length > 0) {
+    const first = stillErrored[0].__error;
+    throw new Error('All strips failed to transcribe: ' + (first && first.message ? first.message : 'unknown error'));
+  }
+
+  const okResults = stripResults.map((r) => (r && !r.__error) ? r : { raw_text: '', suggestions: [] });
+  const raw_text = okResults.map((r) => (r.raw_text || '').trim()).filter(Boolean).join('\n\n');
+  const suggestions = mergeSuggestions(okResults.map((r) => r.suggestions || []));
+  const costUsd = okResults.reduce((sum, r) => sum + (r.costUsd || 0), 0);
 
   return {
     raw_text, suggestions,
@@ -132,12 +179,15 @@ async function runPipeline(input, opts) {
       stripCutMs: cut.wallMs,
       stripCount: cut.strips.length,
       transcribeMs,
-      perStripMs: stripResults.map((r) => r.wallMs),
+      perStripMs: okResults.map((r) => r.wallMs || null),
     },
     meta: {
       deskewDeg: pre.meta.deskewDeg,
       detectedLines: cut.meta.detectedLines,
       fallbackUsed: cut.meta.fallbackUsed,
+      failedStripCount: stillErrored.length,
+      retriedStripCount: retriedIdx.length,
+      partial: stillErrored.length > 0,
     },
   };
 }
