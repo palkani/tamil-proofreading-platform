@@ -145,21 +145,13 @@ jobs:
       # Vercel Pro (60s timeout — Hobby's 10s isn't enough for a
       # 15-20s pipeline). Consolidated here to keep infra simpler.
 
-      - name: Verify Backend Health (Both Regions)
+      - name: Verify Backend Health
         run: |
           sleep 10
-          echo "=== Asia South (Mumbai) ==="
+          echo "=== Asia South (Mumbai) — sole backend region ==="
           BACKEND_URL=$(gcloud run services describe prooftamil-backend --region=${{ env.REGION }} --format='value(status.url)')
           echo "Backend URL: $BACKEND_URL"
           curl -f "$BACKEND_URL/health" || echo "Health check pending..."
-
-          echo ""
-          echo "=== US Central ==="
-          BACKEND_URL_US=$(gcloud run services describe prooftamil-backend-us --region=us-central1 --format='value(status.url)' 2>/dev/null) || echo "US backend not yet deployed"
-          if [ -n "$BACKEND_URL_US" ]; then
-            echo "Backend URL (US): $BACKEND_URL_US"
-            curl -f "$BACKEND_URL_US/health" || echo "US health check pending..."
-          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -192,43 +184,37 @@ jobs:
             exit 1
           fi
 
-      # Automatically sync the freshly-deployed Cloud Run URLs into Vercel's
-      # production environment so the frontend always routes to the right backend.
-      # Uses the Vercel CLI (not the REST API) so VERCEL_ORG_ID / VERCEL_PROJECT_ID
-      # are resolved correctly regardless of whether they are stored as slugs or IDs.
-      - name: Sync Cloud Run URLs to Vercel environment
+      # Sync Vercel production env vars managed by this deploy.
+      #
+      # BACKEND_URL is NO LONGER auto-synced. It is now managed manually in the
+      # Vercel dashboard, pointing at prooftamil-backend in asia-south1. Reason:
+      # the previous auto-sync was re-creating BACKEND_URL_US / _ASIA / _PRIMARY
+      # on every run, resurrecting env vars that had been deliberately deleted
+      # and causing the frontend to route to the retired us-central1 backend
+      # (login broke twice this way). Backend consolidation lives on manually
+      # managed BACKEND_URL now — see express-frontend/utils/regional-backend.js
+      # for how it falls through when the regional vars are absent.
+      #
+      # As a one-time cleanup, we also REMOVE the three stale regional vars if
+      # they exist (from any prior deploy). vercel env rm is idempotent — no
+      # error if the var was already deleted.
+      - name: Sync Vercel production env vars
         run: |
-          # Prefer explicit GitHub secrets (CLOUD_RUN_URL_ASIA / CLOUD_RUN_URL_US) so the
-          # stable project-number URLs are used instead of the auto-generated hash URLs that
-          # `gcloud run services describe` may return (e.g. *-aspwcdiala-el.a.run.app vs
-          # *-991187041222.asia-south1.run.app).  Fall back to gcloud if secrets are absent.
-          if [ -n "$CLOUD_RUN_URL_ASIA" ]; then
-            ASIA_URL="$CLOUD_RUN_URL_ASIA"
-          else
-            ASIA_URL=$(gcloud run services describe prooftamil-backend \
-              --region=asia-south1 --format='value(status.url)')
-          fi
-
-          if [ -n "$CLOUD_RUN_URL_US" ]; then
-            US_URL="$CLOUD_RUN_URL_US"
-          else
-            US_URL=$(gcloud run services describe prooftamil-backend-us \
-              --region=us-central1 --format='value(status.url)' 2>/dev/null || echo "")
-          fi
-
-          echo "Asia backend: $ASIA_URL"
-          echo "US backend:   ${US_URL:-not deployed}"
-
-          if [ -z "$ASIA_URL" ]; then
-            echo "ERROR: Asia backend URL not found"
-            exit 1
-          fi
-
           npm install --global vercel@latest --quiet
 
-          # Set/overwrite a Vercel production env var using the CLI.
-          # vercel env rm removes only the production target (ignores error if absent).
-          # vercel env add reads value from stdin; --yes skips any confirmation prompt.
+          # Defensive cleanup — remove the three regional URL vars that used to
+          # be auto-created. Safe to run repeatedly (errors when absent are
+          # swallowed).
+          for stale in BACKEND_URL_ASIA BACKEND_URL_US BACKEND_URL_PRIMARY; do
+            echo "  Removing stale $stale (if present)"
+            vercel env rm "$stale" production \
+              --token="$VERCEL_TOKEN" --yes 2>/dev/null || true
+          done
+
+          # Keep syncing the OCR v2 beta allowlist — this is a config value
+          # that legitimately belongs in code (see middleware/ocrV2Beta.js).
+          # Comma-separated emails that see the new pipeline UI at
+          # /tools/handwriting-ocr; everyone else sees the maintenance page.
           set_env() {
             local KEY="$1" VALUE="$2"
             echo "  Setting $KEY"
@@ -239,20 +225,6 @@ jobs:
               --token="$VERCEL_TOKEN" --yes
             echo "  Done: $KEY"
           }
-
-          set_env BACKEND_URL_ASIA "$ASIA_URL"
-
-          if [ -n "$US_URL" ]; then
-            set_env BACKEND_URL_US      "$US_URL"
-            # BACKEND_URL_PRIMARY is the fixed OAuth callback URL — always US.
-            set_env BACKEND_URL_PRIMARY "$US_URL"
-          fi
-
-          # OCR v2 beta allowlist — comma-separated emails that see the
-          # new pipeline UI at /tools/handwriting-ocr. Everyone else
-          # still sees the maintenance page. Expand this list as we
-          # roll out to more users. (The pipeline itself now runs
-          # inline in Express — no separate service URL needed.)
           set_env OCR_V2_BETA_EMAILS "contact@prooftamil.com"
 
           echo "Vercel env vars synced."
@@ -260,10 +232,6 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          # Optional overrides — set these in GitHub secrets to pin the stable
-          # project-number Cloud Run URLs instead of relying on gcloud output.
-          CLOUD_RUN_URL_ASIA: ${{ secrets.CLOUD_RUN_URL_ASIA }}
-          CLOUD_RUN_URL_US: ${{ secrets.CLOUD_RUN_URL_US }}
 
       - name: Deploy Frontend to Vercel
         run: |
