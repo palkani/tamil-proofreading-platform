@@ -224,7 +224,7 @@
       // show emails after the page has moved on.
       visibleRows.forEach((u) => knownUsers.set(u.id, { email: u.email || '', name: u.name || '' }));
       tbody.innerHTML = visibleRows.map(function (u) {
-        const planBadge = u.subscription === 'pro'
+        const planBadge = String(u.subscription || '').toLowerCase().startsWith('pro')
           ? badge('Pro', 'green')
           : badge('Free', 'slate');
         const overrideBadge = u.premium_override ? ' ' + badge('override', 'amber') : '';
@@ -233,7 +233,7 @@
         // the same BC rules the runtime uses (missing entitlements +
         // is_premium=true → grant all). Full detail is on the user
         // detail page's Feature Access table.
-        const isPremium = !!(u.subscription === 'pro' || u.premium_override);
+        const isPremium = !!(String(u.subscription || '').toLowerCase().startsWith('pro') || u.premium_override);
         const ents = Array.isArray(u.entitlements) ? u.entitlements : null;
         const hasF = (f) => isPremium && (!ents || ents.includes(f));
         const dot = (letter, on, title) =>
