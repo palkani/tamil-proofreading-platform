@@ -53,11 +53,18 @@ const SHARED_LITE_CHECKOUT = 'https://checkout.dodopayments.com/buy/pdt_0NmSZ8Cl
 
 const STATIC_CODES = {
   // ── Proofreading-only Pro Lite ────────────────────────────────────
+  //     PROOFPROLITE is priced at ₹400/mo for Indian customers — cheaper than
+  //     the other two Lite codes (₹600) to make proofreading-only the entry
+  //     tier for new writers. IMPORTANT: display_price here is UI-only; the
+  //     Dodo product at SHARED_LITE_CHECKOUT still charges ₹600. When
+  //     ready, create a dedicated ₹400 Dodo product for PROOFPROLITE and
+  //     replace checkout_url below — until then, customers will see ₹400 in
+  //     our UI and ₹600 at Dodo's checkout screen.
   'PROOFPROLITE': {
     plan_code:        'PRO_PROOFREAD_LITE',
     label:            'Proofreading Pro Lite',
-    price_cents:      60000,             // ₹600.00
-    display_price:    '600',
+    price_cents:      40000,             // ₹400.00
+    display_price:    '400',
     currency:         'INR',
     billing_interval: 'month',
     entitlements:     ['proofreading', 'export', 'ai_writer'],
