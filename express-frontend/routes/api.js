@@ -1824,15 +1824,9 @@ try {
           apiKeys,
           timeoutMs: 55_000,
         });
-        // Consume one monthly credit ONLY on a successful extraction — a
-        // failed upload never burns the user's single free upload. An
-        // "illegible" document-mode response is also treated as a
-        // non-consuming failure: Gemini honestly refused to transcribe
-        // (typical for pre-1947 cursive manuscripts), so charging the
-        // user's monthly quota for a refusal would feel like a bug.
-        if (!r.illegible) {
-          await ocrMonthlyLimit.recordSuccess(req);
-        }
+        // Consume one monthly credit only on a successful extraction — a
+        // failed upload throws above and never reaches this line.
+        await ocrMonthlyLimit.recordSuccess(req);
         res.json({
           raw_text: r.raw_text,
           suggestions: r.suggestions,
