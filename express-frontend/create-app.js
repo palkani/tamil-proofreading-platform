@@ -268,11 +268,18 @@ function createApp() {
   app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
     console.error(err.stack);
     // Any client-parsed-as-JSON endpoint must return JSON — never HTML.
-    // Both /api/* and /auth/* are called via fetch() and the client
-    // pipes the response through res.json(); an HTML error page there
-    // surfaces to the user as the misleading "Unexpected token '<'"
-    // instead of the real error.
-    const wantsJson = req.path.startsWith('/api/') || req.path.startsWith('/auth/');
+    // /api/* is called via fetch() and the client pipes the response
+    // through res.json(); an HTML error page there surfaces as the
+    // misleading "Unexpected token '<'" instead of the real error.
+    //
+    // /auth/* is trickier: POST /auth/login etc. are fetch-JSON, but
+    // GET /auth/google and GET /auth/google/callback are FULL-PAGE
+    // browser navigations from the Google OAuth handshake. Returning
+    // JSON on those renders raw `{"error":"..."}` in the browser
+    // address bar. Restrict the JSON branch to POST /auth/* only —
+    // OAuth GETs fall through to the HTML error page.
+    const isAuthPath = req.path.startsWith('/auth/');
+    const wantsJson = req.path.startsWith('/api/') || (isAuthPath && req.method === 'POST');
     if (wantsJson) {
       const status = err.status || err.statusCode || 500;
       return res.status(status).json({
