@@ -4168,7 +4168,7 @@ router.post('/account/delete-request', async (req, res) => {
 // the UI can show a friendly "codes not active yet, contact us"
 // message instead of crashing. MUST be declared before the catch-all.
 // ─────────────────────────────────────────────────────────────────────
-router.post('/promo-code/validate', express.json(), async (req, res) => {
+router.post('/promo-code/validate', async (req, res) => {
   const code = String(req.body?.code || '').trim();
   const countryCode = String(req.body?.country_code || '').toUpperCase().slice(0, 2) || 'US';
   if (!code) return res.status(400).json({ valid: false, error: 'code_required', message: 'Enter your activation code.' });

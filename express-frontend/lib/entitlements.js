@@ -92,8 +92,9 @@ function planLabel(billing) {
   const code = String(billing.plan_code || '').toUpperCase();
   if (code.startsWith('PRO_PROOFREAD_LITE')) return 'Pro · Proofreading Lite';
   if (code.startsWith('PRO_OCR_LITE'))       return 'Pro · OCR Lite';
-  if (code.startsWith('PRO_'))               return 'Pro';
-  return 'Pro'; // BC: existing subscribers without a lite prefix
+  // Everything else premium — including existing subscribers with an
+  // empty/unknown plan_code (BC) — is Full Pro.
+  return 'Pro';
 }
 
 module.exports = { hasFeature, planLabel, isPaidWithoutFeature, FEATURES };
