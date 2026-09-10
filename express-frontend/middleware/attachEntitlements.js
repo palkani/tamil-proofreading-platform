@@ -12,7 +12,7 @@
  * need a fetch per feature check.
  *
  * This middleware does one billing/me fetch per authenticated page
- * render and stashes:
+ * render (with a small in-memory cache) and stashes:
  *   res.locals.billing          — raw billing object (or null)
  *   res.locals.hasFeature       — (feature) => boolean, from lib/entitlements
  *   res.locals.planLabel        — "Free" | "Pro" | "Pro · OCR Lite" | …
@@ -22,15 +22,12 @@
  * Templates can then do:
  *   <% if (hasFeature('ocr')) { %> …OCR nav link… <% } %>
  *
- * Perf caveats
- * ────────────
- * Adds one ~50-500ms HTTP hop to Cloud Run for every authenticated page
- * request. Acceptable at current scale; consider a per-user in-memory
- * cache (e.g. 30 s TTL keyed by user id) if page render P95 becomes an
- * issue. Anonymous requests skip the fetch entirely.
- *
- * Cache poisoning risk: none — we only cache in req/res scope, never
- * cross-request.
+ * Perf notes
+ * ──────────
+ * - Uses a keep-alive HTTP agent (like axiosWithPool in routes/*) so
+ *   authenticated pages don't pay a fresh TCP+TLS handshake each time.
+ * - Caches billing/me per user for 30 s in memory to short-circuit
+ *   repeat renders in the same nav burst.
  *
  * Failure posture
  * ───────────────
@@ -41,25 +38,84 @@
  */
 
 const axios = require('axios');
+const http = require('node:http');
+const https = require('node:https');
 const { hasFeature, planLabel } = require('../lib/entitlements');
 
+const httpAgent  = new http.Agent({ keepAlive: true, maxSockets: 50, maxFreeSockets: 25, timeout: 30000 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50, maxFreeSockets: 25, timeout: 30000 });
+const pooledAxios = axios.create({ httpAgent, httpsAgent, timeout: 3000 });
+
+// Small in-memory per-user cache. Keyed by user id (or email as fallback).
+// 30-second TTL — long enough to absorb a nav burst, short enough that
+// a plan change is picked up before the user notices. Bounded LRU via
+// simple size cap; enough for a single-instance workload.
+const CACHE_TTL_MS = 30_000;
+const CACHE_MAX = 500;
+const billingCache = new Map();  // key -> { billing, expiresAt }
+
+function cacheGet(key) {
+  const entry = billingCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    billingCache.delete(key);
+    return null;
+  }
+  return entry.billing;
+}
+
+function cacheSet(key, billing) {
+  if (billingCache.size >= CACHE_MAX) {
+    // Simple eviction — drop the oldest entry (Map preserves insertion order).
+    const oldest = billingCache.keys().next().value;
+    if (oldest) billingCache.delete(oldest);
+  }
+  billingCache.set(key, { billing, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
+// Resolve the backend URL the same way every OTHER billing consumer does
+// (ocrMonthlyLimit.js, routes/index.js pricing route, etc.). Reading
+// req._backendUrl here does NOT work — attachEntitlements is registered
+// at app-scope, before the router-scope middleware that stamps that field.
+function resolveBackendUrl() {
+  const raw = process.env.BACKEND_URL_US
+    || process.env.BACKEND_URL_ASIA
+    || process.env.BACKEND_URL
+    || '';
+  return raw.replace(/\/$/, '');
+}
+
 async function attachEntitlements(req, res, next) {
-  // Default: no entitlements. Templates should ALWAYS be able to call
-  // res.locals.hasFeature() safely, whether the user is anon, the backend
-  // is down, or entitlements simply aren't populated.
+  // Defaults — templates and downstream API handlers can always call
+  // hasFeature() safely, whether the user is anon, backend is down, or
+  // entitlements aren't populated. Set BOTH req.* and res.locals.* up
+  // front so error paths can't leave req.hasFeature undefined.
+  const noFeature = () => false;
   res.locals.billing = null;
-  res.locals.hasFeature = () => false;
+  res.locals.hasFeature = noFeature;
   res.locals.planLabel = 'Free';
+  req.billing = null;
+  req.hasFeature = noFeature;
 
   if (!req.user || !req.cookies?.access_token) return next();
 
-  const backend = (req._backendUrl || process.env.BACKEND_URL || '').replace(/\/$/, '');
+  const backend = resolveBackendUrl();
   if (!backend) return next();
 
+  const cacheKey = req.user.id || req.user.email;
+  const cached = cacheKey && cacheGet(cacheKey);
+  if (cached) {
+    res.locals.billing    = cached;
+    res.locals.hasFeature = (feature) => hasFeature(cached, feature);
+    res.locals.planLabel  = planLabel(cached);
+    req.billing           = cached;
+    req.hasFeature        = res.locals.hasFeature;
+    return next();
+  }
+
   try {
-    const resp = await axios.get(backend + '/api/v1/billing/me', {
+    const resp = await pooledAxios.get(backend + '/api/v1/billing/me', {
       headers: { Authorization: 'Bearer ' + req.cookies.access_token },
-      timeout: 3000,
       validateStatus: () => true,
     });
     if (resp.status === 200 && resp.data && resp.data.billing) {
@@ -69,9 +125,10 @@ async function attachEntitlements(req, res, next) {
       res.locals.planLabel  = planLabel(billing);
       req.billing           = billing;
       req.hasFeature        = res.locals.hasFeature;
+      if (cacheKey) cacheSet(cacheKey, billing);
     }
   } catch (err) {
-    // Fail-quiet — templates default to free-tier behaviour.
+    // Fail-quiet — defaults above stand.
     console.warn('[attachEntitlements] billing/me fetch failed:', err.message);
   }
   return next();
