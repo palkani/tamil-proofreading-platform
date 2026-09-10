@@ -20,11 +20,19 @@
    * Entry point — called from pricing page and workspace upgrade modal.
    * @param {string} planCode    e.g. 'PRO_MONTHLY' | 'PRO_YEARLY'
    * @param {string} countryCode e.g. 'IN' | 'US'
+   * @param {object} [options]   optional:
+   *                               - promo_code: forwarded to backend to
+   *                                 apply promo pricing/entitlements on
+   *                                 the resulting Dodo checkout session
    */
-  window.startCheckout = async function startCheckout(planCode, countryCode) {
+  window.startCheckout = async function startCheckout(planCode, countryCode, options) {
+    var opts = options || {};
+    var promoCode = opts.promo_code ? String(opts.promo_code).trim() : '';
+
     // Require login before attempting checkout
     if (!window.USER_LOGGED_IN && !window.USER_EMAIL) {
       var afterAuthUrl = '/pricing?auto_checkout=' + encodeURIComponent(planCode);
+      if (promoCode) afterAuthUrl += '&promo_code=' + encodeURIComponent(promoCode);
       window.location.href = '/login?redirect=' + encodeURIComponent(afterAuthUrl);
       return;
     }
@@ -42,14 +50,22 @@
     }
 
     try {
+      var body = {
+        plan_code: planCode,
+        country_code: countryCode || 'US',
+      };
+      // Forward promo_code so the backend can re-validate server-side and
+      // apply the promo's price + entitlements to the Dodo session. Backend
+      // must trust ONLY server-validated codes — never render the client
+      // string directly onto the session amount. See
+      // PROMO_CODES_BACKEND_CONTRACT.md for the full contract.
+      if (promoCode) body.promo_code = promoCode;
+
       var res = await fetch('/api/v1/billing/checkout-session', {
         method: 'POST',
         headers: _authHeaders(),
         credentials: 'include',
-        body: JSON.stringify({
-          plan_code: planCode,
-          country_code: countryCode || 'US',
-        }),
+        body: JSON.stringify(body),
       });
 
       var data = await res.json().catch(function () { return {}; });
