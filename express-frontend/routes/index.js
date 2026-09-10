@@ -837,17 +837,10 @@ router.get('/pricing', async (req, res) => {
       seo,
       user,
       paymentsEnabled: false,
-      monthly: null,
-      yearly: null,
-      // Passed through so the view can always safely reference these
-      // fields without an EJS ReferenceError on the payments-disabled
-      // preview render.
-      proofreadLiteMonthly: null,
-      proofreadLiteYearly: null,
-      ocrLiteMonthly: null,
-      ocrLiteYearly: null,
       countryCode: 'US',
-      error: false
+      monthly: null,
+      error: false,
+      pricingFromCache: false,
     });
   }
 
@@ -874,47 +867,31 @@ router.get('/pricing', async (req, res) => {
     return { ...p, display_price: displayPrice, currency };
   };
 
-  // Fallback pricing when API fails. Lite prices default to ~60% of
-  // Full Pro (each Lite covers one feature area). Backend can override
-  // via /api/v1/billing/pricing?plan_code=... at any time — these
-  // constants are only used when that endpoint is unreachable.
+  // Fallback pricing when the backend pricing endpoint fails. Backend
+  // can override via /api/v1/billing/pricing?plan_code=... at any time —
+  // this constant is only used when that endpoint is unreachable.
   const fallbackPricing = (countryCode) => {
     const isIndia = countryCode === 'IN';
     return {
-      monthly: isIndia ? { display_price: '1000', currency: 'INR' } : { display_price: '12.00', currency: 'USD' },
-      yearly:  isIndia ? { display_price: '9599', currency: 'INR' } : { display_price: '115.20', currency: 'USD' },
-      proofreadLiteMonthly: isIndia ? { display_price: '599', currency: 'INR' } : { display_price: '7.00',  currency: 'USD' },
-      proofreadLiteYearly:  isIndia ? { display_price: '5750', currency: 'INR' } : { display_price: '69.00', currency: 'USD' },
-      ocrLiteMonthly:       isIndia ? { display_price: '599', currency: 'INR' } : { display_price: '7.00',  currency: 'USD' },
-      ocrLiteYearly:        isIndia ? { display_price: '5750', currency: 'INR' } : { display_price: '69.00', currency: 'USD' },
+      monthly: isIndia
+        ? { display_price: '1000', currency: 'INR' }
+        : { display_price: '12.00', currency: 'USD' },
     };
   };
 
   try {
     const backendUrl = (process.env.BACKEND_URL_PRIMARY || process.env.BACKEND_URL || 'http://localhost:8080').replace(/\/$/, '');
-    // Fetch all six plan codes in parallel. Each call is best-effort —
-    // if the backend hasn't provisioned a plan yet, we fall back to the
-    // constant above for that specific plan without blocking the page.
-    const fetchPlan = (code) => axiosWithPool.get(
-      `${backendUrl}/api/v1/billing/pricing?plan_code=${code}&country_code=${countryCode}`,
+    // The rebuilt pricing.ejs only surfaces the Full Pro monthly card —
+    // Yearly and the four Lite variants were removed. Fetching those
+    // codes here just to discard them wastes Cloud Run calls per render.
+    // Add the fetch back only when the view starts rendering them again.
+    const monthlyResp = await axiosWithPool.get(
+      `${backendUrl}/api/v1/billing/pricing?plan_code=PRO_MONTHLY&country_code=${countryCode}`,
       { validateStatus: () => true }
-    ).then((r) => normalizePricing(r.status === 200 ? r.data : null)).catch(() => null);
+    ).catch(() => null);
 
-    const [
-      monthly, yearly,
-      proofreadLiteMonthly, proofreadLiteYearly,
-      ocrLiteMonthly, ocrLiteYearly,
-    ] = await Promise.all([
-      fetchPlan('PRO_MONTHLY'),
-      fetchPlan('PRO_YEARLY'),
-      fetchPlan('PRO_PROOFREAD_LITE_MONTHLY'),
-      fetchPlan('PRO_PROOFREAD_LITE_YEARLY'),
-      fetchPlan('PRO_OCR_LITE_MONTHLY'),
-      fetchPlan('PRO_OCR_LITE_YEARLY'),
-    ]);
-
+    const monthly = normalizePricing(monthlyResp && monthlyResp.status === 200 ? monthlyResp.data : null);
     const fallback = fallbackPricing(countryCode);
-    const apiFailed = !monthly && !yearly && !proofreadLiteMonthly && !ocrLiteMonthly;
 
     res.render('pages/pricing', {
       title: seo.title,
@@ -922,14 +899,9 @@ router.get('/pricing', async (req, res) => {
       user,
       paymentsEnabled: true,
       countryCode,
-      monthly:              monthly              || fallback.monthly,
-      yearly:               yearly               || fallback.yearly,
-      proofreadLiteMonthly: proofreadLiteMonthly || fallback.proofreadLiteMonthly,
-      proofreadLiteYearly:  proofreadLiteYearly  || fallback.proofreadLiteYearly,
-      ocrLiteMonthly:       ocrLiteMonthly       || fallback.ocrLiteMonthly,
-      ocrLiteYearly:        ocrLiteYearly        || fallback.ocrLiteYearly,
+      monthly: monthly || fallback.monthly,
       error: false,
-      pricingFromCache: apiFailed
+      pricingFromCache: !monthly,
     });
   } catch (_err) {
     console.error('[PRICING] Failed to fetch pricing:', _err.message);
@@ -939,15 +911,10 @@ router.get('/pricing', async (req, res) => {
       seo,
       user,
       paymentsEnabled: true,
-      monthly: fallback.monthly,
-      yearly: fallback.yearly,
-      proofreadLiteMonthly: fallback.proofreadLiteMonthly,
-      proofreadLiteYearly: fallback.proofreadLiteYearly,
-      ocrLiteMonthly: fallback.ocrLiteMonthly,
-      ocrLiteYearly: fallback.ocrLiteYearly,
       countryCode,
+      monthly: fallback.monthly,
       error: false,
-      pricingFromCache: true
+      pricingFromCache: true,
     });
   }
 });
