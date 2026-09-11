@@ -4173,17 +4173,31 @@ router.post('/promo-code/validate', async (req, res) => {
   const countryCode = String(req.body?.country_code || '').toUpperCase().slice(0, 2) || 'US';
   if (!code) return res.status(400).json({ valid: false, error: 'code_required', message: 'Enter your activation code.' });
 
-  // 1) Static registry — the MVP path. Ships with a handful of
-  //    hand-curated codes, each pointing at a specific Dodo checkout
-  //    URL. See lib/promo-codes.js for the trade-off vs the full
-  //    dynamic backend system.
-  const { findCode } = require('../lib/promo-codes');
-  const staticEntry = findCode(code);
-  if (staticEntry) {
-    return res.json({ valid: true, plan: staticEntry });
+  // 1) Admin-generated DB codes (created via /admin/promo-codes) — win
+  //    over static entries with the same slug so admin action is
+  //    authoritative. Handles single-use + expiry + revocation +
+  //    optional target_email restriction inside lib/promo-codes-db.js.
+  //    2) Static registry (lib/promo-codes.js) is the fallback for the
+  //    hand-curated PROOFPROLITE / OCRPROLITE / PROOFTAMIL-LITE codes.
+  const { findCodeAsync } = require('../lib/promo-codes');
+  const entry = await findCodeAsync(code);
+  if (entry) {
+    // If the code is restricted to a specific email, gate here so a
+    // logged-in user with the wrong email can't quietly redeem it.
+    // Anon users see the plan preview and get the login prompt at
+    // click time — the /redeem endpoint enforces the same restriction
+    // authoritatively at that point.
+    if (entry.target_email && req.user?.email && entry.target_email !== String(req.user.email).toLowerCase()) {
+      return res.status(403).json({
+        valid: false,
+        error: 'code_not_for_this_account',
+        message: 'This code is reserved for a different account. Please sign in with the invited email.',
+      });
+    }
+    return res.json({ valid: true, plan: entry });
   }
 
-  // 2) Fall back to the backend's dynamic promo-code system. When the
+  // 3) Fall back to the backend's dynamic promo-code system. When the
   //    full contract (PROMO_CODES_BACKEND_CONTRACT.md) is
   //    implemented, this path handles unlimited codes with
   //    per-code price + entitlement lookups. Until then it returns
@@ -4199,9 +4213,6 @@ router.post('/promo-code/validate', async (req, res) => {
       { code, country_code: countryCode },
       { timeout: 8000, validateStatus: () => true }
     );
-    // Backend hasn't shipped the dynamic endpoint yet → tell the user
-    // the code isn't valid (which is true — we don't recognise it in
-    // either the static or dynamic registries).
     if (upstream.status === 404 || upstream.status === 501) {
       return res.status(404).json({ valid: false, error: 'code_not_found', message: 'That code is not valid or has expired. Please double-check with us.' });
     }
@@ -4210,6 +4221,71 @@ router.post('/promo-code/validate', async (req, res) => {
     console.error('[PROMO-VALIDATE] backend call failed:', err.message);
     return res.status(502).json({ valid: false, error: 'validation_service_unavailable', message: 'Could not check the code right now — please try again in a moment.' });
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Promo code REDEEM — marks a code single-use-consumed and returns the
+// authoritative checkout URL. Called from the pricing page's Continue
+// button IMMEDIATELY before we redirect the browser to Dodo.
+//
+// This is the ONLY server-authoritative single-use gate. /validate is
+// idempotent (a customer previewing a code with three tabs open must
+// still see the plan card three times); /redeem is not.
+//
+// Design decision — click-time redemption vs Dodo-webhook redemption:
+//   We mark the code redeemed WHEN THE USER CLICKS Continue, before
+//   the Dodo redirect fires. If the customer abandons the checkout,
+//   the code IS burned — admin can revoke and regenerate from the
+//   /admin/promo-codes console. The alternative (mark redeemed on a
+//   Dodo webhook after the payment succeeds) needs a webhook receiver
+//   Express doesn't have yet — deferred to a follow-up.
+//
+// Requires login — an anonymous click funnels to /login?redirect=...
+// on the client, so this endpoint should never see anonymous requests
+// in the happy path, but we hard-gate anyway.
+// ─────────────────────────────────────────────────────────────────────
+router.post('/promo-code/redeem', async (req, res) => {
+  const code = String(req.body?.code || '').trim();
+  if (!code) return res.status(400).json({ ok: false, error: 'code_required' });
+  const email = String(req.user?.email || '').trim().toLowerCase();
+  if (!email) return res.status(401).json({ ok: false, error: 'login_required' });
+
+  // Admin-DB codes are the only single-use codes. Static registry
+  // codes (PROOFPROLITE etc.) are shared — no redemption tracking,
+  // just resolve and hand back the same checkout_url every time.
+  const db = require('../lib/promo-codes-db');
+  const dbEntry = await db.redeem(code, email, {
+    ip:        req.headers['x-forwarded-for'] || req.ip || null,
+    userAgent: String(req.headers['user-agent'] || '').slice(0, 500) || null,
+  });
+  if (dbEntry) {
+    return res.json({
+      ok: true,
+      checkout_url: dbEntry.checkout_url,
+      plan_code:    dbEntry.plan_code,
+      label:        dbEntry.label,
+    });
+  }
+
+  // Not in the DB (or already redeemed / revoked / expired / email
+  // mismatch — db.redeem() returns null for all failure modes).
+  // Try the static registry as a fallback so the shared PROOFPROLITE
+  // etc. codes still work through the same click path.
+  const { findCode } = require('../lib/promo-codes');
+  const staticEntry = findCode(code);
+  if (staticEntry) {
+    return res.json({
+      ok: true,
+      checkout_url: staticEntry.checkout_url,
+      plan_code:    staticEntry.plan_code,
+      label:        staticEntry.label,
+    });
+  }
+  return res.status(404).json({
+    ok: false,
+    error: 'code_not_redeemable',
+    message: 'This code is not valid, has already been used, or has expired.',
+  });
 });
 
 // Proxy other API calls to Go backend

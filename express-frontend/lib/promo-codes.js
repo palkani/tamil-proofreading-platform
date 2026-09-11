@@ -134,4 +134,21 @@ function knownCodes() {
   return Object.keys(STATIC_CODES);
 }
 
-module.exports = { findCode, knownCodes };
+/**
+ * Async lookup that checks the admin-generated codes table FIRST
+ * (lib/promo-codes-db.js), then falls back to findCode() above and
+ * the env-var override. Use this from any new code path — the sync
+ * findCode() is kept for the static-only path in tests / dev where
+ * the Supabase env isn't wired up.
+ *
+ * DB codes shadow both static entries and env-var overrides — an
+ * admin regenerating a code in production is authoritative.
+ */
+async function findCodeAsync(code) {
+  const db = require('./promo-codes-db');
+  const fromDb = await db.findCode(code).catch(() => null);
+  if (fromDb) return fromDb;
+  return findCode(code);
+}
+
+module.exports = { findCode, findCodeAsync, knownCodes };
