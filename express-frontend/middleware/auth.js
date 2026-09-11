@@ -33,6 +33,30 @@ const getAccessTokenFromRequest = (req) => {
 };
 
 const attachUser = (req, res, next) => {
+  // ── DEV-ONLY AUTH BYPASS ─────────────────────────────────────────
+  // When DEV_FAKE_USER_EMAIL is set AND NODE_ENV !== 'production', pretend
+  // this request is signed in as that email. Lets a developer test any
+  // authenticated flow locally without running the JWT-issuing backend.
+  // Both guards must line up — Vercel automatically sets NODE_ENV=production,
+  // so even if DEV_FAKE_USER_EMAIL somehow leaked to Vercel env vars, this
+  // path cannot fire in prod. Not for production use.
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    process.env.DEV_FAKE_USER_EMAIL
+  ) {
+    const email = String(process.env.DEV_FAKE_USER_EMAIL).toLowerCase().trim();
+    const { isAdminEmail } = require('./admin');
+    req.user = {
+      id: 'dev-fake-user',
+      email,
+      name: email.split('@')[0],
+      role: isAdminEmail(email) ? 'admin' : 'user',
+      profile_picture: null,
+      isAdmin: isAdminEmail(email),
+    };
+    return next();
+  }
+
   try {
     const token = getAccessTokenFromRequest(req);
     if (!token) {
