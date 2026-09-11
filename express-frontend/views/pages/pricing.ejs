@@ -410,37 +410,74 @@
     }
   }
 
-  document.getElementById('promo-checkout-btn').addEventListener('click', function () {
+  document.getElementById('promo-checkout-btn').addEventListener('click', async function () {
     if (!lastValidatedPlan) return;
+    var btn = this;
+    var enteredCode = input.value.trim();
     if (!USER_LOGGED_IN) {
       // Route through login → post-auth auto-checkout, same pattern as
       // the old plan-card CTAs. Login preserves the code so we can
       // re-validate + redirect after auth.
-      var target = encodeURIComponent('/pricing?activate=' + encodeURIComponent(input.value.trim()));
+      var target = encodeURIComponent('/pricing?activate=' + encodeURIComponent(enteredCode));
       window.location.href = '/login?redirect=' + target;
       return;
     }
-    // PATH A — static registry hit: plan.checkout_url is a direct Dodo
-    // link. Redirect through the /checkout/redirecting interstitial so
-    // (a) the user sees a "you're leaving to secure checkout" screen
-    // and (b) the Back button after Dodo returns them to prooftamil,
-    // not out of the app.
-    if (lastValidatedPlan.checkout_url) {
-      var url = lastValidatedPlan.checkout_url;
-      window.location.href = '/checkout/redirecting?url=' + encodeURIComponent(url) +
-        '&plan=' + encodeURIComponent(lastValidatedPlan.plan_code || 'PROMO');
-      return;
-    }
-    // PATH B — dynamic backend system: hand off to payment.js which
-    // calls /api/v1/billing/checkout with promo_code so backend builds
-    // the Dodo session with a price override. See
-    // PROMO_CODES_BACKEND_CONTRACT.md.
-    if (typeof startCheckout === 'function') {
-      startCheckout(lastValidatedPlan.plan_code || 'PROMO', COUNTRY, { promo_code: input.value.trim() });
-    } else {
-      window.location.href = '/api/v1/billing/checkout?plan_code=' + encodeURIComponent(lastValidatedPlan.plan_code || 'PROMO') +
-        '&promo_code=' + encodeURIComponent(input.value.trim()) +
-        '&country_code=' + COUNTRY;
+
+    // Server-authoritative single-use redemption. For admin-generated
+    // DB codes this marks redeemed_at NOW and appends an audit row —
+    // two concurrent tabs racing to redeem the same code both hit the
+    // same UPDATE ... WHERE guard, so only one wins.  For static-
+    // registry codes (PROOFPROLITE etc.) redeem is a no-op that just
+    // returns the same checkout_url every time.
+    //
+    // The server-returned checkout_url is authoritative — we never
+    // trust the client-side lastValidatedPlan.checkout_url for the
+    // actual redirect, because an admin could have rotated the URL
+    // between validate and click.
+    btn.disabled = true;
+    var origLabel = btn.textContent;
+    btn.textContent = 'Processing…';
+    try {
+      var res = await fetch('/api/promo-code/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ code: enteredCode }),
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok || !data.ok) {
+        var msg = data.message || data.error || 'This code cannot be redeemed. It may have been used already or expired.';
+        alert(msg);
+        btn.disabled = false;
+        btn.textContent = origLabel;
+        return;
+      }
+
+      // PATH A — direct Dodo link (both static registry and admin-DB
+      // codes return checkout_url). Redirect through the /checkout/
+      // redirecting interstitial so the user sees a "you're leaving
+      // to secure checkout" screen and Back returns them to us.
+      if (data.checkout_url) {
+        window.location.href = '/checkout/redirecting?url=' + encodeURIComponent(data.checkout_url) +
+          '&plan=' + encodeURIComponent(data.plan_code || 'PROMO');
+        return;
+      }
+
+      // PATH B — dynamic backend system (Go builds the Dodo session
+      // with a promo-code price override — full contract in
+      // PROMO_CODES_BACKEND_CONTRACT.md). Reached only if /redeem
+      // succeeds without returning a checkout_url.
+      if (typeof startCheckout === 'function') {
+        startCheckout(data.plan_code || 'PROMO', COUNTRY, { promo_code: enteredCode });
+      } else {
+        window.location.href = '/api/v1/billing/checkout?plan_code=' + encodeURIComponent(data.plan_code || 'PROMO') +
+          '&promo_code=' + encodeURIComponent(enteredCode) +
+          '&country_code=' + COUNTRY;
+      }
+    } catch (err) {
+      alert('Network error — please try again.');
+      btn.disabled = false;
+      btn.textContent = origLabel;
     }
   });
 
