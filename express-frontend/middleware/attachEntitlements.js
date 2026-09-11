@@ -42,6 +42,93 @@ const http = require('node:http');
 const https = require('node:https');
 const { hasFeature, planLabel } = require('../lib/entitlements');
 
+// ── Admin tier preview ───────────────────────────────────────────────
+// Admins can preview any plan tier by adding `?preview_tier=X` to any URL:
+//
+//   ?preview_tier=free                 → is_premium:false, entitlements:[]
+//   ?preview_tier=proofreading_lite    → is_premium:true, no OCR
+//   ?preview_tier=ocr_lite             → is_premium:true, ONLY ocr
+//   ?preview_tier=full_pro             → is_premium:true, all four
+//   ?preview_entitlements=proofreading,export  → arbitrary custom set
+//   ?preview_tier=off                  → clear preview mode
+//
+// The tier is persisted in a signed cookie so it survives navigation
+// without needing the query param on every URL. Only fires for signed-in
+// admins (req.user.isAdmin) — other users are unaffected. Safe in prod:
+// even if a non-admin adds ?preview_tier=X the middleware ignores it.
+//
+// The banner is set on res.locals.previewBanner so templates can surface
+// "You are previewing Proofreading Lite" — makes it impossible to
+// forget which tier you're testing as.
+const PREVIEW_COOKIE = 'preview_tier';
+const PREVIEW_TIERS = {
+  free:               { is_premium: false, entitlements: [], plan_code: 'FREE',                       label: 'Free' },
+  full_pro:           { is_premium: true,  entitlements: ['proofreading', 'ocr', 'export', 'ai_writer'], plan_code: 'PRO_MONTHLY',     label: 'Pro (full)' },
+  proofreading_lite:  { is_premium: true,  entitlements: ['proofreading', 'export', 'ai_writer'],       plan_code: 'PRO_PROOFREAD_LITE', label: 'Pro · Proofreading Lite' },
+  ocr_lite:           { is_premium: true,  entitlements: ['ocr'],                                        plan_code: 'PRO_OCR_LITE',       label: 'Pro · OCR Lite' },
+};
+
+function resolvePreviewBilling(req, res) {
+  if (!req.user?.isAdmin) return null;
+
+  const q = req.query || {};
+  const rawTier = String(q.preview_tier || '').trim().toLowerCase();
+  const rawEnts = String(q.preview_entitlements || '').trim();
+
+  // Explicit clear.
+  if (rawTier === 'off' || rawTier === 'none' || rawTier === 'clear') {
+    res.clearCookie(PREVIEW_COOKIE);
+    return null;
+  }
+
+  // Query param wins over cookie. When either is present, refresh the
+  // cookie so the preview persists across page navigations.
+  let source = null;
+  let billing = null;
+
+  if (rawEnts) {
+    const ents = rawEnts.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    billing = { is_premium: true, entitlements: ents, plan_code: 'PREVIEW_CUSTOM' };
+    source = 'ents:' + ents.join(',');
+  } else if (rawTier && PREVIEW_TIERS[rawTier]) {
+    billing = { ...PREVIEW_TIERS[rawTier] };
+    source = rawTier;
+  } else if (rawTier) {
+    // Unknown tier name — ignore, don't override.
+    return null;
+  } else {
+    // No query param — try the cookie.
+    const cookieTier = req.cookies && req.cookies[PREVIEW_COOKIE];
+    if (!cookieTier) return null;
+    if (cookieTier.startsWith('ents:')) {
+      const ents = cookieTier.slice(5).split(',').filter(Boolean);
+      billing = { is_premium: true, entitlements: ents, plan_code: 'PREVIEW_CUSTOM' };
+    } else if (PREVIEW_TIERS[cookieTier]) {
+      billing = { ...PREVIEW_TIERS[cookieTier] };
+    } else {
+      // Cookie carries a value we don't recognise — clear it.
+      res.clearCookie(PREVIEW_COOKIE);
+      return null;
+    }
+    source = cookieTier;
+  }
+
+  // Refresh the cookie (30 min TTL — short so a forgotten preview
+  // doesn't linger for days). httpOnly so a compromised page script
+  // can't read it; SameSite=lax so it survives normal navigations.
+  if (source) {
+    res.cookie(PREVIEW_COOKIE, source, {
+      maxAge: 30 * 60 * 1000,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    });
+    res.locals.previewBanner = 'Previewing tier: ' + (billing.label || source) + ' — add ?preview_tier=off to clear';
+    console.log(`[attachEntitlements] preview mode active for admin ${req.user?.email}: ${source}`);
+  }
+  return billing;
+}
+
 const httpAgent  = new http.Agent({ keepAlive: true, maxSockets: 50, maxFreeSockets: 25, timeout: 30000 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50, maxFreeSockets: 25, timeout: 30000 });
 const pooledAxios = axios.create({ httpAgent, httpsAgent, timeout: 3000 });
@@ -85,6 +172,14 @@ function resolveBackendUrl() {
   return raw.replace(/\/$/, '');
 }
 
+function applyBilling(req, res, billing) {
+  res.locals.billing    = billing;
+  res.locals.hasFeature = (feature) => hasFeature(billing, feature);
+  res.locals.planLabel  = planLabel(billing);
+  req.billing           = billing;
+  req.hasFeature        = res.locals.hasFeature;
+}
+
 async function attachEntitlements(req, res, next) {
   // Defaults — templates and downstream API handlers can always call
   // hasFeature() safely, whether the user is anon, backend is down, or
@@ -94,10 +189,21 @@ async function attachEntitlements(req, res, next) {
   res.locals.billing = null;
   res.locals.hasFeature = noFeature;
   res.locals.planLabel = 'Free';
+  res.locals.previewBanner = null;
   req.billing = null;
   req.hasFeature = noFeature;
 
   if (!req.user || !req.cookies?.access_token) return next();
+
+  // Admin preview override — if this signed-in user is an admin and
+  // ?preview_tier=X (or a saved cookie) is present, use the simulated
+  // billing shape INSTEAD of hitting the real backend. Bypasses the
+  // cache too so toggling tier is instant. Non-admins can't trigger this.
+  const previewBilling = resolvePreviewBilling(req, res);
+  if (previewBilling) {
+    applyBilling(req, res, previewBilling);
+    return next();
+  }
 
   const backend = resolveBackendUrl();
   if (!backend) return next();
@@ -105,11 +211,7 @@ async function attachEntitlements(req, res, next) {
   const cacheKey = req.user.id || req.user.email;
   const cached = cacheKey && cacheGet(cacheKey);
   if (cached) {
-    res.locals.billing    = cached;
-    res.locals.hasFeature = (feature) => hasFeature(cached, feature);
-    res.locals.planLabel  = planLabel(cached);
-    req.billing           = cached;
-    req.hasFeature        = res.locals.hasFeature;
+    applyBilling(req, res, cached);
     return next();
   }
 
@@ -120,11 +222,7 @@ async function attachEntitlements(req, res, next) {
     });
     if (resp.status === 200 && resp.data && resp.data.billing) {
       const billing = resp.data.billing;
-      res.locals.billing    = billing;
-      res.locals.hasFeature = (feature) => hasFeature(billing, feature);
-      res.locals.planLabel  = planLabel(billing);
-      req.billing           = billing;
-      req.hasFeature        = res.locals.hasFeature;
+      applyBilling(req, res, billing);
       if (cacheKey) cacheSet(cacheKey, billing);
     }
   } catch (err) {
