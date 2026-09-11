@@ -54,6 +54,7 @@ function commonLocals(req, activeTab) {
       { key: 'ai-requests', label: 'AI requests', href: '/admin/ai-requests', icon: 'chart' },
       { key: 'blog-generator', label: 'Blog generator', href: '/admin/blog-generator', icon: 'chart' },
       { key: 'communications', label: 'Communications', href: '/admin/communications', icon: 'mail' },
+      { key: 'promo-codes', label: 'Promo codes', href: '/admin/promo-codes', icon: 'tag' },
       { key: 'audit', label: 'Audit log', href: '/admin/audit', icon: 'alert' },
     ],
   };
@@ -283,6 +284,75 @@ router.post('/api/campaigns/ocr-launch/test-send', requireAdmin, express.json(),
     console.error('[campaign-test-send] failed:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// ---------- Promo codes (admin-generated single-use codes) ----------
+//
+// List / create / revoke / reset admin-generated promo codes stored in
+// the admin_promo_codes Supabase table. This is Express-local — no
+// backend proxy — because the codes DB is directly reachable from
+// Express (same pattern as the OCR usage table).
+//
+// Every route here uses express.json() explicitly (the global JSON
+// parser runs at app scope but declaring it inline keeps the intent
+// obvious for POST bodies coming from the admin form's fetch().
+const promoCodesDb = require('../lib/promo-codes-db');
+
+router.get('/promo-codes', requireAdmin, async (req, res) => {
+  const codes = await promoCodesDb.listAll({ limit: 200 });
+  res.render('pages/admin/promo-codes', {
+    title: 'Admin · Promo codes',
+    ...commonLocals(req, 'promo-codes'),
+    codes,
+    dbConfigured: promoCodesDb.isConfigured(),
+    // Suggested code prefills the "code" field in the form. Admin can
+    // overwrite; if left as-is or blank the server auto-generates.
+    suggestedCode: promoCodesDb.generateCode(),
+  });
+});
+
+router.post('/promo-codes', requireAdmin, express.json(), async (req, res) => {
+  const body = req.body || {};
+  // Normalise entitlements — form sends a comma-separated string OR
+  // an array (depending on how the client encoded it).
+  let ents = body.entitlements;
+  if (typeof ents === 'string') {
+    ents = ents.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  }
+  if (!Array.isArray(ents)) ents = [];
+
+  const result = await promoCodesDb.createCode({
+    code:             body.code,
+    label:            body.label,
+    price_cents:      body.price_cents,
+    currency:         body.currency,
+    plan_code:        body.plan_code,
+    billing_interval: body.billing_interval,
+    entitlements:     ents,
+    checkout_url:     body.checkout_url,
+    recurring_terms:  body.recurring_terms,
+    target_email:     body.target_email,
+    single_use:       body.single_use !== false && body.single_use !== 'false',
+    expires_at:       body.expires_at || null,
+    created_by_email: req.user?.email,
+    notes:            body.notes,
+  });
+  if (result && result.error) {
+    return res.status(400).json({ ok: false, ...result });
+  }
+  res.json({ ok: true, code: result });
+});
+
+router.post('/promo-codes/:code/revoke', requireAdmin, async (req, res) => {
+  const result = await promoCodesDb.revokeCode(req.params.code, req.user?.email);
+  if (result && result.error) return res.status(500).json({ ok: false, ...result });
+  res.json({ ok: true });
+});
+
+router.post('/promo-codes/:code/reset', requireAdmin, async (req, res) => {
+  const result = await promoCodesDb.resetRedemption(req.params.code);
+  if (result && result.error) return res.status(500).json({ ok: false, ...result });
+  res.json({ ok: true });
 });
 
 // ---------- API proxy ----------

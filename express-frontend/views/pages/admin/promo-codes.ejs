@@ -1,0 +1,316 @@
+<%- include('../../partials/admin/layout-header') %>
+
+<div class="mx-auto max-w-6xl space-y-6">
+
+  <header class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-semibold text-slate-900">Promo codes</h1>
+      <p class="mt-1 text-sm text-slate-600">
+        Generate a single-use activation code with a custom price. Share the code with the customer;
+        when they enter it on <a class="underline" href="/pricing" target="_blank" rel="noopener">/pricing</a>
+        they see your quoted price and click through to the Dodo checkout URL you paste below.
+      </p>
+    </div>
+  </header>
+
+  <% if (!dbConfigured) { %>
+    <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+      <strong>Supabase not configured.</strong> Set <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> (or the <code>NEXT_PUBLIC_*</code> equivalents) and run <a class="underline" href="https://github.com/palkani/tamil-proofreading-platform/blob/main/express-frontend/db/migrations/admin_promo_codes.sql" target="_blank" rel="noopener">db/migrations/admin_promo_codes.sql</a> in Supabase before creating codes.
+    </div>
+  <% } %>
+
+  <!-- ─── Create form ─────────────────────────────────────────────── -->
+  <section class="rounded-lg border border-slate-200 bg-white p-6">
+    <h2 class="mb-4 text-lg font-semibold text-slate-900">Generate a new code</h2>
+    <form id="create-form" class="grid grid-cols-1 gap-4 md:grid-cols-2">
+
+      <label class="block">
+        <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Code</span>
+        <input name="code" type="text" value="<%= suggestedCode %>"
+               class="mt-1 block w-full rounded border border-slate-300 px-3 py-2 font-mono text-sm"
+               autocomplete="off" spellcheck="false" />
+        <span class="mt-1 block text-xs text-slate-500">Auto-generated. Overwrite for a memorable one; blank auto-generates a fresh code.</span>
+      </label>
+
+      <label class="block">
+        <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Label</span>
+        <input name="label" type="text" required maxlength="120"
+               placeholder="e.g. Rajesh — Proofreading Lite (2026-09)"
+               class="mt-1 block w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+        <span class="mt-1 block text-xs text-slate-500">Human name for the code — shown in this table and audit logs.</span>
+      </label>
+
+      <label class="block">
+        <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Price</span>
+        <div class="mt-1 flex items-stretch gap-2">
+          <input name="price_display" type="number" step="0.01" min="0" required
+                 placeholder="e.g. 500"
+                 class="block w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+          <select name="currency" class="rounded border border-slate-300 px-3 py-2 text-sm">
+            <option value="INR" selected>INR (₹)</option>
+            <option value="USD">USD ($)</option>
+          </select>
+        </div>
+        <span class="mt-1 block text-xs text-slate-500">Displayed on /pricing and must match the price on your Dodo product.</span>
+      </label>
+
+      <label class="block">
+        <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Dodo checkout URL</span>
+        <input name="checkout_url" type="url" required
+               placeholder="https://checkout.dodopayments.com/buy/pdt_…?quantity=1"
+               class="mt-1 block w-full rounded border border-slate-300 px-3 py-2 font-mono text-xs" />
+        <span class="mt-1 block text-xs text-slate-500">Create a Dodo product at your target price first, then paste its "buy" URL here.</span>
+      </label>
+
+      <label class="block md:col-span-2">
+        <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Entitlements</span>
+        <div class="mt-2 flex flex-wrap gap-3 text-sm">
+          <label class="inline-flex items-center gap-1.5"><input type="checkbox" name="ent" value="proofreading" checked /> Proofreading</label>
+          <label class="inline-flex items-center gap-1.5"><input type="checkbox" name="ent" value="ocr" /> OCR</label>
+          <label class="inline-flex items-center gap-1.5"><input type="checkbox" name="ent" value="export" checked /> Export</label>
+          <label class="inline-flex items-center gap-1.5"><input type="checkbox" name="ent" value="ai_writer" checked /> AI writer</label>
+        </div>
+      </label>
+
+      <label class="block">
+        <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Restrict to email <span class="text-slate-400">(optional)</span></span>
+        <input name="target_email" type="email"
+               placeholder="e.g. rajesh@example.com"
+               class="mt-1 block w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+        <span class="mt-1 block text-xs text-slate-500">If set, only this signed-in user can redeem the code.</span>
+      </label>
+
+      <label class="block">
+        <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Expires at <span class="text-slate-400">(optional)</span></span>
+        <input name="expires_at" type="datetime-local"
+               class="mt-1 block w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+      </label>
+
+      <label class="block md:col-span-2">
+        <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Notes <span class="text-slate-400">(internal, optional)</span></span>
+        <textarea name="notes" rows="2" maxlength="500"
+                  placeholder="Context for this code — what deal, what promise, when to expire"
+                  class="mt-1 block w-full rounded border border-slate-300 px-3 py-2 text-sm"></textarea>
+      </label>
+
+      <label class="block">
+        <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Billing interval</span>
+        <select name="billing_interval" class="mt-1 block w-full rounded border border-slate-300 px-3 py-2 text-sm">
+          <option value="month" selected>Monthly</option>
+          <option value="year">Yearly</option>
+          <option value="one_time">One-time</option>
+        </select>
+      </label>
+
+      <label class="block">
+        <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Plan code</span>
+        <input name="plan_code" type="text" value="PRO_LITE"
+               class="mt-1 block w-full rounded border border-slate-300 px-3 py-2 font-mono text-xs" />
+        <span class="mt-1 block text-xs text-slate-500">Internal plan identifier — used by entitlements + billing analytics.</span>
+      </label>
+
+      <label class="block md:col-span-2">
+        <span class="text-xs font-medium uppercase tracking-wide text-slate-500">Recurring terms <span class="text-slate-400">(shown to customer on pricing card)</span></span>
+        <input name="recurring_terms" type="text" maxlength="240"
+               placeholder="e.g. Billed monthly. Cancel anytime — access continues until the end of your current period."
+               class="mt-1 block w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+      </label>
+
+      <div class="md:col-span-2 flex items-center justify-between">
+        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="single_use" checked />
+          Single-use (code becomes unusable after the customer clicks Continue to checkout)
+        </label>
+        <button type="submit"
+                class="rounded bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
+          Generate code
+        </button>
+      </div>
+
+      <p id="create-error" class="hidden text-sm text-red-600 md:col-span-2"></p>
+      <p id="create-success" class="hidden rounded bg-emerald-50 p-3 text-sm text-emerald-900 md:col-span-2"></p>
+    </form>
+  </section>
+
+  <!-- ─── Existing codes ──────────────────────────────────────────── -->
+  <section class="rounded-lg border border-slate-200 bg-white">
+    <div class="border-b border-slate-200 px-6 py-4">
+      <h2 class="text-lg font-semibold text-slate-900">Existing codes (<%= codes.length %>)</h2>
+    </div>
+    <% if (codes.length === 0) { %>
+      <p class="px-6 py-8 text-center text-sm text-slate-500">No codes yet. Generate the first one above.</p>
+    <% } else { %>
+      <table class="w-full text-sm">
+        <thead class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th class="px-4 py-2 text-left">Code</th>
+            <th class="px-4 py-2 text-left">Label</th>
+            <th class="px-4 py-2 text-right">Price</th>
+            <th class="px-4 py-2 text-left">Entitlements</th>
+            <th class="px-4 py-2 text-left">Restricted to</th>
+            <th class="px-4 py-2 text-left">Status</th>
+            <th class="px-4 py-2 text-left">Created</th>
+            <th class="px-4 py-2 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          <% codes.forEach((c) => {
+            const cents = Number(c.price_cents) || 0;
+            const priceStr = c.currency === 'INR'
+              ? '₹' + Math.round(cents / 100)
+              : '$' + (cents / 100).toFixed(2);
+            let status = 'Ready';
+            let statusClass = 'bg-emerald-100 text-emerald-700';
+            if (c.revoked_at) { status = 'Revoked'; statusClass = 'bg-slate-200 text-slate-600'; }
+            else if (c.expires_at && new Date(c.expires_at) < new Date()) { status = 'Expired'; statusClass = 'bg-amber-100 text-amber-700'; }
+            else if (c.redeemed_at) { status = 'Used'; statusClass = 'bg-slate-100 text-slate-600'; }
+          %>
+          <tr data-row-code="<%= c.code %>">
+            <td class="px-4 py-2">
+              <button type="button" class="copy-code font-mono text-xs text-blue-700 hover:underline" title="Copy" data-copy="<%= c.code %>"><%= c.code %></button>
+            </td>
+            <td class="px-4 py-2 max-w-xs truncate" title="<%= c.label %>"><%= c.label %></td>
+            <td class="px-4 py-2 text-right font-medium"><%= priceStr %><span class="text-xs text-slate-500">/<%= c.billing_interval %></span></td>
+            <td class="px-4 py-2">
+              <% (Array.isArray(c.entitlements) ? c.entitlements : []).forEach((e) => { %>
+                <span class="mr-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700"><%= e %></span>
+              <% }) %>
+            </td>
+            <td class="px-4 py-2 text-slate-600 text-xs"><%= c.target_email || '—' %></td>
+            <td class="px-4 py-2">
+              <span class="rounded px-2 py-0.5 text-xs font-semibold <%= statusClass %>"><%= status %></span>
+              <% if (c.redeemed_at && c.redeemed_by_email) { %>
+                <div class="mt-1 text-xs text-slate-500">by <%= c.redeemed_by_email %></div>
+              <% } %>
+            </td>
+            <td class="px-4 py-2 text-xs text-slate-500">
+              <%= new Date(c.created_at).toISOString().slice(0, 10) %><br>
+              <span class="text-slate-400">by <%= c.created_by_email %></span>
+            </td>
+            <td class="px-4 py-2 text-right">
+              <% if (!c.revoked_at && c.redeemed_at) { %>
+                <button type="button" class="reset-btn rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50" data-code="<%= c.code %>">Reset</button>
+              <% } %>
+              <% if (!c.revoked_at) { %>
+                <button type="button" class="revoke-btn rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50" data-code="<%= c.code %>">Revoke</button>
+              <% } %>
+            </td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </section>
+
+</div>
+
+<script>
+  (function() {
+    var form         = document.getElementById('create-form');
+    var errorEl      = document.getElementById('create-error');
+    var successEl    = document.getElementById('create-success');
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.remove('hidden');
+      successEl.classList.add('hidden');
+    }
+    function showSuccess(msg) {
+      successEl.textContent = msg;
+      successEl.classList.remove('hidden');
+      errorEl.classList.add('hidden');
+    }
+
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      errorEl.classList.add('hidden');
+      successEl.classList.add('hidden');
+
+      var fd = new FormData(form);
+      // Price displayed in whole units → cents for storage
+      var priceUnits = parseFloat(fd.get('price_display') || '0');
+      if (!(priceUnits >= 0)) { showError('Price must be a non-negative number.'); return; }
+      var priceCents = Math.round(priceUnits * 100);
+
+      var checkoutUrl = String(fd.get('checkout_url') || '').trim();
+      if (!checkoutUrl.startsWith('https://checkout.dodopayments.com/')) {
+        showError('Checkout URL must be a https://checkout.dodopayments.com/ link.'); return;
+      }
+
+      var ents = fd.getAll('ent');
+      var expiresAt = fd.get('expires_at');
+      if (expiresAt) { expiresAt = new Date(expiresAt).toISOString(); }
+
+      var payload = {
+        code:             String(fd.get('code') || '').trim(),
+        label:            String(fd.get('label') || '').trim(),
+        price_cents:      priceCents,
+        currency:         fd.get('currency'),
+        plan_code:        fd.get('plan_code'),
+        billing_interval: fd.get('billing_interval'),
+        entitlements:     ents,
+        checkout_url:     checkoutUrl,
+        recurring_terms:  fd.get('recurring_terms') || '',
+        target_email:     fd.get('target_email') || null,
+        single_use:       !!fd.get('single_use'),
+        expires_at:       expiresAt || null,
+        notes:            fd.get('notes') || '',
+      };
+
+      var btn = form.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      try {
+        var res  = await fetch('/admin/promo-codes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+        var data = await res.json().catch(function() { return {}; });
+        if (!res.ok || !data.ok) {
+          showError(data.error || data.detail || 'Failed to create code');
+          return;
+        }
+        showSuccess('Code ' + (data.code && data.code.code ? data.code.code : payload.code) + ' created. Reload to see it in the table.');
+        setTimeout(function() { window.location.reload(); }, 1200);
+      } catch (err) {
+        showError(err.message || 'Network error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // Row actions — revoke / reset / copy
+    document.addEventListener('click', async function(e) {
+      var t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+
+      if (t.classList.contains('copy-code')) {
+        try {
+          await navigator.clipboard.writeText(t.dataset.copy || '');
+          var orig = t.textContent;
+          t.textContent = 'copied ✓';
+          setTimeout(function() { t.textContent = orig; }, 900);
+        } catch (_) {}
+        return;
+      }
+
+      if (t.classList.contains('revoke-btn')) {
+        if (!confirm('Revoke code ' + t.dataset.code + '? The customer will no longer be able to redeem it.')) return;
+        var r = await fetch('/admin/promo-codes/' + encodeURIComponent(t.dataset.code) + '/revoke', { method: 'POST', credentials: 'include' });
+        if (r.ok) window.location.reload();
+        else alert('Revoke failed');
+        return;
+      }
+
+      if (t.classList.contains('reset-btn')) {
+        if (!confirm('Reset code ' + t.dataset.code + '? It becomes redeemable again by the next click.')) return;
+        var r2 = await fetch('/admin/promo-codes/' + encodeURIComponent(t.dataset.code) + '/reset', { method: 'POST', credentials: 'include' });
+        if (r2.ok) window.location.reload();
+        else alert('Reset failed');
+      }
+    });
+  })();
+</script>
+
+<%- include('../../partials/admin/layout-footer') %>
