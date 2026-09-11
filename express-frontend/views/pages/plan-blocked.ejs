@@ -1,0 +1,46 @@
+<%- include('../partials/header') %>
+
+<% if (user) { %>
+  <%- include('../partials/nav', { active: '', user: user }) %>
+<% } %>
+
+<%
+  // Local: feature (string label e.g. "Handwriting OCR"), currentPlan
+  // (locals.planLabel from attachEntitlements), addOnLabel (e.g.
+  // "add OCR"), contactSubject (mail subject line).
+  const featureName = typeof feature !== 'undefined' ? feature : 'This feature';
+  const currentPlan = typeof planLabel !== 'undefined' ? planLabel : 'your plan';
+  const addOnLabel = typeof addOn !== 'undefined' ? addOn : 'add this feature';
+%>
+
+<div class="min-h-[70vh] flex items-center justify-center px-6 py-16 bg-gradient-to-b from-white to-gray-50">
+  <div class="w-full max-w-lg text-center">
+    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-100 text-amber-600 mb-6">
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+    </div>
+    <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900 mb-3"><%= featureName %> isn't included in your plan</h1>
+    <p class="text-gray-600 mb-2">
+      You're currently on <b class="text-gray-900"><%= currentPlan %></b>.
+    </p>
+    <p class="text-gray-600 mb-8">
+      <%= featureName %> needs a plan that includes it. We'll issue you an activation code that unlocks it — contact us and we'll set it up.
+    </p>
+
+    <div class="grid gap-3 sm:grid-cols-2">
+      <a href="/contact?topic=upgrade&feature=<%= encodeURIComponent(featureName) %>"
+         class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-primary-600 text-white font-semibold text-sm hover:bg-primary-700 transition">
+        Contact us to <%= addOnLabel %>
+      </a>
+      <a href="/pricing"
+         class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-300 bg-white text-gray-700 font-semibold text-sm hover:bg-gray-50 transition">
+        Enter activation code
+      </a>
+    </div>
+
+    <p class="mt-8 text-xs text-gray-500">
+      Have an activation code already? Head to the <a href="/pricing" class="text-primary-600 underline">pricing page</a> and enter it there.
+    </p>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

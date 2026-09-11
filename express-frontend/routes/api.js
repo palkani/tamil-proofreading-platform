@@ -1824,8 +1824,8 @@ try {
           apiKeys,
           timeoutMs: 55_000,
         });
-        // Consume one monthly credit ONLY on a successful extraction — a failed
-        // upload never burns the user's single free upload.
+        // Consume one monthly credit only on a successful extraction — a
+        // failed upload throws above and never reaches this line.
         await ocrMonthlyLimit.recordSuccess(req);
         res.json({
           raw_text: r.raw_text,
@@ -2447,7 +2447,7 @@ router.post('/document/export-docx', async (req, res) => {
     // four passing paths (paid subscription, PremiumOverride grant,
     // admin role, operator email).
     const isAdmin = isAdminEmail(req.user?.email);
-    let isPaidTier = false;
+    let hasExportEntitlement = false;
     if (!isAdmin && req.cookies?.access_token) {
       try {
         const backend = (req._backendUrl || BACKEND_URL || '').replace(/\/$/, '');
@@ -2457,21 +2457,27 @@ router.post('/document/export-docx', async (req, res) => {
             timeout: 5000,
             validateStatus: () => true,
           });
-          if (meResp.status === 200 && meResp.data?.billing?.is_premium) {
-            isPaidTier = true;
+          if (meResp.status === 200 && meResp.data?.billing) {
+            // Per-feature check via the entitlements helper. Existing
+            // Full Pro users (no entitlements field yet) get true via
+            // the BC guarantee in lib/entitlements.js. New Lite tiers:
+            //   Pro Proofread Lite → true  (export included)
+            //   Pro OCR Lite       → false (export NOT included)
+            const { hasFeature, FEATURES } = require('../lib/entitlements');
+            hasExportEntitlement = hasFeature(meResp.data.billing, FEATURES.EXPORT);
           }
         }
       } catch (err) {
-        // Fail-closed: if the backend can't confirm Pro status, treat
-        // as free rather than granting export on a network hiccup.
+        // Fail-closed: if the backend can't confirm entitlement, treat
+        // as no-export rather than granting on a network hiccup.
         console.warn('[DOCX-EXPORT] billing/me check failed:', err.message);
       }
     }
 
-    if (!isPaidTier && !isAdmin) {
+    if (!hasExportEntitlement && !isAdmin) {
       return res.status(402).json({
-        error: 'pro_required',
-        message: 'Document export is available on Pro plans. Upgrade at /pricing to unlock DOCX, PDF, and TXT downloads.',
+        error: 'export_not_in_plan',
+        message: 'Document export is available on Pro (Full) and Pro Proofreading Lite plans. Upgrade at /pricing to unlock DOCX, PDF, and TXT downloads.',
         upgrade_url: '/pricing',
       });
     }
@@ -4150,6 +4156,60 @@ router.post('/account/delete-request', async (req, res) => {
     submitted_at: submittedAt,
     message: 'Deletion request received. We will process it within 30 days and email a confirmation.',
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Promo / activation code validation (2026-08-29)
+// Full contract in PROMO_CODES_BACKEND_CONTRACT.md. Client-side (see
+// pricing.ejs) POSTs { code, country_code }; we forward to backend
+// which returns { valid, plan: { label, plan_code, price_cents,
+// display_price, currency, billing_interval, entitlements, recurring_terms } }.
+// If the backend hasn't shipped this endpoint yet, we return 501 so
+// the UI can show a friendly "codes not active yet, contact us"
+// message instead of crashing. MUST be declared before the catch-all.
+// ─────────────────────────────────────────────────────────────────────
+router.post('/promo-code/validate', async (req, res) => {
+  const code = String(req.body?.code || '').trim();
+  const countryCode = String(req.body?.country_code || '').toUpperCase().slice(0, 2) || 'US';
+  if (!code) return res.status(400).json({ valid: false, error: 'code_required', message: 'Enter your activation code.' });
+
+  // 1) Static registry — the MVP path. Ships with a handful of
+  //    hand-curated codes, each pointing at a specific Dodo checkout
+  //    URL. See lib/promo-codes.js for the trade-off vs the full
+  //    dynamic backend system.
+  const { findCode } = require('../lib/promo-codes');
+  const staticEntry = findCode(code);
+  if (staticEntry) {
+    return res.json({ valid: true, plan: staticEntry });
+  }
+
+  // 2) Fall back to the backend's dynamic promo-code system. When the
+  //    full contract (PROMO_CODES_BACKEND_CONTRACT.md) is
+  //    implemented, this path handles unlimited codes with
+  //    per-code price + entitlement lookups. Until then it returns
+  //    501 which surfaces the "codes not active yet" UI message.
+  const backend = (req._backendUrl || BACKEND_URL || '').replace(/\/$/, '');
+  if (!backend) {
+    return res.status(404).json({ valid: false, error: 'code_not_found', message: 'That code is not valid or has expired. Please double-check with us.' });
+  }
+
+  try {
+    const upstream = await axios.post(
+      backend + '/api/v1/billing/promo-code/validate',
+      { code, country_code: countryCode },
+      { timeout: 8000, validateStatus: () => true }
+    );
+    // Backend hasn't shipped the dynamic endpoint yet → tell the user
+    // the code isn't valid (which is true — we don't recognise it in
+    // either the static or dynamic registries).
+    if (upstream.status === 404 || upstream.status === 501) {
+      return res.status(404).json({ valid: false, error: 'code_not_found', message: 'That code is not valid or has expired. Please double-check with us.' });
+    }
+    return res.status(upstream.status).json(upstream.data);
+  } catch (err) {
+    console.error('[PROMO-VALIDATE] backend call failed:', err.message);
+    return res.status(502).json({ valid: false, error: 'validation_service_unavailable', message: 'Could not check the code right now — please try again in a moment.' });
+  }
 });
 
 // Proxy other API calls to Go backend

@@ -170,6 +170,20 @@ router.get('/tools/handwriting-ocr', (req, res) => {
   if (!user) {
     return res.redirect('/login?redirect=' + encodeURIComponent('/tools/handwriting-ocr'));
   }
+  // Least-privilege gate: a user on a PAID plan that does not include
+  // OCR (e.g. Pro Proofreading Lite) gets a "not in your plan" page
+  // instead of the tool. Free users are NOT blocked here — they see
+  // the tool with their 1/month free-tier quota (existing behaviour).
+  const { isPaidWithoutFeature, FEATURES } = require('../lib/entitlements');
+  if (isPaidWithoutFeature(res.locals.billing, FEATURES.OCR)) {
+    return res.render('pages/plan-blocked', {
+      title: 'OCR is not in your plan | ProofTamil',
+      seo: { title: 'OCR is not in your plan | ProofTamil', noIndex: true },
+      user,
+      feature: 'Handwriting OCR',
+      addOn: 'add OCR to your plan',
+    });
+  }
   const seo = getSeoData('handwritingOcrTool') || {};
   return res.render('pages/handwriting-ocr-v2', {
     title: 'Handwriting OCR — Tamil handwriting to text | ProofTamil',
@@ -823,10 +837,10 @@ router.get('/pricing', async (req, res) => {
       seo,
       user,
       paymentsEnabled: false,
-      monthly: null,
-      yearly: null,
       countryCode: 'US',
-      error: false
+      monthly: null,
+      error: false,
+      pricingFromCache: false,
     });
   }
 
@@ -853,43 +867,41 @@ router.get('/pricing', async (req, res) => {
     return { ...p, display_price: displayPrice, currency };
   };
 
-  // Fallback pricing when API fails (based on plan defaults)
+  // Fallback pricing when the backend pricing endpoint fails. Backend
+  // can override via /api/v1/billing/pricing?plan_code=... at any time —
+  // this constant is only used when that endpoint is unreachable.
   const fallbackPricing = (countryCode) => {
     const isIndia = countryCode === 'IN';
     return {
       monthly: isIndia
         ? { display_price: '1000', currency: 'INR' }
         : { display_price: '12.00', currency: 'USD' },
-      yearly: isIndia
-        ? { display_price: '9599', currency: 'INR' }
-        : { display_price: '115.20', currency: 'USD' }
     };
   };
 
   try {
     const backendUrl = (process.env.BACKEND_URL_PRIMARY || process.env.BACKEND_URL || 'http://localhost:8080').replace(/\/$/, '');
-    const [monthlyRes, yearlyRes] = await Promise.all([
-      axiosWithPool.get(`${backendUrl}/api/v1/billing/pricing?plan_code=PRO_MONTHLY&country_code=${countryCode}`, { validateStatus: () => true }),
-      axiosWithPool.get(`${backendUrl}/api/v1/billing/pricing?plan_code=PRO_YEARLY&country_code=${countryCode}`, { validateStatus: () => true })
-    ]);
-    let monthly = normalizePricing(monthlyRes.status === 200 ? monthlyRes.data : null);
-    let yearly = normalizePricing(yearlyRes.status === 200 ? yearlyRes.data : null);
-    const apiFailed = !monthly && !yearly;
-    if (apiFailed) {
-      const fallback = fallbackPricing(countryCode);
-      monthly = fallback.monthly;
-      yearly = fallback.yearly;
-    }
+    // The rebuilt pricing.ejs only surfaces the Full Pro monthly card —
+    // Yearly and the four Lite variants were removed. Fetching those
+    // codes here just to discard them wastes Cloud Run calls per render.
+    // Add the fetch back only when the view starts rendering them again.
+    const monthlyResp = await axiosWithPool.get(
+      `${backendUrl}/api/v1/billing/pricing?plan_code=PRO_MONTHLY&country_code=${countryCode}`,
+      { validateStatus: () => true }
+    ).catch(() => null);
+
+    const monthly = normalizePricing(monthlyResp && monthlyResp.status === 200 ? monthlyResp.data : null);
+    const fallback = fallbackPricing(countryCode);
+
     res.render('pages/pricing', {
       title: seo.title,
       seo,
       user,
       paymentsEnabled: true,
       countryCode,
-      monthly,
-      yearly,
+      monthly: monthly || fallback.monthly,
       error: false,
-      pricingFromCache: apiFailed
+      pricingFromCache: !monthly,
     });
   } catch (_err) {
     console.error('[PRICING] Failed to fetch pricing:', _err.message);
@@ -899,11 +911,10 @@ router.get('/pricing', async (req, res) => {
       seo,
       user,
       paymentsEnabled: true,
-      monthly: fallback.monthly,
-      yearly: fallback.yearly,
       countryCode,
+      monthly: fallback.monthly,
       error: false,
-      pricingFromCache: true
+      pricingFromCache: true,
     });
   }
 });
