@@ -131,10 +131,6 @@ async function upsertOverride({
 }
 
 /**
- * Idempotency check for webhook processing. Returns true if this
- * event id has already been processed; caller should skip it.
- */
-/**
  * Fetch the FULL subscription state for a user — powers the /account
  * subscription card. Returns null when there's no row, expired, etc.,
  * so the caller can render a "no active subscription" empty state.
@@ -163,6 +159,33 @@ async function findFullSubscriptionByEmail(email) {
   }
 }
 
+/**
+ * List all overrides — powers the /admin/users table's per-row plan
+ * badge so admins see Express-side grants that the Go backend's user
+ * list doesn't know about. Returns an empty array on any error so the
+ * admin page renders regardless.
+ */
+async function listAllOverrides({ limit = 1000 } = {}) {
+  if (!isConfigured()) return [];
+  try {
+    const url =
+      `${SUPABASE_URL}/rest/v1/admin_user_entitlement_overrides` +
+      `?select=email,is_premium,entitlements,plan_code,plan_label,expires_at,` +
+      `next_renewal_at,cancelled_at,auto_renew,payment_status,` +
+      `granted_at,granted_by_email,notes` +
+      `&order=granted_at.desc&limit=${limit}`;
+    const resp = await axios.get(url, { headers: supabaseHeaders(), timeout: 3000 });
+    return Array.isArray(resp.data) ? resp.data : [];
+  } catch (err) {
+    console.warn('[user-entitlement-overrides-db] listAllOverrides error:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Idempotency check for webhook processing. Returns true if this
+ * event id has already been processed; caller should skip it.
+ */
 async function isEventProcessed(eventId) {
   if (!isConfigured() || !eventId) return false;
   try {
@@ -194,6 +217,7 @@ async function markEventProcessed(eventId, { eventType, outcome, detail } = {}) 
 module.exports = {
   findOverrideByEmail,
   findFullSubscriptionByEmail,
+  listAllOverrides,
   upsertOverride,
   isEventProcessed,
   markEventProcessed,
