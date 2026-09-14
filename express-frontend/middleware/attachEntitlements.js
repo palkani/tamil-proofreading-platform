@@ -41,6 +41,7 @@ const axios = require('axios');
 const http = require('node:http');
 const https = require('node:https');
 const { hasFeature, planLabel } = require('../lib/entitlements');
+const { findOverrideByEmail } = require('../lib/user-entitlement-overrides-db');
 
 // ── Admin tier preview ───────────────────────────────────────────────
 // Admins can preview any plan tier by adding `?preview_tier=X` to any URL:
@@ -175,9 +176,26 @@ function resolveBackendUrl() {
 function applyBilling(req, res, billing) {
   res.locals.billing    = billing;
   res.locals.hasFeature = (feature) => hasFeature(billing, feature);
-  res.locals.planLabel  = planLabel(billing);
+  res.locals.planLabel  = (billing && billing._override_plan_label) || planLabel(billing);
   req.billing           = billing;
   req.hasFeature        = res.locals.hasFeature;
+}
+
+// Merges an admin-set per-user entitlement override on top of the real
+// billing object. Override fields (is_premium, entitlements, plan_code)
+// REPLACE the corresponding fields on billing; everything else is left
+// alone. If billing was null (no billing from backend, or backend down)
+// we synthesize a minimal shape so the override still takes effect.
+function mergeOverride(billing, override) {
+  const base = billing && typeof billing === 'object' ? { ...billing } : {};
+  base.is_premium   = override.is_premium;
+  base.entitlements = override.entitlements;
+  if (override.plan_code)  base.plan_code = override.plan_code;
+  // Custom plan_label (e.g. "Pro · Proofreading Lite · Grandfather") wins
+  // over the derived planLabel() output when present. Stashed here so
+  // res.locals.planLabel picks it up in applyBilling below.
+  if (override.plan_label) base._override_plan_label = override.plan_label;
+  return base;
 }
 
 async function attachEntitlements(req, res, next) {
@@ -206,24 +224,47 @@ async function attachEntitlements(req, res, next) {
   }
 
   const backend = resolveBackendUrl();
-  if (!backend) return next();
 
   const cacheKey = req.user.id || req.user.email;
   const cached = cacheKey && cacheGet(cacheKey);
   if (cached) {
+    // Cached is the already-merged (billing + override) shape.
     applyBilling(req, res, cached);
     return next();
   }
 
+  // Fetch real billing + look up admin override in parallel so we don't
+  // stack two RTTs on every authenticated page render.
+  let realBilling = null;
   try {
-    const resp = await pooledAxios.get(backend + '/api/v1/billing/me', {
-      headers: { Authorization: 'Bearer ' + req.cookies.access_token },
-      validateStatus: () => true,
-    });
-    if (resp.status === 200 && resp.data && resp.data.billing) {
-      const billing = resp.data.billing;
-      applyBilling(req, res, billing);
-      if (cacheKey) cacheSet(cacheKey, billing);
+    const [billingResp, override] = await Promise.all([
+      backend
+        ? pooledAxios.get(backend + '/api/v1/billing/me', {
+            headers: { Authorization: 'Bearer ' + req.cookies.access_token },
+            validateStatus: () => true,
+          })
+        : Promise.resolve(null),
+      findOverrideByEmail(req.user.email),
+    ]);
+
+    if (billingResp && billingResp.status === 200 && billingResp.data && billingResp.data.billing) {
+      realBilling = billingResp.data.billing;
+    }
+
+    // Merge order: override REPLACES billing.is_premium / entitlements /
+    // plan_code. Everything else on billing (subscription id, invoices,
+    // etc. — whatever the backend returns) is preserved.
+    // Rationale: we're using overrides specifically to grant features the
+    // Go backend can't yet return, so overrides must win.
+    let finalBilling = realBilling;
+    if (override) {
+      finalBilling = mergeOverride(realBilling, override);
+      console.log(`[attachEntitlements] override applied for ${req.user.email}: entitlements=${JSON.stringify(override.entitlements)} plan=${override.plan_code || 'n/a'}`);
+    }
+
+    if (finalBilling) {
+      applyBilling(req, res, finalBilling);
+      if (cacheKey) cacheSet(cacheKey, finalBilling);
     }
   } catch (err) {
     // Fail-quiet — defaults above stand.
