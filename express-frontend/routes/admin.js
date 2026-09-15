@@ -497,22 +497,35 @@ function impersonationFlagCookieBase() {
 // routes/auth.js:135-146 which was added for the same reason. Called at the
 // start of impersonate AND end-impersonation, since both operations must
 // leave the jar with EXACTLY ONE cookie of each name.
+const COOKIE_VARIANTS = [
+  // host-only (matches the buggy PR #194 shape)
+  { path: '/', secure: true,  sameSite: 'lax'  },
+  { path: '/', secure: false, sameSite: 'lax'  },
+  { path: '/', secure: true,  sameSite: 'none' },
+  // domain-scoped, all forms browsers accept
+  { path: '/', secure: true,  sameSite: 'lax',  domain: '.prooftamil.com' },
+  { path: '/', secure: true,  sameSite: 'lax',  domain: 'prooftamil.com'  },
+  { path: '/', secure: true,  sameSite: 'lax',  domain: 'www.prooftamil.com' },
+  { path: '/', secure: true,  sameSite: 'none', domain: '.prooftamil.com' },
+  { path: '/', secure: true,  sameSite: 'none', domain: 'prooftamil.com'  },
+  { path: '/', secure: true,  sameSite: 'none', domain: 'www.prooftamil.com' },
+];
+
+// Full nuke — INCLUDES access_token. Only safe to call when the caller
+// will IMMEDIATELY set a fresh access_token before returning. Otherwise
+// the admin loses their real login cookie.
 function nukeImpersonationCookies(res) {
   const names = ['access_token', 'admin_original_token', 'impersonation_active'];
-  const variants = [
-    // host-only (matches the buggy PR #194 shape)
-    { path: '/', secure: true,  sameSite: 'lax'  },
-    { path: '/', secure: false, sameSite: 'lax'  },
-    { path: '/', secure: true,  sameSite: 'none' },
-    // domain-scoped, all forms browsers accept
-    { path: '/', secure: true,  sameSite: 'lax',  domain: '.prooftamil.com' },
-    { path: '/', secure: true,  sameSite: 'lax',  domain: 'prooftamil.com'  },
-    { path: '/', secure: true,  sameSite: 'lax',  domain: 'www.prooftamil.com' },
-    { path: '/', secure: true,  sameSite: 'none', domain: '.prooftamil.com' },
-    { path: '/', secure: true,  sameSite: 'none', domain: 'prooftamil.com'  },
-    { path: '/', secure: true,  sameSite: 'none', domain: 'www.prooftamil.com' },
-  ];
-  names.forEach((name) => variants.forEach((v) => res.clearCookie(name, v)));
+  names.forEach((name) => COOKIE_VARIANTS.forEach((v) => res.clearCookie(name, v)));
+}
+
+// Clears ONLY the impersonation-side cookies — never touches access_token.
+// Use this when end-impersonation is called with nothing to restore (e.g.
+// a stale impersonation_active flag from an older buggy state) so the
+// admin's real login isn't wiped alongside the stale flag.
+function clearImpersonationFlagsOnly(res) {
+  const names = ['admin_original_token', 'impersonation_active'];
+  names.forEach((name) => COOKIE_VARIANTS.forEach((v) => res.clearCookie(name, v)));
 }
 
 router.post('/api/users/:id/impersonate', requireAdmin, express.json(), async (req, res) => {
@@ -567,14 +580,23 @@ router.post('/api/users/:id/impersonate', requireAdmin, express.json(), async (r
 router.post('/api/impersonation/end', requireAdmin, express.json(), async (req, res) => {
   const originalToken = req.cookies && req.cookies.admin_original_token;
 
-  // Whether or not we have a token to restore, sweep the jar first so
-  // no stale cookie beats the fresh one in priority.
-  nukeImpersonationCookies(res);
-
   if (!originalToken) {
-    console.log('[IMPERSONATE-END] no admin_original_token; jar swept, client redirected');
+    // CRITICAL: no impersonation to end. Do NOT nuke access_token here —
+    // the admin may be normally logged in with just a stale
+    // impersonation_active flag in their jar (leftover from an earlier
+    // buggy state). Wiping access_token would bounce them to /login
+    // for no reason. This is exactly the bug that hit prod on
+    // 2026-09-15 after PR #197 shipped — end handler was nuking
+    // the admin's real login cookie before checking whether it had
+    // anything to restore.
+    clearImpersonationFlagsOnly(res);
+    console.log('[IMPERSONATE-END] no admin_original_token; cleared stale flags only, access_token preserved');
     return res.json({ ok: true, note: 'no_admin_token_to_restore' });
   }
+
+  // Real end path — nuke everything, then restore. Safe because we set
+  // a fresh access_token below before returning.
+  nukeImpersonationCookies(res);
   const targetId = Number(req.body && req.body.target_id) || 0;
 
   // Best-effort backend audit — never blocks session restore.
