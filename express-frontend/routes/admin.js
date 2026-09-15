@@ -396,33 +396,62 @@ const IMPERSONATION_MAX_AGE_MS = 30 * 60 * 1000;   // 30 min, matches the note i
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 // Cookie attributes must EXACTLY match the ones the Go backend uses when
-// it sets access_token at login (see routes/auth.js:130-135 for the
-// documented backend cookie shape). If Domain/SameSite differ, the browser
-// treats the impersonation cookie as a DIFFERENT cookie than the login one
-// (RFC 6265: cookie identity is name+domain+path), keeps BOTH, and sends
-// BOTH in every request — cookie-parser picks whichever comes first, which
-// on prod turned out to be the admin's original token. That's the bug PR
-// #194 tried to fix but only half-fixed: it moved the swap server-side but
-// still emitted a mismatched cookie. This shape matches the backend so the
-// browser REPLACES the value instead of creating a duplicate.
-function impersonationCookieBase(req) {
-  const host = String(req.hostname || '').toLowerCase();
-  const isProofHost = host === 'prooftamil.com' || host.endsWith('.prooftamil.com');
+// it sets access_token at login (backend/internal/handlers/auth_handlers.go
+// L182-L204: Domain=.prooftamil.com; HttpOnly; Secure; SameSite=None). If
+// Domain/SameSite differ, the browser treats the impersonation cookie as
+// a DIFFERENT cookie than the login one (RFC 6265: cookie identity is
+// name+domain+path), keeps BOTH, and sends BOTH in every request —
+// cookie-parser picks whichever comes first, which turned out to be the
+// admin's original token. That was PR #194's bug; PR #196 tried to fix
+// via req.hostname detection but was still fragile. Now we always use the
+// prod shape when NODE_ENV=production — no host detection needed.
+function impersonationCookieBase() {
+  if (IS_PROD) {
+    return {
+      httpOnly: true,
+      sameSite: 'none',   // exact match with backend
+      secure:   true,     // required for SameSite=None
+      domain:   '.prooftamil.com',
+      path:     '/',
+      maxAge:   IMPERSONATION_MAX_AGE_MS,
+    };
+  }
+  // Local dev over http://localhost: SameSite=None+Secure would be rejected.
   return {
     httpOnly: true,
-    sameSite: isProofHost ? 'none' : 'lax',   // must match backend (SameSite=None on prod)
-    secure:   isProofHost || IS_PROD,          // SameSite=None REQUIRES Secure
+    sameSite: 'lax',
+    secure:   false,
     path:     '/',
     maxAge:   IMPERSONATION_MAX_AGE_MS,
-    ...(isProofHost ? { domain: '.prooftamil.com' } : {}),
   };
 }
 
-// Non-HttpOnly UI flag — client JS reads this to decide whether to show the
-// impersonation banner. Uses the SAME domain/samesite tuple so it lives in
-// the same "cookie namespace" as access_token.
-function impersonationFlagCookieBase(req) {
-  return { ...impersonationCookieBase(req), httpOnly: false };
+function impersonationFlagCookieBase() {
+  return { ...impersonationCookieBase(), httpOnly: false };
+}
+
+// Nuke every historical (domain × sameSite) variant of an impersonation cookie
+// name so that a lingering duplicate from an older shape can't win priority
+// over the fresh one we're about to set. This mirrors the logout matrix in
+// routes/auth.js:135-146 which was added for the same reason. Called at the
+// start of impersonate AND end-impersonation, since both operations must
+// leave the jar with EXACTLY ONE cookie of each name.
+function nukeImpersonationCookies(res) {
+  const names = ['access_token', 'admin_original_token', 'impersonation_active'];
+  const variants = [
+    // host-only (matches the buggy PR #194 shape)
+    { path: '/', secure: true,  sameSite: 'lax'  },
+    { path: '/', secure: false, sameSite: 'lax'  },
+    { path: '/', secure: true,  sameSite: 'none' },
+    // domain-scoped, all forms browsers accept
+    { path: '/', secure: true,  sameSite: 'lax',  domain: '.prooftamil.com' },
+    { path: '/', secure: true,  sameSite: 'lax',  domain: 'prooftamil.com'  },
+    { path: '/', secure: true,  sameSite: 'lax',  domain: 'www.prooftamil.com' },
+    { path: '/', secure: true,  sameSite: 'none', domain: '.prooftamil.com' },
+    { path: '/', secure: true,  sameSite: 'none', domain: 'prooftamil.com'  },
+    { path: '/', secure: true,  sameSite: 'none', domain: 'www.prooftamil.com' },
+  ];
+  names.forEach((name) => variants.forEach((v) => res.clearCookie(name, v)));
 }
 
 router.post('/api/users/:id/impersonate', requireAdmin, express.json(), async (req, res) => {
@@ -452,28 +481,21 @@ router.post('/api/users/:id/impersonate', requireAdmin, express.json(), async (r
       return res.status(502).json({ ok: false, error: 'backend_returned_no_token' });
     }
 
-    // Server-side cookie swap — MATCH the backend's cookie shape exactly
-    // (Domain=.prooftamil.com, SameSite=None, Secure) so the browser replaces
-    // the login access_token instead of creating a second cookie with the
-    // same name. See impersonationCookieBase() comment above for the full
-    // explanation.
-    const cookieBase = impersonationCookieBase(req);
+    // Nuke every (domain × sameSite) variant of impersonation cookies
+    // that might be lingering in the jar (from PR #194's buggy shape,
+    // or a previous impersonation on a different domain form) so nothing
+    // can beat our fresh cookie in priority.
+    nukeImpersonationCookies(res);
 
-    // Sweep any host-only stale duplicates left over from the broken
-    // PR #194 shape (sameSite:'lax', no Domain). Without this, a returning
-    // admin who impersonated during the buggy window would still have a
-    // host-only access_token in their jar, and cookie-parser would pick
-    // that one over our new correctly-scoped cookie. This clear is safe
-    // even for admins with no stale cookies — it's a no-op then.
-    ['access_token', 'admin_original_token', 'impersonation_active'].forEach((name) => {
-      res.clearCookie(name, { path: '/', sameSite: 'lax', secure: IS_PROD });
-    });
-
+    // Set fresh cookies with the exact backend cookie shape.
+    const cookieBase = impersonationCookieBase();
     res.cookie('admin_original_token', adminToken,         cookieBase);
     res.cookie('access_token',         impersonationToken, cookieBase);
-    // Non-HttpOnly boolean flag so the header banner script can detect
-    // impersonation without needing to read the (HttpOnly) admin token.
-    res.cookie('impersonation_active', '1', impersonationFlagCookieBase(req));
+    res.cookie('impersonation_active', '1', impersonationFlagCookieBase());
+
+    console.log('[IMPERSONATE] target=%s admin_hostname=%s cookie_domain=%s samesite=%s secure=%s prod=%s',
+      targetId, req.hostname, cookieBase.domain || '(host-only)', cookieBase.sameSite, cookieBase.secure, IS_PROD);
+
     return res.json({ ok: true, target_id: Number(targetId) });
   } catch (err) {
     console.error('[admin/impersonate] failed:', err.message);
@@ -483,32 +505,18 @@ router.post('/api/users/:id/impersonate', requireAdmin, express.json(), async (r
 
 router.post('/api/impersonation/end', requireAdmin, express.json(), async (req, res) => {
   const originalToken = req.cookies && req.cookies.admin_original_token;
-  // Match the cookie shape the impersonation-start handler used, and
-  // therefore the shape the backend uses at login (see comment on
-  // impersonationCookieBase above).
-  const cookieBase = impersonationCookieBase(req);
-  // For clearCookie(): domain and sameSite must match the SET, otherwise
-  // the browser considers it a DIFFERENT cookie and doesn't clear.
-  const clearOpts = {
-    path:     cookieBase.path,
-    domain:   cookieBase.domain,
-    sameSite: cookieBase.sameSite,
-    secure:   cookieBase.secure,
-  };
+
+  // Whether or not we have a token to restore, sweep the jar first so
+  // no stale cookie beats the fresh one in priority.
+  nukeImpersonationCookies(res);
 
   if (!originalToken) {
-    // Nothing to restore — clear any lingering flag and 200 so the client
-    // still redirects, avoiding a UI dead end.
-    res.clearCookie('access_token',         clearOpts);
-    res.clearCookie('admin_original_token', clearOpts);
-    res.clearCookie('impersonation_active', clearOpts);
+    console.log('[IMPERSONATE-END] no admin_original_token; jar swept, client redirected');
     return res.json({ ok: true, note: 'no_admin_token_to_restore' });
   }
   const targetId = Number(req.body && req.body.target_id) || 0;
 
-  // Best-effort backend notification for the audit log. We don't fail the
-  // end-impersonation flow if the backend is unreachable — the admin's
-  // session MUST be restored regardless.
+  // Best-effort backend audit — never blocks session restore.
   try {
     await axios.post(
       `${backendBase()}/api/v1/admin/impersonation/end`,
@@ -521,15 +529,43 @@ router.post('/api/impersonation/end', requireAdmin, express.json(), async (req, 
     );
   } catch (_) { /* audit-only, ignore */ }
 
-  // Restore admin's original token to access_token. Same cookie shape as
-  // the start-impersonation handler, so this Set-Cookie REPLACES the
-  // impersonation token cleanly instead of creating a duplicate.
-  const restoreBase = { ...cookieBase, maxAge: 24 * 3600 * 1000 };  // 1 day, matches admin login TTL
+  // Restore the admin's original token as access_token. The nuke above
+  // deleted every variant, so this is a clean set with no duplicates
+  // possible.
+  const restoreBase = { ...impersonationCookieBase(), maxAge: 24 * 3600 * 1000 };  // 1 day, matches admin login TTL
   res.cookie('access_token', originalToken, restoreBase);
-  res.clearCookie('admin_original_token', clearOpts);
-  res.clearCookie('impersonation_active', clearOpts);
   logAdminApi({ req, method: 'POST', upstreamPath: `/impersonation/end (target ${targetId})`, status: 200, durationMs: 0 });
+  console.log('[IMPERSONATE-END] target=%s restored admin identity, cookie_domain=%s samesite=%s',
+    targetId, restoreBase.domain || '(host-only)', restoreBase.sameSite);
   return res.json({ ok: true });
+});
+
+// ---------- Diagnostic: dump cookies the server sees ----------
+//
+// Lets an admin verify what's actually landing in their jar after an
+// impersonation attempt. Returns a summary of names (never the raw JWT
+// values) so we can see if there's a duplicate access_token, a stale
+// admin_original_token, etc. Safe to leave in — admin-gated, read-only.
+router.get('/api/impersonation/debug', requireAdmin, (req, res) => {
+  const cookieHeader = req.headers.cookie || '';
+  const rawPairs = cookieHeader.split(/;\s*/).filter(Boolean);
+  const counts = {};
+  rawPairs.forEach((p) => {
+    const eq = p.indexOf('=');
+    const name = eq >= 0 ? p.slice(0, eq) : p;
+    counts[name] = (counts[name] || 0) + 1;
+  });
+  res.json({
+    ok: true,
+    hostname: req.hostname,
+    protocol: req.protocol,
+    prod: IS_PROD,
+    cookie_shape_would_use: impersonationCookieBase(),
+    cookies_parsed_count: Object.keys(req.cookies || {}).length,
+    cookies_present: Object.keys(req.cookies || {}),
+    raw_cookie_name_counts: counts,
+    duplicates: Object.entries(counts).filter(([, n]) => n > 1).map(([n, c]) => ({ name: n, count: c })),
+  });
 });
 
 // ---------- API proxy ----------
