@@ -1,0 +1,199 @@
+/**
+ * Dodo Payments webhook helpers.
+ *
+ * Two things happen here:
+ *   1. verifySignature() — HMAC check against DODO_WEBHOOK_SECRET so we
+ *      know the request actually came from Dodo (and not a random POST
+ *      by anyone who guessed the URL).
+ *   2. resolveEntitlements() — maps the Dodo product_id in the event
+ *      payload to the ProofTamil entitlements array we need to grant.
+ *
+ * We haven't seen a real Dodo payload yet, so parseEvent() below is
+ * DEFENSIVE — it tries several common field shapes (Dodo uses Svix
+ * under the hood, plus their own top-level fields) and returns
+ * whatever it can extract. Every incoming payload is logged in full
+ * so we can adjust the parser once the first real event lands.
+ */
+
+const crypto = require('node:crypto');
+
+// Product ID → entitlements. Source: your Dodo dashboard as of 2026-09-14.
+// Update as you create new products. When a product ID isn't in this
+// table, the webhook falls back to granting Full Pro (best guess —
+// we know they paid, we just don't know exactly what for).
+const PRODUCT_ENTITLEMENTS = {
+  // ProofTamil LITE Monthly Subscription (INR ₹350/mo)
+  'pdt_0NmSZ8Clcj8nUjpvixwq2': {
+    is_premium:   true,
+    entitlements: ['proofreading', 'export', 'ai_writer'],
+    plan_code:    'PRO_PROOFREAD_LITE',
+    plan_label:   'Pro · Proofreading Lite',
+  },
+  // ProofTamil PRO Monthly Subscription - INR (₹1000/mo)
+  'pdt_0NaBiSUS25WJlwcnZquWu': {
+    is_premium:   true,
+    entitlements: ['proofreading', 'ocr', 'export', 'ai_writer'],
+    plan_code:    'PRO_MONTHLY',
+    plan_label:   'Pro',
+  },
+  // ProofTamil PRO Monthly Subscription ($12/mo USD)
+  'pdt_0NZzVU00bGo2E4CcmyLoP': {
+    is_premium:   true,
+    entitlements: ['proofreading', 'ocr', 'export', 'ai_writer'],
+    plan_code:    'PRO_MONTHLY',
+    plan_label:   'Pro',
+  },
+};
+
+const FULL_PRO_FALLBACK = {
+  is_premium:   true,
+  entitlements: ['proofreading', 'ocr', 'export', 'ai_writer'],
+  plan_code:    'PRO_MONTHLY',
+  plan_label:   'Pro (unmapped product — check product_id)',
+};
+
+/**
+ * Verify HMAC signature on the raw request body.
+ *
+ * Dodo uses Svix for webhook delivery; Svix headers:
+ *   webhook-id         unique event id
+ *   webhook-timestamp  unix seconds
+ *   webhook-signature  space-separated signatures, each "v1,<base64>"
+ *
+ * Signature payload: `${id}.${timestamp}.${rawBody}`
+ * Algorithm: HMAC-SHA256, key = base64(secret without "whsec_" prefix)
+ *
+ * We also accept a simpler `HMAC-SHA256(secret, rawBody)` scheme in
+ * case Dodo has a fallback signature format we don't know about.
+ * Returns { ok, reason }.
+ */
+function verifySignature({ rawBody, headers, secret }) {
+  if (!secret) return { ok: false, reason: 'secret_not_configured' };
+  if (!rawBody) return { ok: false, reason: 'empty_body' };
+
+  const webhookId        = headers['webhook-id'] || headers['svix-id'];
+  const webhookTimestamp = headers['webhook-timestamp'] || headers['svix-timestamp'];
+  const webhookSignature = headers['webhook-signature'] || headers['svix-signature'];
+
+  // --- Try Svix-style verification first (Dodo's default) -----------
+  if (webhookId && webhookTimestamp && webhookSignature) {
+    const bodyText = Buffer.isBuffer(rawBody) ? rawBody.toString('utf-8') : String(rawBody);
+    const signedPayload = `${webhookId}.${webhookTimestamp}.${bodyText}`;
+    const secretBytes = secret.startsWith('whsec_')
+      ? Buffer.from(secret.slice(6), 'base64')
+      : Buffer.from(secret, 'utf-8');
+    const expected = crypto.createHmac('sha256', secretBytes).update(signedPayload).digest('base64');
+    // Multiple v1 signatures may be listed space-separated; any match is OK.
+    const provided = String(webhookSignature).split(' ')
+      .map((s) => s.trim())
+      .filter((s) => s.startsWith('v1,'))
+      .map((s) => s.slice(3));
+    if (provided.some((sig) => timingSafeEqual(sig, expected))) {
+      return { ok: true, scheme: 'svix' };
+    }
+    return { ok: false, reason: 'svix_signature_mismatch' };
+  }
+
+  // --- Fallback: simple HMAC of raw body against a hex header -------
+  const rawSig = headers['dodo-signature'] || headers['x-dodo-signature'];
+  if (rawSig) {
+    const bodyBuf = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody), 'utf-8');
+    const expected = crypto.createHmac('sha256', secret).update(bodyBuf).digest('hex');
+    if (timingSafeEqual(String(rawSig), expected)) {
+      return { ok: true, scheme: 'raw-hex' };
+    }
+    return { ok: false, reason: 'raw_signature_mismatch' };
+  }
+
+  return { ok: false, reason: 'no_signature_headers_found' };
+}
+
+function timingSafeEqual(a, b) {
+  const aBuf = Buffer.from(String(a));
+  const bBuf = Buffer.from(String(b));
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+/**
+ * Try to extract the fields we need from a Dodo event payload.
+ * Defensive because we haven't seen the actual JSON yet — dips into
+ * several candidate paths and returns whatever it can find.
+ *
+ * Returns:
+ *   { type, id, email, product_id, current_period_end, subscription_status,
+ *     mode: 'live' | 'test', raw: full event }
+ */
+function parseEvent(bodyText) {
+  let raw;
+  try {
+    raw = JSON.parse(bodyText);
+  } catch (_) {
+    return { type: null, id: null, email: null, product_id: null, raw: null, parseError: 'invalid_json' };
+  }
+  const data = raw.data || raw.payload || raw;
+  const subscription = data.subscription || data;
+  const customer     = data.customer || subscription.customer || raw.customer || {};
+
+  return {
+    type:                raw.type || raw.event || raw.event_type || null,
+    id:                  raw.id || raw.event_id || raw.webhook_id || null,
+    email:               (customer.email || data.customer_email || data.email || subscription.customer_email || '').toLowerCase() || null,
+    product_id:          data.product_id || subscription.product_id || (data.product && data.product.id) || (subscription.product && subscription.product.id) || null,
+    subscription_id:     subscription.id || data.subscription_id || null,
+    current_period_end:  toIsoOrNull(subscription.current_period_end || data.current_period_end || subscription.next_billing_at || data.next_billing_at),
+    subscription_status: subscription.status || data.status || null,
+    mode:                raw.livemode === false ? 'test' : (raw.mode || (raw.livemode === true ? 'live' : null)),
+    raw,
+  };
+}
+
+function toIsoOrNull(v) {
+  if (!v) return null;
+  // Dodo may send unix seconds, unix millis, or ISO. Normalize to ISO.
+  if (typeof v === 'number') {
+    const ms = v < 1e12 ? v * 1000 : v;
+    return new Date(ms).toISOString();
+  }
+  try { return new Date(String(v)).toISOString(); } catch (_) { return null; }
+}
+
+function resolveEntitlements(productId) {
+  if (productId && PRODUCT_ENTITLEMENTS[productId]) return PRODUCT_ENTITLEMENTS[productId];
+  return FULL_PRO_FALLBACK;
+}
+
+/**
+ * Which lifecycle bucket does this event fall into? Any active-payment
+ * event grants; cancellation / expiration revokes; anything else is a
+ * no-op we still 200 back.
+ */
+function bucketize(eventType) {
+  const t = String(eventType || '').toLowerCase();
+  if (t.startsWith('payment.succeeded')     ||
+      t.startsWith('subscription.active')   ||
+      t.startsWith('subscription.created')  ||
+      t.startsWith('subscription.renewed')  ||
+      t.startsWith('subscription.updated')  ||
+      t.startsWith('subscription.resumed')) {
+    return 'activate';
+  }
+  if (t.startsWith('subscription.cancelled') ||
+      t.startsWith('subscription.canceled')  ||
+      t.startsWith('subscription.expired')   ||
+      t.startsWith('subscription.on_hold')   ||
+      t.startsWith('subscription.paused')    ||
+      t.startsWith('subscription.failed')) {
+    return 'deactivate';
+  }
+  if (t.startsWith('refund.')) return 'refund';
+  return 'noop';
+}
+
+module.exports = {
+  verifySignature,
+  parseEvent,
+  resolveEntitlements,
+  bucketize,
+  PRODUCT_ENTITLEMENTS,
+};
