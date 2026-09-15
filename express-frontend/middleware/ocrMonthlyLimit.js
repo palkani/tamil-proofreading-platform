@@ -57,7 +57,8 @@ function isAdmin(req) {
 }
 
 /**
- * Ask the backend whether this user has the OCR entitlement. { premium, ok }.
+ * Ask the backend + Supabase overrides table whether this user has the
+ * OCR entitlement. Returns { premium, ok }.
  *
  * "premium" here means "has premium OCR quota" — 20/month instead of 1.
  * Under the new tier system (2026-08-29):
@@ -66,31 +67,86 @@ function isAdmin(req) {
  *   Pro OCR Lite            → hasFeature(billing, 'ocr') → true  → 20/mo
  *   Free                    → hasFeature(billing, 'ocr') → false → 1/mo
  *
- * Backward-compat: existing subscribers have is_premium:true and no
- * entitlements field; hasFeature() returns true for them so they keep
- * their 20/mo quota until backend populates entitlements.
+ * Sources of truth (both consulted, override wins per attachEntitlements
+ * semantics):
+ *   - Backend `/api/v1/billing/me` → is_premium + entitlements from
+ *     backend user state and any Dodo subscription.
+ *   - Supabase admin_user_entitlement_overrides → per-user grant/lite
+ *     override that the backend doesn't see. Populated by the Express
+ *     Dodo webhook receiver AND the admin Grant Lite button.
+ *
+ * BUG THIS ADDRESSES: previously we only fetched backend billing. An
+ * OCR Lite (or Full Pro-via-Lite) user whose Pro state lives only in
+ * the override table came back is_premium:false → 1/month cap + "Free"
+ * badge instead of their real 20/month quota. Same class of bug fixed
+ * in PRs #195/#200/#201 for other surfaces.
+ *
+ * Resilience bonus: if backend billing is unreachable but override
+ * exists, we still honor it. Previously a backend hiccup silently
+ * demoted every paying customer to the 1/mo Free tier.
  */
 async function verifyPremium(req) {
   const token = req.cookies && req.cookies.access_token;
+  const email = String(req.user?.email || '').toLowerCase().trim();
   if (!token) return { premium: false, ok: true };
+
+  const { findOverrideByEmail } = require('../lib/user-entitlement-overrides-db');
+  const { hasFeature, FEATURES } = require('../lib/entitlements');
+
+  let backendStatus = 0;
+  let backendBilling = null;
+  let override = null;
+
   try {
-    const resp = await axios.get(backendUrl() + '/api/v1/billing/me', {
-      headers: { Authorization: 'Bearer ' + token },
-      timeout: 5000,
-      validateStatus: () => true,
-    });
-    if (resp.status === 200 && resp.data && resp.data.billing) {
-      const { hasFeature, FEATURES } = require('../lib/entitlements');
-      return { premium: hasFeature(resp.data.billing, FEATURES.OCR), ok: true };
+    const [billingResp, overrideResp] = await Promise.all([
+      axios.get(backendUrl() + '/api/v1/billing/me', {
+        headers: { Authorization: 'Bearer ' + token },
+        timeout: 5000,
+        validateStatus: () => true,
+      }).catch((err) => {
+        console.error('[OCR-LIMIT] backend billing/me fetch error:', err.message);
+        return null;
+      }),
+      email ? findOverrideByEmail(email).catch(() => null) : Promise.resolve(null),
+    ]);
+
+    if (billingResp) {
+      backendStatus = billingResp.status;
+      if (billingResp.status === 200 && billingResp.data && billingResp.data.billing) {
+        backendBilling = billingResp.data.billing;
+      }
     }
-    if (resp.status === 200 || resp.status === 401 || resp.status === 403) {
-      return { premium: false, ok: true };
-    }
-    return { premium: false, ok: false };
+    override = overrideResp;
   } catch (err) {
-    console.error('[OCR-LIMIT] billing/me check failed:', err.message);
+    console.error('[OCR-LIMIT] billing check failed:', err.message);
     return { premium: false, ok: false };
   }
+
+  // Merge: override REPLACES is_premium/entitlements/plan_code on top of
+  // backend billing (matches middleware/attachEntitlements.js mergeOverride).
+  // If backend billing is missing but an override exists, we synthesize a
+  // minimal billing shape so hasFeature() still works. If neither source
+  // yielded data, treat as free.
+  let merged = backendBilling;
+  if (override) {
+    merged = {
+      ...(backendBilling || {}),
+      is_premium: override.is_premium,
+      entitlements: override.entitlements,
+    };
+    if (override.plan_code) merged.plan_code = override.plan_code;
+  }
+
+  if (merged) {
+    return { premium: hasFeature(merged, FEATURES.OCR), ok: true };
+  }
+  // Neither source returned billing. If the backend answered (200/401/403)
+  // we know the user is definitively free-tier; return ok:true so callers
+  // apply the Free quota (1/mo) rather than surfacing an outage.
+  if (backendStatus === 200 || backendStatus === 401 || backendStatus === 403) {
+    return { premium: false, ok: true };
+  }
+  return { premium: false, ok: false };
 }
 
 function supabaseHeaders() {
