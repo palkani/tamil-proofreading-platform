@@ -66,4 +66,48 @@ async function findOverrideByEmail(email) {
   }
 }
 
-module.exports = { findOverrideByEmail, isConfigured };
+/**
+ * UPSERT a per-user entitlement override — used by the Dodo webhook
+ * receiver when it activates / extends a subscription. Idempotent by
+ * email (Supabase's PostgREST Prefer: resolution=merge-duplicates
+ * merges on the PK conflict).
+ */
+async function upsertOverride({
+  email, is_premium, entitlements, plan_code, plan_label,
+  expires_at, granted_by_email, notes,
+}) {
+  if (!isConfigured()) return { error: 'db_not_configured' };
+  const key = String(email || '').trim().toLowerCase();
+  if (!key) return { error: 'email_required' };
+
+  const row = {
+    email:            key,
+    is_premium:       is_premium !== false,
+    entitlements:     Array.isArray(entitlements) ? entitlements : [],
+    plan_code:        plan_code || null,
+    plan_label:       plan_label || null,
+    expires_at:       expires_at || null,
+    granted_by_email: String(granted_by_email || 'dodo-webhook').toLowerCase(),
+    notes:            notes || null,
+  };
+
+  try {
+    const resp = await axios.post(
+      `${SUPABASE_URL}/rest/v1/admin_user_entitlement_overrides`,
+      row,
+      {
+        headers: {
+          ...supabaseHeaders(),
+          Prefer: 'resolution=merge-duplicates,return=representation',
+        },
+        timeout: 5000,
+      }
+    );
+    return { ok: true, row: Array.isArray(resp.data) ? resp.data[0] : resp.data };
+  } catch (err) {
+    console.error('[user-entitlement-overrides-db] upsertOverride error:', err.message);
+    return { error: 'db_error', detail: err.message };
+  }
+}
+
+module.exports = { findOverrideByEmail, upsertOverride, isConfigured };

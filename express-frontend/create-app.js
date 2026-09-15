@@ -38,6 +38,7 @@ const chatbotRouter = require('./routes/chatbot');
 const orgRouter = require('./routes/org');
 const inviteRouter = require('./routes/invite');
 const onboardingRouter = require('./routes/onboarding');
+const webhooksRouter = require('./routes/webhooks');
 
 // JS files that must never be served from cache
 const NO_CACHE_JS = [
@@ -148,6 +149,13 @@ function createApp() {
   );
 
   // 50mb allows /api/corrections to accept competitor-style docJson with 200k+ words
+  // CRITICAL: webhooks mounted BEFORE express.json() so req.body is the
+  // raw Buffer that HMAC signature verification needs. Body-parsing
+  // JSON here would break signature verification because JSON.stringify
+  // may not byte-match Dodo's canonical payload. Webhook route uses
+  // express.raw() locally, so no interference with everything else.
+  app.use('/api/webhooks', webhooksRouter);
+
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
   app.use(cookieParser());
