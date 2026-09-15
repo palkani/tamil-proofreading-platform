@@ -1177,9 +1177,47 @@
               </svg>
             </button>
           </div>
-          
+
           <div class="toolbar-divider"></div>
-          
+
+          <!-- Paragraph alignment. Wired to setupTipTapToolbar's commandMap
+               entries (justifyLeft / justifyCenter / justifyRight / justifyFull)
+               which call the TipTap TextAlign extension. Active-state highlight
+               reflects the current selection's alignment. -->
+          <div class="toolbar-pill">
+            <button class="toolbar-btn" data-command="justifyLeft" data-align="left" title="Align left">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6"/>
+                <line x1="4" y1="12" x2="14" y2="12"/>
+                <line x1="4" y1="18" x2="18" y2="18"/>
+                <line x1="4" y1="15" x2="10" y2="15" style="display:none"/>
+              </svg>
+            </button>
+            <button class="toolbar-btn" data-command="justifyCenter" data-align="center" title="Align center">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6"/>
+                <line x1="7" y1="12" x2="17" y2="12"/>
+                <line x1="5" y1="18" x2="19" y2="18"/>
+              </svg>
+            </button>
+            <button class="toolbar-btn" data-command="justifyRight" data-align="right" title="Align right">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6"/>
+                <line x1="10" y1="12" x2="20" y2="12"/>
+                <line x1="6" y1="18" x2="20" y2="18"/>
+              </svg>
+            </button>
+            <button class="toolbar-btn" data-command="justifyFull" data-align="justify" title="Justify">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6"/>
+                <line x1="4" y1="12" x2="20" y2="12"/>
+                <line x1="4" y1="18" x2="20" y2="18"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="toolbar-divider"></div>
+
           <button class="toolbar-btn" id="search-btn" title="Search">
             <svg class="w-5 h-5" viewBox="0 0 24 24">
               <path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" stroke-linecap="round" stroke-linejoin="round"/>

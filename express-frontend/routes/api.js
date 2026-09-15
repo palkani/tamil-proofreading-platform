@@ -2474,45 +2474,119 @@ router.post('/document/export-docx', async (req, res) => {
       });
     }
 
-    // Pick source: prefer plain text, else strip HTML to text.
-    let bodyText = text;
-    if (!bodyText && html) {
-      bodyText = String(html)
-        .replace(/<script[\s\S]*?<\/script>/gi, '')
-        .replace(/<style[\s\S]*?<\/style>/gi, '')
-        .replace(/<\/p\s*>/gi, '\n\n')
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<\/div\s*>/gi, '\n')
-        .replace(/<\/h[1-6]\s*>/gi, '\n\n')
-        .replace(/<[^>]+>/g, '')
+    // Structured paragraphs — each entry is { text, alignment } where
+    // alignment is one of 'left' | 'center' | 'right' | 'justify'.
+    //
+    // Prefer HTML when present so paragraph-level alignment survives the
+    // round-trip. Parses <p style="text-align:X"> AND Word's legacy
+    // <p align="X"> attribute so pastes from both TipTap and Word/Docs
+    // land aligned in the DOCX. Falls back to the previous plain-text
+    // split when HTML isn't provided (some legacy paths only send text).
+    const ALIGN_MAP = {
+      left:    AlignmentType.LEFT,
+      center:  AlignmentType.CENTER,
+      right:   AlignmentType.RIGHT,
+      justify: AlignmentType.JUSTIFIED,
+    };
+
+    function decodeHtmlEntities(s) {
+      return String(s)
         .replace(/&nbsp;/g, ' ')
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .trim();
+        .replace(/&#39;/g, "'");
     }
 
-    if (!bodyText.trim()) {
+    function parseHtmlParagraphs(rawHtml) {
+      if (!rawHtml || typeof rawHtml !== 'string') return [];
+      // Strip <script>/<style> before pattern-matching so their contents
+      // can't accidentally look like a paragraph body.
+      const cleaned = String(rawHtml)
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '');
+      const out = [];
+      const re = /<p\b([^>]*)>([\s\S]*?)<\/p>/gi;
+      let m;
+      while ((m = re.exec(cleaned)) !== null) {
+        const attrs = m[1] || '';
+        const inner = m[2] || '';
+        // style="…text-align:X…" — the modern form TipTap emits and
+        // most modern editors send on paste.
+        let alignment = 'left';
+        const styleMatch = attrs.match(/style\s*=\s*["']([^"']*)["']/i);
+        if (styleMatch) {
+          const ta = styleMatch[1].match(/text-align\s*:\s*(left|center|right|justify)/i);
+          if (ta) alignment = ta[1].toLowerCase();
+        }
+        // align="X" attribute — legacy Word / Google Docs export shape;
+        // takes precedence when both are present, since Word uses attr
+        // over inline style in its export.
+        const alignAttr = attrs.match(/\balign\s*=\s*["']?(left|center|right|justify)["']?/i);
+        if (alignAttr) alignment = alignAttr[1].toLowerCase();
+        // Text inside — preserve <br> as newline, drop everything else.
+        const text = decodeHtmlEntities(
+          inner
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+        ).trim();
+        if (text) out.push({ text, alignment });
+      }
+      return out;
+    }
+
+    let structured = html ? parseHtmlParagraphs(html) : [];
+
+    // Fall back to the plain-text split when HTML parsing yielded nothing
+    // (legacy client, malformed HTML, or the doc genuinely had no <p>
+    // wrappers). Preserves the previous behavior byte-for-byte in that
+    // case — paragraphs default to LEFT alignment.
+    if (structured.length === 0) {
+      let bodyText = text;
+      if (!bodyText && html) {
+        bodyText = decodeHtmlEntities(
+          String(html)
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[\s\S]*?<\/style>/gi, '')
+            .replace(/<\/p\s*>/gi, '\n\n')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/div\s*>/gi, '\n')
+            .replace(/<\/h[1-6]\s*>/gi, '\n\n')
+            .replace(/<[^>]+>/g, '')
+        ).trim();
+      }
+      if (!bodyText.trim()) {
+        return res.status(400).json({ error: 'Empty document — provide non-empty `text` or `html`.' });
+      }
+      structured = String(bodyText)
+        .replace(/\r\n/g, '\n')
+        .split(/\n{2,}/g)
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((p) => ({ text: p, alignment: 'left' }));
+    }
+
+    if (structured.length === 0) {
       return res.status(400).json({ error: 'Empty document — provide non-empty `text` or `html`.' });
     }
 
-    // Split on blank lines for paragraphs; preserve hard line breaks within a paragraph as soft breaks.
-    const paragraphs = String(bodyText)
-      .replace(/\r\n/g, '\n')
-      .split(/\n{2,}/g)
-      .map((p) => p.trim())
-      .filter(Boolean);
-
-    const docParagraphs = paragraphs.map((p) => {
-      const lines = p.split('\n');
+    const docParagraphs = structured.map(({ text: paraText, alignment }) => {
+      const lines = paraText.split('\n');
       const runs = [];
       lines.forEach((line, idx) => {
         if (idx > 0) runs.push(new TextRun({ break: 1 }));
         runs.push(new TextRun({ text: line }));
       });
-      return new Paragraph({ children: runs });
+      const paraOpts = { children: runs };
+      const alignType = ALIGN_MAP[alignment];
+      // Only set the alignment field when non-left — omitting matches the
+      // pre-fix output byte-for-byte for the common left-aligned case, so
+      // existing exports stay bit-identical.
+      if (alignType && alignType !== AlignmentType.LEFT) {
+        paraOpts.alignment = alignType;
+      }
+      return new Paragraph(paraOpts);
     });
 
     // Pro tier: clean export — no auto-prepended title heading, no footer.
