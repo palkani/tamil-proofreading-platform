@@ -17,6 +17,22 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Serialise deploys so back-to-back merges don't race Cloud Run's
+# optimistic concurrency check. Prod incident 2026-09-15: five PRs
+# (#203–#207) merged within ~60 s, two of them (#203, #206) failed
+# with "ABORTED: Conflict for resource … version X was specified but
+# current version is Y". Each run reads a revision, builds a new one,
+# then writes back — if a second run reads the same revision before
+# the first writes, only one wins.
+#
+# cancel-in-progress: false so each merge still deploys separately
+# and shows up as its own row in the Actions history. `true` would
+# collapse rapid merges into "only the latest deploys" which loses
+# observability of which commit reached prod when.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 env:
   PROJECT_ID: prooftamil
   REGION: asia-south1
