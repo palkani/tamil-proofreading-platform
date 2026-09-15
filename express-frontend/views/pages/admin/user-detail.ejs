@@ -8,6 +8,8 @@
               class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Send email</button>
       <button type="button" data-action="toggle-pro"
               class="rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Grant Pro</button>
+      <button type="button" data-action="grant-lite"
+              class="rounded-md border border-emerald-600 bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700">Grant Lite</button>
       <button type="button" data-action="impersonate"
               class="rounded-md border border-amber-500 bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600">Impersonate</button>
       <button type="button" data-action="force-logout"
@@ -444,6 +446,37 @@
       .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
       .then(() => location.reload())
       .catch((err) => alert('Failed: ' + err.message));
+  });
+
+  // ── Grant Lite — creates/updates the Express-side entitlement override
+  //    row so a Dodo-paid customer (or a support-comped user) has the
+  //    right entitlement set without the Go backend's "Full Pro"
+  //    premium_override flag turning on OCR/AI Writer they didn't buy.
+  document.querySelector('[data-action="grant-lite"]').addEventListener('click', function () {
+    if (!recipientEmail) { alert('Load the profile first.'); return; }
+    const promoCode = prompt(
+      'Which lite plan to grant? Enter one of:\n' +
+      '  PROOFPROLITE   — Proofreading only (proofreading + export + ai_writer)\n' +
+      '  OCRPROLITE     — OCR only (ocr)\n' +
+      '  PROOFTAMIL-LITE — All Lite features (legacy)\n\n' +
+      'Grants for 1 month by default.',
+      'PROOFPROLITE'
+    );
+    if (!promoCode) return;
+    const monthsStr = prompt('How many months? (1-24)', '1');
+    if (!monthsStr) return;
+    const months = parseInt(monthsStr, 10);
+    if (!(months > 0 && months <= 24)) { alert('Months must be 1-24'); return; }
+    const notes = prompt('Notes (visible on this page, optional):', '');
+    if (notes === null) return;
+    fetch('/admin/api/users/' + encodeURIComponent(userId) + '/entitlement-override', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: recipientEmail, promo_code: promoCode, months: months, notes: notes }),
+    })
+      .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error(j.error || 'HTTP ' + r.status))))
+      .then(() => location.reload())
+      .catch((err) => alert('Grant failed: ' + err.message));
   });
   // ── Force logout — invalidate every active session for this user.
   //    Doesn't lock the account; the user just has to sign in again.
