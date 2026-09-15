@@ -6912,10 +6912,10 @@ function setupTipTapToolbar() {
       e.stopPropagation();
       const command = newBtn.getAttribute('data-command');
       const tipTapCommand = commandMap[command];
-      
+
       if (tipTapCommand) {
         tipTapCommand();
-        
+
         // Update active state for formatting buttons
         if (['bold', 'italic', 'underline', 'strikeThrough'].includes(command)) {
           const isActive = tiptapWorkspaceEditor.isActive(command === 'strikeThrough' ? 'strike' : command);
@@ -6925,9 +6925,35 @@ function setupTipTapToolbar() {
             newBtn.classList.remove('active');
           }
         }
+
+        // Alignment buttons are mutually exclusive: clear all four then
+        // add active to whichever the current selection now reflects.
+        // Uses data-align on the button (matches the setTextAlign value).
+        const align = newBtn.getAttribute('data-align');
+        if (align) {
+          syncAlignmentActive();
+        }
       }
     });
   });
+
+  // Refresh which alignment button (if any) is highlighted based on the
+  // current selection. Called after alignment clicks AND on selection
+  // change so cursor movement into a differently-aligned paragraph
+  // updates the pill correctly.
+  function syncAlignmentActive() {
+    const alignBtns = document.querySelectorAll('.toolbar-btn[data-align]');
+    alignBtns.forEach((b) => {
+      const a = b.getAttribute('data-align');
+      const on = tiptapWorkspaceEditor.isActive({ textAlign: a });
+      b.classList.toggle('active', on);
+    });
+  }
+  // Wire selection-change so cursor movement updates the pill.
+  tiptapWorkspaceEditor.on('selectionUpdate', syncAlignmentActive);
+  tiptapWorkspaceEditor.on('transaction',    syncAlignmentActive);
+  // Initial paint — the doc may already have alignment from a restored draft.
+  syncAlignmentActive();
 
   // Handle alignment dropdown items
   const dropdownItems = document.querySelectorAll('.dropdown-item[data-command]');
