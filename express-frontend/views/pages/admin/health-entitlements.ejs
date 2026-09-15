@@ -1,0 +1,262 @@
+<%- include('../../partials/admin/layout-header') %>
+
+<%
+  // Small server-side helpers so the template stays readable.
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    } catch (_) { return iso; }
+  }
+  function fmtDays(iso) {
+    if (!iso) return '—';
+    const diffMs = new Date(iso).getTime() - Date.now();
+    const days = Math.round(diffMs / 86400000);
+    if (days === 0) return 'today';
+    if (days > 0)  return 'in ' + days + 'd';
+    return Math.abs(days) + 'd ago';
+  }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  }
+  function statusPill(status) {
+    const map = {
+      active:     ['bg-emerald-50 text-emerald-700 ring-emerald-200', 'active'],
+      past_due:   ['bg-amber-50 text-amber-700 ring-amber-200',       'past due'],
+      cancelled:  ['bg-slate-100 text-slate-700 ring-slate-200',      'cancelled'],
+      expired:    ['bg-slate-100 text-slate-700 ring-slate-200',      'expired'],
+      refunded:   ['bg-rose-50 text-rose-700 ring-rose-200',          'refunded'],
+      admin_granted: ['bg-blue-50 text-blue-700 ring-blue-200',        'admin granted'],
+    };
+    const [cls, label] = map[status] || ['bg-slate-100 text-slate-700 ring-slate-200', status || '—'];
+    return '<span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ' + cls + '">' + esc(label) + '</span>';
+  }
+%>
+
+<div class="mx-auto max-w-6xl space-y-6">
+
+  <header class="flex flex-wrap items-baseline justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900">Entitlement health</h1>
+      <p class="mt-1 text-sm text-slate-600">Every Express-side entitlement override and the webhook events that shaped it. Anomalies are called out so support triage doesn't need to email.</p>
+    </div>
+    <p class="text-xs text-slate-500 font-mono">Snapshot · <%= generatedAt %></p>
+  </header>
+
+  <% if (!dbConfigured) { %>
+    <section class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+      <b>Supabase is not configured on this Vercel deployment.</b>
+      Set <code class="rounded bg-red-100 px-1">NEXT_PUBLIC_SUPABASE_URL</code> and
+      <code class="rounded bg-red-100 px-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>
+      then redeploy. Without them the overrides table can be neither read nor written and the whole entitlement system falls silently to "backend only".
+    </section>
+  <% } %>
+
+  <!-- Summary tiles ────────────────────────────────────────────── -->
+  <section class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Total overrides</p>
+      <p class="mt-1 text-2xl font-semibold text-slate-900 tabular-nums"><%= summary.total %></p>
+    </div>
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+      <p class="text-xs uppercase tracking-wide text-emerald-700">Active (unexpired)</p>
+      <p class="mt-1 text-2xl font-semibold text-emerald-900 tabular-nums"><%= summary.active %></p>
+    </div>
+    <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+      <p class="text-xs uppercase tracking-wide text-amber-700">Expired</p>
+      <p class="mt-1 text-2xl font-semibold text-amber-900 tabular-nums"><%= summary.expired %></p>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Cancelled</p>
+      <p class="mt-1 text-2xl font-semibold text-slate-900 tabular-nums"><%= summary.cancelled %></p>
+    </div>
+
+    <div class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Auto-renew off</p>
+      <p class="mt-1 text-2xl font-semibold text-slate-900 tabular-nums"><%= summary.autoRenewOff %></p>
+    </div>
+    <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+      <p class="text-xs uppercase tracking-wide text-blue-700">Admin-granted</p>
+      <p class="mt-1 text-2xl font-semibold text-blue-900 tabular-nums"><%= summary.adminGranted %></p>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Recent webhook events</p>
+      <p class="mt-1 text-2xl font-semibold text-slate-900 tabular-nums"><%= summary.recentEvents %></p>
+    </div>
+    <div class="rounded-lg border <%= summary.failedEvents > 0 ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white' %> px-4 py-3">
+      <p class="text-xs uppercase tracking-wide <%= summary.failedEvents > 0 ? 'text-red-700' : 'text-slate-500' %>">Failed events</p>
+      <p class="mt-1 text-2xl font-semibold <%= summary.failedEvents > 0 ? 'text-red-900' : 'text-slate-900' %> tabular-nums"><%= summary.failedEvents %></p>
+    </div>
+  </section>
+
+  <!-- Anomalies ─────────────────────────────────────────────────── -->
+  <section class="rounded-lg border border-slate-200 bg-white">
+    <div class="flex items-baseline justify-between border-b border-slate-100 px-6 py-4">
+      <h2 class="text-lg font-semibold text-slate-900">Anomalies</h2>
+      <p class="text-xs text-slate-500">Rows the system thinks it should tell you about.</p>
+    </div>
+
+    <%
+      const groups = [
+        ['expiredButActive',  'Expired but is_premium=true',              'Their access should have been revoked when expires_at passed — either the middleware isn\'t applying the expiry check, or something wrote a truthy is_premium after the row expired.'],
+        ['refundedButActive', 'Refunded but is_premium=true',              'A refund event should set is_premium=false. If you see rows here, the refund handler failed silently — check the webhook events panel.'],
+        ['pastDueStuck',      'Past-due beyond the 7-day grace window',    'Dodo\'s dunning window is short. Rows sitting past-due for more than a week usually mean the customer\'s card was declined without recovery — reach out or cancel.'],
+        ['missingPlan',       'is_premium=true with no plan_code',         'Malformed row — someone wrote is_premium without a plan. Every gate that reads entitlements[] will still work, but plan labels won\'t render and revenue reporting will miss these.'],
+        ['failedEvents',      'Recent webhook events with error outcome',  'Dodo webhook events we recorded but couldn\'t act on. Detail column has the raw error. Look for repeats — Dodo will retry until we 200.'],
+      ];
+      let totalAnomalies = 0;
+      groups.forEach(([key]) => { totalAnomalies += (anomalies[key] || []).length; });
+    %>
+
+    <% if (totalAnomalies === 0) { %>
+      <div class="px-6 py-8 text-center text-sm text-slate-500">
+        <p class="text-emerald-600">No anomalies. All entitlement rows are in the state the system expects.</p>
+      </div>
+    <% } else { %>
+      <% groups.forEach(function(g) { const rows = anomalies[g[0]] || []; if (rows.length === 0) return; %>
+        <details class="border-t border-slate-100" open>
+          <summary class="cursor-pointer px-6 py-3 text-sm font-medium text-slate-900 hover:bg-slate-50">
+            <span class="inline-flex items-center rounded bg-red-50 px-1.5 py-0.5 text-xs font-semibold text-red-700 ring-1 ring-inset ring-red-200 mr-2 tabular-nums"><%= rows.length %></span>
+            <%= g[1] %>
+          </summary>
+          <p class="border-t border-slate-100 bg-slate-50 px-6 py-2 text-xs text-slate-600"><%= g[2] %></p>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-xs">
+              <thead class="bg-slate-50 text-slate-500">
+                <tr>
+                  <% if (g[0] === 'failedEvents') { %>
+                    <th class="px-6 py-2 text-left font-medium">Event type</th>
+                    <th class="px-4 py-2 text-left font-medium">Outcome</th>
+                    <th class="px-4 py-2 text-left font-medium">Processed</th>
+                    <th class="px-6 py-2 text-left font-medium">Detail</th>
+                  <% } else { %>
+                    <th class="px-6 py-2 text-left font-medium">Email</th>
+                    <th class="px-4 py-2 text-left font-medium">Plan</th>
+                    <th class="px-4 py-2 text-left font-medium">Status</th>
+                    <th class="px-4 py-2 text-left font-medium">Expires</th>
+                    <th class="px-6 py-2 text-left font-medium">Notes</th>
+                  <% } %>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <% rows.forEach(function(row) { %>
+                  <tr>
+                    <% if (g[0] === 'failedEvents') { %>
+                      <td class="px-6 py-2 font-mono text-slate-800"><%= esc(row.event_type || '—') %></td>
+                      <td class="px-4 py-2"><span class="inline-flex items-center rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-200"><%= esc(row.outcome || '—') %></span></td>
+                      <td class="px-4 py-2 text-slate-600"><%= fmtDate(row.processed_at) %></td>
+                      <td class="px-6 py-2 font-mono text-slate-500 text-xs"><%= esc(JSON.stringify(row.detail || {})) %></td>
+                    <% } else { %>
+                      <td class="px-6 py-2 text-slate-900"><%= esc(row.email || '—') %></td>
+                      <td class="px-4 py-2 text-slate-700"><%= esc(row.plan_label || row.plan_code || '—') %></td>
+                      <td class="px-4 py-2"><%- statusPill(row.payment_status) %></td>
+                      <td class="px-4 py-2 text-slate-600"><%= fmtDate(row.expires_at) %> · <span class="text-slate-400"><%= fmtDays(row.expires_at) %></span></td>
+                      <td class="px-6 py-2 text-slate-500 max-w-md truncate"><%= esc(row.notes || '') %></td>
+                    <% } %>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      <% }) %>
+    <% } %>
+  </section>
+
+  <!-- All overrides ──────────────────────────────────────────────── -->
+  <section class="rounded-lg border border-slate-200 bg-white">
+    <div class="flex items-baseline justify-between border-b border-slate-100 px-6 py-4">
+      <h2 class="text-lg font-semibold text-slate-900">All entitlement overrides</h2>
+      <p class="text-xs text-slate-500"><%= overrides.length %> row<%= overrides.length === 1 ? '' : 's' %> · newest first</p>
+    </div>
+
+    <% if (overrides.length === 0) { %>
+      <div class="px-6 py-8 text-center text-sm text-slate-500">No overrides yet. Rows appear here when the Dodo webhook fires OR admin uses Grant Lite.</div>
+    <% } else { %>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-xs">
+          <thead class="bg-slate-50 text-slate-500">
+            <tr>
+              <th class="px-6 py-2 text-left font-medium">Email</th>
+              <th class="px-4 py-2 text-left font-medium">Plan</th>
+              <th class="px-4 py-2 text-left font-medium">Entitlements</th>
+              <th class="px-4 py-2 text-left font-medium">Status</th>
+              <th class="px-4 py-2 text-left font-medium">Auto-renew</th>
+              <th class="px-4 py-2 text-left font-medium">Expires</th>
+              <th class="px-4 py-2 text-left font-medium">Granted by</th>
+              <th class="px-4 py-2 text-left font-medium">Granted at</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <% overrides.forEach(function(row) { %>
+              <tr class="<%= row.expires_at && new Date(row.expires_at) < new Date() ? 'bg-amber-50/30' : '' %>">
+                <td class="px-6 py-2 text-slate-900"><%= esc(row.email || '—') %></td>
+                <td class="px-4 py-2 text-slate-700"><%= esc(row.plan_label || row.plan_code || '—') %></td>
+                <td class="px-4 py-2 font-mono text-slate-500"><%= esc((row.entitlements || []).join(', ') || '—') %></td>
+                <td class="px-4 py-2"><%- statusPill(row.payment_status) %></td>
+                <td class="px-4 py-2 text-slate-700"><%= row.auto_renew === false ? 'off' : 'on' %></td>
+                <td class="px-4 py-2 text-slate-600"><%= fmtDate(row.expires_at) %> · <span class="text-slate-400"><%= fmtDays(row.expires_at) %></span></td>
+                <td class="px-4 py-2 text-slate-500"><%= esc(row.granted_by_email || '—') %></td>
+                <td class="px-4 py-2 text-slate-500"><%= fmtDate(row.granted_at) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </section>
+
+  <!-- Recent webhook events ─────────────────────────────────────── -->
+  <section class="rounded-lg border border-slate-200 bg-white">
+    <div class="flex items-baseline justify-between border-b border-slate-100 px-6 py-4">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-900">Recent webhook events</h2>
+        <p class="text-xs text-slate-500 mt-0.5">From <code class="rounded bg-slate-100 px-1">processed_webhook_events</code>. Idempotency ledger doubles as the audit trail for what Dodo has told us.</p>
+      </div>
+      <p class="text-xs text-slate-500"><%= events.length %> event<%= events.length === 1 ? '' : 's' %></p>
+    </div>
+
+    <% if (events.length === 0) { %>
+      <div class="px-6 py-8 text-center text-sm text-slate-500">
+        <p>No recent events.</p>
+        <p class="mt-2 text-xs">If Dodo webhooks were configured recently, wait for the next event. If they haven't been configured yet — <b>this is the immediate ops task</b>. Point Dodo at <code class="rounded bg-slate-100 px-1">https://www.prooftamil.com/api/webhooks/dodo</code>.</p>
+      </div>
+    <% } else { %>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-xs">
+          <thead class="bg-slate-50 text-slate-500">
+            <tr>
+              <th class="px-6 py-2 text-left font-medium">Event type</th>
+              <th class="px-4 py-2 text-left font-medium">Outcome</th>
+              <th class="px-4 py-2 text-left font-medium">Processed</th>
+              <th class="px-6 py-2 text-left font-medium">Event id</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <% events.forEach(function(e) {
+                const outcomeStr = String(e.outcome || '');
+                const isError = /^(error|failed)/i.test(outcomeStr);
+            %>
+              <tr class="<%= isError ? 'bg-red-50/30' : '' %>">
+                <td class="px-6 py-2 font-mono text-slate-800"><%= esc(e.event_type || '—') %></td>
+                <td class="px-4 py-2">
+                  <% if (isError) { %>
+                    <span class="inline-flex items-center rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-200"><%= esc(outcomeStr) %></span>
+                  <% } else { %>
+                    <span class="inline-flex items-center rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200"><%= esc(outcomeStr || '—') %></span>
+                  <% } %>
+                </td>
+                <td class="px-4 py-2 text-slate-600"><%= fmtDate(e.processed_at) %></td>
+                <td class="px-6 py-2 font-mono text-slate-500"><%= esc(e.event_id || '—') %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </section>
+
+</div>
+
+<%- include('../../partials/admin/layout-footer') %>

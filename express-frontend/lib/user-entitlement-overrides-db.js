@@ -214,10 +214,31 @@ async function markEventProcessed(eventId, { eventType, outcome, detail } = {}) 
   }
 }
 
+/**
+ * List the most recent processed webhook events, newest first. Powers
+ * the /admin/health/entitlements dashboard — no idempotency use here,
+ * this is purely a read for the audit view.
+ */
+async function listRecentWebhookEvents({ limit = 100 } = {}) {
+  if (!isConfigured()) return [];
+  try {
+    const url =
+      `${SUPABASE_URL}/rest/v1/processed_webhook_events` +
+      `?select=event_id,event_type,processed_at,outcome,detail` +
+      `&order=processed_at.desc&limit=${limit}`;
+    const resp = await axios.get(url, { headers: supabaseHeaders(), timeout: 3000 });
+    return Array.isArray(resp.data) ? resp.data : [];
+  } catch (err) {
+    console.warn('[user-entitlement-overrides-db] listRecentWebhookEvents error:', err.message);
+    return [];
+  }
+}
+
 module.exports = {
   findOverrideByEmail,
   findFullSubscriptionByEmail,
   listAllOverrides,
+  listRecentWebhookEvents,
   upsertOverride,
   isEventProcessed,
   markEventProcessed,
