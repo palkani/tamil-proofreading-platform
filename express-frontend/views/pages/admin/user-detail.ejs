@@ -530,25 +530,18 @@
     if (!confirm('Start impersonation session as ' + (recipientEmail || 'user #' + userId) + '?\n\n' +
                  'You will browse the site AS this user for 30 minutes. Every action is audit-logged.\n' +
                  'End the session with the banner shown at the top of every page.')) return;
+    // The server handles the cookie swap now — see routes/admin.js:
+    // /admin/api/users/:id/impersonate. It Set-Cookie's the new access_token
+    // as HttpOnly so it actually overrides the (also-HttpOnly) admin cookie.
+    // The old client-side document.cookie swap only created a second
+    // non-HttpOnly cookie with the same name; the browser sent both and
+    // Express picked the admin one → identity was never switched.
     fetch('/admin/api/users/' + encodeURIComponent(userId) + '/impersonate', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
     })
       .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error(j.error || 'HTTP ' + r.status))))
-      .then((data) => {
-        // Preserve the admin's original token so "End impersonation" can
-        // restore it. We stash it in a cookie; it's marked path=/ so any
-        // page in the app can read it and inject the banner.
-        const cookies = document.cookie.split(';').reduce((a, c) => { const [k, v] = c.trim().split('='); a[k] = v; return a; }, {});
-        const originalToken = cookies['access_token'];
-        if (originalToken) {
-          document.cookie = 'admin_original_token=' + originalToken + '; path=/; max-age=1800; SameSite=Lax';
-        }
-        // Swap access_token to the impersonation token.
-        document.cookie = 'access_token=' + data.access_token + '; path=/; max-age=1800; SameSite=Lax';
-        // Redirect to homepage as the impersonated user.
-        window.location.href = '/';
-      })
+      .then(() => { window.location.href = '/'; })
       .catch((err) => alert('Impersonation failed: ' + err.message));
   });
 })();
