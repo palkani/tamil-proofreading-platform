@@ -1010,23 +1010,26 @@ router.get('/billing/success', async (req, res) => {
     }
   }
 
-  // Signal 2 — backend Pro state for the logged-in user. Belt and
+  // Signal 2 — Pro state via the MERGED billing view (backend billing/me
+  // combined with the Supabase entitlement override). Belt and
   // suspenders in case the checkout_attempt lookup missed (older
   // checkouts pre-CheckoutAttempts table, or a Dodo webhook that
   // arrived before we recorded the attempt for some reason).
+  //
+  // Uses fetchMergedBilling so Lite subscribers — whose Pro state may
+  // land in the Supabase override table BEFORE the backend catches up,
+  // or whose plan lives entirely in the override — get "confirmed" on
+  // this page instead of a permanent "pending".
   let verifiedByBackend = null;
   if (user && req.cookies && req.cookies.access_token) {
     try {
-      const resp = await axios.get(backendURL + '/api/v1/billing/me', {
-        headers: { Authorization: 'Bearer ' + req.cookies.access_token },
-        timeout: 5000,
-        validateStatus: () => true,
-      });
-      if (resp.status === 200 && resp.data && resp.data.billing) {
-        verifiedByBackend = !!resp.data.billing.is_premium;
+      const { fetchMergedBilling } = require('../lib/billing-with-override');
+      const merged = await fetchMergedBilling(req);
+      if (merged) {
+        verifiedByBackend = !!merged.is_premium;
       }
     } catch (err) {
-      console.warn('[BILLING] verify failed:', err.message);
+      console.warn('[BILLING] merged verify failed:', err.message);
     }
   }
 

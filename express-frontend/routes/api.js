@@ -4082,9 +4082,22 @@ router.get('/account/export', async (req, res) => {
     }
   };
 
-  const [profile, billing] = await Promise.all([
+  // Fetch backend endpoints AND the Express-side entitlement override in
+  // parallel. Without the override, a Lite subscriber's data export
+  // silently omits the subscription that governs their access — a real
+  // GDPR problem because it's data about them the system uses to decide
+  // what they can do.
+  const { findFullSubscriptionByEmail } = require('../lib/user-entitlement-overrides-db');
+  const email = String((req.user && req.user.email) || '').toLowerCase().trim();
+  const [profile, billing, override] = await Promise.all([
     fetchJson('/api/v1/me'),
     fetchJson('/api/v1/billing/me'),
+    email
+      ? findFullSubscriptionByEmail(email).catch((err) => {
+          console.warn('[account/export] override lookup failed:', err.message);
+          return null;
+        })
+      : Promise.resolve(null),
   ]);
 
   const bundle = {
@@ -4096,6 +4109,10 @@ router.get('/account/export', async (req, res) => {
     },
     profile: profile.ok ? profile.data : { unavailable: true, reason: profile.reason },
     billing: billing.ok ? billing.data : { unavailable: true, reason: billing.reason },
+    // Express-side per-user entitlement override, if any. Populated by the
+    // Dodo webhook receiver and by admin Grant Lite. Shape is documented
+    // in db/migrations/subscription_lifecycle_expansion.sql.
+    entitlement_override: override || { present: false },
   };
 
   const filename = `prooftamil-data-${(req.user.email || req.user.id).replace(/[^A-Za-z0-9._-]/g, '_')}-${generatedAt.slice(0, 10)}.json`;
