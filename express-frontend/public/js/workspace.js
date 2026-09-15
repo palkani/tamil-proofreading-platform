@@ -6553,6 +6553,17 @@ class WorkspaceController {
     const text = document.getElementById('plan-pill-text');
     if (!el || !dot || !text) return;
 
+    // Effective Pro state — trust the server-rendered window.USER_IS_PRO
+    // (populated from res.locals.billing which merges backend billing
+    // with the Supabase override) OVER usage.is_pro. Backend's
+    // /billing/usage/today doesn't see Express-side Lite overrides, so a
+    // Lite subscriber would come back is_pro:false and get painted "Free
+    // · N/M used today". This coercion fixes that without disturbing any
+    // other behavior: real backend Pro users still fall through the same
+    // branches, past-due still overrides everything, expiry warning still
+    // fires when a subscription_end_date is present.
+    const effectiveIsPro = usage.is_pro === true || window.USER_IS_PRO === true;
+
     // Decide state — order matters, first match wins.
     // 1. past_due (RED) beats everything: money problem, act now
     // 2. expires soon (AMBER): still Pro but about to lose it
@@ -6563,9 +6574,12 @@ class WorkspaceController {
     const rawStatus = (usage.raw_provider_status || '').toLowerCase();
     const isPastDue = rawStatus === 'past_due';
 
-    // Compute days until expiry (only meaningful for Pro users)
+    // Compute days until expiry (only meaningful for Pro users with a
+    // subscription_end_date from the backend — override-only Lite users
+    // don't have one, and skipping this branch for them is correct: they
+    // stay on the plain "Pro" branch below).
     let daysUntilExpiry = null;
-    if (usage.is_pro && usage.subscription_end_date) {
+    if (effectiveIsPro && usage.subscription_end_date) {
       const end = new Date(usage.subscription_end_date);
       const now = new Date();
       daysUntilExpiry = Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)));
@@ -6574,12 +6588,12 @@ class WorkspaceController {
     if (isPastDue) {
       bg = '#FEE2E2'; border = '#FCA5A5'; color = '#991B1B'; dotColor = '#DC2626';
       label = 'Payment past due';
-    } else if (usage.is_pro && daysUntilExpiry !== null && daysUntilExpiry <= 7) {
+    } else if (effectiveIsPro && daysUntilExpiry !== null && daysUntilExpiry <= 7) {
       bg = '#FEF3C7'; border = '#FCD34D'; color = '#92400E'; dotColor = '#D97706';
       label = daysUntilExpiry === 0
         ? 'Pro expires today'
         : `Pro expires in ${daysUntilExpiry} day${daysUntilExpiry === 1 ? '' : 's'}`;
-    } else if (usage.is_pro) {
+    } else if (effectiveIsPro) {
       bg = '#DCFCE7'; border = '#86EFAC'; color = '#166534'; dotColor = '#16A34A';
       label = 'Pro';
       href = '/account'; // Pro users go to account instead of pricing
@@ -6605,6 +6619,15 @@ class WorkspaceController {
   // does NOT run on pending-draft restoration (signup bridge) because
   // that flow explicitly wants to bring the demo text over the fence.
   async gatedCreateNewDraft() {
+    // Pro users (including Lite via Express-side override) have no daily
+    // credit cap — skip the quota check entirely. Without this bail-out,
+    // /billing/usage/today would return is_exhausted:true for a Lite user
+    // whose Pro status lives only in the override table, and we'd show
+    // them the upgrade modal on New Draft.
+    if (window.USER_IS_PRO === true) {
+      this.createNewDraft();
+      return;
+    }
     try {
       const r = await this.apiFetch('/api/v1/billing/usage/today');
       if (r.ok) {

@@ -42,6 +42,16 @@
   // Read the plan directly from the DOM / global signals. Returns
   // 'pro' | 'free' | null (null = not resolved yet, caller may fetch).
   function readPlanFromSignals() {
+    // Signal 0: window.USER_IS_PRO — the server-rendered truth from
+    // res.locals.billing (merges backend billing/me with the Supabase
+    // entitlement override). This is the SINGLE most reliable signal for
+    // Lite subscribers whose Pro status doesn't exist backend-side; it
+    // reads synchronously with zero fetches. Checked before the DOM pill
+    // because that pill might still say "Loading…" or (before the
+    // paintPlanPill fix in this same PR) might have been painted "Free"
+    // by a stale /usage/today response.
+    if (window.USER_IS_PRO === true) return 'pro';
+
     // Signal 1: the plan pill text painted by workspace.js
     const pill = document.getElementById('plan-pill-text');
     if (pill) {
