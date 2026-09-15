@@ -55,6 +55,7 @@ function commonLocals(req, activeTab) {
       { key: 'blog-generator', label: 'Blog generator', href: '/admin/blog-generator', icon: 'chart' },
       { key: 'communications', label: 'Communications', href: '/admin/communications', icon: 'mail' },
       { key: 'promo-codes', label: 'Promo codes', href: '/admin/promo-codes', icon: 'tag' },
+      { key: 'health', label: 'Entitlement health', href: '/admin/health/entitlements', icon: 'chart' },
       { key: 'audit', label: 'Audit log', href: '/admin/audit', icon: 'alert' },
     ],
   };
@@ -161,6 +162,75 @@ router.get('/api/audit/snapshot', requireAdmin, (req, res) => {
     entries: getRingSnapshot(),
     process_uptime_seconds: Math.round(process.uptime()),
     note: 'This is a per-function-instance ring buffer (last 500 events). The authoritative audit log is Vercel logs — filter by `kind:admin_audit`.',
+  });
+});
+
+// Entitlement health dashboard — visualizes the Supabase override table
+// alongside processed webhook events so drift, failed writes, and
+// past-expiry-still-active rows are visible without opening Supabase.
+// Answers the "any error should be noticed" ask by making anomalies
+// glanceable in one screen instead of email-based support triage.
+router.get('/health/entitlements', requireAdmin, async (req, res) => {
+  const overridesDb = require('../lib/user-entitlement-overrides-db');
+
+  // Two Supabase reads in parallel — small enough that we do the join
+  // in JS instead of a stored proc. If either fails we render the page
+  // with what we have and surface the failure inline.
+  const [overrides, events] = await Promise.all([
+    overridesDb.listAllOverrides({ limit: 1000 }).catch((err) => {
+      console.warn('[health/entitlements] listAllOverrides error:', err.message);
+      return [];
+    }),
+    overridesDb.listRecentWebhookEvents({ limit: 100 }).catch((err) => {
+      console.warn('[health/entitlements] listRecentWebhookEvents error:', err.message);
+      return [];
+    }),
+  ]);
+
+  const nowMs = Date.now();
+  const isFuture = (iso) => iso && new Date(iso).getTime() > nowMs;
+
+  // Anomaly buckets — each row a plain object the view renders.
+  const anomalies = {
+    expiredButActive: overrides.filter(
+      (o) => o.is_premium === true && o.expires_at && !isFuture(o.expires_at)
+    ),
+    pastDueStuck: overrides.filter(
+      (o) =>
+        o.payment_status === 'past_due' &&
+        o.expires_at &&
+        (nowMs - new Date(o.expires_at).getTime()) / 86400000 > 7
+    ),
+    missingPlan: overrides.filter((o) => o.is_premium === true && !o.plan_code),
+    refundedButActive: overrides.filter(
+      (o) => o.payment_status === 'refunded' && o.is_premium === true
+    ),
+    failedEvents: events.filter((e) =>
+      String(e.outcome || '').match(/^(error|failed)/i)
+    ),
+  };
+
+  // Summary counts for the tiles at the top of the page.
+  const summary = {
+    total: overrides.length,
+    active: overrides.filter((o) => o.is_premium === true && isFuture(o.expires_at)).length,
+    expired: overrides.filter((o) => o.expires_at && !isFuture(o.expires_at)).length,
+    autoRenewOff: overrides.filter((o) => o.auto_renew === false && o.is_premium === true).length,
+    cancelled: overrides.filter((o) => o.cancelled_at).length,
+    adminGranted: overrides.filter((o) => (o.granted_by_email || '').toLowerCase().indexOf('webhook') === -1).length,
+    recentEvents: events.length,
+    failedEvents: anomalies.failedEvents.length,
+  };
+
+  res.render('pages/admin/health-entitlements', {
+    title: 'Admin · Entitlement health',
+    ...commonLocals(req, 'health'),
+    summary,
+    anomalies,
+    overrides,
+    events,
+    generatedAt: new Date().toISOString(),
+    dbConfigured: overridesDb.isConfigured(),
   });
 });
 
