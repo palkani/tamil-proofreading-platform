@@ -39,6 +39,7 @@ const orgRouter = require('./routes/org');
 const inviteRouter = require('./routes/invite');
 const onboardingRouter = require('./routes/onboarding');
 const webhooksRouter = require('./routes/webhooks');
+const cronRouter = require('./routes/cron');
 
 // JS files that must never be served from cache
 const NO_CACHE_JS = [
@@ -260,6 +261,10 @@ function createApp() {
   app.use('/invite', inviteRouter);
   app.use('/onboarding', onboardingRouter);
   app.use('/', indexRouter);
+  // Cron endpoints — mounted before the generic /api catch-all so
+  // /api/cron/* resolves here (they need their own auth check, not
+  // requireAuth). Vercel Cron config in vercel.json hits these.
+  app.use('/api/cron', cronRouter);
   // Before apiRouter so /api/chat and /api/leads resolve here rather than
   // falling through to whatever apiRouter does with unmatched paths.
   app.use('/api', chatbotRouter);
