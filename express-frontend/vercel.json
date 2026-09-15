@@ -130,6 +130,14 @@
       "destination": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/ime/:path*"
     },
     {
+      "source": "/api/v1/billing/me",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/api/v1/billing/usage/today",
+      "destination": "/api/index.js"
+    },
+    {
       "source": "/api/v1/:path*",
       "destination": "https://prooftamil-backend-991187041222.asia-south1.run.app/api/v1/:path*"
     },
