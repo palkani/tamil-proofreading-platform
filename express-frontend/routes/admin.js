@@ -546,6 +546,60 @@ router.all('/api/*', requireAdmin, async (req, res) => {
       }
     }
 
+    // Enrich GET /users/:id with the Express-side entitlement override
+    // if one exists for this user's email. Without this, the admin
+    // detail page shows "Free (inactive)" for users granted plans via
+    // /admin/promo-codes or /admin/api/user-overrides (e.g. Proofreading
+    // Lite grants), because the Go backend has no idea those overrides
+    // exist. Same enrichment pattern as PR #189 used for /admin/users.
+    if (
+      method === 'GET' &&
+      /^\/users\/\d+$/.test(upstreamPath) &&
+      response.status >= 200 && response.status < 300 &&
+      data && data.profile && data.profile.email
+    ) {
+      try {
+        const override = await userOverridesDb.findFullSubscriptionByEmail(data.profile.email);
+        const isLive = override && (!override.expires_at || new Date(override.expires_at) > new Date());
+        if (isLive) {
+          // Merge into shape the client already renders. is_pro_active
+          // drives the top-right badge; premium_override drives the
+          // "[override]" tag on the Plan row; plan_label/plan_code/
+          // subscription_end/entitlements power the detail rows.
+          data = {
+            ...data,
+            is_pro_active: true,
+            profile: {
+              ...data.profile,
+              premium_override:  true,
+              plan_code:         override.plan_code || data.profile.plan_code || null,
+              plan_label:        override.plan_label || null,
+              subscription:      override.plan_code
+                ? String(override.plan_code).toLowerCase()
+                : data.profile.subscription,
+              subscription_end:  override.expires_at || data.profile.subscription_end || null,
+              entitlements:      Array.isArray(override.entitlements)
+                ? override.entitlements
+                : data.profile.entitlements,
+              override_source: {
+                granted_by:      override.granted_by_email || null,
+                granted_at:      override.granted_at || null,
+                auto_renew:      override.auto_renew !== false,
+                payment_status:  override.payment_status || null,
+                cancelled_at:    override.cancelled_at || null,
+                next_renewal_at: override.next_renewal_at || null,
+                notes:           override.notes || null,
+              },
+            },
+          };
+        }
+      } catch (e) {
+        // Fail-quiet: never break the admin page because the override
+        // lookup errored. The page will just render the backend view.
+        console.warn('[ADMIN] user-detail override enrichment error:', e.message);
+      }
+    }
+
     res.status(response.status);
     if (response.headers['content-type']) {
       res.type(response.headers['content-type']);
