@@ -128,5 +128,23 @@ $$;
 ALTER TABLE admin_promo_codes             DISABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_promo_code_redemptions  DISABLE ROW LEVEL SECURITY;
 
--- ── 5. Refresh PostgREST schema cache ────────────────────────────────
+-- ── 5. Grant table + RPC privileges ──────────────────────────────────
+-- Disabling RLS is not enough — PostgREST also enforces classic Postgres
+-- GRANTs before it even considers RLS. On newer Supabase projects
+-- CREATE TABLE via the SQL Editor does NOT auto-grant CRUD to anon /
+-- authenticated, so a bare `INSERT INTO admin_promo_codes` from the
+-- middleware would return 401 unauthorized even with RLS off. These
+-- grants are idempotent (GRANT is a no-op if already granted), safe
+-- to re-run on an existing project.
+GRANT SELECT, INSERT, UPDATE, DELETE ON admin_promo_codes            TO anon, authenticated;
+GRANT SELECT, INSERT                  ON admin_promo_code_redemptions TO anon, authenticated;
+-- The redemptions.id is a BIGSERIAL — anon needs USAGE on the sequence
+-- to consume next-values on INSERT.
+GRANT USAGE, SELECT ON SEQUENCE admin_promo_code_redemptions_id_seq TO anon, authenticated;
+-- The redemption RPC does both an UPDATE and an INSERT internally, so
+-- executing it requires table grants above PLUS execute rights on the
+-- function itself.
+GRANT EXECUTE ON FUNCTION redeem_admin_promo_code(TEXT, TEXT, TEXT, TEXT) TO anon, authenticated;
+
+-- ── 6. Refresh PostgREST schema cache ────────────────────────────────
 NOTIFY pgrst, 'reload schema';
