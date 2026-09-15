@@ -75,21 +75,41 @@ async function findOverrideByEmail(email) {
 async function upsertOverride({
   email, is_premium, entitlements, plan_code, plan_label,
   expires_at, granted_by_email, notes,
+  // subscription-lifecycle fields (all optional — omitted keys are not
+  // touched on upsert; this is IMPORTANT because separate flows update
+  // different subsets of columns and we don't want a webhook to overwrite
+  // an admin-set field, or vice versa).
+  auto_renew, payment_status, cancelled_at,
+  dodo_customer_id, dodo_subscription_id,
+  currency, amount_cents, next_renewal_at,
 }) {
   if (!isConfigured()) return { error: 'db_not_configured' };
   const key = String(email || '').trim().toLowerCase();
   if (!key) return { error: 'email_required' };
 
-  const row = {
-    email:            key,
-    is_premium:       is_premium !== false,
-    entitlements:     Array.isArray(entitlements) ? entitlements : [],
-    plan_code:        plan_code || null,
-    plan_label:       plan_label || null,
-    expires_at:       expires_at || null,
-    granted_by_email: String(granted_by_email || 'dodo-webhook').toLowerCase(),
-    notes:            notes || null,
-  };
+  // Only include fields that were EXPLICITLY passed. Undefined = don't
+  // touch. Null = clear the column.
+  const row = { email: key };
+  if (is_premium           !== undefined) row.is_premium           = is_premium !== false;
+  if (entitlements         !== undefined) row.entitlements         = Array.isArray(entitlements) ? entitlements : [];
+  if (plan_code            !== undefined) row.plan_code            = plan_code || null;
+  if (plan_label           !== undefined) row.plan_label           = plan_label || null;
+  if (expires_at           !== undefined) row.expires_at           = expires_at || null;
+  if (granted_by_email     !== undefined) row.granted_by_email     = String(granted_by_email || 'dodo-webhook').toLowerCase();
+  if (notes                !== undefined) row.notes                = notes || null;
+  if (auto_renew           !== undefined) row.auto_renew           = auto_renew !== false;
+  if (payment_status       !== undefined) row.payment_status       = payment_status || 'active';
+  if (cancelled_at         !== undefined) row.cancelled_at         = cancelled_at || null;
+  if (dodo_customer_id     !== undefined) row.dodo_customer_id     = dodo_customer_id || null;
+  if (dodo_subscription_id !== undefined) row.dodo_subscription_id = dodo_subscription_id || null;
+  if (currency             !== undefined) row.currency             = currency || null;
+  if (amount_cents         !== undefined) row.amount_cents         = amount_cents === null ? null : parseInt(amount_cents, 10) || 0;
+  if (next_renewal_at      !== undefined) row.next_renewal_at      = next_renewal_at || null;
+
+  // Ensure the merge-upsert has ENOUGH fields to be a valid row when the
+  // email PK conflicts. If this is the first ever insert for this email,
+  // granted_by_email must be present (NOT NULL) — set a default when omitted.
+  if (!row.granted_by_email) row.granted_by_email = 'dodo-webhook';
 
   try {
     const resp = await axios.post(
@@ -110,4 +130,42 @@ async function upsertOverride({
   }
 }
 
-module.exports = { findOverrideByEmail, upsertOverride, isConfigured };
+/**
+ * Idempotency check for webhook processing. Returns true if this
+ * event id has already been processed; caller should skip it.
+ */
+async function isEventProcessed(eventId) {
+  if (!isConfigured() || !eventId) return false;
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/processed_webhook_events?event_id=eq.${encodeURIComponent(eventId)}&select=event_id&limit=1`;
+    const resp = await axios.get(url, { headers: supabaseHeaders(), timeout: 3000 });
+    return Array.isArray(resp.data) && resp.data.length > 0;
+  } catch (err) {
+    // Fail-quiet: on lookup error we treat as "not processed" and let
+    // the event through. Worst case: a double-processed event, which
+    // upsertOverride handles idempotently anyway.
+    console.warn('[user-entitlement-overrides-db] isEventProcessed error:', err.message);
+    return false;
+  }
+}
+
+async function markEventProcessed(eventId, { eventType, outcome, detail } = {}) {
+  if (!isConfigured() || !eventId) return;
+  try {
+    await axios.post(
+      `${SUPABASE_URL}/rest/v1/processed_webhook_events`,
+      { event_id: eventId, event_type: eventType || null, outcome: outcome || null, detail: detail || null },
+      { headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates,return=minimal' }, timeout: 3000 }
+    );
+  } catch (err) {
+    console.warn('[user-entitlement-overrides-db] markEventProcessed error:', err.message);
+  }
+}
+
+module.exports = {
+  findOverrideByEmail,
+  upsertOverride,
+  isEventProcessed,
+  markEventProcessed,
+  isConfigured,
+};

@@ -4261,7 +4261,7 @@ router.post('/promo-code/redeem', async (req, res) => {
   if (dbEntry) {
     return res.json({
       ok: true,
-      checkout_url: dbEntry.checkout_url,
+      checkout_url: attachCheckoutContext(dbEntry.checkout_url, { email, code, userId: req.user?.id }),
       plan_code:    dbEntry.plan_code,
       label:        dbEntry.label,
     });
@@ -4276,7 +4276,7 @@ router.post('/promo-code/redeem', async (req, res) => {
   if (staticEntry) {
     return res.json({
       ok: true,
-      checkout_url: staticEntry.checkout_url,
+      checkout_url: attachCheckoutContext(staticEntry.checkout_url, { email, code, userId: req.user?.id }),
       plan_code:    staticEntry.plan_code,
       label:        staticEntry.label,
     });
@@ -4287,6 +4287,37 @@ router.post('/promo-code/redeem', async (req, res) => {
     message: 'This code is not valid, has already been used, or has expired.',
   });
 });
+
+/**
+ * Append customer context to a Dodo checkout URL so the webhook can
+ * reliably match `payment.succeeded` back to a ProofTamil user without
+ * relying on the email the customer typed at Dodo's form matching
+ * their ProofTamil account email.
+ *
+ * Attaches:
+ *   customer_email       — pre-fills Dodo's email field
+ *   metadata[code]       — promo code they used (forwarded in webhook)
+ *   metadata[user_id]    — internal user id for exact match
+ *
+ * Preserves any existing query params (e.g. ?quantity=1).
+ */
+function attachCheckoutContext(rawUrl, { email, code, userId }) {
+  if (!rawUrl) return rawUrl;
+  try {
+    const url = new URL(rawUrl);
+    if (email && !url.searchParams.has('customer_email')) {
+      url.searchParams.set('customer_email', email);
+    }
+    if (code) url.searchParams.set('metadata[code]', code.toUpperCase());
+    if (userId) url.searchParams.set('metadata[user_id]', String(userId));
+    url.searchParams.set('metadata[source]', 'prooftamil-pricing');
+    return url.toString();
+  } catch (_) {
+    // If the URL is somehow malformed, return as-is rather than block
+    // the checkout — worst case we fall back to today's fuzzy match.
+    return rawUrl;
+  }
+}
 
 // Proxy other API calls to Go backend
 // IMPORTANT: This catch-all must be LAST to avoid intercepting specific routes like /submit

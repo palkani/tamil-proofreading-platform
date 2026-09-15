@@ -27,7 +27,11 @@ const {
   resolveEntitlements,
   bucketize,
 } = require('../lib/webhooks-dodo');
-const { upsertOverride } = require('../lib/user-entitlement-overrides-db');
+const {
+  upsertOverride,
+  isEventProcessed,
+  markEventProcessed,
+} = require('../lib/user-entitlement-overrides-db');
 
 // express.raw preserves the request body as a Buffer — required for
 // HMAC verification (JSON.stringify(parsed) wouldn't byte-match the
@@ -87,13 +91,29 @@ router.post('/dodo', express.raw({ type: '*/*', limit: '1mb' }), async (req, res
     subscription_id:     event.subscription_id,
     current_period_end:  event.current_period_end,
     subscription_status: event.subscription_status,
+    auto_renew:          event.auto_renew,
+    amount_cents:        event.amount_cents,
+    currency:            event.currency,
     mode:                event.mode,
   });
 
-  // --- 4. Route by lifecycle bucket ---------------------------------
+  // --- 4. Idempotency check ------------------------------------------
+  // Dodo retries any event until we 200. That means the same event id
+  // can arrive twice if a previous 200 was lost in transit. Skip if
+  // we've already fully processed it — upsertOverride is idempotent
+  // for the primary grant/revoke, but re-issuing a renewal on the
+  // same event would extend expires_at by another cycle (double-credit).
+  const svixEventId = headers['webhook-id'] || headers['svix-id'] || event.id;
+  if (svixEventId && await isEventProcessed(svixEventId)) {
+    console.log('[DODO-WEBHOOK] duplicate event — skipping', { event_id: svixEventId, type: event.type });
+    return res.status(200).send('ok');
+  }
+
+  // --- 5. Route by lifecycle bucket ---------------------------------
   const bucket = bucketize(event.type);
   if (bucket === 'noop') {
     console.log('[DODO-WEBHOOK] no-op event type:', event.type);
+    if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: 'noop' });
     return res.status(200).send('ok');
   }
 
@@ -103,6 +123,7 @@ router.post('/dodo', express.raw({ type: '*/*', limit: '1mb' }), async (req, res
     console.warn('[DODO-WEBHOOK] no email extractable from payload — dumping raw for adjustment', {
       raw: event.raw,
     });
+    if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: 'error', detail: { reason: 'no_email' } });
     return res.status(200).send('ok');   // 200 so Dodo doesn't retry — we own the fix, not them
   }
 
@@ -114,40 +135,65 @@ router.post('/dodo', express.raw({ type: '*/*', limit: '1mb' }), async (req, res
     // miss a renewal event.
     const expiresAt = event.current_period_end || new Date(Date.now() + 32 * 24 * 3600 * 1000).toISOString();
     const result = await upsertOverride({
-      email:            event.email,
-      is_premium:       true,
-      entitlements:     ents.entitlements,
-      plan_code:        ents.plan_code,
-      plan_label:       ents.plan_label,
-      expires_at:       expiresAt,
-      granted_by_email: 'dodo-webhook',
-      notes:            `Dodo ${event.type} · event ${event.id || '<no-id>'} · product ${event.product_id || '<no-product>'} · mode ${event.mode || 'unknown'}`,
+      email:                event.email,
+      is_premium:           true,
+      entitlements:         ents.entitlements,
+      plan_code:            ents.plan_code,
+      plan_label:           ents.plan_label,
+      expires_at:           expiresAt,
+      next_renewal_at:      expiresAt,          // for auto-renew: this is when Dodo will charge again
+      payment_status:       'active',
+      auto_renew:           event.auto_renew !== false,
+      dodo_customer_id:     event.customer_id || undefined,
+      dodo_subscription_id: event.subscription_id || undefined,
+      currency:             event.currency || undefined,
+      amount_cents:         event.amount_cents || undefined,
+      // Clear any previous cancellation flag — subscription is active again
+      cancelled_at:         null,
+      granted_by_email:     'dodo-webhook',
+      notes:                `Dodo ${event.type} · event ${svixEventId || '<no-id>'} · product ${event.product_id || '<no-product>'} · mode ${event.mode || 'unknown'}`,
     });
     if (result.ok) {
       console.log('[DODO-WEBHOOK] ✅ granted', { email: event.email, plan: ents.plan_label, expires_at: expiresAt });
+      if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: 'granted', detail: { email: event.email, plan: ents.plan_code } });
     } else {
       console.error('[DODO-WEBHOOK] ❌ grant failed', { email: event.email, error: result.error, detail: result.detail });
+      // Do NOT mark processed on DB failure — let Dodo retry so we get another chance.
     }
     return res.status(200).send('ok');
   }
 
   if (bucket === 'deactivate') {
-    // Revoke: set expires_at to now so hasFeature() sees them as expired
-    // immediately, but leave the row so audit trail is preserved.
-    const result = await upsertOverride({
-      email:            event.email,
-      is_premium:       false,
-      entitlements:     [],
-      plan_code:        ents.plan_code,
-      plan_label:       ents.plan_label + ' · cancelled',
-      expires_at:       new Date().toISOString(),
-      granted_by_email: 'dodo-webhook',
-      notes:            `Dodo ${event.type} · event ${event.id || '<no-id>'} · product ${event.product_id || '<no-product>'}`,
-    });
+    // IMPORTANT: for cancellation, DO NOT set expires_at to NOW. Customer
+    // paid through the current period and expects access until it ends.
+    // We flag cancelled_at + payment_status='cancelled' + auto_renew=false
+    // and leave expires_at ALONE. The middleware will still honor the
+    // override until expires_at passes naturally.
+    //
+    // For explicit "expired" or "failed" events (as opposed to
+    // "cancelled" which is a soft flag), the semantics differ — those
+    // DO cut premium right now.
+    const isSoftCancel = /cancel(?:led|ed)?$/i.test(event.type || '');
+    const patch = {
+      email:                event.email,
+      auto_renew:           false,
+      payment_status:       isSoftCancel ? 'cancelled' : 'expired',
+      cancelled_at:         new Date().toISOString(),
+      dodo_customer_id:     event.customer_id || undefined,
+      dodo_subscription_id: event.subscription_id || undefined,
+      notes:                `Dodo ${event.type} · event ${svixEventId || '<no-id>'} · product ${event.product_id || '<no-product>'}`,
+    };
+    // Hard-expire only for non-cancel deactivation events (expired/failed/paused).
+    if (!isSoftCancel) {
+      patch.is_premium = false;
+      patch.expires_at = new Date().toISOString();
+    }
+    const result = await upsertOverride(patch);
     if (result.ok) {
-      console.log('[DODO-WEBHOOK] 🚫 revoked', { email: event.email, reason: event.type });
+      console.log('[DODO-WEBHOOK] 🚫 ' + (isSoftCancel ? 'cancellation flagged (premium stays until expires_at)' : 'hard-expired'), { email: event.email, reason: event.type });
+      if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: isSoftCancel ? 'cancelled' : 'revoked' });
     } else {
-      console.error('[DODO-WEBHOOK] ❌ revoke failed', { email: event.email, error: result.error });
+      console.error('[DODO-WEBHOOK] ❌ deactivate failed', { email: event.email, error: result.error });
     }
     return res.status(200).send('ok');
   }
