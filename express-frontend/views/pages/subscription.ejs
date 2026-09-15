@@ -155,6 +155,14 @@
 </div>
 
 <script>
+  // Server-rendered snapshot of the merged billing shape (backend +
+  // Express-side override). See middleware/attachEntitlements.js.
+  // For Lite subscribers whose Pro state lives ONLY in the override
+  // table, /api/v1/billing/me returns has_active_subscription:false —
+  // this snapshot is what tells us they're actually premium.
+  window.EXPRESS_BILLING = <%- JSON.stringify(locals.billing || null) %>;
+</script>
+<script>
 (function() {
   var loading = document.getElementById('sub-loading');
   var content = document.getElementById('sub-content');
@@ -182,7 +190,18 @@
     var limitsData  = results[1];
 
     var billing = billingData && billingData.billing;
-    var isPro   = !!(billing && billing.has_active_subscription);
+    // Prefer the Express-side merged view for Pro determination —
+    // it includes the entitlement override that backend/billing/me
+    // has no visibility into. Fall back to backend billing for users
+    // on a real Dodo subscription (has_active_subscription drives
+    // subscription details rendering below).
+    var isProFromOverride = !!(window.EXPRESS_BILLING && window.EXPRESS_BILLING.is_premium);
+    var isProFromBackend  = !!(billing && billing.has_active_subscription);
+    var isPro = isProFromOverride || isProFromBackend;
+    // "Override-only" means Pro comes from the Express-side grant with
+    // no corresponding backend Dodo subscription — hide the Dodo-detail
+    // panel and the "renews on" line since there's nothing to show.
+    var isOverrideOnly = isProFromOverride && !isProFromBackend;
 
     // ── Plan card ──────────────────────────────────────────────────────
     var planName  = document.getElementById('plan-name');
@@ -192,9 +211,16 @@
     var limit = (limitsData && limitsData.limit) || 30;
 
     if (isPro) {
-      var sub      = billing.subscription;
-      var planCode = sub && sub.plan_code;
-      planName.textContent  = planCode === 'PRO_YEARLY' ? 'ProofTamil Pro — Yearly' : 'ProofTamil Pro — Monthly';
+      var sub      = billing && billing.subscription;
+      var planCode = (sub && sub.plan_code) || (window.EXPRESS_BILLING && window.EXPRESS_BILLING.plan_code);
+      var overrideLabel = window.EXPRESS_BILLING && window.EXPRESS_BILLING.plan_label;
+      if (overrideLabel) {
+        planName.textContent = overrideLabel;
+      } else if (planCode === 'PRO_YEARLY') {
+        planName.textContent = 'ProofTamil Pro — Yearly';
+      } else {
+        planName.textContent = 'ProofTamil Pro — Monthly';
+      }
       planDesc.textContent  = 'Unlimited AI proofreading — no word caps, no daily limits.';
       planBadge.textContent = 'Active';
       planBadge.className   = 'px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700';
@@ -206,40 +232,52 @@
     }
 
     // ── Usage bar ──────────────────────────────────────────────────────
+    // Pro users have no daily cap — swap the numbers card for an
+    // "Unlimited" reading instead of pretending they're using 0/30.
     var used      = (limitsData && limitsData.used)       || 0;
     var remaining = (limitsData && limitsData.remaining)  || (limit - used);
     var periodEnd = limitsData && limitsData.period_end;
-    var pct       = limit > 0 ? Math.min(100, Math.round(used / limit * 100)) : 0;
 
-    document.getElementById('usage-used').textContent        = used;
-    document.getElementById('usage-limit-label').textContent = 'of ' + limit + ' checks used';
-    document.getElementById('usage-reset').textContent       = formatReset(periodEnd);
-    document.getElementById('usage-sub').textContent         = remaining + ' check' + (remaining !== 1 ? 's' : '') + ' remaining this period';
-
-    var bar = document.getElementById('usage-bar');
-    bar.style.width = pct + '%';
     if (isPro) {
-      bar.style.background = 'linear-gradient(90deg,#6366f1,#3b82f6)';
-    } else if (pct >= 90) {
-      bar.style.background = '#ef4444';
-    } else if (pct >= 70) {
-      bar.style.background = '#f59e0b';
+      document.getElementById('usage-used').textContent        = '∞';
+      document.getElementById('usage-limit-label').textContent = 'unlimited AI checks';
+      document.getElementById('usage-reset').textContent       = '';
+      document.getElementById('usage-sub').textContent         = 'No daily or monthly cap on your plan.';
+      var barPro = document.getElementById('usage-bar');
+      barPro.style.width = '100%';
+      barPro.style.background = 'linear-gradient(90deg,#6366f1,#3b82f6)';
     } else {
-      bar.style.background = 'linear-gradient(90deg,#6366f1,#3b82f6)';
+      var pct = limit > 0 ? Math.min(100, Math.round(used / limit * 100)) : 0;
+      document.getElementById('usage-used').textContent        = used;
+      document.getElementById('usage-limit-label').textContent = 'of ' + limit + ' checks used';
+      document.getElementById('usage-reset').textContent       = formatReset(periodEnd);
+      document.getElementById('usage-sub').textContent         = remaining + ' check' + (remaining !== 1 ? 's' : '') + ' remaining this period';
+      var bar = document.getElementById('usage-bar');
+      bar.style.width = pct + '%';
+      if (pct >= 90)      bar.style.background = '#ef4444';
+      else if (pct >= 70) bar.style.background = '#f59e0b';
+      else                bar.style.background = 'linear-gradient(90deg,#6366f1,#3b82f6)';
     }
 
     // ── Upgrade / Pro sections ─────────────────────────────────────────
     if (isPro) {
-      document.getElementById('pro-section').classList.remove('hidden');
+      // Show the "your plan details" section only when we actually have
+      // Dodo billing details to fill it with. For override-only Lite
+      // users (admin-granted), we have nothing to display in that panel
+      // — leaving it visible with empty fields would look broken.
+      if (!isOverrideOnly) {
+        document.getElementById('pro-section').classList.remove('hidden');
 
-      var statusVal = (sub && sub.status) || 'active';
-      document.getElementById('sub-provider').textContent    = 'Dodo Payments';
-      document.getElementById('sub-status-text').textContent = statusVal.charAt(0).toUpperCase() + statusVal.slice(1);
+        var statusVal = (sub && sub.status) || 'active';
+        document.getElementById('sub-provider').textContent    = 'Dodo Payments';
+        document.getElementById('sub-status-text').textContent = statusVal.charAt(0).toUpperCase() + statusVal.slice(1);
 
-      if (billing.current_period_end) {
-        var d = new Date(billing.current_period_end);
-        document.getElementById('sub-renews').textContent = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+        if (billing.current_period_end) {
+          var d = new Date(billing.current_period_end);
+          document.getElementById('sub-renews').textContent = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
       }
+      // Either way, DON'T show the upgrade CTA to Pro users.
     } else {
       document.getElementById('upgrade-section').classList.remove('hidden');
     }
