@@ -2437,40 +2437,32 @@ router.post('/document/export-docx', async (req, res) => {
     const isPro = ['pro', 'basic', 'enterprise'].includes(planRaw);
 
     // Server-side Pro gate. Client-sent `plan` is deliberately IGNORED
-    // — never trust the browser to declare its own tier. The previous
-    // code checked req.user.subscription, but that field is never set
-    // on the JWT (auth_service.go only signs user_id, email, role), so
-    // every real Pro subscriber not on the admin allowlist was denied
-    // export and shown "Upgrade to Pro" — a real revenue regression.
+    // — never trust the browser to declare its own tier.
     //
-    // Ask the backend authoritatively. billing.IsUserPro covers all
-    // four passing paths (paid subscription, PremiumOverride grant,
-    // admin role, operator email).
+    // Uses fetchMergedBilling to combine backend billing/me with the
+    // Supabase entitlement override, so Proofreading Lite subscribers
+    // (whose EXPORT entitlement lives only in the override) are
+    // correctly allowed. Previously we called billing/me directly and
+    // Kanchana-class users got 402 export_not_in_plan.
     const isAdmin = isAdminEmail(req.user?.email);
     let hasExportEntitlement = false;
-    if (!isAdmin && req.cookies?.access_token) {
+    if (!isAdmin) {
       try {
-        const backend = (req._backendUrl || BACKEND_URL || '').replace(/\/$/, '');
-        if (backend) {
-          const meResp = await axios.get(backend + '/api/v1/billing/me', {
-            headers: { Authorization: 'Bearer ' + req.cookies.access_token },
-            timeout: 5000,
-            validateStatus: () => true,
-          });
-          if (meResp.status === 200 && meResp.data?.billing) {
-            // Per-feature check via the entitlements helper. Existing
-            // Full Pro users (no entitlements field yet) get true via
-            // the BC guarantee in lib/entitlements.js. New Lite tiers:
-            //   Pro Proofread Lite → true  (export included)
-            //   Pro OCR Lite       → false (export NOT included)
-            const { hasFeature, FEATURES } = require('../lib/entitlements');
-            hasExportEntitlement = hasFeature(meResp.data.billing, FEATURES.EXPORT);
-          }
+        const { fetchMergedBilling } = require('../lib/billing-with-override');
+        const merged = await fetchMergedBilling(req);
+        if (merged) {
+          const { hasFeature, FEATURES } = require('../lib/entitlements');
+          // Per-feature check via the entitlements helper. Existing
+          // Full Pro users (no entitlements field yet) get true via
+          // the BC guarantee in lib/entitlements.js. New Lite tiers:
+          //   Pro Proofread Lite → true  (export included)
+          //   Pro OCR Lite       → false (export NOT included)
+          hasExportEntitlement = hasFeature(merged, FEATURES.EXPORT);
         }
       } catch (err) {
-        // Fail-closed: if the backend can't confirm entitlement, treat
-        // as no-export rather than granting on a network hiccup.
-        console.warn('[DOCX-EXPORT] billing/me check failed:', err.message);
+        // Fail-closed: if we can't confirm entitlement, treat as
+        // no-export rather than granting on a network hiccup.
+        console.warn('[DOCX-EXPORT] merged billing check failed:', err.message);
       }
     }
 
