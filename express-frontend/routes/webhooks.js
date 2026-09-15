@@ -272,11 +272,49 @@ router.post('/dodo', express.raw({ type: '*/*', limit: '1mb' }), async (req, res
   }
 
   if (bucket === 'refund') {
-    // Currently just logs — full refund handling (revoke immediately +
-    // send email) is a follow-up. We 200 back so Dodo doesn't retry.
-    console.log('[DODO-WEBHOOK] refund event received (no automatic action yet)', {
-      type: event.type, email: event.email,
+    // Only refund.succeeded actually revokes — refund.created is a
+    // pending refund that may still fail, and refund.failed means the
+    // money didn't come back. In both non-succeeded cases we log and
+    // 200 without touching the entitlement.
+    //
+    // Kept the email side of "your refund is complete" for a follow-up:
+    // Dodo already sends its own refund confirmation, and doubling up on
+    // that is user-hostile. If we ever want a ProofTamil-branded note
+    // we can add it here in a targeted way.
+    const isSucceeded = /^refund\.(?:succeeded|completed|processed)$/i.test(event.type || '');
+    if (!isSucceeded) {
+      console.log('[DODO-WEBHOOK] refund event received (not succeeded — no revoke)', {
+        type: event.type, email: event.email,
+      });
+      if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: 'refund_ignored' });
+      return res.status(200).send('ok');
+    }
+
+    // Refund succeeded — revoke premium immediately. Same shape as
+    // the hard-expire path in the deactivate bucket: is_premium=false,
+    // expires_at=now, plus payment_status='refunded' and cancelled_at
+    // so support can distinguish "refunded" from "cancelled voluntarily"
+    // in the row.
+    const nowIso = new Date().toISOString();
+    const result = await upsertOverride({
+      email:                event.email,
+      is_premium:           false,
+      expires_at:           nowIso,
+      payment_status:       'refunded',
+      cancelled_at:         nowIso,
+      auto_renew:           false,
+      dodo_customer_id:     event.customer_id || undefined,
+      dodo_subscription_id: event.subscription_id || undefined,
+      notes:                `Dodo ${event.type} · event ${svixEventId || '<no-id>'}${event.amount_cents ? ` · amount ${event.amount_cents} ${event.currency || ''}` : ''}`.trim(),
     });
+    if (result.ok) {
+      console.log('[DODO-WEBHOOK] 💸 refund succeeded — premium revoked', { email: event.email, type: event.type });
+      if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: 'refunded' });
+    } else {
+      // Don't mark processed on write failure — let Dodo retry so we
+      // eventually catch up. Same pattern as the activate bucket.
+      console.error('[DODO-WEBHOOK] ❌ refund revoke write failed', { email: event.email, error: result.error });
+    }
     return res.status(200).send('ok');
   }
 
