@@ -189,6 +189,14 @@ function bucketize(eventType) {
       t.startsWith('subscription.resumed')) {
     return 'activate';
   }
+  // Payment failures = grace period, NOT immediate revocation. Kept
+  // in its own bucket so the route can email the customer to update
+  // their card while premium remains active during Dodo's retry
+  // window. Only subscription.failed / expired / cancelled actually
+  // deactivate.
+  if (t.startsWith('payment.failed')) {
+    return 'payment_failed';
+  }
   if (t.startsWith('subscription.cancelled') ||
       t.startsWith('subscription.canceled')  ||
       t.startsWith('subscription.expired')   ||

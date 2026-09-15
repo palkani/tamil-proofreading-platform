@@ -31,7 +31,25 @@ const {
   upsertOverride,
   isEventProcessed,
   markEventProcessed,
+  findFullSubscriptionByEmail,
 } = require('../lib/user-entitlement-overrides-db');
+const lifecycleEmails = require('../lib/email/templates/subscription-lifecycle');
+const { sendEmail } = require('../lib/email/send');
+
+/**
+ * Fire-and-forget email helper — we always 200 the webhook regardless
+ * of whether the email sent, because Dodo shouldn't retry the whole
+ * event just because Resend is briefly down. Failures are logged.
+ */
+async function safeSendLifecycleEmail(template, email, opts) {
+  try {
+    const { subject, html } = template(Object.assign({ email }, opts));
+    const result = await sendEmail({ to: email, subject, html });
+    console.log('[DODO-WEBHOOK] email', { to: email, subject, ok: result.ok, transport: result.transport });
+  } catch (err) {
+    console.warn('[DODO-WEBHOOK] email send threw:', err.message);
+  }
+}
 
 // express.raw preserves the request body as a Buffer — required for
 // HMAC verification (JSON.stringify(parsed) wouldn't byte-match the
@@ -130,6 +148,12 @@ router.post('/dodo', express.raw({ type: '*/*', limit: '1mb' }), async (req, res
   const ents = resolveEntitlements(event.product_id);
 
   if (bucket === 'activate') {
+    // BEFORE upsert: check whether this is a first-time activation or
+    // a recurring renewal — determines welcome-vs-renewal-success email.
+    // Uses payment_status pre-upsert: absent-or-not-active = first-time.
+    const existing = await findFullSubscriptionByEmail(event.email);
+    const isFirstActivation = !existing || existing.payment_status !== 'active' || !existing.is_premium;
+
     // Extend expires_at to whatever Dodo says the next billing date is,
     // else default to 32 days out so premium never lapses even if we
     // miss a renewal event.
@@ -154,12 +178,49 @@ router.post('/dodo', express.raw({ type: '*/*', limit: '1mb' }), async (req, res
       notes:                `Dodo ${event.type} · event ${svixEventId || '<no-id>'} · product ${event.product_id || '<no-product>'} · mode ${event.mode || 'unknown'}`,
     });
     if (result.ok) {
-      console.log('[DODO-WEBHOOK] ✅ granted', { email: event.email, plan: ents.plan_label, expires_at: expiresAt });
-      if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: 'granted', detail: { email: event.email, plan: ents.plan_code } });
+      console.log('[DODO-WEBHOOK] ✅ ' + (isFirstActivation ? 'first-time granted' : 'renewed'), { email: event.email, plan: ents.plan_label, expires_at: expiresAt });
+      // Fire the appropriate lifecycle email (fire-and-forget).
+      safeSendLifecycleEmail(
+        isFirstActivation ? lifecycleEmails.welcome : lifecycleEmails.renewalSuccess,
+        event.email,
+        {
+          plan_label:      ents.plan_label,
+          entitlements:    ents.entitlements,
+          expires_at:      expiresAt,
+          next_renewal_at: expiresAt,
+          currency:        event.currency,
+          amount_cents:    event.amount_cents,
+        }
+      );
+      if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: isFirstActivation ? 'welcomed' : 'renewed', detail: { email: event.email, plan: ents.plan_code } });
     } else {
       console.error('[DODO-WEBHOOK] ❌ grant failed', { email: event.email, error: result.error, detail: result.detail });
       // Do NOT mark processed on DB failure — let Dodo retry so we get another chance.
     }
+    return res.status(200).send('ok');
+  }
+
+  if (bucket === 'payment_failed') {
+    // Dunning: DON'T revoke premium. Dodo will retry the charge; we
+    // just flag payment_status and let the customer know via email.
+    const result = await upsertOverride({
+      email:                event.email,
+      payment_status:       'past_due',
+      dodo_customer_id:     event.customer_id || undefined,
+      dodo_subscription_id: event.subscription_id || undefined,
+      notes:                `Dodo ${event.type} · event ${svixEventId || '<no-id>'}`,
+    });
+    if (result.ok) {
+      console.log('[DODO-WEBHOOK] ⚠️  payment failed — grace period active', { email: event.email });
+    }
+    safeSendLifecycleEmail(lifecycleEmails.paymentFailed, event.email, {
+      plan_label:       resolveEntitlements(event.product_id).plan_label,
+      currency:         event.currency,
+      amount_cents:     event.amount_cents,
+      retry_at:         event.current_period_end,   // Dodo's own retry schedule
+      grace_expires_at: null,                       // no hard grace date yet — Dodo controls retry window
+    });
+    if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: 'payment_failed' });
     return res.status(200).send('ok');
   }
 
@@ -191,6 +252,18 @@ router.post('/dodo', express.raw({ type: '*/*', limit: '1mb' }), async (req, res
     const result = await upsertOverride(patch);
     if (result.ok) {
       console.log('[DODO-WEBHOOK] 🚫 ' + (isSoftCancel ? 'cancellation flagged (premium stays until expires_at)' : 'hard-expired'), { email: event.email, reason: event.type });
+      // Only send cancellation email on soft cancel — hard expiration
+      // usually follows a series of already-sent dunning emails, and a
+      // "cancelled" email on hard expiration reads like whiplash.
+      if (isSoftCancel) {
+        // Need to know the current expires_at to tell the customer
+        // when their access ends. Re-fetch since our patch didn't set it.
+        const current = await findFullSubscriptionByEmail(event.email);
+        safeSendLifecycleEmail(lifecycleEmails.cancellation, event.email, {
+          plan_label:  ents.plan_label,
+          expires_at:  current && current.expires_at,
+        });
+      }
       if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: isSoftCancel ? 'cancelled' : 'revoked' });
     } else {
       console.error('[DODO-WEBHOOK] ❌ deactivate failed', { email: event.email, error: result.error });

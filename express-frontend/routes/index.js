@@ -806,12 +806,25 @@ router.get('/dashboard', (req, res) => {
 });
 
 // Account page - client-side auth only
-router.get('/account', requireAuth, (req, res) => {
+router.get('/account', requireAuth, async (req, res) => {
   const seo = getSeoData('account');
+  // Fetch subscription details from the override table (post-webhook
+  // truth) so the page can render plan / expiry / auto-renew / cancel
+  // status. Null if no subscription record — page renders the "no
+  // active subscription" empty state.
+  let subscription = null;
+  try {
+    const overridesDb = require('../lib/user-entitlement-overrides-db');
+    subscription = await overridesDb.findFullSubscriptionByEmail(req.user?.email);
+  } catch (err) {
+    // Fail-quiet — the profile card just doesn't render if the lookup fails.
+    console.warn('[/account] subscription lookup failed:', err.message);
+  }
   res.render('pages/account', {
     title: seo.title,
     seo: seo,
-    user: req.user
+    user: req.user,
+    subscription,
   });
 });
 
