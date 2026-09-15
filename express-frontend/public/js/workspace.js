@@ -77,6 +77,14 @@ function _isAdminEmail(email) {
 }
 
 function _isProUser() {
+  // Server-side truth first. workspace.ejs sets window.USER_IS_PRO from
+  // res.locals.billing.is_premium, which attachEntitlements populates by
+  // merging the Go backend's billing/me with the Express-side entitlement
+  // override (Supabase admin_user_entitlement_overrides). That's the ONLY
+  // signal that reflects Lite subscribers whose Pro state lives entirely
+  // in the override table — /api/v1/billing/usage/today doesn't see it.
+  if (window.USER_IS_PRO === true) return true;
+
   // Cached from /api/v1/billing/usage/today (fetched below), OR from
   // the synchronous admin-allowlist fast-path in _fetchUserPlan.
   if (_isProCache !== null) return _isProCache;
@@ -105,6 +113,17 @@ function _isLoggedIn() {
 (function _fetchUserPlan() {
   if (!window.USER_LOGGED_IN) {
     _isProCache = false;
+    return;
+  }
+  // Server-side render already resolved Pro (attachEntitlements merged
+  // the Express-side override into backend billing). Trust it and skip
+  // the /usage/today fetch entirely — that endpoint doesn't know about
+  // the override table and would DOWNGRADE a Lite user back to free.
+  if (window.USER_IS_PRO === true) {
+    _isProCache = true;
+    _freeTierUserPlan = 'pro';
+    try { _updateWordLimitUI(); } catch (_e) {}
+    try { _updateQuotaBar(); } catch (_e) {}
     return;
   }
   // Admin-email fast-path — resolve Pro SYNCHRONOUSLY before any fetch,

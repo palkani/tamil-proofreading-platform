@@ -1490,8 +1490,16 @@
   // User session info (decoded from JWT cookie server-side; subscription fetched client-side from /api/v1/me)
   window.USER_LOGGED_IN = <%= user ? 'true' : 'false' %>;
   window.USER_EMAIL     = '<%= user && user.email ? user.email.replace(/'/g, "\\'") : "" %>';
-  // USER_PLAN is resolved client-side after fetching /api/v1/me so we start with a safe default
-  window.USER_PLAN      = 'free';
+  // Pro status pre-populated from the server-side merged billing shape
+  // (backend billing/me + Express-side entitlement override — see
+  // middleware/attachEntitlements.js). Doing this SYNCHRONOUSLY at page
+  // render matters for Lite users: /api/v1/billing/usage/today only knows
+  // about the backend, not the Express-side overrides table, so a Lite
+  // subscriber whose Pro state lives in the override would flash "0/200
+  // words" until they gave up on the tool. With this line their Pro
+  // state is truthy on first paint.
+  window.USER_IS_PRO    = <%= locals.billing && locals.billing.is_premium ? 'true' : 'false' %>;
+  window.USER_PLAN      = window.USER_IS_PRO ? 'pro' : 'free';
   // Payment / country globals (server-detected; used by upgrade modal and payment.js)
   window.COUNTRY_CODE     = '<%= countryCode || "US" %>';
   window.PAYMENTS_ENABLED = <%= locals.paymentsEnabled ? 'true' : 'false' %>;
