@@ -2857,6 +2857,15 @@ function buildBackendHeaders(req) {
 // Never throws — network errors fail OPEN (allowed=true) so the tool
 // doesn't break during a Cloud Run cold start. The generation itself
 // is still cost-capped by Gemini rate limits in that failure mode.
+//
+// The Go backend's quota endpoint only knows about backend billing state
+// (users.subscription, users.premium_override). It has no visibility into
+// the Supabase admin_user_entitlement_overrides table where Lite grants
+// live. So we ALSO consult the merged billing shape (via
+// fetchMergedBilling) in parallel: if the user has the ai_writer
+// entitlement in the override, we treat them as premium regardless of
+// what the backend quota returned. Same override-honoring pattern used
+// by other Lite-aware handlers (see the entitlement audit doc).
 async function checkContentWriterQuota(req) {
   const backend = (req._backendUrl || BACKEND_URL || '').replace(/\/$/, '');
   if (!backend) {
@@ -2864,33 +2873,64 @@ async function checkContentWriterQuota(req) {
     return { allowed: true, quota: null };
   }
   const url = `${backend}/ai-content-writer/quota`;
-  try {
-    const response = await axiosWithColdStartRetry({
+
+  const { fetchMergedBilling } = require('../lib/billing-with-override');
+  const { hasFeature, FEATURES } = require('../lib/entitlements');
+
+  // Fire both requests in parallel — Lite users need the merged view to
+  // be honored; backend Pro users are already handled by the quota
+  // endpoint. Parallel keeps latency identical to the previous single
+  // call in the common case.
+  const [quotaResp, merged] = await Promise.all([
+    axiosWithColdStartRetry({
       method: 'GET',
       url,
       headers: buildBackendHeaders(req),
       validateStatus: () => true,
       timeout: 8000,
-    });
-    if (response.status === 401) {
-      return { allowed: false, statusCode: 401, quota: null };
-    }
-    if (response.status < 200 || response.status >= 300) {
-      console.warn(`[AI-CONTENT-WRITER] Quota check failed (${response.status}); failing open`);
-      return { allowed: true, quota: null };
-    }
-    const quota = response.data || {};
-    if (quota.is_pro) {
-      return { allowed: true, quota };
-    }
-    if (typeof quota.remaining === 'number' && quota.remaining <= 0) {
-      return { allowed: false, statusCode: 402, quota };
-    }
-    return { allowed: true, quota };
-  } catch (err) {
-    console.warn('[AI-CONTENT-WRITER] Quota check errored; failing open:', err.message);
+    }).catch((err) => {
+      console.warn('[AI-CONTENT-WRITER] Quota check errored; failing open:', err.message);
+      return null;
+    }),
+    fetchMergedBilling(req).catch(() => null),
+  ]);
+
+  // Override path: Lite users whose ai_writer entitlement lives in the
+  // Supabase overrides table appear as premium here even when the
+  // backend quota endpoint (blind to that table) says they're free.
+  if (merged && hasFeature(merged, FEATURES.AI_WRITER)) {
+    return {
+      allowed: true,
+      quota: {
+        is_pro: true,
+        used: 0,
+        limit: 0,
+        remaining: 0,
+        resets_at: null,
+      },
+    };
+  }
+
+  // Otherwise, follow the backend quota response exactly as before.
+  if (!quotaResp) {
+    // Backend quota fetch errored — fail open, matching legacy posture.
     return { allowed: true, quota: null };
   }
+  if (quotaResp.status === 401) {
+    return { allowed: false, statusCode: 401, quota: null };
+  }
+  if (quotaResp.status < 200 || quotaResp.status >= 300) {
+    console.warn(`[AI-CONTENT-WRITER] Quota check failed (${quotaResp.status}); failing open`);
+    return { allowed: true, quota: null };
+  }
+  const quota = quotaResp.data || {};
+  if (quota.is_pro) {
+    return { allowed: true, quota };
+  }
+  if (typeof quota.remaining === 'number' && quota.remaining <= 0) {
+    return { allowed: false, statusCode: 402, quota };
+  }
+  return { allowed: true, quota };
 }
 
 // consumeContentWriterQuota is fire-and-forget — a failure to record
