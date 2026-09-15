@@ -120,13 +120,39 @@ BEGIN
 END;
 $$;
 
--- ── 4. RLS ───────────────────────────────────────────────────────────
--- Disabled so the Express middleware can read/write with the
--- SUPABASE_ANON_KEY the app already uses (see middleware/ocrMonthlyLimit.js
--- for the same pattern). All write paths are already admin-gated in
--- Express — nothing in the browser talks to these tables directly.
-ALTER TABLE admin_promo_codes             DISABLE ROW LEVEL SECURITY;
-ALTER TABLE admin_promo_code_redemptions  DISABLE ROW LEVEL SECURITY;
+-- ── 4. GRANTs ────────────────────────────────────────────────────────
+-- On newer Supabase projects, CREATE TABLE via the SQL Editor does NOT
+-- auto-grant CRUD to anon / authenticated. PostgREST enforces classic
+-- Postgres GRANTs BEFORE RLS, so without these grants a bare INSERT
+-- from the middleware returns 401 even with RLS off. All idempotent.
+GRANT SELECT, INSERT, UPDATE, DELETE ON admin_promo_codes            TO anon, authenticated;
+GRANT SELECT, INSERT                  ON admin_promo_code_redemptions TO anon, authenticated;
+GRANT USAGE, SELECT ON SEQUENCE admin_promo_code_redemptions_id_seq TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION redeem_admin_promo_code(TEXT, TEXT, TEXT, TEXT) TO anon, authenticated;
 
--- ── 5. Refresh PostgREST schema cache ────────────────────────────────
+-- ── 5. RLS + permissive policy ───────────────────────────────────────
+-- Supabase projects auto-enable / re-enable RLS on tables in the
+-- public schema, and a plain `DISABLE ROW LEVEL SECURITY` doesn't
+-- stick reliably. Real fix: leave RLS enabled and add a permissive
+-- ALL policy. Safe because Express hard-gates every route that
+-- touches these tables with requireAdmin — nothing in the browser
+-- talks to Supabase directly for these.
+ALTER TABLE admin_promo_codes            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_promo_code_redemptions ENABLE ROW LEVEL SECURITY;
+
+-- CREATE POLICY doesn't accept IF NOT EXISTS in older Postgres; use
+-- DROP + CREATE for idempotency instead.
+DROP POLICY IF EXISTS admin_promo_codes_all ON admin_promo_codes;
+CREATE POLICY admin_promo_codes_all
+  ON admin_promo_codes
+  FOR ALL TO anon, authenticated
+  USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS admin_promo_code_redemptions_all ON admin_promo_code_redemptions;
+CREATE POLICY admin_promo_code_redemptions_all
+  ON admin_promo_code_redemptions
+  FOR ALL TO anon, authenticated
+  USING (true) WITH CHECK (true);
+
+-- ── 6. Refresh PostgREST schema cache ────────────────────────────────
 NOTIFY pgrst, 'reload schema';
