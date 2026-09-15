@@ -134,6 +134,7 @@ function parseEvent(bodyText) {
   const data = raw.data || raw.payload || raw;
   const subscription = data.subscription || data;
   const customer     = data.customer || subscription.customer || raw.customer || {};
+  const payment      = data.payment || data;
 
   return {
     type:                raw.type || raw.event || raw.event_type || null,
@@ -141,9 +142,19 @@ function parseEvent(bodyText) {
     email:               (customer.email || data.customer_email || data.email || subscription.customer_email || '').toLowerCase() || null,
     product_id:          data.product_id || subscription.product_id || (data.product && data.product.id) || (subscription.product && subscription.product.id) || null,
     subscription_id:     subscription.id || data.subscription_id || null,
+    customer_id:         customer.id || data.customer_id || subscription.customer_id || null,
     current_period_end:  toIsoOrNull(subscription.current_period_end || data.current_period_end || subscription.next_billing_at || data.next_billing_at),
+    // Amount in the smallest currency unit (paise for INR, cents for USD)
+    amount_cents:        Number(payment.amount || subscription.amount || data.amount) || null,
+    currency:            (payment.currency || subscription.currency || data.currency || '').toUpperCase() || null,
+    auto_renew:          typeof subscription.cancel_at_period_end !== 'undefined'
+                           ? !subscription.cancel_at_period_end
+                           : (typeof subscription.auto_renew !== 'undefined' ? !!subscription.auto_renew : true),
     subscription_status: subscription.status || data.status || null,
     mode:                raw.livemode === false ? 'test' : (raw.mode || (raw.livemode === true ? 'live' : null)),
+    // Passthrough of any metadata we attached at checkout-session creation.
+    // Reading customer_metadata (Dodo's key) with metadata as fallback.
+    metadata:            data.metadata || subscription.metadata || raw.metadata || {},
     raw,
   };
 }
