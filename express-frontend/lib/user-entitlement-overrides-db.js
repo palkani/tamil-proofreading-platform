@@ -134,6 +134,35 @@ async function upsertOverride({
  * Idempotency check for webhook processing. Returns true if this
  * event id has already been processed; caller should skip it.
  */
+/**
+ * Fetch the FULL subscription state for a user — powers the /account
+ * subscription card. Returns null when there's no row, expired, etc.,
+ * so the caller can render a "no active subscription" empty state.
+ *
+ * Distinct from findOverrideByEmail() which returns only the fields
+ * the middleware needs for entitlement decisions.
+ */
+async function findFullSubscriptionByEmail(email) {
+  if (!isConfigured()) return null;
+  const key = String(email || '').trim().toLowerCase();
+  if (!key) return null;
+  try {
+    const url =
+      `${SUPABASE_URL}/rest/v1/admin_user_entitlement_overrides` +
+      `?email=eq.${encodeURIComponent(key)}` +
+      `&select=email,is_premium,entitlements,plan_code,plan_label,expires_at,` +
+      `next_renewal_at,cancelled_at,auto_renew,payment_status,currency,amount_cents,` +
+      `dodo_customer_id,dodo_subscription_id,granted_at,granted_by_email,notes`;
+    const resp = await axios.get(url, { headers: supabaseHeaders(), timeout: 3000 });
+    const row = Array.isArray(resp.data) && resp.data[0];
+    if (!row) return null;
+    return row;   // caller decides how to display expired / cancelled state
+  } catch (err) {
+    console.warn('[user-entitlement-overrides-db] findFullSubscriptionByEmail error:', err.message);
+    return null;
+  }
+}
+
 async function isEventProcessed(eventId) {
   if (!isConfigured() || !eventId) return false;
   try {
@@ -164,6 +193,7 @@ async function markEventProcessed(eventId, { eventType, outcome, detail } = {}) 
 
 module.exports = {
   findOverrideByEmail,
+  findFullSubscriptionByEmail,
   upsertOverride,
   isEventProcessed,
   markEventProcessed,
