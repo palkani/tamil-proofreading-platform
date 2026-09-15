@@ -182,6 +182,28 @@
   const suspiciousCache = new Map();
   let suspiciousOnly = false;
 
+  // Per-email entitlement overrides — populated once on page load from
+  // /admin/api/user-overrides. These are Express-side grants (see
+  // admin_user_entitlement_overrides table) that the Go backend's user
+  // list doesn't know about. Empty on first render; render() picks it
+  // up as soon as the fetch below resolves and re-renders.
+  const overrideMap = new Map();
+  let lastRenderedData = null;
+
+  async function loadOverrides() {
+    try {
+      const r = await fetch('/admin/api/user-overrides', { credentials: 'include' });
+      if (!r.ok) return;
+      const d = await r.json();
+      (d.overrides || []).forEach((o) => {
+        if (o.email) overrideMap.set(String(o.email).toLowerCase(), o);
+      });
+      if (lastRenderedData) render(lastRenderedData);
+    } catch (_) { /* fail-quiet — table still renders, just without override info */ }
+  }
+  // Kick it off immediately — runs alongside the initial user-list fetch.
+  loadOverrides();
+
   async function auditPageEmails(users) {
     const toCheck = users.map((u) => (u.email || '').toLowerCase()).filter((e) => e && !suspiciousCache.has(e));
     if (toCheck.length === 0) return;
@@ -200,6 +222,7 @@
   }
 
   function render(data) {
+    lastRenderedData = data;
     state.total = data.total;
     const rows = data.users || [];
     const tbody = document.querySelector('[data-users-body]');
@@ -224,17 +247,34 @@
       // show emails after the page has moved on.
       visibleRows.forEach((u) => knownUsers.set(u.id, { email: u.email || '', name: u.name || '' }));
       tbody.innerHTML = visibleRows.map(function (u) {
-        const planBadge = String(u.subscription || '').toLowerCase().startsWith('pro')
-          ? badge('Pro', 'green')
-          : badge('Free', 'slate');
-        const overrideBadge = u.premium_override ? ' ' + badge('override', 'amber') : '';
-        // Feature-access dots under the plan badge — one letter per
-        // canonical feature. Green = has, gray = doesn't. Computed from
-        // the same BC rules the runtime uses (missing entitlements +
-        // is_premium=true → grant all). Full detail is on the user
-        // detail page's Feature Access table.
-        const isPremium = !!(String(u.subscription || '').toLowerCase().startsWith('pro') || u.premium_override);
-        const ents = Array.isArray(u.entitlements) ? u.entitlements : null;
+        // Merge in per-user override (populated by loadOverrides above).
+        // Override is Express-side: /admin/api/user-overrides reads from
+        // admin_user_entitlement_overrides. Backend doesn't know about
+        // these grants, so without this merge the row shows "Free"
+        // even though the user has active Pro entitlements.
+        const ov = overrideMap.get(String(u.email || '').toLowerCase());
+        const backendIsPro = String(u.subscription || '').toLowerCase().startsWith('pro') || u.premium_override;
+        const effectiveIsPro = ov ? ov.is_premium !== false : backendIsPro;
+
+        // Plan badge — override's plan_label wins for display when set,
+        // otherwise fall back to a generic Pro/Free badge.
+        const planLabel = ov && ov.plan_label ? ov.plan_label
+                        : ov && ov.plan_code  ? ov.plan_code
+                        : effectiveIsPro       ? 'Pro'
+                        :                        'Free';
+        const planBadge = badge(planLabel, effectiveIsPro ? 'green' : 'slate');
+
+        // Amber "override" or "grant" tag so admins spot Express-side
+        // grants at a glance vs real subscriptions.
+        const overrideBadge = ov ? ' ' + badge('grant', 'amber')
+                              : u.premium_override ? ' ' + badge('override', 'amber')
+                              : '';
+
+        // Feature-access dots under the plan badge — reflects effective
+        // entitlements (override wins over backend's list).
+        const isPremium = effectiveIsPro;
+        const ents = ov ? (Array.isArray(ov.entitlements) ? ov.entitlements : [])
+                        : (Array.isArray(u.entitlements) ? u.entitlements : null);
         const hasF = (f) => isPremium && (!ents || ents.includes(f));
         const dot = (letter, on, title) =>
           '<span title="' + title + (on ? ': yes' : ': no') + '" ' +

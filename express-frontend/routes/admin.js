@@ -355,6 +355,28 @@ router.post('/promo-codes/:code/reset', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- User entitlement overrides (read-only for now) ----------
+//
+// Powers the "override" badge on /admin/users so the users table
+// reflects Express-side entitlement grants that the Go backend doesn't
+// know about (see PR #188 for context). Client-side JS fetches this
+// once, indexes by lowercase email, and merges into the row rendering.
+//
+// Writes (grant/revoke) still go through Supabase SQL editor for now —
+// admin grant buttons are a follow-up. Kept read-only here to keep the
+// PR small.
+const userOverridesDb = require('../lib/user-entitlement-overrides-db');
+
+router.get('/api/user-overrides', requireAdmin, async (req, res) => {
+  const overrides = await userOverridesDb.listAllOverrides({ limit: 1000 });
+  // Normalise the response: lowercase email (defensive — schema is
+  // lowercase but old rows might have mixed case), strip nothing else.
+  res.json({
+    ok: true,
+    overrides: overrides.map((o) => ({ ...o, email: String(o.email || '').toLowerCase() })),
+  });
+});
+
 // ---------- API proxy ----------
 //
 // The frontend sends fetch() calls to /admin/api/* which we forward
