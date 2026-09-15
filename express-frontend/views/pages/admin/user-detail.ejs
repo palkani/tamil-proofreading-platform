@@ -202,12 +202,19 @@
   function renderProfile(p, isProActive) {
     // Capture recipient email for the email-send modal
     recipientEmail = p.email || '';
+    // Prefer the friendly label the override sets (e.g. "Proofreading
+    // Lite") over the raw plan code. Falls back to the backend's
+    // subscription string ('pro' / 'free') for users on real Dodo
+    // subscriptions where no override is present.
+    const planText = p.plan_label
+      ? p.plan_label
+      : (p.subscription + (isProActive ? '' : ' (inactive)'));
     const rows = [
       ['ID', p.id],
       ['Email', p.email],
       ['Name', p.name || '—'],
       ['Role', p.role],
-      ['Plan', p.subscription + (isProActive ? ' ' : ' (inactive) ') + (p.premium_override ? ' [override]' : '')],
+      ['Plan', planText + (p.premium_override ? ' [override]' : '')],
       ['Plan ends', fmtDate(p.subscription_end)],
       ['Country', p.country_code || '—'],
       ['Dodo customer', p.dodo_customer_id || '—'],
@@ -216,8 +223,25 @@
       ['Active', p.is_active ? 'yes' : 'no'],
       ['Email verified', p.email_verified ? 'yes' : 'no'],
     ];
+    // Extra rows shown only when this user has an Express-side override.
+    // Gives admins the same subscription lifecycle context /account
+    // shows the user themselves, so support triage doesn't need a
+    // Supabase console open in another tab.
+    if (p.override_source) {
+      const os = p.override_source;
+      rows.push(['Granted by',      os.granted_by || '—']);
+      rows.push(['Granted at',      fmtDate(os.granted_at)]);
+      rows.push(['Auto-renew',      os.auto_renew ? 'on' : 'off']);
+      rows.push(['Payment status',  os.payment_status || '—']);
+      rows.push(['Next renewal',    fmtDate(os.next_renewal_at)]);
+      if (os.cancelled_at) rows.push(['Cancelled at', fmtDate(os.cancelled_at)]);
+      if (os.notes)        rows.push(['Notes',        os.notes]);
+    }
+    const topBadge = isProActive
+      ? badge(p.plan_label ? p.plan_label + ' active' : 'Pro active', 'green')
+      : (p.subscription === 'pro' ? badge('Pro expired', 'amber') : badge('Free', 'slate'));
     const html = '<div class="flex items-baseline justify-between"><h2 class="text-lg font-semibold text-slate-900">' + escape(p.email) + '</h2>' +
-      (isProActive ? badge('Pro active', 'green') : (p.subscription === 'pro' ? badge('Pro expired', 'amber') : badge('Free', 'slate'))) +
+      topBadge +
       '</div>' +
       '<dl class="mt-4 grid grid-cols-2 gap-y-3 text-sm">' +
       rows.map(function (r) {
@@ -283,6 +307,8 @@
     // Header line — where the data came from
     if (!isPremium) {
       sourceEl.textContent = 'Free tier';
+    } else if (profile.premium_override && Array.isArray(profile.entitlements)) {
+      sourceEl.textContent = 'Granted via admin override' + (profile.plan_label ? ' (' + profile.plan_label + ')' : '') + ' — entitlements: [' + profile.entitlements.join(', ') + ']';
     } else if (Array.isArray(profile.entitlements)) {
       sourceEl.textContent = 'From subscription — entitlements: [' + profile.entitlements.join(', ') + ']';
     } else if (profile.premium_override) {
