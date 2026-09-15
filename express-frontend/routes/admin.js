@@ -377,6 +377,67 @@ router.get('/api/user-overrides', requireAdmin, async (req, res) => {
   });
 });
 
+// Admin-driven entitlement grant. Creates/updates an override row for
+// the target user with the plan_code the admin picks from the promo-code
+// registry. Fills the gap between "paid via Dodo but webhook never fired"
+// and "manually grant a lite plan without giving Full Pro via the backend
+// premium_override flag". Previously the only writer of the overrides
+// table was the Dodo webhook receiver — until that was live, admins had
+// no way to grant Lite tiers.
+//
+// Body: { email, promo_code, months? = 1, notes? }
+//   promo_code is one of the keys from lib/promo-codes.js (e.g.
+//   'PROOFPROLITE' | 'OCRPROLITE'). We look up the plan_label,
+//   entitlements, and amount from the registry so admins can't fat-finger
+//   the entitlement set.
+const promoCodes = require('../lib/promo-codes');
+
+router.post('/api/users/:id/entitlement-override', requireAdmin, express.json(), async (req, res) => {
+  const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+  const promoCode = String((req.body && req.body.promo_code) || '').trim().toUpperCase();
+  const months = Number((req.body && req.body.months) || 1);
+  const notes = String((req.body && req.body.notes) || '').trim() || null;
+
+  if (!email)      return res.status(400).json({ ok: false, error: 'email_required' });
+  if (!promoCode)  return res.status(400).json({ ok: false, error: 'promo_code_required' });
+  if (!(months > 0 && months <= 24)) return res.status(400).json({ ok: false, error: 'months_out_of_range' });
+
+  const meta = promoCodes.findCode(promoCode);
+  if (!meta) return res.status(400).json({ ok: false, error: 'unknown_promo_code' });
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime());
+  expiresAt.setUTCMonth(expiresAt.getUTCMonth() + months);
+
+  const grantedBy = (req.user && req.user.email) || 'admin';
+
+  const result = await userOverridesDb.upsertOverride({
+    email,
+    is_premium:     true,
+    entitlements:   meta.entitlements,
+    plan_code:      meta.plan_code,
+    plan_label:     meta.label,
+    expires_at:     expiresAt.toISOString(),
+    granted_by_email: grantedBy,
+    notes:          notes || `admin-granted via ${promoCode} for ${months}mo`,
+    auto_renew:     false,   // admin manual grant, not a Dodo subscription
+    payment_status: 'admin_granted',
+    currency:       meta.currency,
+    amount_cents:   meta.price_cents,
+    next_renewal_at: expiresAt.toISOString(),
+  });
+
+  if (result && result.error) {
+    return res.status(500).json({ ok: false, error: result.error, detail: result.detail });
+  }
+  logAdminApi({
+    req, method: 'POST',
+    upstreamPath: `/users/${req.params.id}/entitlement-override (${promoCode}, ${months}mo)`,
+    status: 200, durationMs: 0,
+  });
+  return res.json({ ok: true, override: result && result.row });
+});
+
 // ---------- Impersonation (server-side cookie swap) ----------
 //
 // Old flow: client JS called /admin/api/users/:id/impersonate, got the
