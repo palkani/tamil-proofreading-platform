@@ -40,6 +40,7 @@ const inviteRouter = require('./routes/invite');
 const onboardingRouter = require('./routes/onboarding');
 const webhooksRouter = require('./routes/webhooks');
 const cronRouter = require('./routes/cron');
+const billingProxyRouter = require('./routes/billing-proxy');
 
 // JS files that must never be served from cache
 const NO_CACHE_JS = [
@@ -265,6 +266,14 @@ function createApp() {
   // /api/cron/* resolves here (they need their own auth check, not
   // requireAuth). Vercel Cron config in vercel.json hits these.
   app.use('/api/cron', cronRouter);
+  // Billing proxies for /api/v1/billing/me + /api/v1/billing/usage/today.
+  // These endpoints are re-routed to Express by vercel.json rewrites
+  // (added in the same PR) so the response body can be merged with the
+  // Supabase entitlement override before returning. See routes/billing-
+  // proxy.js for the full contract. Mounted BEFORE apiRouter to make the
+  // route hierarchy explicit — /api/v1/* would otherwise land in the
+  // generic /api namespace.
+  app.use('/api/v1/billing', billingProxyRouter);
   // Before apiRouter so /api/chat and /api/leads resolve here rather than
   // falling through to whatever apiRouter does with unmatched paths.
   app.use('/api', chatbotRouter);
