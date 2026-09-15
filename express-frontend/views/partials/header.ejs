@@ -580,7 +580,13 @@
         a[kv[0]] = kv[1];
         return a;
       }, {});
-      if (!cookies.admin_original_token) return;
+      // Detect impersonation via the non-HttpOnly `impersonation_active`
+      // flag set server-side. The admin_original_token itself is now
+      // HttpOnly (set via Set-Cookie in routes/admin.js) so JS can't see
+      // it — the flag is the JS-visible signal that impersonation is on.
+      // Falls back to admin_original_token for legacy sessions started
+      // before the fix shipped.
+      if (!cookies.impersonation_active && !cookies.admin_original_token) return;
       var banner = document.createElement('div');
       banner.style.cssText = 'position:sticky;top:0;z-index:9999;background:#f59e0b;color:#111;padding:8px 16px;font-family:system-ui,-apple-system,sans-serif;font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,0.2);';
       banner.innerHTML =
@@ -588,23 +594,20 @@
         '<button type="button" id="end-impersonation" style="background:#111;color:#fff;border:0;padding:4px 12px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;">End impersonation</button>';
       document.body.insertBefore(banner, document.body.firstChild);
       document.getElementById('end-impersonation').addEventListener('click', function () {
-        // Grab the target user id from the current JWT for the audit
-        // endpoint, then swap the tokens back.
-        var currentToken = cookies.access_token;
-        var targetId = 0;
-        try {
-          var payload = JSON.parse(atob(currentToken.split('.')[1]));
-          targetId = payload.user_id || 0;
-        } catch (e) {}
-        // Restore admin cookie
-        document.cookie = 'access_token=' + cookies.admin_original_token + '; path=/; max-age=86400; SameSite=Lax';
-        document.cookie = 'admin_original_token=; path=/; max-age=0; SameSite=Lax';
+        // Server-side swap only — same reason as the start-impersonation
+        // fix: JS can't overwrite HttpOnly cookies, so the client can't
+        // restore the admin token by itself. The server reads the
+        // (HttpOnly) admin_original_token cookie, Set-Cookie's it back
+        // into access_token, and clears the impersonation flags.
+        //
+        // Read the impersonated user's id from a lightweight endpoint
+        // so we can bounce back to their admin page. Fallback: /admin/users.
         fetch('/admin/api/impersonation/end', {
           method: 'POST', credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target_id: targetId }),
+          body: JSON.stringify({}),
         }).finally(function () {
-          window.location.href = '/admin/users/' + targetId;
+          window.location.href = '/admin/users';
         });
       });
     })();

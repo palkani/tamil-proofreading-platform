@@ -377,6 +377,124 @@ router.get('/api/user-overrides', requireAdmin, async (req, res) => {
   });
 });
 
+// ---------- Impersonation (server-side cookie swap) ----------
+//
+// Old flow: client JS called /admin/api/users/:id/impersonate, got the
+// impersonation JWT in the response body, then set access_token via
+// document.cookie. Bug: the original access_token was HttpOnly, so JS
+// couldn't overwrite it — it just created a SECOND non-HttpOnly cookie
+// with the same name. Browser sent both; Express picked the older
+// (admin) one; req.user stayed as the admin. Result: banner showed but
+// the identity was never actually switched. This was the "impersonation
+// not working" bug the user hit today.
+//
+// New flow: server does the cookie swap via Set-Cookie so the new
+// access_token is properly HttpOnly and overrides the original. The
+// impersonation token never touches JavaScript, which is also better
+// from a security standpoint (no way for a page script to exfiltrate).
+const IMPERSONATION_MAX_AGE_MS = 30 * 60 * 1000;   // 30 min, matches the note in the confirm dialog
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+router.post('/api/users/:id/impersonate', requireAdmin, express.json(), async (req, res) => {
+  const targetId = String(req.params.id || '').trim();
+  if (!/^\d+$/.test(targetId)) return res.status(400).json({ ok: false, error: 'invalid_id' });
+
+  const adminToken = req.cookies && req.cookies.access_token;
+  if (!adminToken) return res.status(401).json({ ok: false, error: 'admin_token_missing' });
+
+  try {
+    const response = await axios.post(
+      `${backendBase()}/api/v1/admin/users/${encodeURIComponent(targetId)}/impersonate`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+        validateStatus: () => true,
+        timeout: 15000,
+      }
+    );
+    logAdminApi({ req, method: 'POST', upstreamPath: `/users/${targetId}/impersonate`, status: response.status, durationMs: 0 });
+
+    if (response.status < 200 || response.status >= 300) {
+      return res.status(response.status).json(response.data || { ok: false, error: 'backend_error' });
+    }
+    const impersonationToken = response.data && response.data.access_token;
+    if (!impersonationToken) {
+      return res.status(502).json({ ok: false, error: 'backend_returned_no_token' });
+    }
+
+    // Server-side cookie swap — same name+path as the original access_token
+    // so the browser REPLACES it rather than creating a second cookie.
+    // HttpOnly protects the impersonation token from page scripts. SameSite=Lax
+    // survives normal navigations. Secure only in prod (localhost dev needs it off).
+    const cookieBase = {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure:   IS_PROD,
+      path:     '/',
+      maxAge:   IMPERSONATION_MAX_AGE_MS,
+    };
+    res.cookie('admin_original_token', adminToken,           cookieBase);
+    res.cookie('access_token',         impersonationToken,   cookieBase);
+    // Non-HttpOnly boolean flag so the header banner script can detect
+    // impersonation without needing to read the (HttpOnly) admin token.
+    res.cookie('impersonation_active', '1', {
+      httpOnly: false,
+      sameSite: 'lax',
+      secure:   IS_PROD,
+      path:     '/',
+      maxAge:   IMPERSONATION_MAX_AGE_MS,
+    });
+    return res.json({ ok: true, target_id: Number(targetId) });
+  } catch (err) {
+    console.error('[admin/impersonate] failed:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/api/impersonation/end', requireAdmin, express.json(), async (req, res) => {
+  const originalToken = req.cookies && req.cookies.admin_original_token;
+  if (!originalToken) {
+    // Nothing to restore — clear any lingering flag and 200 so the client
+    // still redirects, avoiding a UI dead end.
+    res.clearCookie('access_token',         { path: '/' });
+    res.clearCookie('admin_original_token', { path: '/' });
+    res.clearCookie('impersonation_active', { path: '/' });
+    return res.json({ ok: true, note: 'no_admin_token_to_restore' });
+  }
+  const targetId = Number(req.body && req.body.target_id) || 0;
+
+  // Best-effort backend notification for the audit log. We don't fail the
+  // end-impersonation flow if the backend is unreachable — the admin's
+  // session MUST be restored regardless.
+  try {
+    await axios.post(
+      `${backendBase()}/api/v1/admin/impersonation/end`,
+      { target_id: targetId },
+      {
+        headers: { Authorization: `Bearer ${originalToken}`, 'Content-Type': 'application/json' },
+        validateStatus: () => true,
+        timeout: 5000,
+      }
+    );
+  } catch (_) { /* audit-only, ignore */ }
+
+  // Server-side cookie swap back — admin token is restored to
+  // access_token, and the admin_original_token + impersonation_active
+  // flag are cleared.
+  const cookieBase = {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure:   IS_PROD,
+    path:     '/',
+    maxAge:   24 * 3600 * 1000,   // 1 day — same as the admin's own login token TTL
+  };
+  res.cookie('access_token', originalToken, cookieBase);
+  res.clearCookie('admin_original_token', { path: '/' });
+  res.clearCookie('impersonation_active', { path: '/' });
+  logAdminApi({ req, method: 'POST', upstreamPath: `/impersonation/end (target ${targetId})`, status: 200, durationMs: 0 });
+  return res.json({ ok: true });
+});
+
 // ---------- API proxy ----------
 //
 // The frontend sends fetch() calls to /admin/api/* which we forward
