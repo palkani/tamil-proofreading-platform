@@ -356,6 +356,7 @@ class HomeEditor {
     console.log('[INIT] Editor element found, attaching event listeners');
     
     // Toolbar buttons (execCommand)
+    const ALIGN_CMDS = ['justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull'];
     document.querySelectorAll('.home-toolbar .toolbar-btn[data-command]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -369,6 +370,13 @@ class HomeEditor {
           const isActive = document.queryCommandState(cmd);
           if (isActive) btn.classList.add('active');
           else btn.classList.remove('active');
+        }
+        // Alignment is mutually exclusive — clear siblings then set clicked
+        if (ALIGN_CMDS.includes(cmd)) {
+          document.querySelectorAll('.home-toolbar .toolbar-btn[data-command]').forEach((sib) => {
+            if (ALIGN_CMDS.includes(sib.getAttribute('data-command'))) sib.classList.remove('active');
+          });
+          if (document.queryCommandState(cmd)) btn.classList.add('active');
         }
       });
     });
