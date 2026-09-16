@@ -387,6 +387,86 @@ document.addEventListener('DOMContentLoaded', function() {
  * silently drop the correction — the user clicked Apply expecting SOMETHING
  * to happen).
  */
+/**
+ * PREFERRED apply path when TipTap is active: walk the ProseMirror
+ * doc, find every occurrence of `original` in a text node, and dispatch
+ * ONE transaction that replaces each occurrence with `corrected`.
+ *
+ * Why this over applyCorrectionPreservingMarkup:
+ *   - Preserves cursor selection (setContent kills it and drops to doc start)
+ *   - Undo history is a single, targeted step (setContent creates a whole
+ *     new document — one undo returns to the pre-apply state, another
+ *     undo returns to the state before that, but the intermediate step
+ *     is a whole-doc replace which is scary in the history stack)
+ *   - No full HTML serialise + parse round-trip
+ *   - Any decorations set by the ProofreadPlugin map through the same
+ *     transaction — the highlight for the replaced range disappears
+ *     cleanly and other highlights shift correctly (position stability
+ *     is exactly what the plugin was built for)
+ *   - Right-to-left ordering so earlier ranges aren't invalidated by
+ *     later inserts changing document length
+ *
+ * Falls back to applyCorrectionPreservingMarkup (returns false) when:
+ *   - TipTap isn't active
+ *   - No text node contains `original`
+ *   - The transaction dispatch throws (schema mismatch, missing view)
+ */
+function applyCorrectionViaTransaction(original, corrected) {
+  if (
+    !window.USE_TIPTAP_EDITOR ||
+    typeof tiptapWorkspaceEditor === 'undefined' ||
+    !tiptapWorkspaceEditor ||
+    !tiptapWorkspaceEditor.state ||
+    !tiptapWorkspaceEditor.view
+  ) {
+    return false;
+  }
+  if (!original || typeof original !== 'string') return false;
+  const replacement = typeof corrected === 'string' ? corrected : '';
+
+  try {
+    const state = tiptapWorkspaceEditor.state;
+    const doc = state.doc;
+    const ranges = [];
+
+    // Walk text nodes; collect (from, to) of every match.
+    doc.descendants((node, pos) => {
+      if (!node.isText) return true;
+      const text = node.text || '';
+      if (text.indexOf(original) === -1) return true;
+      let idx = text.indexOf(original);
+      while (idx !== -1) {
+        ranges.push({ from: pos + idx, to: pos + idx + original.length });
+        idx = text.indexOf(original, idx + original.length);
+      }
+      return true;
+    });
+
+    if (ranges.length === 0) return false;
+
+    // Apply right-to-left so earlier positions aren't shifted by
+    // later replacements changing the doc length ahead of them.
+    ranges.sort((a, b) => b.from - a.from);
+
+    let tr = state.tr;
+    for (const r of ranges) {
+      if (replacement.length > 0) {
+        tr = tr.replaceRangeWith(r.from, r.to, state.schema.text(replacement));
+      } else {
+        // Deletion — schema.text('') throws, use delete range instead.
+        tr = tr.delete(r.from, r.to);
+      }
+    }
+
+    if (!tr.docChanged) return false;
+    tiptapWorkspaceEditor.view.dispatch(tr);
+    return true;
+  } catch (e) {
+    console.warn('[APPLY] transaction dispatch failed, caller should fall back:', e && e.message);
+    return false;
+  }
+}
+
 function applyCorrectionPreservingMarkup(original, corrected) {
   if (
     !window.USE_TIPTAP_EDITOR ||
@@ -5455,12 +5535,16 @@ class WorkspaceController {
             preview: original && corrected ? `${original} → ${corrected}` : corrected || original || '',
             sourceText: original,
             onApply: original && corrected ? () => {
-              // TipTap path: preserve inline formatting (text-align, bold,
-              // etc.) by walking text nodes only. Falls through to the
-              // legacy plain-text path if not on TipTap or if the helper
-              // couldn't apply the correction.
-              const appliedInPlace = applyCorrectionPreservingMarkup(original, corrected);
-              if (appliedInPlace) {
+              // TipTap apply — try three paths in order, best to worst:
+              //   1. applyCorrectionViaTransaction — dispatches a targeted
+              //      ProseMirror transaction. Preserves cursor + granular
+              //      undo; decorations map through the same transaction.
+              //   2. applyCorrectionPreservingMarkup — full HTML DOMParse +
+              //      setContent. Preserves formatting but resets cursor.
+              //   3. Legacy plain-text (below) — last resort.
+              const appliedByTx = applyCorrectionViaTransaction(original, corrected);
+              const appliedByHtml = appliedByTx || applyCorrectionPreservingMarkup(original, corrected);
+              if (appliedByHtml) {
                 if (this._applySaveTimeout) clearTimeout(this._applySaveTimeout);
                 this._applySaveTimeout = setTimeout(() => {
                   if (typeof this.autosave === 'function') this.autosave();
@@ -5877,11 +5961,11 @@ class WorkspaceController {
         // so the user's Accept-flow feels the same regardless of
         // whether the suggestion came from stream or submit.
         onApply: () => {
-          // Same formatting-preservation pattern as the primary onApply
-          // above: try TipTap in-place first, fall back to plain-text
-          // only when there's no TipTap or the DOM walk found no match.
-          const appliedInPlace = applyCorrectionPreservingMarkup(c.original, c.corrected);
-          if (appliedInPlace) {
+          // Three-tier apply — transaction → HTML preserve → plain text.
+          // See applyCorrectionViaTransaction docstring for the rationale.
+          const appliedByTx = applyCorrectionViaTransaction(c.original, c.corrected);
+          const appliedByHtml = appliedByTx || applyCorrectionPreservingMarkup(c.original, c.corrected);
+          if (appliedByHtml) {
             if (this._applySaveTimeout) clearTimeout(this._applySaveTimeout);
             this._applySaveTimeout = setTimeout(() => this.autosave(), 500);
             return;
@@ -6191,11 +6275,11 @@ class WorkspaceController {
           preview: `${t.original} → ${sugg.ta}`,
           sourceText: t.original,
           onApply: () => {
-            // Transliteration-suggest apply — same formatting preservation
-            // as the two proofreading onApply paths above. TipTap first,
-            // plain-text fallback for legacy.
-            const appliedInPlace = applyCorrectionPreservingMarkup(t.original, sugg.ta);
-            if (appliedInPlace) return;
+            // Transliteration-suggest apply — three-tier same as the two
+            // proofreading onApply paths above.
+            const appliedByTx = applyCorrectionViaTransaction(t.original, sugg.ta);
+            const appliedByHtml = appliedByTx || applyCorrectionPreservingMarkup(t.original, sugg.ta);
+            if (appliedByHtml) return;
             const currentText = this.getEditorText();
             const replaced = this.replaceTokenInText(currentText, t.original, sugg.ta, t.start);
             if (this.editor && typeof this.editor.setText === 'function') {
