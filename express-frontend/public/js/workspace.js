@@ -25,20 +25,44 @@ console.log('[WorkspaceJS] ✅ Loaded version v20260224b - inline correction pop
 // change the default to true here and drop the opt-in.
 if (typeof window.USE_TIPTAP_EDITOR === 'undefined') {
   let optedIn = false;
+  let optSource = null;
   try {
     const params = new URLSearchParams(window.location.search || '');
-    if (params.get('editor') === 'tiptap') optedIn = true;
+    const raw = String(params.get('editor') || '').trim().toLowerCase();
+    // Common typos we've actually seen — real user hit ?editor=tiptop
+    // and silently got legacy. Accept anything obviously meaning tiptap.
+    // If typed something we don't recognise, warn loudly so the typo
+    // shows up in the console instead of silently no-op'ing.
+    const TIPTAP_ALIASES = new Set([
+      'tiptap', 'tiptop', 'tiptap2', 'tiptap-v2', 'tt', 'pm', 'prosemirror',
+      'v2', 'new', 'true', '1', 'on',
+    ]);
+    if (raw) {
+      if (TIPTAP_ALIASES.has(raw)) {
+        optedIn = true;
+        optSource = '?editor=' + raw;
+        if (raw !== 'tiptap') {
+          console.warn('[WorkspaceJS] Accepted ?editor=' + raw + ' as an alias for tiptap. Canonical form is ?editor=tiptap.');
+        }
+      } else {
+        // User typed something for `editor` we don't recognise (e.g.
+        // `?editor=classic`, `?editor=legacy`). Don't silently ignore
+        // — surface it so future typos are debuggable.
+        console.warn('[WorkspaceJS] Ignoring unrecognised ?editor value:', JSON.stringify(raw), '— known aliases:', Array.from(TIPTAP_ALIASES));
+      }
+    }
   } catch (_) { /* URL parse can fail in edge browsers — ignore */ }
   if (!optedIn) {
     try {
       if (typeof localStorage !== 'undefined' &&
           localStorage.getItem('pt_editor_tiptap') === '1') {
         optedIn = true;
+        optSource = 'localStorage.pt_editor_tiptap';
       }
     } catch (_) { /* private mode / disabled storage — ignore */ }
   }
   window.USE_TIPTAP_EDITOR = optedIn;
-  console.log('[WorkspaceJS] ✅ USE_TIPTAP_EDITOR =', optedIn, optedIn ? '(opt-in via ?editor=tiptap or pt_editor_tiptap localStorage)' : '(default — legacy editor)');
+  console.log('[WorkspaceJS] ✅ USE_TIPTAP_EDITOR =', optedIn, optedIn ? '(opt-in via ' + (optSource || 'unknown') + ')' : '(default — legacy editor)');
 } else {
   console.log('[WorkspaceJS] USE_TIPTAP_EDITOR already set to:', window.USE_TIPTAP_EDITOR);
 }
