@@ -7517,41 +7517,68 @@ function setupTipTapToolbar() {
     });
   });
 
-  // Refresh which alignment button (if any) is highlighted based on the
-  // current selection. Called after alignment clicks AND on selection
-  // change so cursor movement into a differently-aligned paragraph
-  // updates the pill correctly.
+  // Reflect the current selection's alignment onto (a) the dropdown items'
+  // active class for the panel's visual highlight, and (b) the trigger
+  // button — both its icon (mirrors the active alignment) and its own
+  // active state (lit when non-left, so users see the toolbar remember
+  // their choice). Called on click, selectionUpdate, and transaction so
+  // cursor movement into a differently-aligned paragraph keeps the UI
+  // truthful.
+  const alignTrigger = document.getElementById('align-dropdown-btn');
+  const alignCurrentIcon = document.getElementById('align-current-icon');
   function syncAlignmentActive() {
-    const alignBtns = document.querySelectorAll('.toolbar-btn[data-align]');
-    alignBtns.forEach((b) => {
+    let activeItem = null;
+    const items = document.querySelectorAll('.dropdown-item[data-align]');
+    items.forEach((b) => {
       const a = b.getAttribute('data-align');
       const on = tiptapWorkspaceEditor.isActive({ textAlign: a });
       b.classList.toggle('active', on);
+      if (on) activeItem = b;
     });
+    if (alignTrigger && alignCurrentIcon && activeItem) {
+      const src = activeItem.querySelector('svg');
+      if (src) alignCurrentIcon.innerHTML = src.innerHTML;
+      // Trigger stays "unlit" for the default left alignment, lit for the
+      // rest — subtle nod to "you've deliberately changed alignment."
+      const a = activeItem.getAttribute('data-align');
+      alignTrigger.classList.toggle('active', a !== 'left');
+    }
   }
-  // Wire selection-change so cursor movement updates the pill.
   tiptapWorkspaceEditor.on('selectionUpdate', syncAlignmentActive);
   tiptapWorkspaceEditor.on('transaction',    syncAlignmentActive);
-  // Initial paint — the doc may already have alignment from a restored draft.
   syncAlignmentActive();
 
-  // Handle alignment dropdown items
+  // Alignment dropdown open/close + item click
+  const alignDropdown = document.getElementById('align-dropdown');
+  if (alignTrigger && alignDropdown) {
+    // Replace to strip any stale listeners from a previous mount
+    const trg = alignTrigger.cloneNode(true);
+    alignTrigger.parentNode.replaceChild(trg, alignTrigger);
+    trg.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const willOpen = alignDropdown.classList.contains('hidden');
+      alignDropdown.classList.toggle('hidden');
+      trg.setAttribute('aria-expanded', String(willOpen));
+    });
+    document.addEventListener('click', () => {
+      alignDropdown.classList.add('hidden');
+      trg.setAttribute('aria-expanded', 'false');
+    });
+  }
   const dropdownItems = document.querySelectorAll('.dropdown-item[data-command]');
   dropdownItems.forEach(item => {
     const newItem = item.cloneNode(true);
     item.parentNode.replaceChild(newItem, item);
-    
     newItem.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       const command = newItem.getAttribute('data-command');
       const tipTapCommand = commandMap[command];
-      if (tipTapCommand) {
-        tipTapCommand();
-      }
-      // Close dropdown
-      const dropdown = document.getElementById('align-dropdown');
-      if (dropdown) dropdown.classList.add('hidden');
+      if (tipTapCommand) tipTapCommand();
+      if (alignDropdown) alignDropdown.classList.add('hidden');
+      // syncAlignmentActive will fire from the TipTap transaction and
+      // update trigger icon + active state.
     });
   });
 

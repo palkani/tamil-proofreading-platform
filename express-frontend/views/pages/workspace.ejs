@@ -13,70 +13,90 @@
   }
 
   /* ==========================================================================
-     Workspace Toolbar (reference: light grey bar, dark grey icons, purple language/mic)
+     Workspace Toolbar — 2026 refresh
+     Matches home-toolbar CSS so both editors read as one product. White
+     bar, airy 40px buttons, thin icons, no visible dividers, indigo active
+     state. Voice/mic stays blue to preserve the workspace brand accent
+     (home uses purple).
      ========================================================================== */
   .workspace-toolbar {
     position: sticky;
     top: 0;
     z-index: 30;
-    background: #f3f4f6 !important; /* light grey like reference */
+    background: #ffffff !important;
+    border-bottom: 1px solid #e5e7eb;
   }
   .workspace-toolbar .toolbar-btn {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 8px;
-    color: #374151; /* dark grey icons */
+    border-radius: 10px;
+    color: #4b5563;
     background: transparent;
     border: none;
-    transition: all 120ms ease;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease, transform 120ms ease;
   }
   .workspace-toolbar .toolbar-btn:hover {
-    background: rgba(0, 0, 0, 0.06);
+    background: #f3f4f6;
     color: #111827;
   }
   .workspace-toolbar .toolbar-btn:active {
-    background: rgba(0, 0, 0, 0.08);
+    transform: scale(0.96);
   }
   .workspace-toolbar .toolbar-btn.active {
-    background: rgba(0, 0, 0, 0.08);
-    color: #111827;
+    background: #eef2ff;
+    color: #4f46e5;
   }
   .workspace-toolbar .toolbar-btn svg {
     stroke: currentColor;
-    stroke-width: 2.2;
+    stroke-width: 1.75;
     fill: none;
+    width: 22px;
+    height: 22px;
   }
   .workspace-toolbar .toolbar-divider {
     width: 1px;
-    height: 22px;
-    background: rgba(0, 0, 0, 0.12);
+    height: 24px;
+    background: #e5e7eb;
     margin: 0 8px;
+    opacity: 0.7;
   }
   .workspace-toolbar .toolbar-pill {
     display: inline-flex;
     gap: 2px;
-    padding: 4px;
-    border-radius: 8px;
+    padding: 0;
+    border-radius: 10px;
     background: transparent;
     border: none;
   }
-  /* Oval language toggle (தமிழ்) - blue when Tamil, grey when English */
+  .workspace-toolbar .toolbar-btn.has-chevron {
+    width: auto;
+    padding: 0 8px 0 10px;
+    gap: 4px;
+  }
+  .workspace-toolbar .toolbar-btn.has-chevron svg.chevron {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2;
+    opacity: 0.6;
+  }
   .workspace-toolbar .voice-lang-toggle {
     display: inline-flex;
     align-items: center;
     height: 36px;
-    padding: 0 6px 0 14px;
+    padding: 0 8px 0 16px;
     border-radius: 999px;
     border: none;
     cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease;
-    background: #e5e7eb;
-    color: #6b7280;
+    transition: background 200ms ease, color 200ms ease;
+    background: #eef2ff;
+    color: #4f46e5;
     position: relative;
-    min-width: 88px;
+    min-width: 92px;
+    font-weight: 500;
   }
   .workspace-toolbar .voice-lang-toggle[aria-checked="true"] {
     background: #2563eb;
@@ -86,6 +106,7 @@
     font-size: 13px;
     font-weight: 500;
     font-family: 'Noto Sans Tamil', system-ui, sans-serif;
+    letter-spacing: 0.01em;
   }
   .workspace-toolbar .voice-lang-toggle .voice-lang-toggle-knob {
     position: absolute;
@@ -95,14 +116,13 @@
     height: 28px;
     border-radius: 50%;
     background: #fff;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    transition: transform 0.2s ease, right 0.2s ease, left 0.2s ease;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+    transition: right 0.2s ease, left 0.2s ease;
   }
   .workspace-toolbar .voice-lang-toggle[aria-checked="false"] .voice-lang-toggle-knob {
     left: 4px;
     right: auto;
   }
-  /* Circular blue mic button */
   .workspace-toolbar .voice-mic-btn {
     width: 40px;
     height: 40px;
@@ -114,39 +134,54 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: background 0.2s ease, transform 0.1s ease;
+    transition: background 200ms ease, transform 120ms ease;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
   }
   .workspace-toolbar .voice-mic-btn:hover {
     background: #1d4ed8;
+    transform: translateY(-1px);
   }
   .workspace-toolbar .voice-mic-btn svg {
     stroke: #fff;
+    stroke-width: 1.75;
   }
   .workspace-toolbar .voice-mic-btn.voice-typing-active {
     background: #dc2626;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
   }
   .workspace-toolbar .voice-mic-btn.voice-typing-active:hover {
     background: #b91c1c;
   }
   .workspace-toolbar .dropdown-panel {
     border-radius: 14px;
-    border: 1px solid rgba(15, 23, 42, 0.12);
-    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(15, 23, 42, 0.06);
     overflow: hidden;
+    background: #ffffff;
   }
   .workspace-toolbar .dropdown-item {
     width: 100%;
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
+    padding: 10px 14px;
     font-size: 14px;
     color: #0f172a;
     background: #ffffff;
-    transition: background 120ms ease;
+    border: none;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease;
   }
   .workspace-toolbar .dropdown-item:hover {
-    background: rgba(59, 130, 246, 0.08);
+    background: #f5f3ff;
+    color: #4f46e5;
+  }
+  .workspace-toolbar .dropdown-item svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    fill: none;
   }
   .workspace-editor-panel .flex-1 {
     min-height: 0;
@@ -1124,9 +1159,9 @@
 
           <!-- Text style dropdown (T with caret) -->
           <div class="relative inline-block">
-            <button class="toolbar-btn flex items-center gap-0.5" id="format-dropdown-btn" title="Text style">
-              <span class="text-base font-bold text-inherit leading-none" style="color:inherit">T</span>
-              <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" stroke="currentColor" stroke-width="2.5" fill="none">
+            <button class="toolbar-btn has-chevron" id="format-dropdown-btn" title="Text style" aria-haspopup="true" aria-expanded="false">
+              <span style="font-size:16px;font-weight:600;line-height:1;color:currentColor">T</span>
+              <svg class="chevron" viewBox="0 0 20 20">
                 <path d="M6 8l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
@@ -1180,40 +1215,55 @@
 
           <div class="toolbar-divider"></div>
 
-          <!-- Paragraph alignment. Wired to setupTipTapToolbar's commandMap
-               entries (justifyLeft / justifyCenter / justifyRight / justifyFull)
-               which call the TipTap TextAlign extension. Active-state highlight
-               reflects the current selection's alignment. -->
-          <div class="toolbar-pill">
-            <button class="toolbar-btn" data-command="justifyLeft" data-align="left" title="Align left">
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="4" y1="6" x2="20" y2="6"/>
-                <line x1="4" y1="12" x2="14" y2="12"/>
-                <line x1="4" y1="18" x2="18" y2="18"/>
-                <line x1="4" y1="15" x2="10" y2="15" style="display:none"/>
+          <!-- Paragraph alignment dropdown. Wired to setupTipTapToolbar's
+               commandMap (justifyLeft/Center/Right/Full → TipTap
+               setTextAlign). Trigger button mirrors the currently-selected
+               alignment icon so users see what's in force. -->
+          <div class="relative inline-block">
+            <button class="toolbar-btn has-chevron" id="align-dropdown-btn" title="Alignment" aria-haspopup="true" aria-expanded="false">
+              <svg id="align-current-icon" viewBox="0 0 24 24">
+                <line x1="4" y1="6" x2="20" y2="6" stroke-linecap="round"/>
+                <line x1="4" y1="12" x2="14" y2="12" stroke-linecap="round"/>
+                <line x1="4" y1="18" x2="18" y2="18" stroke-linecap="round"/>
+              </svg>
+              <svg class="chevron" viewBox="0 0 20 20">
+                <path d="M6 8l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <button class="toolbar-btn" data-command="justifyCenter" data-align="center" title="Align center">
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="4" y1="6" x2="20" y2="6"/>
-                <line x1="7" y1="12" x2="17" y2="12"/>
-                <line x1="5" y1="18" x2="19" y2="18"/>
-              </svg>
-            </button>
-            <button class="toolbar-btn" data-command="justifyRight" data-align="right" title="Align right">
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="4" y1="6" x2="20" y2="6"/>
-                <line x1="10" y1="12" x2="20" y2="12"/>
-                <line x1="6" y1="18" x2="20" y2="18"/>
-              </svg>
-            </button>
-            <button class="toolbar-btn" data-command="justifyFull" data-align="justify" title="Justify">
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="4" y1="6" x2="20" y2="6"/>
-                <line x1="4" y1="12" x2="20" y2="12"/>
-                <line x1="4" y1="18" x2="20" y2="18"/>
-              </svg>
-            </button>
+            <div id="align-dropdown" class="dropdown-panel hidden absolute left-0 mt-2 w-44 z-10">
+              <button class="dropdown-item" data-command="justifyLeft" data-align="left">
+                <svg viewBox="0 0 24 24">
+                  <line x1="4" y1="6" x2="20" y2="6" stroke-linecap="round"/>
+                  <line x1="4" y1="12" x2="14" y2="12" stroke-linecap="round"/>
+                  <line x1="4" y1="18" x2="18" y2="18" stroke-linecap="round"/>
+                </svg>
+                Align left
+              </button>
+              <button class="dropdown-item" data-command="justifyCenter" data-align="center">
+                <svg viewBox="0 0 24 24">
+                  <line x1="4" y1="6" x2="20" y2="6" stroke-linecap="round"/>
+                  <line x1="7" y1="12" x2="17" y2="12" stroke-linecap="round"/>
+                  <line x1="5" y1="18" x2="19" y2="18" stroke-linecap="round"/>
+                </svg>
+                Align center
+              </button>
+              <button class="dropdown-item" data-command="justifyRight" data-align="right">
+                <svg viewBox="0 0 24 24">
+                  <line x1="4" y1="6" x2="20" y2="6" stroke-linecap="round"/>
+                  <line x1="10" y1="12" x2="20" y2="12" stroke-linecap="round"/>
+                  <line x1="6" y1="18" x2="20" y2="18" stroke-linecap="round"/>
+                </svg>
+                Align right
+              </button>
+              <button class="dropdown-item" data-command="justifyFull" data-align="justify">
+                <svg viewBox="0 0 24 24">
+                  <line x1="4" y1="6" x2="20" y2="6" stroke-linecap="round"/>
+                  <line x1="4" y1="12" x2="20" y2="12" stroke-linecap="round"/>
+                  <line x1="4" y1="18" x2="20" y2="18" stroke-linecap="round"/>
+                </svg>
+                Justify
+              </button>
+            </div>
           </div>
 
           <div class="toolbar-divider"></div>

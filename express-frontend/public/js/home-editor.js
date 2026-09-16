@@ -355,8 +355,9 @@ class HomeEditor {
     }
     console.log('[INIT] Editor element found, attaching event listeners');
     
-    // Toolbar buttons (execCommand)
-    const ALIGN_CMDS = ['justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull'];
+    // Toolbar buttons (execCommand). Alignment lives in its own dropdown
+    // below, not as top-level toolbar-btn elements — so this handler is
+    // only bold/italic/underline/strikeThrough/undo/redo.
     document.querySelectorAll('.home-toolbar .toolbar-btn[data-command]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -370,13 +371,6 @@ class HomeEditor {
           const isActive = document.queryCommandState(cmd);
           if (isActive) btn.classList.add('active');
           else btn.classList.remove('active');
-        }
-        // Alignment is mutually exclusive — clear siblings then set clicked
-        if (ALIGN_CMDS.includes(cmd)) {
-          document.querySelectorAll('.home-toolbar .toolbar-btn[data-command]').forEach((sib) => {
-            if (ALIGN_CMDS.includes(sib.getAttribute('data-command'))) sib.classList.remove('active');
-          });
-          if (document.queryCommandState(cmd)) btn.classList.add('active');
         }
       });
     });
@@ -406,14 +400,26 @@ class HomeEditor {
 
     // Alignment dropdown
     if (this.alignDropdownBtn && this.alignDropdown) {
-      this.alignDropdownBtn.addEventListener('click', (e) => {
+      const trigger = this.alignDropdownBtn;
+      const currentIcon = document.getElementById('home-align-current-icon');
+      // Mirror the selected item's SVG into the trigger so the toolbar
+      // button always shows the alignment currently in force.
+      const setTriggerIcon = (item) => {
+        if (!currentIcon || !item) return;
+        const src = item.querySelector('svg');
+        if (src) currentIcon.innerHTML = src.innerHTML;
+      };
+      trigger.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        const willOpen = this.alignDropdown.classList.contains('hidden');
         this.alignDropdown.classList.toggle('hidden');
+        trigger.setAttribute('aria-expanded', String(willOpen));
       });
       this._alignDropdownClickListener = (e) => {
         if (e.target.closest('a[href]')) return;
         this.alignDropdown.classList.add('hidden');
+        trigger.setAttribute('aria-expanded', 'false');
       };
       document.addEventListener('click', this._alignDropdownClickListener);
       this.alignDropdown.querySelectorAll('[data-command]').forEach((item) => {
@@ -422,7 +428,10 @@ class HomeEditor {
           const cmd = item.getAttribute('data-command');
           if (!cmd) return;
           document.execCommand(cmd, false, null);
+          setTriggerIcon(item);
+          trigger.classList.add('active');
           this.alignDropdown.classList.add('hidden');
+          trigger.setAttribute('aria-expanded', 'false');
           this.editor.focus();
         });
       });
