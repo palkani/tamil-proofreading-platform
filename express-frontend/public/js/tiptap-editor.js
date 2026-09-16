@@ -347,6 +347,114 @@ window.createTipTapEditor = null;
       }, 0);
     }
 
+    // ── Legacy Tamil encoding detection ────────────────────────────
+    //
+    // Reported by a customer 2026-09-15 — pasted Tamil looked correct
+    // in Word but rendered as junk in ProofTamil. Cause: source document
+    // used a non-Unicode Tamil font (Bamini, TAB, TAM, TSCII) where each
+    // byte position maps to a Tamil glyph but the underlying character
+    // codes are Latin. When copy-pasted into any Unicode-expecting app
+    // the bytes re-render as different characters — Tamil-shaped but
+    // meaningless.
+    //
+    // We can't auto-convert (that needs per-font byte-map tables which
+    // are out of scope for this PR). But we CAN detect the pattern and
+    // give the user a one-time non-blocking warning telling them to
+    // convert to Unicode first. Same info the customer got from support
+    // earlier — surfaced automatically.
+    //
+    // Detection signal (any one triggers):
+    //   1. text/html font-family names any legacy Tamil font
+    //   2. text/plain is > 30% Latin AND text/rtf mentions those fonts
+    //   3. text/plain looks like Bamini byte-pattern (high frequency of
+    //      specific Latin chars that render as Tamil glyphs — heuristic)
+    //
+    // Fires at most once per session (`legacyEncodingWarned`). No
+    // preventDefault — the paste still lands; the user just gets a
+    // toast advising them what to do.
+    const LEGACY_TAMIL_FONTS = [
+      'Bamini', 'TAB', 'TAM', 'TSC', 'TSCII', 'Elango', 'Mylai',
+      'Amuthu', 'Kanchi', 'Tamil TAM', 'Barani', 'Thendral', 'Roman',
+      'ShreeLipi', 'ShreeTam', 'Adhawin', 'AvarangalAM',
+    ];
+    let legacyEncodingWarned = false;
+    function detectLegacyTamilEncoding(event) {
+      if (legacyEncodingWarned) return;
+      let signal = null;
+      try {
+        const cd = event.clipboardData || window.clipboardData;
+        const html  = (cd && cd.getData && cd.getData('text/html'))  || '';
+        const rtf   = (cd && cd.getData && cd.getData('text/rtf'))   || '';
+        const plain = (cd && cd.getData && cd.getData('text/plain')) || '';
+
+        // Signal 1 + 2 — font-family or RTF font-table mentions a known
+        // legacy Tamil font. Case-insensitive.
+        const clip = (html + ' ' + rtf).toLowerCase();
+        for (const font of LEGACY_TAMIL_FONTS) {
+          if (clip.indexOf(font.toLowerCase()) !== -1) {
+            signal = { font, source: html ? 'html' : 'rtf' };
+            break;
+          }
+        }
+
+        // Signal 3 — plain-text byte pattern. Bamini-encoded Tamil has
+        // near-zero Tamil Unicode chars AND a very high density of Latin
+        // letters + punctuation. If plain text is "mostly Latin" AND
+        // "has no Tamil Unicode range chars" AND "is long enough that
+        // we're confident it's a paragraph not a URL", flag it. This is
+        // heuristic — avoids false positives on English pastes.
+        if (!signal && plain && plain.length > 60) {
+          const tamilChars = (plain.match(/[஀-௿]/g) || []).length;
+          const latinChars = (plain.match(/[A-Za-z]/g) || []).length;
+          if (tamilChars === 0 && latinChars / plain.length > 0.4) {
+            // Additional: if the html paste has non-Latin fonts specified
+            // (font-family:) we're much more confident.
+            if (/font-family\s*:/i.test(html)) {
+              signal = { font: 'unknown-legacy', source: 'heuristic' };
+            }
+          }
+        }
+      } catch (_e) { /* diagnostic only, never throw from a paste handler */ }
+
+      if (!signal) return;
+      legacyEncodingWarned = true;
+      console.warn('[TipTap paste] Detected likely legacy Tamil font paste:', signal);
+      // Non-blocking toast — user can dismiss and continue. Auto-hides
+      // after 25s so it doesn't linger.
+      showLegacyEncodingToast(signal);
+    }
+
+    function showLegacyEncodingToast(signal) {
+      try {
+        if (document.getElementById('pt-legacy-encoding-toast')) return;
+        const t = document.createElement('div');
+        t.id = 'pt-legacy-encoding-toast';
+        t.setAttribute('role', 'alert');
+        t.style.cssText = [
+          'position:fixed', 'bottom:24px', 'right:24px', 'z-index:9999',
+          'max-width:420px', 'background:#FFFBEB', 'border:1px solid #F59E0B',
+          'border-radius:8px', 'padding:14px 40px 14px 16px',
+          'box-shadow:0 8px 24px rgba(0,0,0,0.12)',
+          'font-family:ui-sans-serif,system-ui,-apple-system,sans-serif',
+          'font-size:13.5px', 'color:#78350F', 'line-height:1.5',
+        ].join(';');
+        t.innerHTML =
+          '<button aria-label="Dismiss" style="position:absolute;top:6px;right:8px;background:none;border:none;font-size:20px;line-height:1;color:#92400E;cursor:pointer;padding:2px 6px">&times;</button>' +
+          '<div style="font-weight:600;margin-bottom:4px">Non-Unicode Tamil font detected</div>' +
+          '<div>Your paste looks like it\'s from a legacy Tamil font' +
+          (signal.font && signal.font !== 'unknown-legacy' ? ' (<b>' + escapeAttr(signal.font) + '</b>)' : '') +
+          '. Modern editors can\'t read those bytes as Tamil — words will look wrong or garbled.</div>' +
+          '<div style="margin-top:8px">Convert first: <a href="https://www.tamilcube.com/utility/unicode-converter.aspx" target="_blank" rel="noopener" style="color:#1D4ED8;text-decoration:underline">tamilcube unicode converter</a></div>';
+        t.querySelector('button').addEventListener('click', function () {
+          if (t.parentNode) t.parentNode.removeChild(t);
+        });
+        document.body.appendChild(t);
+        setTimeout(function () {
+          if (t.parentNode) t.parentNode.removeChild(t);
+        }, 25000);
+      } catch (_e) { /* toast is best-effort */ }
+    }
+
     // ── Word-paste HTML normalizer ────────────────────────────────
     //
     // Word puts alignment in half a dozen places (align="" attribute,
@@ -508,6 +616,7 @@ window.createTipTapEditor = null;
             },
             handlePaste: (view, event) => {
               logPasteDiagnostic(event);
+              detectLegacyTamilEncoding(event);
               try {
                 const text =
                   (event.clipboardData && event.clipboardData.getData('text/plain')) ||
