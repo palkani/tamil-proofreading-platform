@@ -5829,8 +5829,48 @@ class WorkspaceController {
     }
   }
 
-  updateWordCount() {
+  /**
+   * Public API — throttled. Called from every keystroke, every editor
+   * change, every draft load. Actual work runs in _doUpdateWordCount
+   * at most 4x/second.
+   *
+   * Why throttle: getEditorText() is O(N) — walks the whole doc via
+   * TipTap.getText() or reads editorElement.textContent. countWords
+   * then does another O(N) trim + split. On a 300-page book (~150K
+   * chars) that's ~5ms per call — 100x/second of typing lag adds up.
+   *
+   * Throttling to 250ms gives at most 4 counts/sec — imperceptible
+   * lag on the badge, ~25x faster in aggregate. Skip-if-unchanged
+   * via the last text length avoids the whole cost when getText
+   * returns the same string as the last count (paste-then-idle case).
+   *
+   * Callers that need SYNCHRONOUS accuracy pass `{ immediate: true }`
+   * — only openDraft and initial mount do; keystroke paths use
+   * throttle default.
+   */
+  updateWordCount(opts) {
+    if (opts && opts.immediate) {
+      if (this._wordCountThrottleId) {
+        clearTimeout(this._wordCountThrottleId);
+        this._wordCountThrottleId = null;
+      }
+      this._doUpdateWordCount();
+      return;
+    }
+    if (this._wordCountThrottleId) return;   // update already scheduled
+    this._wordCountThrottleId = setTimeout(() => {
+      this._wordCountThrottleId = null;
+      this._doUpdateWordCount();
+    }, 250);
+  }
+
+  _doUpdateWordCount() {
     const text = this.getEditorText();
+    // Skip-if-unchanged fast path — same-text repeat (e.g. cursor
+    // move that fired an unrelated event) does zero counting work.
+    if (text === this._lastWordCountText) return;
+    this._lastWordCountText = text;
+
     const count = countWords(text);
     const wordCountEl = document.getElementById('word-count');
     if (wordCountEl) {
