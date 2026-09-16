@@ -508,6 +508,48 @@ router.post('/api/users/:id/entitlement-override', requireAdmin, express.json(),
   return res.json({ ok: true, override: result && result.row });
 });
 
+// Revoke a per-user entitlement override. The UI hides the Grant Lite
+// button when the target already has an active override and shows Revoke
+// Lite instead — this is that endpoint. Sets is_premium=false + expires_
+// at=now via the same upsertOverride pipeline, which:
+//   - immediately kicks the user off Pro across every consumer
+//     (attachEntitlements sees is_premium:false, /pro-access reads it,
+//     workspace uncaps them back to Free, etc.)
+//   - keeps the row intact for the audit trail (payment_status:
+//     'admin_revoked', cancelled_at, reason in notes). Deleting the row
+//     would lose history — that would be a separate destructive action.
+//
+// Body: { email, reason? }
+router.post('/api/users/:id/entitlement-override/revoke', requireAdmin, express.json(), async (req, res) => {
+  const email  = String((req.body && req.body.email) || '').trim().toLowerCase();
+  const reason = String((req.body && req.body.reason) || 'admin revoked').trim();
+  if (!email) return res.status(400).json({ ok: false, error: 'email_required' });
+
+  const grantedBy = (req.user && req.user.email) || 'admin';
+  const nowIso    = new Date().toISOString();
+
+  const result = await userOverridesDb.upsertOverride({
+    email,
+    is_premium:       false,
+    expires_at:       nowIso,
+    payment_status:   'admin_revoked',
+    cancelled_at:     nowIso,
+    auto_renew:       false,
+    granted_by_email: grantedBy,
+    notes:            `admin revoke by ${grantedBy}: ${reason}`,
+  });
+
+  if (result && result.error) {
+    return res.status(500).json({ ok: false, error: result.error, detail: result.detail });
+  }
+  logAdminApi({
+    req, method: 'POST',
+    upstreamPath: `/users/${req.params.id}/entitlement-override/revoke`,
+    status: 200, durationMs: 0,
+  });
+  return res.json({ ok: true });
+});
+
 // ---------- Impersonation (server-side cookie swap) ----------
 //
 // Old flow: client JS called /admin/api/users/:id/impersonate, got the
