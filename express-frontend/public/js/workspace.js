@@ -592,8 +592,11 @@ function replaceLastToken(text, replacement) {
   return (text || '').replace(/(\S+)$/, replacement);
 }
 
-function getCaretClientRect() {
-}
+// (Empty stub deleted 2026-09-16 — the real getCaretClientRect is
+// declared later in the file. JS function hoisting made the second
+// declaration always win; the stub was dead code with no callers
+// aware of it. Removed so grep for `getCaretClientRect` no longer
+// returns two hits.)
 
 function getTokenAtCaret(text, caretPos) {
   // CRITICAL: Only detect Latin (English) tokens for transliteration
@@ -689,6 +692,44 @@ function rankTamilCandidates(tokenLatin, candidates) {
 }
 
 function getCaretClientRect() {
+  // TipTap fast path \u2014 ProseMirror gives us caret coords directly via
+  // view.coordsAtPos, no DOM mutation. Injecting a marker <span> into a
+  // ProseMirror-managed tree corrupts the doc state (arbitrary DOM
+  // mutation \u2192 schema mismatch \u2192 editor throws on next transaction).
+  // Flagged in the TipTap migration plan \u00a705 as a "no clean equivalent"
+  // item; fixed here so IME dropdown positioning works when the flag
+  // is opt-in enabled (PR #218) and doesn't blow up when it's flipped
+  // globally later.
+  if (window.USE_TIPTAP_EDITOR &&
+      typeof tiptapWorkspaceEditor !== 'undefined' &&
+      tiptapWorkspaceEditor &&
+      tiptapWorkspaceEditor.view) {
+    try {
+      const head = tiptapWorkspaceEditor.state.selection.head;
+      const coords = tiptapWorkspaceEditor.view.coordsAtPos(head);
+      // Normalise to DOMRect shape so callers that read `left`/`top`
+      // AND `right`/`bottom` get consistent numbers. ProseMirror's
+      // coordsAtPos returns {left, right, top, bottom} \u2014 width/height
+      // are zero (a caret has no size).
+      return {
+        left:   coords.left,
+        right:  coords.right,
+        top:    coords.top,
+        bottom: coords.bottom,
+        width:  0,
+        height: coords.bottom - coords.top,
+        x:      coords.left,
+        y:      coords.top,
+      };
+    } catch (_e) {
+      // Fall through to the legacy path if ProseMirror threw for any
+      // reason (selection resolved to a non-position, view not mounted).
+    }
+  }
+
+  // Legacy contenteditable path \u2014 insert a zero-width marker span,
+  // grab its bounding rect, remove it. Works because contenteditable
+  // tolerates arbitrary DOM mutation; ProseMirror doesn't.
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return null;
   const range = selection.getRangeAt(0).cloneRange();
