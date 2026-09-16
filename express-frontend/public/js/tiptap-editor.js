@@ -26,6 +26,80 @@ window.createTipTapEditor = null;
     const { default: Link } = await import('https://esm.sh/@tiptap/extension-link@2.1.13');
     const { default: TextAlign } = await import('https://esm.sh/@tiptap/extension-text-align@2.1.13');
 
+    // TipTap's stock TextAlign.parseHTML only reads element.style.textAlign,
+    // which catches inline styles from ourselves and from Google Docs but
+    // MISSES the shapes Word actually uses on paste:
+    //   1. <p align="center">…</p>              (Office legacy attribute)
+    //   2. <p class="MsoCenterAlign">…</p>       (Word 2016+ hoists alignment
+    //      into a stripped-out <style> block referenced by class)
+    // Result: user pastes a formatted Word doc, alignment is lost even though
+    // the extension is loaded. Reported 2026-09-15 with a real Word paste.
+    //
+    // Extending the extension to check all three sources (inline style, align
+    // attribute, MsoCenter/Right/Justify class prefix) so Word/Docs/manual
+    // HTML all round-trip. Uses the extension's own `alignments` option so
+    // arbitrary/nonstandard values still fall back to the default.
+    const AlignmentAware = TextAlign.extend({
+      addGlobalAttributes() {
+        const alignments = this.options.alignments || ['left', 'center', 'right', 'justify'];
+        const defaultAlignment = this.options.defaultAlignment || 'left';
+        const isValid = (v) => v && alignments.indexOf(v) !== -1;
+        return [
+          {
+            types: this.options.types,
+            attributes: {
+              textAlign: {
+                default: defaultAlignment,
+                parseHTML(element) {
+                  // 1. inline style — covers TipTap self-emit and modern Google Docs
+                  const style = element.style && String(element.style.textAlign || '').toLowerCase();
+                  if (isValid(style)) return style;
+                  // 2. legacy align attribute — Word/older HTML editors
+                  const attr = element.getAttribute && element.getAttribute('align');
+                  if (attr) {
+                    const v = String(attr).toLowerCase();
+                    if (isValid(v)) return v;
+                  }
+                  // 3. Word MSO class hints — class="MsoCenterAlign" etc.
+                  const cls = String(element.className || '');
+                  if (/\bMsoCenter/i.test(cls) && isValid('center'))   return 'center';
+                  if (/\bMsoRight/i.test(cls)  && isValid('right'))    return 'right';
+                  if (/\bMsoJustify/i.test(cls) && isValid('justify')) return 'justify';
+                  return defaultAlignment;
+                },
+                renderHTML(attributes) {
+                  if (!attributes || attributes.textAlign === defaultAlignment) return {};
+                  return { style: `text-align: ${attributes.textAlign}` };
+                },
+              },
+            },
+          },
+        ];
+      },
+    });
+
+    // First-paste diagnostic. Logs the incoming clipboard's text/html AND
+    // text/plain preview to console ONCE per session so we can see what a
+    // paste actually looks like when a user reports alignment isn't sticking.
+    // Cheap (fires once), no user-visible effect, no PII risk beyond what's
+    // already on the user's own clipboard.
+    let firstPasteLogged = false;
+    function logFirstPaste(event) {
+      if (firstPasteLogged) return;
+      firstPasteLogged = true;
+      try {
+        const cd = event.clipboardData || window.clipboardData;
+        const html = (cd && cd.getData && cd.getData('text/html')) || '';
+        const plain = (cd && cd.getData && cd.getData('text/plain')) || '';
+        console.log('[TipTap paste diagnostic]', {
+          hasHtml: !!html,
+          htmlPreview: html.slice(0, 400),
+          hasPlain: !!plain,
+          plainPreview: plain.slice(0, 200),
+        });
+      } catch (_) { /* diagnostic only, never throw */ }
+    }
+
     // Expose editor creation function globally
     window.createTipTapEditor = function (element, initialContent = '') {
       if (!element) {
@@ -49,7 +123,7 @@ window.createTipTapEditor = null;
               autolink: true,
               linkOnPaste: true,
             }),
-            TextAlign.configure({
+            AlignmentAware.configure({
               types: ['heading', 'paragraph'],
             }),
           ],
@@ -60,6 +134,7 @@ window.createTipTapEditor = null;
               'data-placeholder': 'தமிழில் எழுதத் தொடங்குங்கள்...',
             },
             handlePaste: (view, event) => {
+              logFirstPaste(event);
               try {
                 const text =
                   (event.clipboardData && event.clipboardData.getData('text/plain')) ||
