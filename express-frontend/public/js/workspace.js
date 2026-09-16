@@ -6931,6 +6931,51 @@ function getTipTapTokenAroundCaret() {
   }
 }
 
+// Return the Latin token immediately BEFORE the caret (used by the
+// transliteration typeahead — a user typing English letters to get
+// Tamil suggestions expects the current WORD-IN-PROGRESS token, not
+// a token that spans across the caret).
+//
+// This mirrors the legacy `getTokenAtCaret` for TipTap. Was referenced
+// from handleEditorChange:2275 but never defined — the call silently
+// fell through to the else-branch on every keystroke, so TipTap IME
+// used the wrong token extraction path (getTokenAtCaret on a joined
+// text string that has no way to locate the caret's actual position
+// inside a multi-block ProseMirror doc). Flagged as an inventory
+// finding for the TipTap migration; fixing here so IME actually works
+// under the ?editor=tiptap opt-in.
+function getTipTapTokenBeforeCaret() {
+  if (!window.USE_TIPTAP_EDITOR || !tiptapWorkspaceEditor) return null;
+  try {
+    const { state } = tiptapWorkspaceEditor;
+    const sel = state.selection;
+    if (!sel || !sel.$from) return null;
+    const $from = sel.$from;
+    const parent = $from.parent;
+    if (!parent || !parent.isTextblock) return null;
+
+    const offset = $from.parentOffset || 0;
+    if (offset === 0) return null;
+    const before = parent.textBetween(0, offset, '\n', '\n') || '';
+    if (!before) return null;
+
+    // Only the trailing run of Latin letters (that's what the translit
+    // typeahead cares about — Tamil-side text is inserted directly).
+    const match = before.match(/([A-Za-z]+)$/);
+    if (!match) return null;
+    const token = match[1];
+    const base = $from.start();               // absolute doc pos where this textblock starts
+    const startOff = offset - token.length;
+    return {
+      token,
+      fromPos: base + startOff,
+      toPos:   base + offset,
+    };
+  } catch (_e) {
+    return null;
+  }
+}
+
 function replaceTipTapTokenAtCaret(replacement, appendSpace = false) {
   if (!window.USE_TIPTAP_EDITOR || !tiptapWorkspaceEditor) return false;
   const info = getTipTapTokenAroundCaret();
