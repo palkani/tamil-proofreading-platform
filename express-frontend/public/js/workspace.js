@@ -5935,41 +5935,37 @@ class WorkspaceController {
   }
 
   scheduleSave() {
-    if (this.saveTimeout) {
-      clearTimeout(this.saveTimeout);
-    }
-
     if (this.autosaveAuthBlocked) {
       return;
     }
 
-    // Paste can trigger multiple editor-change events. We already queue exactly one
-    // `autoAnalyze()` in `queuePasteAnalyze()`, so skip scheduling a second one here.
+    // Paste can trigger multiple editor-change events. queuePasteAnalyze
+    // already fires one autoAnalyze() for the paste, so skip both timers.
     if (this.pasteSuppressUntil && Date.now() < this.pasteSuppressUntil) {
       return;
     }
 
-    // Phase 4b of the TipTap migration
-    // (https://claude.ai/artifact/6h22Ya3ykUorhBAt9Uiziz §04 P4).
-    // Bumped from 2 s to 5 s. The periodic 30 s save timer + explicit
-    // Save button + navigate-away all still catch persistence; the
-    // 2 s debounce was mostly firing during active typing (every pause
-    // > 2 s), sending an /api/submit round-trip that got immediately
-    // superseded by the next keystroke. 5 s halves the request rate
-    // without touching worst-case data loss (still 30 s max via the
-    // periodic timer).
+    // Split into two independent debouncers so proofreading can feel
+    // responsive without spamming /api/submit on every keystroke pause.
+    //
+    // Autosave (5s): saves the draft to the Go backend. Bumped from 2s
+    // in Phase 4b because most 2s-triggered saves were superseded by the
+    // next keystroke. Periodic 30s save + explicit Save button still
+    // catch persistence; worst-case data loss unchanged.
+    if (this.saveTimeout) clearTimeout(this.saveTimeout);
     this.saveTimeout = setTimeout(() => {
-      // Persist the draft AND fire proofreading. These are two different
-      // endpoints (/api/submit save_draft:true → Go backend row insert;
-      // /api/corrections/stream → Express Gemini SSE). The old code fired
-      // only autoAnalyze() with a misleading comment claiming it was
-      // "unified" — that was wrong and the reason typing+export within
-      // 30s (before the periodic 30s save timer) produced empty /drafts.
-      // Both calls internally gate on MIN_SUBMIT_WORDS so short content
-      // is still skipped by both.
       this.autosave().catch(() => {});
-      this.autoAnalyze({ silent: true });
     }, 5000);
+
+    // Proofreading (2s): calls /api/corrections/stream. Kept short so
+    // suggestions surface a couple of seconds after the user stops typing,
+    // not five. Matches the 2s used by handleEditorChange + IME paths so
+    // all three racing schedulers agree. autoAnalyze aborts any in-flight
+    // SSE stream itself, so a fast follow-up cancels the previous cleanly.
+    if (this.analysisTimeout) clearTimeout(this.analysisTimeout);
+    this.analysisTimeout = setTimeout(() => {
+      this.autoAnalyze({ silent: true });
+    }, 2000);
   }
 
   // Render corrections returned INLINE from /api/submit (not the SSE
