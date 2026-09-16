@@ -125,8 +125,25 @@ async function upsertOverride({
     );
     return { ok: true, row: Array.isArray(resp.data) ? resp.data[0] : resp.data };
   } catch (err) {
-    console.error('[user-entitlement-overrides-db] upsertOverride error:', err.message);
-    return { error: 'db_error', detail: err.message };
+    // Extract the Supabase/PostgREST error body when present — axios buries
+    // it in err.response.data. Without this the caller (and the alert on
+    // the admin Grant Lite button) sees only "Request failed with status
+    // code 400" and has to grep Vercel logs to find the real reason
+    // (missing column / RLS denied / bad type). PostgREST errors look like
+    // { code: 'PGRST204', message: "Column 'X' of relation Y does not exist" }
+    // which is exactly the message an admin needs to see.
+    const status = err.response && err.response.status;
+    const body   = err.response && err.response.data;
+    const bodyMessage =
+      (body && typeof body === 'object' && (body.message || body.hint || body.details)) ||
+      (typeof body === 'string' && body) ||
+      '';
+    const combined =
+      [status && ('HTTP ' + status), bodyMessage, err.message]
+        .filter(Boolean)
+        .join(' · ');
+    console.error('[user-entitlement-overrides-db] upsertOverride error:', combined, body || '');
+    return { error: 'db_error', detail: combined || err.message };
   }
 }
 
@@ -154,7 +171,21 @@ async function findFullSubscriptionByEmail(email) {
     if (!row) return null;
     return row;   // caller decides how to display expired / cancelled state
   } catch (err) {
-    console.warn('[user-entitlement-overrides-db] findFullSubscriptionByEmail error:', err.message);
+    // Same body-extract pattern as upsertOverride — a 400 SELECT here is
+    // almost always the subscription_lifecycle_expansion.sql migration
+    // not being run, so the columns in the select list don't exist. Log
+    // the real Supabase message so it's visible in Vercel logs instead
+    // of the useless "Request failed with status code 400".
+    const status = err.response && err.response.status;
+    const body   = err.response && err.response.data;
+    const bodyMessage =
+      (body && typeof body === 'object' && (body.message || body.hint || body.details)) ||
+      (typeof body === 'string' && body) || '';
+    console.warn(
+      '[user-entitlement-overrides-db] findFullSubscriptionByEmail error:',
+      [status && ('HTTP ' + status), bodyMessage, err.message].filter(Boolean).join(' · '),
+      body || ''
+    );
     return null;
   }
 }
