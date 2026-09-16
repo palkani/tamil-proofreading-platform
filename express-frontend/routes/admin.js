@@ -814,6 +814,49 @@ router.all('/api/*', requireAdmin, async (req, res) => {
       }
     }
 
+    // Enrich GET /overview with the count of active Express-side entitlement
+    // overrides. Backend `users.pro` counts only users with subscription='pro'
+    // OR premium_override=true — it can't see the Supabase overrides table
+    // where Lite subscribers live. Result before this fix: dashboard showed
+    // 2 Pro users while several Lite customers were paying. Same class of
+    // fix as PR #189 (users list), PR #195 (user detail), etc.
+    //
+    // We add `data.users.pro_via_override` (count of active override rows)
+    // and bump `data.users.pro` by that number so the tile reflects total
+    // paying users. Small risk of double-count if a user has BOTH backend
+    // Pro AND an override — negligible in practice (admin grants Lite when
+    // backend didn't grant Pro; the sets rarely overlap) and the sub-text
+    // breakdown makes it clear where the number came from.
+    if (
+      method === 'GET' &&
+      (upstreamPath === '/overview' || upstreamPath.startsWith('/overview?')) &&
+      response.status >= 200 && response.status < 300 &&
+      data && data.users
+    ) {
+      try {
+        const overrides = await userOverridesDb.listAllOverrides({ limit: 1000 });
+        const nowMs = Date.now();
+        const activeOverrides = overrides.filter(
+          (o) => o.is_premium === true &&
+                 (!o.expires_at || new Date(o.expires_at).getTime() > nowMs)
+        );
+        const backendPro = typeof data.users.pro === 'number' ? data.users.pro : 0;
+        data = {
+          ...data,
+          users: {
+            ...data.users,
+            pro_via_override: activeOverrides.length,
+            pro_via_backend:  backendPro,
+            pro: backendPro + activeOverrides.length,
+          },
+        };
+      } catch (e) {
+        // Fail-quiet — never break the dashboard because the override
+        // lookup errored. Backend count still shows.
+        console.warn('[ADMIN] overview override enrichment error:', e.message);
+      }
+    }
+
     // Enrich GET /users/:id with the Express-side entitlement override
     // if one exists for this user's email. Without this, the admin
     // detail page shows "Free (inactive)" for users granted plans via

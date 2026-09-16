@@ -158,10 +158,20 @@
     })
     .then((data) => {
       setTile('total-users', fmtNumber(data.users.total));
-      setTile('pro-users', fmtNumber(data.users.pro),
-        data.users.total > 0
-          ? ((data.users.pro / data.users.total) * 100).toFixed(1) + '% of total'
-          : 'Currently subscribed');
+      // Pro users count. Backend gives us `data.users.pro` (already
+      // includes admins with premium_override + real Dodo subscribers).
+      // The /admin/api/overview proxy also enriches with pro_via_override
+      // (Supabase override-based Lite subscribers). Show total in the
+      // big number; break down in the sub-text so admins see WHERE the
+      // paying users are coming from.
+      var proTotal = data.users.pro;
+      var backendPro = typeof data.users.pro_via_backend === 'number' ? data.users.pro_via_backend : proTotal;
+      var overridePro = typeof data.users.pro_via_override === 'number' ? data.users.pro_via_override : 0;
+      var pct = data.users.total > 0 ? ((proTotal / data.users.total) * 100).toFixed(1) + '% of total' : 'Currently subscribed';
+      var breakdown = overridePro > 0
+        ? (backendPro + ' subscription · ' + overridePro + ' override · ' + pct)
+        : pct;
+      setTile('pro-users', fmtNumber(proTotal), breakdown);
       setTile('monthly-revenue', fmtUsdCents(data.revenue.monthly_completed_usd_cents));
       setTile('active-24h', fmtNumber(data.users.active_24h));
       setTile('signups-7d', fmtNumber(data.users.signups_7d));
