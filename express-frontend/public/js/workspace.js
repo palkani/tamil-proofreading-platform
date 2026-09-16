@@ -6075,6 +6075,45 @@ class WorkspaceController {
       const saveText = text.length > MAX_SAVE_CHARS ? text.slice(0, MAX_SAVE_CHARS) : text;
       const wasTruncated = saveText.length < text.length;
 
+      // Phase 0 client half of the TipTap migration
+      // (https://claude.ai/artifact/6h22Ya3ykUorhBAt9Uiziz §04 P0).
+      // START SENDING html + json alongside text so that once the backend
+      // adds the html_content / json_content columns, existing users'
+      // drafts already have the formatting data waiting.
+      //
+      // Currently the backend IGNORES unknown fields (Gin's default JSON
+      // binding is lax) — this change is a safe no-op today, but it
+      // pre-positions the client for the backend PR without needing a
+      // second client deploy after backend lands.
+      //
+      // For legacy contenteditable users (USE_TIPTAP_EDITOR false), we
+      // still send the innerHTML because the legacy editor can also
+      // hold bold/italic marks. Either editor's HTML shape round-trips
+      // through the same setContent() call on reopen once backend
+      // stores it.
+      let saveHtml = '';
+      let saveJson = null;
+      try {
+        if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
+          if (typeof tiptapWorkspaceEditor.getHTML === 'function') {
+            saveHtml = tiptapWorkspaceEditor.getHTML() || '';
+          }
+          if (typeof tiptapWorkspaceEditor.getJSON === 'function') {
+            saveJson = tiptapWorkspaceEditor.getJSON();
+          }
+        } else if (this.editorElement && typeof this.editorElement.innerHTML === 'string') {
+          saveHtml = this.editorElement.innerHTML;
+        }
+      } catch (e) {
+        console.warn('[AUTOSAVE] html/json serialize failed (non-fatal):', e && e.message);
+      }
+      // Match the same char cap as text — HTML can be ~2-4x larger due
+      // to markup; cap at 4x so payload doesn't blow up on paste-of-book.
+      const MAX_SAVE_HTML_CHARS = MAX_SAVE_CHARS * 4;
+      if (saveHtml.length > MAX_SAVE_HTML_CHARS) {
+        saveHtml = saveHtml.slice(0, MAX_SAVE_HTML_CHARS);
+      }
+
       const response = await this.apiFetch('/api/submit', {
         method: 'POST',
         headers: {
@@ -6082,6 +6121,8 @@ class WorkspaceController {
         },
         body: JSON.stringify({
           text: saveText,
+          html: saveHtml || undefined,     // omit key when empty rather than send ''
+          json: saveJson || undefined,     // ditto
           model: 'gemini-flash',
           save_draft: true,
           ...(this.currentDraft?.id ? { submission_id: this.currentDraft.id } : {}),
@@ -6753,30 +6794,65 @@ class WorkspaceController {
       // Handle both response formats: { submission: {...} } or direct submission object
       const draft = data.submission || data;
       
-      // Load draft into editor (prefer original_text; fallback to proofread_text for completed drafts)
+      // Load draft into editor. Prefer HTML if the backend provided it —
+      // Phase 0 of the TipTap migration teaches the backend to persist
+      // draft.html_content + json_content so alignment / bold / headings
+      // survive save+reopen. Until backend ships that, these fields are
+      // undefined and we fall through to the plain-text path.
       this.currentDraft = draft;
+      const draftHtml =
+        (draft.html_content || draft.original_html || draft.html || '').trim();
       const draftText = (draft.original_text || draft.text || draft.proofread_text || '').trim();
-      console.log('[WorkspaceJS] Loading draft text into editor, length:', draftText.length);
-      
+      const draftJson = draft.json_content || draft.original_json || draft.json || null;
+      console.log('[WorkspaceJS] Loading draft into editor — html:', draftHtml.length, 'chars; text:', draftText.length, 'chars; json:', !!draftJson);
+
       // Ensure editor panel is visible so content is shown
       this.showEditor();
-      
+
       // Resolve editor element: use instance ref or fallback to DOM by id (fixes View Draft when ref not set yet)
       const editorEl = this.editorElement || document.getElementById('editor');
-      
+
       // Set editor content - handle both TipTap and legacy editor
       if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
-        console.log('[WorkspaceJS] Setting content in TipTap editor');
-        tiptapWorkspaceEditor.commands.setContent(draftText || '');
+        // Preference order: JSON (exact TipTap doc state) → HTML (safer
+        // round-trip than string, preserves alignment) → plain text
+        // (last resort — wraps in one <p>, formatting lost).
+        if (draftJson) {
+          console.log('[WorkspaceJS] Setting content in TipTap editor from JSON');
+          try { tiptapWorkspaceEditor.commands.setContent(draftJson); }
+          catch (e) {
+            console.warn('[WorkspaceJS] JSON setContent failed, falling back to HTML:', e && e.message);
+            tiptapWorkspaceEditor.commands.setContent(draftHtml || draftText || '');
+          }
+        } else if (draftHtml) {
+          console.log('[WorkspaceJS] Setting content in TipTap editor from HTML');
+          tiptapWorkspaceEditor.commands.setContent(draftHtml);
+        } else {
+          console.log('[WorkspaceJS] Setting content in TipTap editor from plain text');
+          tiptapWorkspaceEditor.commands.setContent(draftText || '');
+        }
       } else if (editorEl) {
         if (!this.editorElement) this.editorElement = editorEl;
-        console.log('[WorkspaceJS] Setting content in legacy editor element');
-        editorEl.textContent = draftText;
+        // Prefer HTML when the backend provided it — the legacy
+        // contenteditable can hold bold/italic marks and inline styles
+        // just fine. Falls back to textContent for old drafts saved
+        // pre-Phase-0.
+        if (draftHtml) {
+          console.log('[WorkspaceJS] Setting content in legacy editor element from HTML');
+          editorEl.innerHTML = draftHtml;
+        } else {
+          console.log('[WorkspaceJS] Setting content in legacy editor element from plain text');
+          editorEl.textContent = draftText;
+        }
         const inputEvent = new Event('input', { bubbles: true });
         editorEl.dispatchEvent(inputEvent);
       } else if (this.editor && this.editor.editor) {
         console.log('[WorkspaceJS] Setting content in TamilEditor');
-        this.editor.editor.textContent = draftText;
+        if (draftHtml) {
+          this.editor.editor.innerHTML = draftHtml;
+        } else {
+          this.editor.editor.textContent = draftText;
+        }
         const inputEvent = new Event('input', { bubbles: true });
         this.editor.editor.dispatchEvent(inputEvent);
       } else {
