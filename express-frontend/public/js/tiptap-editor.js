@@ -142,6 +142,107 @@ window.createTipTapEditor = null;
       }, 0);
     }
 
+    // ── Word-paste HTML normalizer ────────────────────────────────
+    //
+    // Word puts alignment in half a dozen places (align="" attribute,
+    // MsoCenter/Right/Justify class, mso-* CSS blocks, `<div align=...>`
+    // wrappers). TipTap's AlignmentAware.parseHTML I ship above reads
+    // element.style.textAlign / align / MsoClass — but only on the
+    // <p>/<h1-6> node itself. If Word wraps the alignment on a WRAPPING
+    // element (`<div align="center"><p>...</p></div>`) it never reaches
+    // paragraph-level parseHTML.
+    //
+    // Fix: normalize the HTML BEFORE it reaches ProseMirror's schema
+    // parser. Convert every alignment source to the canonical inline
+    // style form, so by the time TipTap sees a <p>, its style already
+    // says text-align:X. This is the same approach TipTap-based
+    // competitor editors use for Word paste — it's the only way to
+    // handle Word's zoo of alignment mechanisms uniformly.
+    function normalizeWordPasteHtml(html) {
+      if (typeof html !== 'string' || !html) return html;
+
+      // 1. Strip Word's XML/mso boilerplate that adds no signal.
+      // Keeps the <html>/<body> content — those get unwrapped by
+      // ProseMirror anyway.
+      html = html
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<\?xml[^>]*>/gi, '')
+        .replace(/<meta[^>]*>/gi, '')
+        .replace(/<link[^>]*>/gi, '')
+        .replace(/xmlns[^=]*="[^"]*"/gi, '')
+        .replace(/mso-[\w-]+\s*:\s*[^;"]+;?/gi, '');
+
+      // 2. Fold <p align="X"> / <h1-6 align="X"> / <div align="X"> into
+      // inline style="text-align:X". Handles both quoted and unquoted
+      // attribute values.
+      html = html.replace(
+        /<(p|h[1-6]|div)\b([^>]*)\salign\s*=\s*["']?(left|center|right|justify)["']?([^>]*)>/gi,
+        function (_m, tag, before, align, after) {
+          const alignLc = align.toLowerCase();
+          const rest = (before + after).replace(/\s+align\s*=\s*["']?\w+["']?/gi, '');
+          const styleMatch = rest.match(/style\s*=\s*["']([^"']*)["']/i);
+          if (styleMatch) {
+            if (/text-align\s*:/i.test(styleMatch[1])) {
+              return '<' + tag + rest + '>';
+            }
+            const newStyle = (styleMatch[1].replace(/;\s*$/, '') + '; text-align: ' + alignLc).replace(/^;\s*/, '');
+            return '<' + tag + rest.replace(/style\s*=\s*["'][^"']*["']/i, 'style="' + newStyle + '"') + '>';
+          }
+          return '<' + tag + rest + ' style="text-align: ' + alignLc + '">';
+        }
+      );
+
+      // 3. Fold Mso class-based alignment (Word 2016+) into inline style.
+      html = html.replace(
+        /<(p|h[1-6]|div)\b([^>]*)>/gi,
+        function (match, tag, attrs) {
+          const clsMatch = attrs.match(/class\s*=\s*["']([^"']*)["']/i);
+          if (!clsMatch) return match;
+          const cls = clsMatch[1];
+          let align = null;
+          if (/\bMsoCenter/i.test(cls)) align = 'center';
+          else if (/\bMsoRight/i.test(cls)) align = 'right';
+          else if (/\bMsoJustify/i.test(cls)) align = 'justify';
+          if (!align) return match;
+          const styleMatch = attrs.match(/style\s*=\s*["']([^"']*)["']/i);
+          if (styleMatch) {
+            if (/text-align\s*:/i.test(styleMatch[1])) return match;
+            const newStyle = (styleMatch[1].replace(/;\s*$/, '') + '; text-align: ' + align).replace(/^;\s*/, '');
+            return '<' + tag + attrs.replace(/style\s*=\s*["'][^"']*["']/i, 'style="' + newStyle + '"') + '>';
+          }
+          return '<' + tag + attrs + ' style="text-align: ' + align + '">';
+        }
+      );
+
+      // 4. Push alignment from wrapper <div style="text-align:X"> down
+      // onto the child <p>. If a <div style="text-align:center">
+      // wraps <p>Foo</p>, the <p> has no alignment attribute of its
+      // own — Word/browsers rely on CSS inheritance, which TipTap
+      // doesn't respect (each node stores its own attributes).
+      html = html.replace(
+        /<div\b([^>]*style\s*=\s*["'][^"']*text-align\s*:\s*(left|center|right|justify)[^"']*["'][^>]*)>([\s\S]*?)<\/div>/gi,
+        function (_m, divAttrs, align, inner) {
+          const alignLc = align.toLowerCase();
+          // Only push down to <p>/<h1-6> that don't already have their own alignment
+          const innerRewritten = inner.replace(
+            /<(p|h[1-6])\b([^>]*)>/gi,
+            function (m2, tag, attrs) {
+              const styleMatch = attrs.match(/style\s*=\s*["']([^"']*)["']/i);
+              if (styleMatch && /text-align\s*:/i.test(styleMatch[1])) return m2;
+              if (styleMatch) {
+                const newStyle = (styleMatch[1].replace(/;\s*$/, '') + '; text-align: ' + alignLc).replace(/^;\s*/, '');
+                return '<' + tag + attrs.replace(/style\s*=\s*["'][^"']*["']/i, 'style="' + newStyle + '"') + '>';
+              }
+              return '<' + tag + attrs + ' style="text-align: ' + alignLc + '">';
+            }
+          );
+          return '<div' + divAttrs + '>' + innerRewritten + '</div>';
+        }
+      );
+
+      return html;
+    }
+
     // Expose editor creation function globally
     window.createTipTapEditor = function (element, initialContent = '') {
       if (!element) {
@@ -174,6 +275,27 @@ window.createTipTapEditor = null;
             attributes: {
               class: 'ProseMirror prose prose-sm max-w-none focus:outline-none',
               'data-placeholder': 'தமிழில் எழுதத் தொடங்குங்கள்...',
+            },
+            // Runs BEFORE ProseMirror parses the pasted HTML through the
+            // schema. Our chance to normalize Word/Docs alignment sources
+            // into the one shape TipTap's AlignmentAware.parseHTML reads:
+            // inline style="text-align:X" on the paragraph itself.
+            transformPastedHTML(html) {
+              try {
+                const normalized = normalizeWordPasteHtml(html);
+                if (normalized !== html) {
+                  console.log('[TipTap paste normalize] rewrote HTML', {
+                    beforeBytes: html.length,
+                    afterBytes: normalized.length,
+                    beforePreview: html.slice(0, 400),
+                    afterPreview: normalized.slice(0, 400),
+                  });
+                }
+                return normalized;
+              } catch (e) {
+                console.warn('[TipTap paste normalize] failed, returning original:', e && e.message);
+                return html;
+              }
             },
             handlePaste: (view, event) => {
               logPasteDiagnostic(event);
