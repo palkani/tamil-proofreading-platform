@@ -8,14 +8,49 @@ const imeLog = IME_DEBUG ? console.log.bind(console) : () => {};
 
 console.log('[WorkspaceJS] ✅ Loaded version v20260224b - inline correction popover on click');
 
-// CRITICAL: Ensure USE_TIPTAP_EDITOR is set to false at the very top
-// This prevents any initialization issues
+// USE_TIPTAP_EDITOR gates every alignment / rich-paste / AI-apply-preserves-
+// markup code path we've been shipping (see TIPTAP_MIGRATION.md — the flag
+// used to default true but was flipped back to false during initial rollout
+// because the Save/submit and IME checklist items weren't validated yet).
+//
+// Opt-in via URL param `?editor=tiptap` — lets one draft session use TipTap
+// (and get proper alignment on paste + toolbar + DOCX/PDF export) without
+// flipping the global default and risking regression for every other user.
+// Anyone visiting `/workspace?draft=NNN&editor=tiptap` runs the TipTap
+// stack for that session only; every other request keeps legacy behaviour.
+//
+// The flag can also be set via localStorage (`pt_editor_tiptap=1`) so an
+// admin can stick TipTap on for their own sessions without re-typing the
+// URL param each time. When we're confident the migration is validated,
+// change the default to true here and drop the opt-in.
 if (typeof window.USE_TIPTAP_EDITOR === 'undefined') {
-  window.USE_TIPTAP_EDITOR = false;
-  console.log('[WorkspaceJS] ✅ USE_TIPTAP_EDITOR initialized to false');
+  let optedIn = false;
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    if (params.get('editor') === 'tiptap') optedIn = true;
+  } catch (_) { /* URL parse can fail in edge browsers — ignore */ }
+  if (!optedIn) {
+    try {
+      if (typeof localStorage !== 'undefined' &&
+          localStorage.getItem('pt_editor_tiptap') === '1') {
+        optedIn = true;
+      }
+    } catch (_) { /* private mode / disabled storage — ignore */ }
+  }
+  window.USE_TIPTAP_EDITOR = optedIn;
+  console.log('[WorkspaceJS] ✅ USE_TIPTAP_EDITOR =', optedIn, optedIn ? '(opt-in via ?editor=tiptap or pt_editor_tiptap localStorage)' : '(default — legacy editor)');
 } else {
   console.log('[WorkspaceJS] USE_TIPTAP_EDITOR already set to:', window.USE_TIPTAP_EDITOR);
 }
+// Persist the opt-in across page loads once the URL param is used.
+// Not persisting the opt-OUT: to stop using TipTap, admin can either
+// remove the localStorage key from DevTools OR just visit /workspace
+// without the param on a fresh browser profile.
+try {
+  if (window.USE_TIPTAP_EDITOR && typeof localStorage !== 'undefined') {
+    localStorage.setItem('pt_editor_tiptap', '1');
+  }
+} catch (_) { /* ignore */ }
 
 // Read-only view mode (used by "View" action from Drafts)
 // URL: /workspace?draftId=123&mode=view
