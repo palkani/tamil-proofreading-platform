@@ -9,70 +9,85 @@ const imeLog = IME_DEBUG ? console.log.bind(console) : () => {};
 console.log('[WorkspaceJS] ✅ Loaded version v20260224b - inline correction popover on click');
 
 // USE_TIPTAP_EDITOR gates every alignment / rich-paste / AI-apply-preserves-
-// markup code path we've been shipping (see TIPTAP_MIGRATION.md — the flag
-// used to default true but was flipped back to false during initial rollout
-// because the Save/submit and IME checklist items weren't validated yet).
+// markup code path we've been shipping (see TIPTAP_MIGRATION.md). Default is
+// ON as of 2026-09-16 — Palkani validated the opt-in path with ?editor=tiptap
+// on their own drafts and gave the go-ahead to flip the default.
 //
-// Opt-in via URL param `?editor=tiptap` — lets one draft session use TipTap
-// (and get proper alignment on paste + toolbar + DOCX/PDF export) without
-// flipping the global default and risking regression for every other user.
-// Anyone visiting `/workspace?draft=NNN&editor=tiptap` runs the TipTap
-// stack for that session only; every other request keeps legacy behaviour.
+// Escape hatch: anyone can revert to the legacy contenteditable path per
+// session by visiting `/workspace?editor=legacy` (or `classic` / `off`),
+// which also sets `localStorage.pt_editor_legacy=1` so the opt-out is
+// sticky. Removing that localStorage key or clearing site data returns
+// to the TipTap default.
 //
-// The flag can also be set via localStorage (`pt_editor_tiptap=1`) so an
-// admin can stick TipTap on for their own sessions without re-typing the
-// URL param each time. When we're confident the migration is validated,
-// change the default to true here and drop the opt-in.
+// The old `?editor=tiptap` opt-in is still honoured for bookmark
+// compatibility — it's now a no-op (matches the default) but doesn't
+// warn.
 if (typeof window.USE_TIPTAP_EDITOR === 'undefined') {
-  let optedIn = false;
-  let optSource = null;
+  // Default ON.
+  let useTipTap = true;
+  let source = 'default';
+  const TIPTAP_ALIASES = new Set([
+    'tiptap', 'tiptop', 'tiptap2', 'tiptap-v2', 'tt', 'pm', 'prosemirror',
+    'v2', 'new', 'true', '1', 'on',
+  ]);
+  const LEGACY_ALIASES = new Set([
+    'legacy', 'classic', 'old', 'contenteditable', 'ce', 'v1',
+    'false', '0', 'off', 'disable', 'disabled',
+  ]);
   try {
     const params = new URLSearchParams(window.location.search || '');
     const raw = String(params.get('editor') || '').trim().toLowerCase();
-    // Common typos we've actually seen — real user hit ?editor=tiptop
-    // and silently got legacy. Accept anything obviously meaning tiptap.
-    // If typed something we don't recognise, warn loudly so the typo
-    // shows up in the console instead of silently no-op'ing.
-    const TIPTAP_ALIASES = new Set([
-      'tiptap', 'tiptop', 'tiptap2', 'tiptap-v2', 'tt', 'pm', 'prosemirror',
-      'v2', 'new', 'true', '1', 'on',
-    ]);
     if (raw) {
-      if (TIPTAP_ALIASES.has(raw)) {
-        optedIn = true;
-        optSource = '?editor=' + raw;
-        if (raw !== 'tiptap') {
-          console.warn('[WorkspaceJS] Accepted ?editor=' + raw + ' as an alias for tiptap. Canonical form is ?editor=tiptap.');
-        }
+      if (LEGACY_ALIASES.has(raw)) {
+        useTipTap = false;
+        source = '?editor=' + raw;
+      } else if (TIPTAP_ALIASES.has(raw)) {
+        useTipTap = true;
+        source = '?editor=' + raw;
       } else {
-        // User typed something for `editor` we don't recognise (e.g.
-        // `?editor=classic`, `?editor=legacy`). Don't silently ignore
-        // — surface it so future typos are debuggable.
-        console.warn('[WorkspaceJS] Ignoring unrecognised ?editor value:', JSON.stringify(raw), '— known aliases:', Array.from(TIPTAP_ALIASES));
+        console.warn('[WorkspaceJS] Ignoring unrecognised ?editor value:', JSON.stringify(raw), '— use ?editor=legacy to revert to the old editor.');
       }
     }
   } catch (_) { /* URL parse can fail in edge browsers — ignore */ }
-  if (!optedIn) {
+  // localStorage overrides the default but not an explicit URL param
+  // (URL wins because that's how the user turns the opt-out ON in the
+  // first place, and they need the URL to work when they want to reverse
+  // their sticky choice).
+  if (source === 'default') {
     try {
       if (typeof localStorage !== 'undefined' &&
-          localStorage.getItem('pt_editor_tiptap') === '1') {
-        optedIn = true;
-        optSource = 'localStorage.pt_editor_tiptap';
+          localStorage.getItem('pt_editor_legacy') === '1') {
+        useTipTap = false;
+        source = 'localStorage.pt_editor_legacy';
       }
     } catch (_) { /* private mode / disabled storage — ignore */ }
   }
-  window.USE_TIPTAP_EDITOR = optedIn;
-  console.log('[WorkspaceJS] ✅ USE_TIPTAP_EDITOR =', optedIn, optedIn ? '(opt-in via ' + (optSource || 'unknown') + ')' : '(default — legacy editor)');
+  window.USE_TIPTAP_EDITOR = useTipTap;
+  console.log('[WorkspaceJS] ✅ USE_TIPTAP_EDITOR =', useTipTap, '(' + source + ')');
 } else {
   console.log('[WorkspaceJS] USE_TIPTAP_EDITOR already set to:', window.USE_TIPTAP_EDITOR);
 }
-// Persist the opt-in across page loads once the URL param is used.
-// Not persisting the opt-OUT: to stop using TipTap, admin can either
-// remove the localStorage key from DevTools OR just visit /workspace
-// without the param on a fresh browser profile.
+// Persist the legacy opt-out sticky so `?editor=legacy` sticks without
+// re-typing the URL each visit. Persist ONLY when the current source was
+// the URL param — otherwise we'd write the localStorage key on every
+// legacy pageload and never expire it after the user clears it.
 try {
-  if (window.USE_TIPTAP_EDITOR && typeof localStorage !== 'undefined') {
-    localStorage.setItem('pt_editor_tiptap', '1');
+  if (typeof localStorage !== 'undefined') {
+    const params = new URLSearchParams(window.location.search || '');
+    const raw = String(params.get('editor') || '').trim().toLowerCase();
+    if (raw === 'legacy' || raw === 'classic' || raw === 'off') {
+      localStorage.setItem('pt_editor_legacy', '1');
+    } else if (window.USE_TIPTAP_EDITOR) {
+      // If TipTap is active and the sticky legacy key is stale, keep it —
+      // the user may have gotten here via URL param overriding it. Only
+      // clear when they explicitly re-opt into TipTap via URL.
+      if (['tiptap', 'tiptop', 'v2', 'new', 'on', 'true'].includes(raw)) {
+        localStorage.removeItem('pt_editor_legacy');
+      }
+    }
+    // Drop the old `pt_editor_tiptap` key if it's still around — it's
+    // meaningless now that the default is on.
+    localStorage.removeItem('pt_editor_tiptap');
   }
 } catch (_) { /* ignore */ }
 
@@ -7257,10 +7272,12 @@ class WorkspaceController {
 // ============================================
 // TIPTAP MIGRATION - Phase 3 & 4
 // ============================================
-// Migration flag: default is false, but DO NOT override if the page sets it explicitly.
-// (Workspace behavior must work in both legacy + TipTap modes.)
+// Migration flag: default is true as of 2026-09-16 (see the header block
+// at the top of this file for the escape-hatch details). This late-init
+// fallback only fires when the header block above didn't run (extremely
+// rare — page-bootstrap ordering fluke).
 if (typeof window.USE_TIPTAP_EDITOR === 'undefined') {
-  window.USE_TIPTAP_EDITOR = false;
+  window.USE_TIPTAP_EDITOR = true;
 }
 
 // Global TipTap editor instance
