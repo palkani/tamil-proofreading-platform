@@ -261,6 +261,27 @@
       proBtn.textContent = 'Grant Pro';
       proBtn.dataset.currentState = 'not-pro';
     }
+    // Grant Lite ⇄ Revoke Lite based on whether an active Express-side
+    // entitlement override exists. p.premium_override is set true by the
+    // /admin/api/users/:id proxy enrichment (see routes/admin.js) when
+    // findFullSubscriptionByEmail returns a row that hasn't expired.
+    // Without this, admins saw "Grant Lite" for a user who's already on
+    // Lite and would double-grant, or click it and confuse themselves.
+    const liteBtn = document.querySelector('[data-action="grant-lite"]');
+    if (liteBtn) {
+      const hasLiteOverride = !!p.premium_override;
+      if (hasLiteOverride) {
+        liteBtn.textContent = 'Revoke Lite';
+        liteBtn.dataset.currentState = 'granted';
+        liteBtn.classList.remove('border-emerald-600', 'bg-emerald-600', 'hover:bg-emerald-700');
+        liteBtn.classList.add('border-slate-300', 'bg-white', 'text-slate-700', 'hover:bg-slate-50');
+      } else {
+        liteBtn.textContent = 'Grant Lite';
+        liteBtn.dataset.currentState = 'none';
+        liteBtn.classList.add('border-emerald-600', 'bg-emerald-600', 'hover:bg-emerald-700');
+        liteBtn.classList.remove('border-slate-300', 'bg-white', 'text-slate-700', 'hover:bg-slate-50');
+      }
+    }
     // Block button reflects current state (backend sends p.is_blocked, or
     // is_active=false as a legacy signal — treat both as "blocked").
     const blockBtn = document.querySelector('[data-action="toggle-block"]');
@@ -454,6 +475,31 @@
   //    premium_override flag turning on OCR/AI Writer they didn't buy.
   document.querySelector('[data-action="grant-lite"]').addEventListener('click', function () {
     if (!recipientEmail) { alert('Load the profile first.'); return; }
+
+    // Revoke path — the button re-labels to "Revoke Lite" in renderProfile
+    // when an override already exists (data-currentState='granted'). One
+    // confirm(), one fetch, no prompts for plan/months since we're
+    // removing, not creating.
+    if (this.dataset.currentState === 'granted') {
+      const ok = confirm(
+        'Revoke Lite for ' + recipientEmail + '?\n\n' +
+        'The user will lose Pro access immediately across the app. The\n' +
+        'override row is kept for audit (payment_status: admin_revoked).'
+      );
+      if (!ok) return;
+      const reason = prompt('Reason (audit log):', 'admin revoke') || 'admin revoke';
+      fetch('/admin/api/users/' + encodeURIComponent(userId) + '/entitlement-override/revoke', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: recipientEmail, reason: reason }),
+      })
+        .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error((j.error || 'HTTP ' + r.status) + (j.detail ? ' — ' + j.detail : '')))))
+        .then(() => location.reload())
+        .catch((err) => alert('Revoke failed: ' + err.message));
+      return;
+    }
+
+    // Grant path — original flow, unchanged in shape.
     const promoCode = prompt(
       'Which lite plan to grant? Enter one of:\n' +
       '  PROOFPROLITE   — Proofreading only (proofreading + export + ai_writer)\n' +
@@ -474,7 +520,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: recipientEmail, promo_code: promoCode, months: months, notes: notes }),
     })
-      .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error(j.error || 'HTTP ' + r.status))))
+      .then((r) => r.ok ? r.json() : r.json().then((j) => Promise.reject(new Error((j.error || 'HTTP ' + r.status) + (j.detail ? ' — ' + j.detail : '')))))
       .then(() => location.reload())
       .catch((err) => alert('Grant failed: ' + err.message));
   });
