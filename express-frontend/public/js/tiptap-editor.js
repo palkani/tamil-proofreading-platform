@@ -78,26 +78,68 @@ window.createTipTapEditor = null;
       },
     });
 
-    // First-paste diagnostic. Logs the incoming clipboard's text/html AND
-    // text/plain preview to console ONCE per session so we can see what a
-    // paste actually looks like when a user reports alignment isn't sticking.
-    // Cheap (fires once), no user-visible effect, no PII risk beyond what's
-    // already on the user's own clipboard.
-    let firstPasteLogged = false;
-    function logFirstPaste(event) {
-      if (firstPasteLogged) return;
-      firstPasteLogged = true;
+    // Paste diagnostic. Logs the incoming clipboard's text/html AND
+    // text/plain to console on EVERY paste, plus what TipTap actually
+    // kept after its own parse cycle. Comparing the two exposes:
+    //   1. Word/Docs shapes we don't yet parse (raw has text-align in
+    //      some form we miss → editor lands without it)
+    //   2. Sanitisation drops (schema doesn't include the attribute → we
+    //      strip it; adding it to the schema is the fix)
+    //   3. Wrapper elements that reflow the alignment onto a non-block
+    //      node (span with text-align — CSS-invalid but Word emits it)
+    //
+    // First fires immediately on paste (raw clipboard). A `setTimeout(0)`
+    // logs the editor state right after TipTap finishes its parse, so
+    // the two log lines land in the console next to each other with the
+    // same [TipTap paste diagnostic #N] tag. Fires on every paste (not
+    // just the first — an earlier version limited to first only, which
+    // made debugging impossible when user reported a paste that had
+    // happened after opening DevTools).
+    let pasteSeq = 0;
+    function logPasteDiagnostic(event) {
+      pasteSeq += 1;
+      const seq = pasteSeq;
       try {
         const cd = event.clipboardData || window.clipboardData;
-        const html = (cd && cd.getData && cd.getData('text/html')) || '';
+        const html  = (cd && cd.getData && cd.getData('text/html'))  || '';
         const plain = (cd && cd.getData && cd.getData('text/plain')) || '';
-        console.log('[TipTap paste diagnostic]', {
+        // Report ALL styles/attrs the first few <p> tags carry so we
+        // can eyeball which alignment source Word used this time.
+        const paragraphSummaries = [];
+        try {
+          const paraRegex = /<(p|h[1-6])\b([^>]*)>/gi;
+          let m; let n = 0;
+          while ((m = paraRegex.exec(html)) !== null && n < 5) {
+            paragraphSummaries.push({ tag: m[1], attrs: m[2].trim().slice(0, 240) });
+            n += 1;
+          }
+        } catch (_) { /* diagnostic only */ }
+        console.log('[TipTap paste diagnostic #' + seq + ' RAW]', {
           hasHtml: !!html,
-          htmlPreview: html.slice(0, 400),
+          htmlBytes: html.length,
+          htmlPreview: html.slice(0, 1000),
+          firstFewParagraphOpeners: paragraphSummaries,
           hasPlain: !!plain,
-          plainPreview: plain.slice(0, 200),
+          plainPreview: plain.slice(0, 300),
         });
       } catch (_) { /* diagnostic only, never throw */ }
+
+      // After TipTap's own paste parse pipeline runs, capture what the
+      // schema kept. If alignment shows up here it succeeded; if it's
+      // missing here but WAS in the raw clipboard, TipTap dropped it →
+      // that tells us to extend the parseHTML.
+      setTimeout(function () {
+        try {
+          const editor = window.tiptapWorkspaceEditor;
+          if (editor && typeof editor.getHTML === 'function') {
+            const kept = editor.getHTML();
+            console.log('[TipTap paste diagnostic #' + seq + ' KEPT]', {
+              editorHtmlBytes: kept.length,
+              editorHtmlPreview: kept.slice(0, 1000),
+            });
+          }
+        } catch (_) { /* diagnostic only */ }
+      }, 0);
     }
 
     // Expose editor creation function globally
@@ -134,7 +176,7 @@ window.createTipTapEditor = null;
               'data-placeholder': 'தமிழில் எழுதத் தொடங்குங்கள்...',
             },
             handlePaste: (view, event) => {
-              logFirstPaste(event);
+              logPasteDiagnostic(event);
               try {
                 const text =
                   (event.clipboardData && event.clipboardData.getData('text/plain')) ||
