@@ -5925,6 +5925,15 @@ class WorkspaceController {
       return;
     }
 
+    // Phase 4b of the TipTap migration
+    // (https://claude.ai/artifact/6h22Ya3ykUorhBAt9Uiziz §04 P4).
+    // Bumped from 2 s to 5 s. The periodic 30 s save timer + explicit
+    // Save button + navigate-away all still catch persistence; the
+    // 2 s debounce was mostly firing during active typing (every pause
+    // > 2 s), sending an /api/submit round-trip that got immediately
+    // superseded by the next keystroke. 5 s halves the request rate
+    // without touching worst-case data loss (still 30 s max via the
+    // periodic timer).
     this.saveTimeout = setTimeout(() => {
       // Persist the draft AND fire proofreading. These are two different
       // endpoints (/api/submit save_draft:true → Go backend row insert;
@@ -5936,7 +5945,7 @@ class WorkspaceController {
       // is still skipped by both.
       this.autosave().catch(() => {});
       this.autoAnalyze({ silent: true });
-    }, 2000);
+    }, 5000);
   }
 
   // Render corrections returned INLINE from /api/submit (not the SSE
@@ -6100,6 +6109,21 @@ class WorkspaceController {
     if (wc < MIN_SUBMIT_WORDS) {
       const need = MIN_SUBMIT_WORDS - wc;
       this._setSaveState('gated', `Type ${need} more word${need === 1 ? '' : 's'} to save`);
+      return;
+    }
+
+    // Phase 4b skip-if-unchanged. If the text hasn't changed since the
+    // last successful save, don't burn a network round-trip. Backend
+    // sees the same content and would just re-serialize the same row.
+    // Guards against:
+    //   - periodic 30 s timer firing on an idle doc
+    //   - scheduleSave's 5 s debounce firing after the user goes idle
+    //   - autoAnalyze retry paths that redundantly hit /api/submit
+    // Only compares text (not html/json) — text is the durable field;
+    // formatting-only changes (bold-and-unbold-back) don't warrant a
+    // save round-trip.
+    if (this._lastSavedText === text) {
+      this._setSaveState('saved', 'Saved');
       return;
     }
 
@@ -6272,6 +6296,13 @@ class WorkspaceController {
       }
 
       this._setSaveState(wasTruncated ? 'partial' : 'saved', wasTruncated ? 'Saved (partial)' : 'Saved');
+
+      // Phase 4b skip-if-unchanged bookkeeping. Store what we just
+      // saved so the next scheduleSave/periodicSave can compare and
+      // skip. Store the pre-truncation text so a save that WAS
+      // truncated doesn't get spuriously re-attempted on a later
+      // idle tick with the same truncated payload.
+      this._lastSavedText = text;
 
       // Some backend paths return inline corrections alongside a
       // successful save (rare — mostly the synchronous inline path).
