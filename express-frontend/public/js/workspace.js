@@ -4720,6 +4720,48 @@ class WorkspaceController {
       document.body.appendChild(pop);
     }
 
+    // TipTap correction-click bridge — ProofreadPlugin's handleClickOn
+    // fires a `tiptap:correction-click` window event when the user
+    // clicks a squiggle inside the ProseMirror editor. We can't attach
+    // a `click` listener directly to a ProseMirror-managed DOM node
+    // without breaking its selection handling, so the plugin dispatches
+    // this custom event with the suggestion metadata + rect and we
+    // reuse the same popover-show code path the legacy click uses.
+    // Registered once — `_correctionClickBound` guards against
+    // duplicate registration if _setupCorrectionHighlighting is called
+    // again (e.g. after a draft reload).
+    if (!this._correctionClickBound) {
+      this._correctionClickBound = true;
+      window.addEventListener('tiptap:correction-click', (evt) => {
+        try {
+          const d = evt && evt.detail;
+          if (!d) return;
+          const id = d.suggestionId;
+          if (!id) return;
+          // Focus the matching card in the AI panel (same as legacy)
+          if (this.suggestionsPanel && typeof this.suggestionsPanel.focusSuggestion === 'function') {
+            this.suggestionsPanel.focusSuggestion(id);
+          }
+          const suggestion = this.suggestionsPanel && this.suggestionsPanel.suggestions
+            ? this.suggestionsPanel.suggestions.find((s) => s.id === id)
+            : null;
+          if (!suggestion) return;
+          // Reuse _showCorrectionPopover — it expects a `span` argument
+          // to position against. We give it a synthetic object whose
+          // getBoundingClientRect returns the rect we captured in the
+          // plugin's click handler. Everything else the popover reads
+          // (dataset etc.) is already in `suggestion`.
+          const fakeSpan = {
+            getBoundingClientRect: () => d.rect,
+            dataset: { suggestionId: id },
+          };
+          this._showCorrectionPopover(fakeSpan, suggestion);
+        } catch (e) {
+          console.warn('[Highlight] tiptap:correction-click handler failed:', e && e.message);
+        }
+      });
+    }
+
     const editor = document.getElementById('editor');
     if (!editor) return;
 
@@ -4893,6 +4935,16 @@ class WorkspaceController {
 
   /** Remove all `.correction-highlight` spans from the editor, unwrapping their children. */
   _clearCorrectionHighlights() {
+    // TipTap fast path — the ProofreadPlugin owns the decoration set.
+    // Dispatching a 'clear' meta action wipes it without touching the
+    // DOM. See tiptap-editor.js ProofreadPlugin for the plugin design.
+    if (window.USE_TIPTAP_EDITOR && window.tiptapProofreadPlugin) {
+      try { window.tiptapProofreadPlugin.clear(); } catch (_e) {}
+      this._hideTooltip();
+      return;
+    }
+    // Legacy contenteditable path — unchanged from the pre-migration
+    // behaviour. Unwraps every .correction-highlight span in place.
     const editor = document.getElementById('editor');
     if (!editor) return;
     const spans = Array.from(editor.querySelectorAll('.correction-highlight'));
@@ -4909,8 +4961,33 @@ class WorkspaceController {
   /**
    * Wrap ALL occurrences of each suggestion's sourceText in styled spans.
    * Clears any previous highlights first.
+   *
+   * On TipTap the DOM-span wrap NEVER worked because
+   * document.getElementById('editor') is the HIDDEN legacy container
+   * when the flag is on — spans went into a div nobody looked at, so
+   * highlights never appeared for TipTap users. Fast path below routes
+   * to the ProofreadPlugin instead, which produces ProseMirror
+   * Decorations that render on the visible ProseMirror node AND survive
+   * edits because DecorationSet.map(tr.mapping) auto-updates positions.
    */
   _highlightCorrectionsInEditor(suggestions) {
+    // TipTap fast path — Decorations, not DOM spans. See the plugin
+    // definition in tiptap-editor.js. Position stability comes from
+    // ProseMirror mapping decorations through every transaction; no
+    // manual re-wrap needed on edit.
+    if (window.USE_TIPTAP_EDITOR && window.tiptapProofreadPlugin) {
+      try {
+        window.tiptapProofreadPlugin.setCorrections(suggestions || []);
+        console.log('[Highlight] TipTap: pushed', (suggestions || []).length, 'corrections to ProofreadPlugin');
+      } catch (e) {
+        console.warn('[Highlight] TipTap: setCorrections failed:', e && e.message);
+      }
+      return;
+    }
+
+    // Legacy contenteditable path (unchanged) — walks #editor DOM,
+    // splits text nodes, wraps spans. Only runs when USE_TIPTAP_EDITOR
+    // is false OR the plugin didn't load.
     const editor = document.getElementById('editor');
     if (!editor) return;
     this._clearCorrectionHighlights();

@@ -20,11 +20,19 @@ window.createTipTapEditor = null;
   try {
     // Use unpkg CDN for TipTap
     // Import TipTap core and StarterKit
-    const { Editor } = await import('https://esm.sh/@tiptap/core@2.1.13');
+    const { Editor, Extension } = await import('https://esm.sh/@tiptap/core@2.1.13');
     const { default: StarterKit } = await import('https://esm.sh/@tiptap/starter-kit@2.1.13');
     const { default: Underline } = await import('https://esm.sh/@tiptap/extension-underline@2.1.13');
     const { default: Link } = await import('https://esm.sh/@tiptap/extension-link@2.1.13');
     const { default: TextAlign } = await import('https://esm.sh/@tiptap/extension-text-align@2.1.13');
+    // ProseMirror primitives for the ProofreadPlugin — TipTap re-exports
+    // them under @tiptap/pm so we don't need to pin ProseMirror versions
+    // separately. Decoration-based highlighting replaces the DOM-span
+    // wrapping in workspace.js (which was targeting the hidden legacy
+    // #editor when USE_TIPTAP_EDITOR was on — no highlights ever showed
+    // for TipTap users). See TipTap migration plan §04 Phase 1.
+    const { Plugin, PluginKey } = await import('https://esm.sh/@tiptap/pm@2.1.13/state');
+    const { Decoration, DecorationSet } = await import('https://esm.sh/@tiptap/pm@2.1.13/view');
 
     // TipTap's stock TextAlign.parseHTML only reads element.style.textAlign,
     // which catches inline styles from ourselves and from Google Docs but
@@ -77,6 +85,203 @@ window.createTipTapEditor = null;
         ];
       },
     });
+
+    // ── ProofreadPlugin ─────────────────────────────────────────
+    //
+    // The Phase 1 core of the TipTap migration plan
+    // (https://claude.ai/artifact/6h22Ya3ykUorhBAt9Uiziz §04 P1).
+    //
+    // BEFORE: workspace.js._highlightCorrectionsInEditor wrapped every
+    // occurrence of each correction's sourceText with a <span
+    // class="correction-highlight X"> using range.surroundContents on
+    // document.getElementById('editor'). For USE_TIPTAP_EDITOR=true
+    // users, that #editor node is HIDDEN — spans went into a div
+    // nobody looked at, so highlights never appeared. On top of that,
+    // every edit inside a span splits its text nodes and drifts the
+    // wrap; positions became unreliable.
+    //
+    // AFTER: this plugin holds a ProseMirror DecorationSet as plugin
+    // state. On every transaction, decorations map through tr.mapping
+    // automatically — positions update as the user types, no manual
+    // reconciliation. Rendering is Decoration.inline(from, to, {class:
+    // 'correction-highlight …'}), which the browser paints without
+    // mutating the doc tree.
+    //
+    // The external API is window.tiptapProofreadPlugin.setCorrections /
+    // clear. workspace.js's existing correction pipeline calls these on
+    // the TipTap path and keeps its DOM-span code path for legacy.
+    //
+    // Matching is still text-based (indexOf per sourceText) for Phase 1.
+    // Phase 2 will replace it with per-block hashed offsets returned by
+    // a new API — but that's a backend contract change; this PR ships
+    // the client infrastructure that Phase 2 will plug into.
+    const proofreadPluginKey = new PluginKey('prooftamilProofread');
+
+    // Map a suggestion.type string to the CSS class the workspace uses
+    // today. Kept in sync with workspace.js _getCorrectionTypeClass so
+    // both editors render squiggles with identical styling.
+    function proofreadTypeClass(type) {
+      const t = String(type || 'grammar').toLowerCase().replace(/\s+/g, '-');
+      const map = {
+        grammar:     'correction-grammar',
+        punctuation: 'correction-punctuation',
+        spelling:    'correction-spelling',
+        style:       'correction-style',
+        clarity:     'correction-style',
+        rewrite:     'correction-style',
+      };
+      return map[t] || 'correction-grammar';
+    }
+
+    function escapeAttr(s) {
+      return String(s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
+    // Walk the doc's text nodes, for each correction's sourceText emit
+    // Decoration.inline at every occurrence. Skips overlaps (first-win)
+    // and matches < 2 chars — matches workspace.js's current filtering
+    // so behavior stays consistent.
+    function buildProofreadDecorations(doc, corrections) {
+      if (!doc || !corrections || corrections.length === 0) {
+        return DecorationSet.empty;
+      }
+      const decos = [];
+      const seenRanges = [];  // list of {from, to} already claimed
+      const overlaps = (from, to) => {
+        for (const r of seenRanges) {
+          if (from < r.to && to > r.from) return true;
+        }
+        return false;
+      };
+
+      doc.descendants((node, pos) => {
+        if (!node.isText) return true;
+        const text = node.text || '';
+        for (const c of corrections) {
+          const searchText = String((c && (c.sourceText || c.originalText)) || '').trim();
+          if (searchText.length < 2) continue;
+          let idx = text.indexOf(searchText);
+          while (idx !== -1) {
+            const from = pos + idx;
+            const to = from + searchText.length;
+            if (!overlaps(from, to)) {
+              seenRanges.push({ from, to });
+              decos.push(Decoration.inline(from, to, {
+                class: 'correction-highlight ' + proofreadTypeClass(c.type),
+                'data-suggestion-id': String(c.id || ''),
+                'data-title':         escapeAttr(c.title || c.reason || ''),
+                'data-description':   escapeAttr(c.description || c.reason || ''),
+              }));
+            }
+            idx = text.indexOf(searchText, idx + searchText.length);
+          }
+        }
+        return true;   // descend into children
+      });
+
+      return DecorationSet.create(doc, decos);
+    }
+
+    const ProofreadExtension = Extension.create({
+      name: 'proofread',
+      addProseMirrorPlugins() {
+        return [
+          new Plugin({
+            key: proofreadPluginKey,
+            state: {
+              init() {
+                return { decorations: DecorationSet.empty };
+              },
+              apply(tr, prev, _oldState, newState) {
+                // 1. Auto-map existing decorations through this transaction.
+                //    This is what gives us position stability — no manual
+                //    "re-find sourceText after edit" logic needed.
+                let decorations = prev.decorations.map(tr.mapping, tr.doc);
+
+                // 2. Meta actions from the outside (workspace.js's
+                //    correction pipeline) can replace the whole set.
+                const meta = tr.getMeta(proofreadPluginKey);
+                if (meta) {
+                  if (meta.type === 'setAll') {
+                    decorations = buildProofreadDecorations(newState.doc, meta.corrections || []);
+                  } else if (meta.type === 'clear') {
+                    decorations = DecorationSet.empty;
+                  }
+                }
+
+                return { decorations };
+              },
+            },
+            props: {
+              decorations(state) {
+                return this.getState(state).decorations;
+              },
+              // Click on a squiggle bubbles a custom event with the
+              // suggestion metadata + the rect of the clicked span so
+              // workspace.js can position its popover. Keeps the popover
+              // implementation exactly where it is today; only the click
+              // detection moves.
+              handleClickOn(view, pos, node, nodePos, event, direct) {
+                const target = event && event.target;
+                if (!target || !target.classList || !target.classList.contains('correction-highlight')) {
+                  return false;
+                }
+                try {
+                  const detail = {
+                    suggestionId: target.getAttribute('data-suggestion-id') || '',
+                    title:        target.getAttribute('data-title') || '',
+                    description:  target.getAttribute('data-description') || '',
+                    rect:         target.getBoundingClientRect(),
+                  };
+                  window.dispatchEvent(new CustomEvent('tiptap:correction-click', { detail }));
+                } catch (_e) { /* diagnostic only */ }
+                return true;
+              },
+            },
+          }),
+        ];
+      },
+    });
+
+    // External control surface for workspace.js — the existing correction
+    // pipeline calls these on the TipTap path (see workspace.js
+    // _highlightCorrectionsInEditor / _clearCorrectionHighlights).
+    // Deliberately does NOT hold a direct editor reference — grabs the
+    // current one from window.tiptapWorkspaceEditor at call time (which
+    // downstream consumers of the migration inventory all use).
+    function _getCurrentTipTap() {
+      const g = window.tiptapWorkspaceEditor;
+      return typeof g === 'function' ? g() : g;
+    }
+    window.tiptapProofreadPlugin = {
+      setCorrections(suggestions) {
+        const ed = _getCurrentTipTap();
+        if (!ed || !ed.view || !ed.state) return false;
+        try {
+          const tr = ed.state.tr.setMeta(proofreadPluginKey, {
+            type: 'setAll',
+            corrections: Array.isArray(suggestions) ? suggestions : [],
+          });
+          ed.view.dispatch(tr);
+          return true;
+        } catch (e) {
+          console.warn('[Proofread] setCorrections failed:', e && e.message);
+          return false;
+        }
+      },
+      clear() {
+        const ed = _getCurrentTipTap();
+        if (!ed || !ed.view || !ed.state) return false;
+        try {
+          const tr = ed.state.tr.setMeta(proofreadPluginKey, { type: 'clear' });
+          ed.view.dispatch(tr);
+          return true;
+        } catch (e) {
+          console.warn('[Proofread] clear failed:', e && e.message);
+          return false;
+        }
+      },
+    };
 
     // Paste diagnostic. Logs the incoming clipboard's text/html AND
     // text/plain to console on EVERY paste, plus what TipTap actually
@@ -269,6 +474,10 @@ window.createTipTapEditor = null;
             AlignmentAware.configure({
               types: ['heading', 'paragraph'],
             }),
+            // Decoration-based correction highlighting. Replaces the DOM
+            // span-wrap path in workspace.js for TipTap users. See the
+            // ProofreadPlugin block above for the full rationale.
+            ProofreadExtension,
           ],
           content: initialContent || '<p></p>',
           editorProps: {
