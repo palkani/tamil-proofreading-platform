@@ -328,6 +328,92 @@ document.addEventListener('DOMContentLoaded', function() {
 // APPLY REPLACEMENT UTILITY
 // ============================================
 
+/**
+ * When a user clicks Apply on an AI proofreading suggestion, we need to
+ * substitute the original phrase with the corrected one WITHOUT throwing
+ * away the paragraph's alignment / other inline formatting.
+ *
+ * The three onApply sites in this file used to do:
+ *    const text = this.getEditorText();       // plain text — no HTML
+ *    const newText = text.replace(original, corrected);
+ *    this.editor.setText(newText) || (this.editorElement.textContent = newText);
+ * Which flattens the entire document into a plain-text run and wipes
+ * every text-align:center paragraph the user pasted from Word or set via
+ * the toolbar. Reported symptom: "AI apply strips formatting."
+ *
+ * This helper does the same substitution but INSIDE HTML — walks text
+ * nodes only via DOMParser + TreeWalker, so <p style="text-align:X">
+ * (and every other inline formatting) survives byte-for-byte. Only
+ * fires for TipTap; legacy editor callers fall through to the previous
+ * plain-text behavior since it never supported alignment anyway.
+ *
+ * Returns true when the TipTap editor was updated. Callers that get
+ * `false` should fall back to their previous plain-text apply (never
+ * silently drop the correction — the user clicked Apply expecting SOMETHING
+ * to happen).
+ */
+function applyCorrectionPreservingMarkup(original, corrected) {
+  if (
+    !window.USE_TIPTAP_EDITOR ||
+    typeof tiptapWorkspaceEditor === 'undefined' ||
+    !tiptapWorkspaceEditor ||
+    typeof DOMParser === 'undefined'
+  ) {
+    return false;
+  }
+  if (!original || typeof original !== 'string') return false;
+  const replacement = typeof corrected === 'string' ? corrected : '';
+
+  let html;
+  try { html = tiptapWorkspaceEditor.getHTML(); } catch (_) { return false; }
+  if (!html || html.indexOf(original) === -1) return false;
+
+  let newHtml;
+  try {
+    // Parse into a detached DOM so we can walk text nodes without
+    // affecting the live document.
+    const doc = new DOMParser().parseFromString(
+      '<div id="__pt_apply_root__">' + html + '</div>',
+      'text/html'
+    );
+    const root = doc.getElementById('__pt_apply_root__');
+    if (!root) return false;
+
+    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    const textNodes = [];
+    let n;
+    while ((n = walker.nextNode())) textNodes.push(n);
+
+    let touched = false;
+    textNodes.forEach((tn) => {
+      const v = tn.nodeValue || '';
+      if (v.indexOf(original) !== -1) {
+        // Global split/join so every occurrence in this text node is
+        // replaced — matches the "Applying it must fix them all" contract
+        // the panel's dedupe assumes.
+        tn.nodeValue = v.split(original).join(replacement);
+        touched = true;
+      }
+    });
+    if (!touched) return false;
+    newHtml = root.innerHTML;
+  } catch (e) {
+    console.warn('[APPLY] DOM walk failed, caller should fall back:', e && e.message);
+    return false;
+  }
+
+  try {
+    // setContent re-parses through TipTap's schema so any attribute the
+    // schema doesn't recognise is stripped — safe, because the HTML we
+    // just serialised came out of the same schema moments ago.
+    tiptapWorkspaceEditor.commands.setContent(newHtml, true);
+    return true;
+  } catch (e) {
+    console.warn('[APPLY] setContent failed, caller should fall back:', e && e.message);
+    return false;
+  }
+}
+
 function applyReplacement(text, original, replacement, approxIndex = null) {
   if (!text || !original) return { text, changed: false };
   if (!replacement) replacement = ''; // Allow empty replacements (deletion)
@@ -5216,6 +5302,18 @@ class WorkspaceController {
             preview: original && corrected ? `${original} → ${corrected}` : corrected || original || '',
             sourceText: original,
             onApply: original && corrected ? () => {
+              // TipTap path: preserve inline formatting (text-align, bold,
+              // etc.) by walking text nodes only. Falls through to the
+              // legacy plain-text path if not on TipTap or if the helper
+              // couldn't apply the correction.
+              const appliedInPlace = applyCorrectionPreservingMarkup(original, corrected);
+              if (appliedInPlace) {
+                if (this._applySaveTimeout) clearTimeout(this._applySaveTimeout);
+                this._applySaveTimeout = setTimeout(() => {
+                  if (typeof this.autosave === 'function') this.autosave();
+                }, 500);
+                return;
+              }
               const currentText = this.getEditorText();
               // Replace ALL occurrences of `original` with `corrected` throughout the text.
               // Since the panel deduplicates by (type, original, corrected), one card
@@ -5626,6 +5724,15 @@ class WorkspaceController {
         // so the user's Accept-flow feels the same regardless of
         // whether the suggestion came from stream or submit.
         onApply: () => {
+          // Same formatting-preservation pattern as the primary onApply
+          // above: try TipTap in-place first, fall back to plain-text
+          // only when there's no TipTap or the DOM walk found no match.
+          const appliedInPlace = applyCorrectionPreservingMarkup(c.original, c.corrected);
+          if (appliedInPlace) {
+            if (this._applySaveTimeout) clearTimeout(this._applySaveTimeout);
+            this._applySaveTimeout = setTimeout(() => this.autosave(), 500);
+            return;
+          }
           const currentText = this.getEditorText();
           if (!currentText.includes(c.original)) return;
           const newText = currentText.split(c.original).join(c.corrected);
@@ -5931,9 +6038,16 @@ class WorkspaceController {
           preview: `${t.original} → ${sugg.ta}`,
           sourceText: t.original,
           onApply: () => {
-          const currentText = this.getEditorText();
+            // Transliteration-suggest apply — same formatting preservation
+            // as the two proofreading onApply paths above. TipTap first,
+            // plain-text fallback for legacy.
+            const appliedInPlace = applyCorrectionPreservingMarkup(t.original, sugg.ta);
+            if (appliedInPlace) return;
+            const currentText = this.getEditorText();
             const replaced = this.replaceTokenInText(currentText, t.original, sugg.ta, t.start);
-            this.editor.setText(replaced);
+            if (this.editor && typeof this.editor.setText === 'function') {
+              this.editor.setText(replaced);
+            }
           },
           onIgnore: () => {},
       }));
