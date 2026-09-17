@@ -1220,32 +1220,80 @@ ${tamilStyle === 'formal' ? `• எண் பொருந்தல்: ❌ "அ
 ━━━━━━━━━━━━━━━━━━━━━━━
 ❌ "அவன் அவன் வந்தான்" → ✅ "அவன் வந்தான்"
 
+━━━━━━━━━━━━━━━━━━━━━━━
+பிழை வகை 8: சந்தி இணைப்பு (established compound joining) — type: "grammar"
+━━━━━━━━━━━━━━━━━━━━━━━
+சில well-established compound proper nouns / terms are conventionally written as one word, even though they look like two words. Flag these when written with a space:
+
+Place-name compounds (proper nouns — always joined):
+❌ "தமிழ் நாடு" → ✅ "தமிழ்நாடு"
+❌ "தமிழ் நாட்டின்" → ✅ "தமிழ்நாட்டின்"
+❌ "தமிழ் நாட்டில்" → ✅ "தமிழ்நாட்டில்"
+❌ "தமிழ் நாட்டுக்கு" → ✅ "தமிழ்நாட்டுக்கு"
+❌ "தென் நாடு" → ✅ "தென்னாடு"
+❌ "வட நாடு" → ✅ "வடநாடு"
+❌ "மேல் நாடு" → ✅ "மேல்நாடு"
+
+Well-established compound nouns (single word by convention):
+❌ "நாள் இதழ்" → ✅ "நாளிதழ்" (daily newspaper)
+❌ "இரு மொழி" → ✅ "இருமொழி" (bilingual)
+❌ "இரு தலை" → ✅ "இருதலை" (two-headed)
+❌ "பல்நூற்றாண்டு" (already correct — do not split into "பல் நூற்றாண்டு")
+
+⚠️ CONSERVATIVE: Only flag compounds that are UNAMBIGUOUSLY single-word in convention. If unsure, leave the space alone. This is NOT a rule to combine random adjacent words.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+சொற்தேர்வு / STYLE SUGGESTIONS — type: "style" — 💡 optional improvements
+━━━━━━━━━━━━━━━━━━━━━━━
+Beyond outright errors, offer POLITE style suggestions when a more natural or contextually appropriate Tamil word exists. These are marked "style" so the UI shows them as suggestions rather than errors.
+
+Common improvements to flag:
+• "கற்போர்" → "வாசிப்போர்" / "படிப்போர்" (readers of a novel/text; கற்போர் = students / learners, wrong context)
+• "கற்றல்" (in reading context) → "வாசித்தல்" / "படித்தல்"
+• "கற்கும்" (in reading context) → "வாசிக்கும்" / "படிக்கும்"
+• Redundant phrases → concise alternatives ("மிகவும் மிக" → "மிக")
+• Bookish/archaic words when a modern equivalent reads better in the given context
+
+⚠️ CRITICAL for style suggestions:
+- ONLY suggest when the alternative is CLEARLY more appropriate in context — not just personally-preferred
+- Original word MUST be from the text; suggestion MUST be a natural Tamil word (never a transliteration or coinage)
+- If the original is perfectly fine in context, DO NOT suggest a swap — quality over quantity
+- Reason field should briefly explain WHY the alternative fits better (context, register, meaning)
+
 🚫 பிழையாகக் குறிக்க வேண்டாம்:
-- புணர்ச்சி மாற்றங்கள் (வரலாற்றுச்/வரலாற்று — இரண்டும் சரி)
+- புணர்ச்சி மாற்றங்கள் that don't change the compound-noun convention (வரலாற்றுச்/வரலாற்று — இரண்டும் சரி)
 - பேச்சு வழக்கு vs இலக்கிய வழக்கு (போனேன்/சென்றேன் — இரண்டும் சரி)
 - வட்டார வழக்குகள்
 - மரியாதை வடிவங்கள் (செய்தீர்/செய்தீர்கள் — இரண்டும் சரி)${tamilStyle !== 'formal' ? '\n- பேச்சு தமிழ் வினை வடிவங்கள் (பண்ற, போற, வேணும், சாப்பிட்டியா, -யா question suffix) — இவை எல்லாம் சரி!' : ''}
 
 ⚡ CRITICAL RULES:
-1. 100% உறுதியான பிழைகளை மட்டும் குறிக்கவும் — சந்தேகம் இருந்தால் flag செய்யாதீர்கள்
-2. false positive (சரியான சொல்லை பிழை என்று குறிப்பது) மிகவும் மோசமானது — precision முக்கியம், recall அல்ல
-3. ஒவ்வொரு occurrence-ம் தனித்தனியே குறிக்கவும்
-4. title மற்றும் description தமிழில் மட்டுமே எழுதவும்
-5. original: மூல உரையில் உள்ளது அப்படியே | suggestion: சரியான வடிவம்
+1. Errors (spelling/grammar/punctuation): 100% உறுதியான பிழைகளை மட்டும் — false-positive is worse than miss
+2. Style suggestions (type: "style"): confident context-appropriate improvements only — never suggest just because an alternative EXISTS
+3. Every occurrence gets its own entry (positions vary → separate corrections)
+4. title / description ALWAYS in Tamil
+5. original: source text verbatim | suggestion: correct/improved form
 
 📝 பதில் வடிவம் (JSON Array):
 - id: தனித்துவமான அடையாளம்
-- type: "spelling" அல்லது "grammar" அல்லது "punctuation"
-- title: பிழையின் வகை (தமிழில்)
-- description: விரிவான விளக்கம் (தமிழில்)
-- original: மூல உரையில் உள்ள தவறான சொல்
-- suggestion: சரியான சொல்
+- type: "spelling" | "grammar" | "punctuation" | "style"
+- title: பிழை / பரிந்துரை வகை (தமிழில்)
+- description: விரிவான விளக்கம் — WHY the change helps (தமிழில்)
+- original: மூல உரையில் உள்ள சொல்
+- suggestion: சரியான / சிறந்த வடிவம்
 - position: { start: எண், end: எண் }`
           }]
         },
         contents: [{
           role: 'user',
-          parts: [{ text: `கீழே உள்ள Tamil text-ஐ ஒரு conservative expert proof reader போல படித்து, 100% உறுதியான பிழைகளை மட்டும் குறிக்கவும். புள்ளி பிழை, தெளிவான குறில்/நெடில் பிழை, இரட்டை மெய் பிழை, எழுத்து மாற்றம், இடைவெளி பிழை, வினை பிழை — சந்தேகமான சொற்களை flag செய்யாதீர்கள். உரை:\n\n${chunk.text}` }]
+          parts: [{ text: `கீழே உள்ள Tamil text-ஐ ஒரு expert Tamil proof reader போல படித்து பரிசீலிக்கவும்:
+
+1. **தெளிவான பிழைகள்** (spelling / grammar / punctuation): 100% உறுதியான பிழைகளை மட்டும் குறிக்கவும். புள்ளி பிழை, குறில்/நெடில் பிழை, இரட்டை மெய் பிழை, எழுத்து மாற்றம், இடைவெளி பிழை, வினை பிழை — சந்தேகமான சொற்களை flag செய்யாதீர்கள்.
+
+2. **சந்தி இணைப்பு** (compound joining): well-established compound proper nouns like "தமிழ்நாடு" written with a space → suggest joining. NEVER suggest joining random word pairs.
+
+3. **சொற்தேர்வு / Style improvements** (type: "style"): OPTIONAL — where a more contextually appropriate Tamil word clearly fits better (e.g., "கற்போர்" for readers of a novel → "வாசிப்போர்"/"படிப்போர்"). Only when clearly better in context, not just because an alternative exists.
+
+உரை:\n\n${chunk.text}` }]
         }],
         generationConfig: {
           temperature: 0,
