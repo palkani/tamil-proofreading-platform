@@ -6328,6 +6328,36 @@ class WorkspaceController {
         if (titleInput && titleInput.value === 'Untitled Draft') {
           titleInput.value = `Draft #${data.submission.id}`;
         }
+
+        // LocalStorage HTML backstop — until Phase 0 backend lands
+        // (html_content column on submissions), backend persists text
+        // only. Stash the rich html+json in localStorage keyed by
+        // submission id so reopen keeps the formatting the user pasted
+        // in this session. openDraft() prefers backend html_content
+        // when the backend eventually returns it; this stash is the
+        // fallback for that gap.
+        //
+        // Text is stored alongside so openDraft can verify the stash
+        // still matches what the server has — a stale fingerprint
+        // (someone else edited from another device) means the stash
+        // is wrong for the current server text, so we don't restore
+        // it. Cap total per-draft entry at ~200KB to keep localStorage
+        // under its 5MB budget.
+        try {
+          if (typeof localStorage !== 'undefined' && data.submission.id && (saveHtml || saveJson)) {
+            const STASH_MAX_BYTES = 200_000;
+            const entry = {
+              text,
+              html: saveHtml || '',
+              json: saveJson || null,
+              savedAt: Date.now(),
+            };
+            const serialized = JSON.stringify(entry);
+            if (serialized.length <= STASH_MAX_BYTES) {
+              localStorage.setItem('pt_draft_fmt_' + data.submission.id, serialized);
+            }
+          }
+        } catch (_) { /* private mode / quota exceeded — silent skip */ }
       }
 
       this._setSaveState(wasTruncated ? 'partial' : 'saved', wasTruncated ? 'Saved (partial)' : 'Saved');
@@ -6906,10 +6936,40 @@ class WorkspaceController {
       // survive save+reopen. Until backend ships that, these fields are
       // undefined and we fall through to the plain-text path.
       this.currentDraft = draft;
-      const draftHtml =
+      let draftHtml =
         (draft.html_content || draft.original_html || draft.html || '').trim();
       const draftText = (draft.original_text || draft.text || draft.proofread_text || '').trim();
-      const draftJson = draft.json_content || draft.original_json || draft.json || null;
+      let draftJson = draft.json_content || draft.original_json || draft.json || null;
+
+      // LocalStorage fallback: if backend didn't return html/json (Phase 0
+      // not landed yet) but autosave() stashed the last-saved formatting
+      // for this draft id, restore that — but only when the stash's text
+      // matches what the server just returned. A mismatch means the user
+      // (or another device) edited from a different session; trusting a
+      // stale stash there would clobber the server's newer text. Stashes
+      // older than 30 days are ignored regardless (localStorage isn't
+      // authoritative — just a bridge until Phase 0 backend lands).
+      if (!draftHtml && !draftJson && draft.id) {
+        try {
+          if (typeof localStorage !== 'undefined') {
+            const raw = localStorage.getItem('pt_draft_fmt_' + draft.id);
+            if (raw) {
+              const stash = JSON.parse(raw);
+              const fresh = stash && stash.savedAt && (Date.now() - stash.savedAt) < 30 * 24 * 60 * 60 * 1000;
+              const textMatches = stash && typeof stash.text === 'string' && stash.text.trim() === draftText;
+              if (fresh && textMatches) {
+                if (stash.html) draftHtml = stash.html;
+                if (stash.json) draftJson = stash.json;
+                console.log('[WorkspaceJS] Draft formatting restored from localStorage stash (backend has no html_content yet)');
+              } else if (raw) {
+                console.log('[WorkspaceJS] Ignoring localStorage stash (mismatch/stale)', { fresh, textMatches });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[WorkspaceJS] localStorage draft stash read failed:', e && e.message);
+        }
+      }
       console.log('[WorkspaceJS] Loading draft into editor — html:', draftHtml.length, 'chars; text:', draftText.length, 'chars; json:', !!draftJson);
 
       // Ensure editor panel is visible so content is shown
