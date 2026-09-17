@@ -692,6 +692,53 @@ window.createTipTapEditor = null;
               } catch (e) {
                 // non-fatal
               }
+
+              // Empty-doc paste path. When the target is an empty
+              // single-paragraph doc (state after Ctrl+A → Delete →
+              // paste), ProseMirror's default clipboard parser inlines
+              // the first pasted paragraph into that empty target and
+              // drops its block-level attributes (text-align is the
+              // classic loss). Reroute through setContent so the source
+              // block structure survives verbatim.
+              try {
+                const doc = view.state.doc;
+                const isEmptyDoc =
+                  doc.textContent === '' &&
+                  doc.childCount === 1 &&
+                  (doc.firstChild.type.name === 'paragraph' || doc.firstChild.type.name === 'heading');
+                if (isEmptyDoc && event.clipboardData) {
+                  const html = event.clipboardData.getData('text/html') || '';
+                  if (html && html.trim()) {
+                    const normalized = normalizeWordPasteHtml(html);
+                    const accessor = window.tiptapWorkspaceEditor;
+                    const editor = typeof accessor === 'function' ? accessor() : accessor;
+                    if (editor && editor.commands && typeof editor.commands.setContent === 'function') {
+                      event.preventDefault();
+                      editor.commands.setContent(normalized, true);
+                      console.log('[TipTap] Empty-doc paste rerouted through setContent (preserves first-paragraph attrs)');
+                      // Belt-and-suspenders: the tiptap:paste event above
+                      // triggers queuePasteAnalyze, which schedules a 300ms
+                      // pasteAnalyzeTimeout → autosave → autoAnalyze. But
+                      // since setContent bypasses the DOM InputEvent flow,
+                      // some older paste-listeners never fire and the
+                      // pipeline can go quiet. Re-queue explicitly here so
+                      // "paste + AI suggestions" always fires as expected.
+                      setTimeout(function () {
+                        try {
+                          const wc = window.workspaceController;
+                          if (wc && typeof wc.queuePasteAnalyze === 'function') {
+                            wc.queuePasteAnalyze('empty-doc-fast-path');
+                          }
+                        } catch (_) { /* non-fatal */ }
+                      }, 30);
+                      return true;
+                    }
+                  }
+                }
+              } catch (err) {
+                console.warn('[TipTap] Empty-doc paste fast-path failed, falling back to default paste:', err && err.message);
+              }
+
               return false; // allow TipTap to handle paste normally
             },
           },
@@ -718,9 +765,14 @@ window.createTipTapEditor = null;
       }
     };
 
+    // Expose the paste normalizer globally so the home-page editor
+    // (contenteditable + execCommand, not TipTap) can share the same
+    // Word Mso class → standard-tag rewriting instead of duplicating it.
+    window.normalizeWordPasteHtml = normalizeWordPasteHtml;
+
     window.TIPTAP_LOADED = true;
     console.log('[TipTap] Bootstrap loaded successfully');
-    
+
     // Dispatch ready event
     window.dispatchEvent(new CustomEvent('tiptap:ready'));
   } catch (error) {
