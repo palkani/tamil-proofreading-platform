@@ -692,6 +692,45 @@ window.createTipTapEditor = null;
               } catch (e) {
                 // non-fatal
               }
+
+              // Empty-doc paste path (fixes Palkani's paste-#2-after-delete
+              // regression 2026-09-16). When the target is an empty
+              // single-paragraph doc — the exact state after Ctrl+A →
+              // Delete → paste — ProseMirror's default clipboard parser
+              // *inlines* the first pasted paragraph into that empty
+              // target paragraph and DROPS its block-level attributes
+              // (text-align on the source <p> is the classic loss).
+              // Subsequent paragraphs come through fine; only the first
+              // one loses attributes. Symptom: paste #1 (into non-empty
+              // doc) preserves formatting; paste #2 (after delete-all)
+              // loses it. Fix: for the empty-doc case, replace the whole
+              // doc via setContent so the source structure is preserved
+              // verbatim. Uses the same transformPastedHTML normalizer so
+              // Word Mso classes are still folded to standard tags.
+              try {
+                const doc = view.state.doc;
+                const isEmptyDoc =
+                  doc.textContent === '' &&
+                  doc.childCount === 1 &&
+                  (doc.firstChild.type.name === 'paragraph' || doc.firstChild.type.name === 'heading');
+                if (isEmptyDoc && event.clipboardData) {
+                  const html = event.clipboardData.getData('text/html') || '';
+                  if (html && html.trim()) {
+                    const normalized = normalizeWordPasteHtml(html);
+                    const accessor = window.tiptapWorkspaceEditor;
+                    const editor = typeof accessor === 'function' ? accessor() : accessor;
+                    if (editor && editor.commands && typeof editor.commands.setContent === 'function') {
+                      event.preventDefault();
+                      editor.commands.setContent(normalized, true);
+                      console.log('[TipTap] Empty-doc paste rerouted through setContent — preserves first-paragraph attributes');
+                      return true;
+                    }
+                  }
+                }
+              } catch (err) {
+                console.warn('[TipTap] Empty-doc paste fast-path failed, falling back to default paste:', err && err.message);
+              }
+
               return false; // allow TipTap to handle paste normally
             },
           },
