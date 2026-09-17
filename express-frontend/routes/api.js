@@ -1243,22 +1243,97 @@ Well-established compound nouns (single word by convention):
 ⚠️ CONSERVATIVE: Only flag compounds that are UNAMBIGUOUSLY single-word in convention. If unsure, leave the space alone. This is NOT a rule to combine random adjacent words.
 
 ━━━━━━━━━━━━━━━━━━━━━━━
+பிழை வகை 9: வலி மிகல் / வல்லினம் மிகுதல் (sandhi hardening after specific suffixes) — type: "grammar"
+━━━━━━━━━━━━━━━━━━━━━━━
+சில பின்னொட்டுக்கள் தன்னைத் தொடர்ந்து வரும் சொல்லோடு எப்போதும் இணைந்து எழுதப்பட வேண்டும். Only flag the SPECIFIC, unambiguous suffix-attachment cases below:
+
+Suffix-clitic joining (these particles ALWAYS join to the preceding word):
+❌ "அது தான்" → ✅ "அதுதான்"       (-தான் always joins)
+❌ "இது தான்" → ✅ "இதுதான்"
+❌ "நான் தான்" → ✅ "நான்தான்"
+❌ "நீ தான்" → ✅ "நீதான்"
+❌ "அவர்கள் தான்" → ✅ "அவர்கள்தான்"
+❌ "வருகிறார் கூட" → ✅ "வருகிறார்கூட"   (-கூட when meaning "even/also")
+❌ "இது ஏ" → ✅ "இதுவே"              (-ஏ emphasis)
+❌ "நான் ஏ" → ✅ "நானே"
+❌ "அது ஆ?" → ✅ "அதுவா?"           (-ஆ question)
+❌ "நீ ஆ?" → ✅ "நீயா?"
+
+⚠️ ONLY flag these EXACT suffix-attachment patterns. DO NOT invent new joining rules. If the second word is NOT one of {தான், கூட, ஏ, ஆ, ஓ} used as a clitic, LEAVE THE SPACE ALONE.
+
+⚠️ DO NOT flag when:
+- The word "தான்" is used as a noun/verb ("தான் வந்தான்" = "he himself came" — no joining)
+- The word "கூட" means "together with" as a postposition ("என்னுடன் கூட" = "along with me")
+- Context is uncertain
+
+━━━━━━━━━━━━━━━━━━━━━━━
+பிழை வகை 10: திணை பொருந்தல் (grammatical gender agreement) — type: "grammar"
+━━━━━━━━━━━━━━━━━━━━━━━
+Tamil verbs agree with subject's gender-class. Non-human subjects take non-human verbs; using human verbs on non-human subjects is an error:
+
+Non-human subject + human verb (WRONG):
+❌ "மாடு வந்தார்" → ✅ "மாடு வந்தது"
+❌ "மரம் விழுந்தார்" → ✅ "மரம் விழுந்தது"
+❌ "காரு வந்தார்கள்" → ✅ "கார்கள் வந்தன"  (also fixes number)
+❌ "நாய் ஓடினார்" → ✅ "நாய் ஓடியது"
+❌ "பறவை பறந்தார்" → ✅ "பறவை பறந்தது"
+
+Non-human PLURAL subject + wrong plural verb:
+❌ "மாடுகள் வந்தார்கள்" → ✅ "மாடுகள் வந்தன"
+❌ "நாய்கள் ஓடினார்கள்" → ✅ "நாய்கள் ஓடின"
+❌ "வீடுகள் இருக்கிறார்கள்" → ✅ "வீடுகள் இருக்கின்றன"
+
+⚠️ DO NOT flag when:
+- Subject is a human/deity/personified being (deities and honorific personification take human verbs even for non-human referents — "கடவுள் அருளினார்" is correct)
+- Subject is குழந்தை (baby/child) — takes human verb regardless ("குழந்தை அழுதது" and "குழந்தை அழுதாள்/அழுதான்" both acceptable depending on register)
+- Subject is a company / organization treated as agent ("அரசு அறிவித்தது" is correct, "அரசு அறிவித்தார்கள்" is wrong)
+- Poetic personification of non-human ("காற்று பாடினான்" — literary, do not flag)
+
+━━━━━━━━━━━━━━━━━━━━━━━
 சொற்தேர்வு / STYLE SUGGESTIONS — type: "style" — 💡 optional improvements
 ━━━━━━━━━━━━━━━━━━━━━━━
 Beyond outright errors, offer POLITE style suggestions when a more natural or contextually appropriate Tamil word exists. These are marked "style" so the UI shows them as suggestions rather than errors.
 
-Common improvements to flag:
-• "கற்போர்" → "வாசிப்போர்" / "படிப்போர்" (readers of a novel/text; கற்போர் = students / learners, wrong context)
-• "கற்றல்" (in reading context) → "வாசித்தல்" / "படித்தல்"
-• "கற்கும்" (in reading context) → "வாசிக்கும்" / "படிக்கும்"
-• Redundant phrases → concise alternatives ("மிகவும் மிக" → "மிக")
-• Bookish/archaic words when a modern equivalent reads better in the given context
+📚 FEW-SHOT EXAMPLES — these are the SHAPE and QUALITY bar for style suggestions:
+
+Example 1 (context-appropriate word):
+  original: "கற்போர்"     (in a sentence about novel readers)
+  suggestion: "வாசிப்போர்"  (or "படிப்போர்")
+  reason: "நாவல் / இலக்கியம் படிக்கும் மக்களை 'வாசிப்போர்' அல்லது 'படிப்போர்' என்பது இயற்கை — 'கற்போர்' என்பது கல்வி மாணவர்களைக் குறிக்கும்."
+
+Example 2 (redundancy — same-meaning words together):
+  original: "மிக அதிகம்"
+  suggestion: "மிக" (or "அதிகம்")
+  reason: "மிக மற்றும் அதிகம் இரண்டும் ஒரே பொருள் கொண்டவை — ஒன்றை மட்டும் பயன்படுத்துவது நேர்த்தியானது."
+
+Example 3 (redundancy — same-meaning words together):
+  original: "தினமும் நாள்தோறும்"
+  suggestion: "தினமும்" (or "நாள்தோறும்")
+  reason: "இரண்டும் ஒரே கருத்தை வெளிப்படுத்துகின்றன — ஒன்றைத் தேர்ந்தெடுக்கவும்."
+
+Example 4 (wordy → concise):
+  original: "என்று கூறினார்"
+  suggestion: "என்றார்"
+  reason: "'என்றார்' இயற்கையாகவே 'என்று சொன்னார்' என்ற பொருளை உள்ளடக்குகிறது — 'கூறினார்' மிகுதி."
+
+Example 5 (archaic → modern):
+  original: "நுவலுதல்" / "மொழிதல்"
+  suggestion: "சொல்லுதல்" / "கூறுதல்"
+  reason: "நவீன தமிழ் உரைநடையில் 'சொல்லுதல்' / 'கூறுதல்' இயற்கை; 'நுவலுதல்' / 'மொழிதல்' இலக்கிய நடையில் மட்டுமே பொருத்தமாக இருக்கும்."
+
+Common improvement categories to flag:
+• Context-inappropriate word (like கற்போர் in reading contexts)
+• Same-meaning word pair (redundancy): மிக அதிகம், தினமும் நாள்தோறும், பெரிய பெரிய (unless intensification is clearly intended)
+• Wordy phrases → concise ("என்று கூறினார்" → "என்றார்"; "செய்துகொண்டு இருக்கிறார்" → "செய்கிறார்")
+• Archaic word when modern equivalent reads better (நுவலுதல் → சொல்லுதல்)
+• Over-passive voice ("செய்யப்பட்டது" → "செய்தார்/செய்தனர்") when the subject is clearly known
 
 ⚠️ CRITICAL for style suggestions:
 - ONLY suggest when the alternative is CLEARLY more appropriate in context — not just personally-preferred
 - Original word MUST be from the text; suggestion MUST be a natural Tamil word (never a transliteration or coinage)
 - If the original is perfectly fine in context, DO NOT suggest a swap — quality over quantity
 - Reason field should briefly explain WHY the alternative fits better (context, register, meaning)
+- Do NOT suggest "பெரிய பெரிய" → "பெரிய" when the doubling is deliberate intensification (context-dependent)
 
 🚫 பிழையாகக் குறிக்க வேண்டாம்:
 - புணர்ச்சி மாற்றங்கள் that don't change the compound-noun convention (வரலாற்றுச்/வரலாற்று — இரண்டும் சரி)
@@ -1287,11 +1362,15 @@ Common improvements to flag:
           role: 'user',
           parts: [{ text: `கீழே உள்ள Tamil text-ஐ ஒரு expert Tamil proof reader போல படித்து பரிசீலிக்கவும்:
 
-1. **தெளிவான பிழைகள்** (spelling / grammar / punctuation): 100% உறுதியான பிழைகளை மட்டும் குறிக்கவும். புள்ளி பிழை, குறில்/நெடில் பிழை, இரட்டை மெய் பிழை, எழுத்து மாற்றம், இடைவெளி பிழை, வினை பிழை — சந்தேகமான சொற்களை flag செய்யாதீர்கள்.
+1. **தெளிவான பிழைகள்** (spelling / grammar / punctuation): 100% உறுதியான பிழைகளை மட்டும். புள்ளி, குறில்/நெடில், இரட்டை மெய், எழுத்து மாற்றம், இடைவெளி, வினை-எண்/ஆள் பொருந்தல் — சந்தேகமான சொற்களை flag செய்யாதீர்கள்.
 
-2. **சந்தி இணைப்பு** (compound joining): well-established compound proper nouns like "தமிழ்நாடு" written with a space → suggest joining. NEVER suggest joining random word pairs.
+2. **சந்தி இணைப்பு** (compound-noun joining, category 8): well-established compound proper nouns like "தமிழ்நாடு" written with a space → suggest joining. NEVER combine random word pairs.
 
-3. **சொற்தேர்வு / Style improvements** (type: "style"): OPTIONAL — where a more contextually appropriate Tamil word clearly fits better (e.g., "கற்போர்" for readers of a novel → "வாசிப்போர்"/"படிப்போர்"). Only when clearly better in context, not just because an alternative exists.
+3. **வலி மிகல்** (suffix-clitic joining, category 9): the EXACT particles listed (தான், கூட, ஏ, ஆ, ஓ used as clitics) always attach to the preceding word — flag detached ones like "அது தான்" → "அதுதான்". Only these specific suffixes.
+
+4. **திணை பொருந்தல்** (grammatical gender agreement, category 10): non-human subject with a human-honorific verb (e.g., "மாடு வந்தார்" → "மாடு வந்தது"). Skip organizations, deities, poetic personification.
+
+5. **சொற்தேர்வு / Style improvements** (type: "style"): OPTIONAL — contextually better word (கற்போர்→வாசிப்போர் in reading contexts), redundant same-meaning pairs (மிக அதிகம்→மிக), wordy phrases (என்று கூறினார்→என்றார்). Only when clearly better, never just because an alternative exists.
 
 உரை:\n\n${chunk.text}` }]
         }],
