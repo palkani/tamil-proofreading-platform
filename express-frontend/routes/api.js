@@ -1142,6 +1142,35 @@ F. 🔗 பின்னொட்டுச் சேர்ந்த வடிவ�
    ✅ வந்துசேர்ந்தது, எடுத்துச்சென்றார், கொண்டுவந்தார்
    ✅ Clitic suffixes (-கள், -ஐ, -உம், -ஏ, -ஓ, -ஆ) எப்போதும் முந்தைய சொல்லுடன்
 
+G. 🅰️ தமிழ் சுருக்கங்கள் / Tamil abbreviations (letters separated by dots) — 🚫 NEVER "correct" one abbreviation to another
+   Any sequence matching the pattern "X.Y.Z." or "X.Y.Z.W." (single Tamil syllable + dot, repeating) is an ABBREVIATION. Different abbreviations name DIFFERENT organizations / people / concepts. NEVER assume one is a typo of another, EVEN if one is more common in your training data.
+
+   ⛔ FORBIDDEN "corrections" (these are all valid but distinct entities):
+   ❌ த.வெ.க. → தி.மு.க.   (த.வெ.க. = தமிழக வெற்றி கழகம் / Vijay's TVK party; தி.மு.க. = DMK — TOTALLY DIFFERENT PARTIES)
+   ❌ அ.இ.அ.தி.மு.க. → அ.தி.மு.க.  (both are ADMK-variant names; treat as user's chosen form)
+   ❌ ம.தி.மு.க. → தி.மு.க.  (MDMK vs DMK — different parties)
+   ❌ பா.ஜ.க. → எ.ன்.டி.ஏ.  (BJP vs NDA alliance — different)
+   ❌ இ.ந.கா. → தே.கா.       (INC vs Congress variants — leave the user's chosen form)
+   ❌ எம்.ஜி.ஆர். → எம்.ஜி. ராமச்சந்திரன்  (proper-noun initial vs expansion — user chose the initial form; do NOT expand)
+   ❌ கு.நா. → கு. நாகராஜன்  (kavignar initial — do not expand)
+   ❌ சி.என். → C.N.        (Tamil initials vs English — do not transliterate the other direction)
+
+   ✅ Known Tamil political party abbreviations (leave EXACTLY as the user wrote them):
+   ✅ தி.மு.க. (DMK), அ.இ.அ.தி.மு.க. / அ.தி.மு.க. (ADMK), ம.தி.மு.க. (MDMK), தே.மு.தி.க. (DMDK)
+   ✅ த.வெ.க. / த.வே.க. (TVK — Vijay's party, established 2024), வி.சி.க. (VCK), பா.ம.க. (PMK)
+   ✅ பா.ஜ.க. (BJP), இ.ந.கா. / தே.கா. (Congress), ம.க.இ.க. (MNM — Kamal Haasan), ந.த.க. (NTK — Seeman)
+
+   ✅ Common Tamil abbreviations in other domains:
+   ✅ பி.ஏ., எம்.ஏ., பி.எச்.டி., எம்.பி.பி.எஸ். (degrees)
+   ✅ ஐ.ஏ.எஸ்., ஐ.பி.எஸ்., ஐ.எஃப்.எஸ். (civil services)
+   ✅ சி.இ.ஓ., எம்.டி., ஜி.எம். (corporate roles)
+   ✅ Tamil personality initials: எம்.ஜி.ஆர்., எம்.கே.ஸ்டாலின், கே.ஆர்.வி. (Kavignar)
+   ✅ Publication names: தி.இ., இ.ன்.ரா. (newspaper abbreviations)
+
+   ⚡ RULE: If a word contains dots between single Tamil letters (எ.கா.: த.வெ.க., ஐ.ஏ.எஸ்., எம்.ஜி.ஆர்.), it is an abbreviation. LEAVE IT ALONE regardless of whether you recognise it. When in doubt, do NOT flag.
+
+   Exception (ONLY these two): flag ONLY if the user clearly missed a dot ("தமுக" → "த.மு.க." style suggestion is OK if unambiguous) OR if the letters have obvious spelling issues within (e.g., "த.வெ.க." → "த.வெ.க." wouldn't be flagged; "தி.மு.க" missing the final dot IS a legitimate punctuation fix).
+
 ━━━━━━━━━━━━━━━━━━━━━━━
 பிழை வகை 1: புள்ளி (ஒற்று/விகாரம்) பிழைகள் — type: "punctuation"
 ━━━━━━━━━━━━━━━━━━━━━━━
