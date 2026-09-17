@@ -490,7 +490,17 @@ function applyCorrectionViaTransaction(original, corrected) {
     let tr = state.tr;
     for (const r of ranges) {
       if (replacement.length > 0) {
-        tr = tr.replaceRangeWith(r.from, r.to, state.schema.text(replacement));
+        // Preserve marks (bold, italic, underline, link) from the
+        // original text so applying a correction inside formatted
+        // text keeps the formatting. Without this, the replacement
+        // text node is created with an empty marks array and the
+        // user sees plain text where the pre-correction word was bold.
+        let marks = [];
+        try {
+          const $from = state.doc.resolve(r.from);
+          marks = $from.marks() || [];
+        } catch (_) { /* resolve can throw at doc boundaries — ignore */ }
+        tr = tr.replaceRangeWith(r.from, r.to, state.schema.text(replacement, marks));
       } else {
         // Deletion — schema.text('') throws, use delete range instead.
         tr = tr.delete(r.from, r.to);

@@ -1,3 +1,116 @@
+// Word paste normalizer — kept in lockstep with the copy in
+// tiptap-editor.js. Both editors need it, and the home page doesn't
+// load tiptap-editor.js (extra megabytes for a marketing surface that
+// doesn't run TipTap), so we duplicate the function rather than
+// couple the two files. If you change one, change the other.
+function normalizeHomePasteHtml(html) {
+  if (typeof html !== 'string' || !html) return html;
+  html = html
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<\?xml[^>]*>/gi, '')
+    .replace(/<meta[^>]*>/gi, '')
+    .replace(/<link[^>]*>/gi, '')
+    .replace(/xmlns[^=]*="[^"]*"/gi, '')
+    .replace(/mso-[\w-]+\s*:\s*[^;"]+;?/gi, '');
+  html = html.replace(
+    /<(p|h[1-6]|div)\b([^>]*)\salign\s*=\s*["']?(left|center|right|justify)["']?([^>]*)>/gi,
+    function (_m, tag, before, align, after) {
+      const alignLc = align.toLowerCase();
+      const rest = (before + after).replace(/\s+align\s*=\s*["']?\w+["']?/gi, '');
+      const styleMatch = rest.match(/style\s*=\s*["']([^"']*)["']/i);
+      if (styleMatch) {
+        if (/text-align\s*:/i.test(styleMatch[1])) return '<' + tag + rest + '>';
+        const newStyle = (styleMatch[1].replace(/;\s*$/, '') + '; text-align: ' + alignLc).replace(/^;\s*/, '');
+        return '<' + tag + rest.replace(/style\s*=\s*["'][^"']*["']/i, 'style="' + newStyle + '"') + '>';
+      }
+      return '<' + tag + rest + ' style="text-align: ' + alignLc + '">';
+    }
+  );
+  html = html.replace(
+    /<(p|h[1-6]|div)\b([^>]*)>/gi,
+    function (match, tag, attrs) {
+      const clsMatch = attrs.match(/class\s*=\s*["']([^"']*)["']/i);
+      if (!clsMatch) return match;
+      const cls = clsMatch[1];
+      let align = null;
+      if (/\bMsoCenter/i.test(cls)) align = 'center';
+      else if (/\bMsoRight/i.test(cls)) align = 'right';
+      else if (/\bMsoJustify/i.test(cls)) align = 'justify';
+      if (!align) return match;
+      const styleMatch = attrs.match(/style\s*=\s*["']([^"']*)["']/i);
+      if (styleMatch) {
+        if (/text-align\s*:/i.test(styleMatch[1])) return match;
+        const newStyle = (styleMatch[1].replace(/;\s*$/, '') + '; text-align: ' + align).replace(/^;\s*/, '');
+        return '<' + tag + attrs.replace(/style\s*=\s*["'][^"']*["']/i, 'style="' + newStyle + '"') + '>';
+      }
+      return '<' + tag + attrs + ' style="text-align: ' + align + '">';
+    }
+  );
+  html = html.replace(
+    /<div\b([^>]*style\s*=\s*["'][^"']*text-align\s*:\s*(left|center|right|justify)[^"']*["'][^>]*)>([\s\S]*?)<\/div>/gi,
+    function (_m, divAttrs, align, inner) {
+      const alignLc = align.toLowerCase();
+      const innerRewritten = inner.replace(
+        /<(p|h[1-6])\b([^>]*)>/gi,
+        function (m2, tag, attrs) {
+          const styleMatch = attrs.match(/style\s*=\s*["']([^"']*)["']/i);
+          if (styleMatch && /text-align\s*:/i.test(styleMatch[1])) return m2;
+          if (styleMatch) {
+            const newStyle = (styleMatch[1].replace(/;\s*$/, '') + '; text-align: ' + alignLc).replace(/^;\s*/, '');
+            return '<' + tag + attrs.replace(/style\s*=\s*["'][^"']*["']/i, 'style="' + newStyle + '"') + '>';
+          }
+          return '<' + tag + attrs + ' style="text-align: ' + alignLc + '">';
+        }
+      );
+      return '<div' + divAttrs + '>' + innerRewritten + '</div>';
+    }
+  );
+  html = html.replace(
+    /<span\b([^>]*)>([\s\S]*?)<\/span>/gi,
+    function (m, attrs, inner) {
+      const clsMatch = attrs.match(/class\s*=\s*["']([^"']*)["']/i);
+      const styleMatch = attrs.match(/style\s*=\s*["']([^"']*)["']/i);
+      const cls = clsMatch ? clsMatch[1] : '';
+      const style = styleMatch ? styleMatch[1] : '';
+      const isBold =
+        /\bMsoBold\b/i.test(cls) ||
+        /\bMsoStrong\b/i.test(cls) ||
+        /font-weight\s*:\s*(bold|[6-9]\d{2}|1000)/i.test(style);
+      const isItalic =
+        /\bMsoItalic\b/i.test(cls) ||
+        /\bMsoEmphasis\b/i.test(cls) ||
+        /font-style\s*:\s*italic/i.test(style);
+      const isUnderline =
+        /\bMsoUnderline\b/i.test(cls) ||
+        /text-decoration[^;"']*:\s*[^;"']*underline/i.test(style);
+      if (!isBold && !isItalic && !isUnderline) return m;
+      let out = inner;
+      if (isUnderline) out = '<u>' + out + '</u>';
+      if (isItalic)   out = '<em>' + out + '</em>';
+      if (isBold)     out = '<strong>' + out + '</strong>';
+      return out;
+    }
+  );
+  html = html.replace(
+    /<p\b([^>]*)>([\s\S]*?)<\/p>/gi,
+    function (m, attrs, inner) {
+      const clsMatch = attrs.match(/class\s*=\s*["']([^"']*)["']/i);
+      if (!clsMatch) return m;
+      const cls = clsMatch[1];
+      let level = 0;
+      if (/\bMsoTitle\b/i.test(cls))            level = 1;
+      else if (/\bMsoHeading\s*1\b/i.test(cls)) level = 1;
+      else if (/\bMsoHeading\s*2\b/i.test(cls)) level = 2;
+      else if (/\bMsoHeading\s*3\b/i.test(cls)) level = 3;
+      if (!level) return m;
+      const styleMatch = attrs.match(/style\s*=\s*["'][^"']*["']/i);
+      const carry = styleMatch ? ' ' + styleMatch[0] : '';
+      return '<h' + level + carry + '>' + inner + '</h' + level + '>';
+    }
+  );
+  return html;
+}
+
 // Helper function to check if token is expired
 function isTokenExpired(token) {
   if (!token) return true;
@@ -1384,6 +1497,7 @@ class HomeEditor {
   async handlePaste(e) {
     e.preventDefault();
     const text = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
+    const clipboardHtml = (e.clipboardData && e.clipboardData.getData('text/html')) || '';
     if (!text || !text.trim()) return;
 
     // Tamil icon ON (aria-checked="true") = Tamil mode; OFF = English mode
@@ -1392,6 +1506,59 @@ class HomeEditor {
     const englishRatio = text.length > 0 ? (text.match(/[a-zA-Z]/g) || []).length / text.length : 0;
     const isMostlyEnglish = englishRatio > 0.5;
 
+    // Word-limit gate (free tier caps at maxWords). Applies to the plain-text
+    // representation regardless of whether we insert HTML or plain text.
+    const currentText = this.getPlainText();
+    const currentWords = this.countWords(currentText);
+    const remainingWords = this.maxWords - currentWords;
+    const pastedWords = this.countWords(text);
+    const overLimit = pastedWords > remainingWords;
+
+    // Formatted-paste path — only for Tamil content in Tamil mode, and only
+    // when the clipboard actually has HTML. Uses the same Word Mso → standard
+    // tag normalizer as the TipTap editor (exposed as window.normalizeWordPasteHtml)
+    // so pastes from Word/Docs into the home preview editor keep bold, italic,
+    // headings, and alignment — matching the drafts editor experience.
+    // Skipped when over word limit (we'd have to word-count HTML which is
+    // messy; fall through to plain-text truncation path).
+    const canUseHtmlPath =
+      !overLimit &&
+      clipboardHtml && clipboardHtml.trim() &&
+      isTamilMode && !isMostlyEnglish;
+    if (canUseHtmlPath) {
+      try {
+        const rawHtml = clipboardHtml;
+        // Prefer the globally-exposed normalizer (workspace pages load
+        // tiptap-editor.js which sets window.normalizeWordPasteHtml).
+        // Fall back to the local copy on marketing/home pages where
+        // tiptap-editor.js isn't loaded. Both are the same function.
+        const normalizer =
+          (typeof window.normalizeWordPasteHtml === 'function' && window.normalizeWordPasteHtml) ||
+          (typeof normalizeHomePasteHtml === 'function' && normalizeHomePasteHtml);
+        const normalized = typeof normalizer === 'function' ? normalizer(rawHtml) : rawHtml;
+        // Strip <style>/<script> for safety before handing to execCommand.
+        // insertHTML sanitises tags but not embedded style/script blocks.
+        const safeHtml = normalized
+          .replace(/<style[\s\S]*?<\/style>/gi, '')
+          .replace(/<script[\s\S]*?<\/script>/gi, '');
+        // Fall through to plain-text path if the normalized HTML is trivial
+        // (no formatting worth preserving) — no need to pay execCommand's
+        // overhead just to insert plain text.
+        const hasFormatting = /<(strong|b|em|i|u|h[1-6]|ul|ol|li|blockquote)\b|style\s*=\s*["'][^"']*(?:font-weight|font-style|text-align|text-decoration)/i.test(safeHtml);
+        if (hasFormatting) {
+          document.execCommand('insertHTML', false, safeHtml);
+          this.updateWordCount();
+          this.lastAnalyzedText = '';
+          this._suppressScheduledAnalysisUntil = Date.now() + 1200;
+          setTimeout(() => this.autoAnalyze(), 0);
+          return;
+        }
+      } catch (err) {
+        console.warn('[HomeEditor] HTML paste path failed, falling back to plain text:', err && err.message);
+      }
+    }
+
+    // Plain-text path (English-mode, transliteration, over-limit, or no-HTML)
     let textToInsert = text;
     if (isMostlyEnglish && isTamilMode) {
       // Tamil ON: transliterate (Thanglish → Tamil)
@@ -1399,13 +1566,7 @@ class HomeEditor {
     }
     // Tamil OFF: insert English, translate in background (below)
 
-    // Enforce word limit
-    const currentText = this.getPlainText();
-    const currentWords = this.countWords(currentText);
-    const remainingWords = this.maxWords - currentWords;
-    const textWords = this.countWords(textToInsert);
-
-    if (textWords > remainingWords) {
+    if (overLimit) {
       const wordsArray = textToInsert.split(/\s+/);
       textToInsert = wordsArray.slice(0, remainingWords).join(' ');
     }
