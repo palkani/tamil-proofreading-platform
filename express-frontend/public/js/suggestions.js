@@ -137,6 +137,20 @@ class SuggestionsPanel {
       this._renderNavigator();
     }
     this.render();
+    // Fire the after-remove hook so the workspace can refresh the editor's
+    // ProofreadPlugin decorations from the trimmed list. Without this,
+    // accepting a suggestion leaves its squiggle on the CORRECTED word
+    // (decoration maps through the ProseMirror transaction but the plugin
+    // is never told the correction is gone). Passes both id + the current
+    // remaining suggestions so the caller can update state without an
+    // extra round-trip. See workspace.js's controller wiring.
+    if (typeof this.onRemoveSuggestion === 'function') {
+      try {
+        this.onRemoveSuggestion(id, this.suggestions);
+      } catch (e) {
+        console.warn('[SuggestionsPanel] onRemoveSuggestion callback threw:', e && e.message);
+      }
+    }
   }
 
   getAcceptedCount() {

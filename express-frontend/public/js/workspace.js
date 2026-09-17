@@ -2163,8 +2163,7 @@ class WorkspaceController {
     
     if (container && summary && acceptAllBtn) {
       this.suggestionsPanel = new SuggestionsPanel(container, summary, acceptAllBtn);
-      this.suggestionsPanel.onAcceptSuggestion = () => this.handleSuggestionAccepted();
-      this.suggestionsPanel.onClearHighlights = () => this._clearCorrectionHighlights();
+      this._wireSuggestionsPanelCallbacks();
     }
 
     // Set up event listeners
@@ -5438,7 +5437,7 @@ class WorkspaceController {
         const acceptAllBtn = document.getElementById('accept-all-btn');
         if (container && summary && acceptAllBtn) {
           this.suggestionsPanel = new SuggestionsPanel(container, summary, acceptAllBtn);
-          this.suggestionsPanel.onAcceptSuggestion = () => this.handleSuggestionAccepted();
+          this._wireSuggestionsPanelCallbacks();
           console.log('[AI Debug] ✅ suggestionsPanel initialized on-the-fly');
         } else {
           console.error('[AI Debug] ❌ Cannot initialize suggestionsPanel - missing elements:', {
@@ -5826,6 +5825,44 @@ class WorkspaceController {
     this.updateAcceptedCount();
   }
 
+  /**
+   * Called by SuggestionsPanel after a suggestion is removed (accept OR ignore).
+   * Refreshes the TipTap ProofreadPlugin's decorations from the current
+   * remaining suggestions so the squiggle disappears from a corrected word.
+   *
+   * Without this the decoration stays: after Accept, the ProseMirror
+   * transaction that swaps original→corrected text auto-maps the decoration
+   * to the new position, so `கற்போர்` → `வாசிப்போர்` leaves an orange
+   * squiggle sitting on the CORRECTED word forever. The plugin has no
+   * signal from the panel that the correction was resolved.
+   *
+   * Guards against non-TipTap paths (plugin absent when legacy editor is
+   * active) so it's safe to call unconditionally.
+   */
+  handleSuggestionRemoved(_id, remainingSuggestions) {
+    try {
+      if (window.USE_TIPTAP_EDITOR && window.tiptapProofreadPlugin &&
+          typeof window.tiptapProofreadPlugin.setCorrections === 'function') {
+        window.tiptapProofreadPlugin.setCorrections(Array.isArray(remainingSuggestions) ? remainingSuggestions : []);
+      }
+    } catch (e) {
+      console.warn('[WorkspaceJS] handleSuggestionRemoved failed:', e && e.message);
+    }
+  }
+
+  /**
+   * DRY wire-up for a freshly-created SuggestionsPanel. Called from each
+   * of the 3 panel-instantiation sites so callbacks stay in sync.
+   */
+  _wireSuggestionsPanelCallbacks() {
+    if (!this.suggestionsPanel) return;
+    this.suggestionsPanel.onAcceptSuggestion = () => this.handleSuggestionAccepted();
+    this.suggestionsPanel.onRemoveSuggestion = (id, remaining) => this.handleSuggestionRemoved(id, remaining);
+    if (!this.suggestionsPanel.onClearHighlights) {
+      this.suggestionsPanel.onClearHighlights = () => this._clearCorrectionHighlights();
+    }
+  }
+
   async translateEnglishToTamil() {
     const text = this.getEditorText().trim();
     
@@ -6021,9 +6058,7 @@ class WorkspaceController {
       const acceptAllBtn = document.getElementById('accept-all-btn');
       if (container && summary && acceptAllBtn && typeof SuggestionsPanel === 'function') {
         this.suggestionsPanel = new SuggestionsPanel(container, summary, acceptAllBtn);
-        if (typeof this.handleSuggestionAccepted === 'function') {
-          this.suggestionsPanel.onAcceptSuggestion = () => this.handleSuggestionAccepted();
-        }
+        this._wireSuggestionsPanelCallbacks();
       } else {
         console.warn('[AI] _renderInlineCorrections: SuggestionsPanel not available');
         return;
