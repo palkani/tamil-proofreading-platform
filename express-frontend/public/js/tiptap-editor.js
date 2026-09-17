@@ -330,12 +330,16 @@ window.createTipTapEditor = null;
       } catch (_) { /* diagnostic only, never throw */ }
 
       // After TipTap's own paste parse pipeline runs, capture what the
-      // schema kept. If alignment shows up here it succeeded; if it's
-      // missing here but WAS in the raw clipboard, TipTap dropped it →
-      // that tells us to extend the parseHTML.
+      // schema kept. If alignment/bold/italic shows up here it survived;
+      // if it's missing but WAS in the raw clipboard, TipTap dropped it
+      // → tells us to extend parseHTML further. window.tiptapWorkspaceEditor
+      // is a FUNCTION accessor (see workspace.js line ~7562) — must call
+      // it to reach the actual editor instance. Previous version referenced
+      // the function directly and silently no-op'd for months.
       setTimeout(function () {
         try {
-          const editor = window.tiptapWorkspaceEditor;
+          const accessor = window.tiptapWorkspaceEditor;
+          const editor = typeof accessor === 'function' ? accessor() : accessor;
           if (editor && typeof editor.getHTML === 'function') {
             const kept = editor.getHTML();
             console.log('[TipTap paste diagnostic #' + seq + ' KEPT]', {
@@ -550,6 +554,64 @@ window.createTipTapEditor = null;
             }
           );
           return '<div' + divAttrs + '>' + innerRewritten + '</div>';
+        }
+      );
+
+      // 5. Word wraps bold/italic in <span class="MsoBold">…</span> or
+      // <span style="font-weight:bold">…</span>, and TipTap's Bold mark
+      // only recognises <strong>/<b>/inline font-weight:bold on the
+      // element itself — not classes referring to a Word style block
+      // TipTap never parsed. Rewrite these spans to <strong>/<em> so
+      // TipTap's default parseHTML picks them up.
+      html = html.replace(
+        /<span\b([^>]*)>([\s\S]*?)<\/span>/gi,
+        function (m, attrs, inner) {
+          const clsMatch = attrs.match(/class\s*=\s*["']([^"']*)["']/i);
+          const styleMatch = attrs.match(/style\s*=\s*["']([^"']*)["']/i);
+          const cls = clsMatch ? clsMatch[1] : '';
+          const style = styleMatch ? styleMatch[1] : '';
+          const isBold =
+            /\bMsoBold\b/i.test(cls) ||
+            /\bMsoStrong\b/i.test(cls) ||
+            /font-weight\s*:\s*(bold|[6-9]\d{2}|1000)/i.test(style);
+          const isItalic =
+            /\bMsoItalic\b/i.test(cls) ||
+            /\bMsoEmphasis\b/i.test(cls) ||
+            /font-style\s*:\s*italic/i.test(style);
+          const isUnderline =
+            /\bMsoUnderline\b/i.test(cls) ||
+            /text-decoration[^;"']*:\s*[^;"']*underline/i.test(style);
+          if (!isBold && !isItalic && !isUnderline) return m;
+          let out = inner;
+          if (isUnderline) out = '<u>' + out + '</u>';
+          if (isItalic)   out = '<em>' + out + '</em>';
+          if (isBold)     out = '<strong>' + out + '</strong>';
+          return out;
+        }
+      );
+
+      // 6. Word Title / Heading styles: <p class="MsoTitle"> → <h1>,
+      // <p class="MsoHeading1/2/3"> → <h1/2/3>. TipTap loads Heading
+      // levels 1-3 via StarterKit; deeper ones would just fall through.
+      // Preserves any inline style (typically text-align from step 4)
+      // by pulling it across to the new heading tag.
+      html = html.replace(
+        /<p\b([^>]*)>([\s\S]*?)<\/p>/gi,
+        function (m, attrs, inner) {
+          const clsMatch = attrs.match(/class\s*=\s*["']([^"']*)["']/i);
+          if (!clsMatch) return m;
+          const cls = clsMatch[1];
+          let level = 0;
+          if (/\bMsoTitle\b/i.test(cls))          level = 1;
+          else if (/\bMsoHeading\s*1\b/i.test(cls)) level = 1;
+          else if (/\bMsoHeading\s*2\b/i.test(cls)) level = 2;
+          else if (/\bMsoHeading\s*3\b/i.test(cls)) level = 3;
+          if (!level) return m;
+          // Keep only style attribute (drop the class since we're
+          // remapping the tag); style may carry text-align from step 4.
+          const styleMatch = attrs.match(/style\s*=\s*["'][^"']*["']/i);
+          const carry = styleMatch ? ' ' + styleMatch[0] : '';
+          return '<h' + level + carry + '>' + inner + '</h' + level + '>';
         }
       );
 
