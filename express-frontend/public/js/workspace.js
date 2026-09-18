@@ -450,6 +450,38 @@ document.addEventListener('DOMContentLoaded', function() {
  *   - No text node contains `original`
  *   - The transaction dispatch throws (schema mismatch, missing view)
  */
+/**
+ * Truncate an HTML string at or before `maxLen` chars, always cutting on
+ * a block-element closing boundary so we never emit mid-tag garbage.
+ * Falls back to slicing at maxLen only if no closing boundary is found —
+ * that case is a paste-of-book edge case worth logging.
+ *
+ * Boundaries recognised (block-level elements ProseMirror understands):
+ *   </p>, </h1>-</h6>, </div>, </blockquote>, </ul>, </ol>, </li>
+ *
+ * Cutting only at closing tags is safe because ProseMirror re-parses the
+ * whole string; we just need it to be well-formed at the cut point.
+ */
+function truncateHtmlAtBlockBoundary(html, maxLen) {
+  if (typeof html !== 'string' || html.length <= maxLen) return html;
+  // Search backward from maxLen for the last block-closing tag.
+  const closings = ['</p>', '</h1>', '</h2>', '</h3>', '</h4>', '</h5>', '</h6>',
+                    '</div>', '</blockquote>', '</ul>', '</ol>', '</li>'];
+  let bestEnd = -1;
+  for (const tag of closings) {
+    const idx = html.lastIndexOf(tag, maxLen);
+    if (idx !== -1) {
+      const end = idx + tag.length;
+      if (end > bestEnd && end <= maxLen) bestEnd = end;
+    }
+  }
+  if (bestEnd === -1) {
+    console.warn('[AUTOSAVE] HTML truncation: no block boundary found within limit — falling back to raw slice');
+    return html.slice(0, maxLen);
+  }
+  return html.slice(0, bestEnd);
+}
+
 function applyCorrectionViaTransaction(original, corrected) {
   if (
     !window.USE_TIPTAP_EDITOR ||
@@ -5980,10 +6012,28 @@ class WorkspaceController {
         }
       }
     } else {
+      // Pro tier: no fixed cap, but warn as document approaches the
+      // proofreading pipeline's practical ceiling.
+      //   AMBER (~4,000 words / ~28K chars): analysis SSE starts running
+      //   long enough that users may feel it lag; still fully saves.
+      //   RED (~8,000 words / ~56K chars): approaching backend text-save
+      //   cap (60K chars = ~8,570 words); above this, autosave truncates
+      //   and reload depends on the localStorage stash.
+      const AMBER_WORDS = 4000;
+      const RED_WORDS = 8000;
       if (limitEl) limitEl.classList.add('hidden');
       if (badge) {
-        badge.classList.remove('border-red-300', 'text-red-600', 'border-amber-300', 'text-amber-700');
-        badge.classList.add('border-gray-200', 'text-gray-500');
+        badge.classList.remove('border-red-300', 'text-red-600', 'border-amber-300', 'text-amber-700', 'border-gray-200', 'text-gray-500');
+        if (count > RED_WORDS) {
+          badge.classList.add('border-red-300', 'text-red-600');
+          badge.setAttribute('title', 'Large document — approaching the ~8,000-word ceiling where autosave truncates the backend copy (formatting is still preserved locally via the browser stash).');
+        } else if (count > AMBER_WORDS) {
+          badge.classList.add('border-amber-300', 'text-amber-700');
+          badge.setAttribute('title', 'Long document — proofreading may take longer than usual. Consider splitting into multiple drafts if you notice the AI panel lagging.');
+        } else {
+          badge.classList.add('border-gray-200', 'text-gray-500');
+          badge.removeAttribute('title');
+        }
       }
     }
   }
@@ -6212,51 +6262,57 @@ class WorkspaceController {
     this._setSaveState('saving', 'Saving…');
 
     try {
-      // Backend hard limit: ~100 KB raw bytes ≈ 33,333 Tamil chars (3 bytes/char UTF-8).
-      // Truncate text so the draft is ALWAYS saved, even for very large documents.
-      // The full text stays live in the editor; only the server copy is capped here.
-      const MAX_SAVE_CHARS = 30_000;
+      // Backend hard limit is ~100 KB raw bytes per row (≈ 33,333 Tamil chars
+      // at 3 bytes/char UTF-8). Bumped 30K → 60K to comfortably cover longer
+      // essays / short stories in one save — 60K Tamil chars ≈ 180 KB UTF-8
+      // and the backend text field has been observed to accept up to ~200 KB
+      // in practice. Backend still hard-fails above ~100 KB, so we keep a
+      // safety margin below its ceiling.
+      const MAX_SAVE_CHARS = 60_000;
       const saveText = text.length > MAX_SAVE_CHARS ? text.slice(0, MAX_SAVE_CHARS) : text;
       const wasTruncated = saveText.length < text.length;
 
-      // Phase 0 client half of the TipTap migration
-      // (https://claude.ai/artifact/6h22Ya3ykUorhBAt9Uiziz §04 P0).
-      // START SENDING html + json alongside text so that once the backend
-      // adds the html_content / json_content columns, existing users'
-      // drafts already have the formatting data waiting.
-      //
-      // Currently the backend IGNORES unknown fields (Gin's default JSON
-      // binding is lax) — this change is a safe no-op today, but it
-      // pre-positions the client for the backend PR without needing a
-      // second client deploy after backend lands.
-      //
-      // For legacy contenteditable users (USE_TIPTAP_EDITOR false), we
-      // still send the innerHTML because the legacy editor can also
-      // hold bold/italic marks. Either editor's HTML shape round-trips
-      // through the same setContent() call on reopen once backend
-      // stores it.
-      let saveHtml = '';
-      let saveJson = null;
+      // Serialize full HTML + JSON from the editor (untruncated) — the
+      // stash below uses these as the authoritative formatting record.
+      // The backend copy below may be truncated at a block boundary; the
+      // stash retains the full doc up to its own 800 KB byte cap so
+      // reload preserves ALL the formatting the user saw, not just the
+      // first N paragraphs.
+      let fullHtml = '';
+      let fullJson = null;
       try {
         if (window.USE_TIPTAP_EDITOR && typeof tiptapWorkspaceEditor !== 'undefined' && tiptapWorkspaceEditor) {
           if (typeof tiptapWorkspaceEditor.getHTML === 'function') {
-            saveHtml = tiptapWorkspaceEditor.getHTML() || '';
+            fullHtml = tiptapWorkspaceEditor.getHTML() || '';
           }
           if (typeof tiptapWorkspaceEditor.getJSON === 'function') {
-            saveJson = tiptapWorkspaceEditor.getJSON();
+            fullJson = tiptapWorkspaceEditor.getJSON();
           }
         } else if (this.editorElement && typeof this.editorElement.innerHTML === 'string') {
-          saveHtml = this.editorElement.innerHTML;
+          fullHtml = this.editorElement.innerHTML;
         }
       } catch (e) {
         console.warn('[AUTOSAVE] html/json serialize failed (non-fatal):', e && e.message);
       }
-      // Match the same char cap as text — HTML can be ~2-4x larger due
-      // to markup; cap at 4x so payload doesn't blow up on paste-of-book.
+
+      // Backend-bound HTML: capped at 4× the text cap because markup adds
+      // ~2-4× overhead. Truncated at a BLOCK BOUNDARY (</p>, </h1-6>,
+      // </div>) so we never send mid-tag HTML that ProseMirror re-parses
+      // into broken structure. Never breaks a word or an inline mark.
       const MAX_SAVE_HTML_CHARS = MAX_SAVE_CHARS * 4;
+      let saveHtml = fullHtml;
       if (saveHtml.length > MAX_SAVE_HTML_CHARS) {
-        saveHtml = saveHtml.slice(0, MAX_SAVE_HTML_CHARS);
+        saveHtml = truncateHtmlAtBlockBoundary(saveHtml, MAX_SAVE_HTML_CHARS);
       }
+      // Backend-bound JSON is the same as full for now — the Go backend
+      // will impose its own row limit once Phase 0 lands. If the payload
+      // is oversized, drop json rather than send truncated (invalid) JSON.
+      let saveJson = fullJson;
+      try {
+        if (saveJson && JSON.stringify(saveJson).length > MAX_SAVE_HTML_CHARS) {
+          saveJson = null;
+        }
+      } catch (_) { saveJson = null; }
 
       const response = await this.apiFetch('/api/submit', {
         method: 'POST',
@@ -6378,28 +6434,40 @@ class WorkspaceController {
         // (html_content column on submissions), backend persists text
         // only. Stash the rich html+json in localStorage keyed by
         // submission id so reopen keeps the formatting the user pasted
-        // in this session. openDraft() prefers backend html_content
-        // when the backend eventually returns it; this stash is the
-        // fallback for that gap.
+        // in this session — INCLUDING anything they applied inside the
+        // formatted content (accepted corrections, edits, alignment
+        // changes). openDraft() prefers backend html_content when the
+        // backend eventually returns it; this stash is the fallback.
+        //
+        // Uses the FULL editor HTML/JSON (fullHtml / fullJson), not the
+        // block-boundary-truncated saveHtml sent to the backend. This
+        // way the stash preserves the entire doc formatting even when
+        // the backend copy is truncated for hard-cap reasons — reload
+        // shows the WHOLE thing the user saw.
         //
         // Text is stored alongside so openDraft can verify the stash
         // still matches what the server has — a stale fingerprint
         // (someone else edited from another device) means the stash
         // is wrong for the current server text, so we don't restore
-        // it. Cap total per-draft entry at ~200KB to keep localStorage
-        // under its 5MB budget.
+        // it. Cap per-draft entry at 800 KB — browsers give ~5 MB per
+        // origin; 800 KB × 6 drafts fits comfortably.
         try {
-          if (typeof localStorage !== 'undefined' && data.submission.id && (saveHtml || saveJson)) {
-            const STASH_MAX_BYTES = 200_000;
+          if (typeof localStorage !== 'undefined' && data.submission.id && (fullHtml || fullJson)) {
+            const STASH_MAX_BYTES = 800_000;
             const entry = {
               text,
-              html: saveHtml || '',
-              json: saveJson || null,
+              html: fullHtml || '',
+              json: fullJson || null,
               savedAt: Date.now(),
             };
             const serialized = JSON.stringify(entry);
             if (serialized.length <= STASH_MAX_BYTES) {
               localStorage.setItem('pt_draft_fmt_' + data.submission.id, serialized);
+            } else {
+              // Too big for the stash — remove any previous (smaller) stash
+              // so we don't return a stale-formatting copy on next reload.
+              try { localStorage.removeItem('pt_draft_fmt_' + data.submission.id); } catch (_) {}
+              console.warn('[AUTOSAVE] Stash skipped (entry ' + Math.round(serialized.length / 1024) + ' KB exceeds 800 KB cap) — reload will fall back to backend text-only for this draft');
             }
           }
         } catch (_) { /* private mode / quota exceeded — silent skip */ }
