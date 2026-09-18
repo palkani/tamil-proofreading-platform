@@ -129,6 +129,136 @@ router.all('/renewal-reminders', requireCronAuth, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────
+// GET/POST /api/cron/dodo-reconcile
+//
+// Nightly reconciliation: for every override row that carries a Dodo
+// subscription_id, fetch canonical state from Dodo's API and repair drift.
+//
+// Why this exists: webhooks can miss (Dodo timeout, event name we don't
+// yet bucket, transient DB write failure). Missing even one renewal event
+// means expires_at silently drifts and the customer loses access despite
+// still being charged (see user 106 Aug 9 renewal, 2026-09-18). This cron
+// audits the whole active pool nightly so no drift outlives a single day.
+//
+// Safety rails:
+//   - Never DEMOTES a paying user on API failure. If Dodo returns 5xx or
+//     the API key is missing, we skip the row and log — never revoke.
+//   - Never SHORTENS expires_at. If Dodo's period-end is earlier than
+//     ours, we noop (impossible in practice but defensive).
+//   - Never OVERWRITES plan_code with a fallback. Unmapped product_id
+//     leaves the existing plan alone.
+//   - Runs in parallel batches of 5 to stay within Vercel's 300s window
+//     while covering ~500 rows per run.
+// ─────────────────────────────────────────────────────────────────────
+const dodoApi = require('../lib/dodo-api');
+const { reconcile } = require('../lib/dodo-reconcile');
+const overridesDb = require('../lib/user-entitlement-overrides-db');
+
+const RECONCILE_MAX_ROWS       = 500;
+const RECONCILE_CONCURRENCY    = 5;
+
+router.all('/dodo-reconcile', requireCronAuth, async (req, res) => {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    return res.status(500).json({ ok: false, error: 'supabase_not_configured' });
+  }
+  if (!dodoApi.isConfigured()) {
+    console.warn('[cron/dodo-reconcile] DODO_API_KEY not set — cannot reconcile');
+    return res.status(500).json({ ok: false, error: 'dodo_api_not_configured' });
+  }
+
+  const startedAt = Date.now();
+  const stats = {
+    fetched:        0,
+    checked:        0,
+    extended:       0,
+    granted:        0,
+    soft_cancelled: 0,
+    hard_expired:   0,
+    past_due:       0,
+    noop:           0,
+    dodo_errors:    0,
+    write_errors:   0,
+  };
+  const changes = [];   // human-readable log for the response body
+
+  try {
+    // Fetch every override that has a Dodo subscription id — the pool
+    // of rows we CAN reconcile. Prefer is_premium=true or a recent row
+    // (past-due / cancelled but within grace period) so we don't burn
+    // API calls on ancient dead subs.
+    const filter =
+      `dodo_subscription_id=not.is.null` +
+      `&order=granted_at.desc` +
+      `&limit=${RECONCILE_MAX_ROWS}`;
+    const listUrl =
+      `${SUPABASE_URL}/rest/v1/admin_user_entitlement_overrides?${filter}` +
+      `&select=email,is_premium,expires_at,plan_code,plan_label,entitlements,` +
+      `auto_renew,payment_status,dodo_customer_id,dodo_subscription_id,cancelled_at,granted_at`;
+
+    const listResp = await axios.get(listUrl, { headers: supabaseHeaders(), timeout: 10_000 });
+    const rows = Array.isArray(listResp.data) ? listResp.data : [];
+    stats.fetched = rows.length;
+
+    // Process in parallel batches of RECONCILE_CONCURRENCY so we cover
+    // the whole set within Vercel's 300s function timeout. Each Dodo
+    // call is ~500ms-2s; 500 rows / 5 concurrent × ~2s ≈ 200s worst case.
+    for (let i = 0; i < rows.length; i += RECONCILE_CONCURRENCY) {
+      const batch = rows.slice(i, i + RECONCILE_CONCURRENCY);
+      await Promise.all(batch.map(async (row) => {
+        stats.checked += 1;
+        try {
+          const dodoResp = await dodoApi.getSubscription(row.dodo_subscription_id);
+          if (!dodoResp.ok) {
+            stats.dodo_errors += 1;
+            console.warn('[cron/dodo-reconcile] dodo fetch failed', {
+              email: row.email, subscription_id: row.dodo_subscription_id, error: dodoResp.error,
+            });
+            return;
+          }
+          const decision = reconcile(row, dodoResp.subscription);
+          if (decision.action === 'noop') {
+            stats.noop += 1;
+            return;
+          }
+          if (!decision.patch) {
+            stats.noop += 1;
+            return;
+          }
+          const writeResult = await overridesDb.upsertOverride(decision.patch);
+          if (writeResult && writeResult.error) {
+            stats.write_errors += 1;
+            console.error('[cron/dodo-reconcile] upsert failed', {
+              email: row.email, action: decision.action, error: writeResult.error, detail: writeResult.detail,
+            });
+            return;
+          }
+          // Tally per-action bucket
+          if      (decision.action === 'extend')          stats.extended       += 1;
+          else if (decision.action === 'grant')           stats.granted        += 1;
+          else if (decision.action === 'soft_cancel')     stats.soft_cancelled += 1;
+          else if (decision.action === 'hard_expire')     stats.hard_expired   += 1;
+          else if (decision.action === 'noop_past_due')   stats.past_due       += 1;
+          console.log('[cron/dodo-reconcile] ✅ ' + decision.action, {
+            email: row.email, changes: decision.changes,
+          });
+          changes.push({ email: row.email, action: decision.action, changes: decision.changes });
+        } catch (err) {
+          stats.dodo_errors += 1;
+          console.warn('[cron/dodo-reconcile] row threw', { email: row.email, err: err.message });
+        }
+      }));
+    }
+  } catch (err) {
+    console.error('[cron/dodo-reconcile] fatal error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message, stats });
+  }
+
+  const durationMs = Date.now() - startedAt;
+  console.log('[cron/dodo-reconcile] complete', { durationMs, ...stats });
+  return res.json({ ok: true, duration_ms: durationMs, stats, changes: changes.slice(0, 50) });
+});
+
 // GET /api/cron/health — trivial sanity ping.
 router.get('/health', requireCronAuth, (req, res) => {
   res.json({
@@ -136,6 +266,7 @@ router.get('/health', requireCronAuth, (req, res) => {
     ts: new Date().toISOString(),
     supabase_configured: !!(SUPABASE_URL && SUPABASE_KEY),
     cron_secret_set:     !!process.env.CRON_SECRET,
+    dodo_api_configured: dodoApi.isConfigured(),
   });
 });
 

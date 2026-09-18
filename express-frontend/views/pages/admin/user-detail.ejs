@@ -10,6 +10,9 @@
               class="rounded-md border border-blue-600 bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Grant Pro</button>
       <button type="button" data-action="grant-lite"
               class="rounded-md border border-emerald-600 bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700">Grant Lite</button>
+      <button type="button" data-action="sync-dodo"
+              title="Fetch canonical subscription state from Dodo and repair any drift (e.g. missed renewal webhook)"
+              class="rounded-md border border-purple-600 bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50">Sync from Dodo</button>
       <button type="button" data-action="impersonate"
               class="rounded-md border border-amber-500 bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600">Impersonate</button>
       <button type="button" data-action="force-logout"
@@ -524,6 +527,53 @@
       .then(() => location.reload())
       .catch((err) => alert('Grant failed: ' + err.message));
   });
+  // ── Sync from Dodo — on-demand version of the nightly reconciliation
+  //    cron. Fetches canonical subscription state from Dodo's API for
+  //    this user and repairs drift (extends expires_at, promotes
+  //    is_premium, flips auto_renew, or soft/hard cancels). Use this
+  //    when a customer complains about lost access mid-billing-cycle
+  //    (missed renewal webhook) or right after a support-visible Dodo
+  //    change (upgrade, refund, cancellation) that hasn't reflected yet.
+  document.querySelector('[data-action="sync-dodo"]').addEventListener('click', function () {
+    if (!recipientEmail) { alert('Load the profile first.'); return; }
+    const btn = this;
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Syncing…';
+    fetch('/admin/api/users/' + encodeURIComponent(userId) + '/sync-dodo', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: recipientEmail }),
+    })
+      .then((r) => r.json().then((j) => ({ ok: r.ok, status: r.status, body: j })))
+      .then(({ ok, status, body }) => {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+        if (!ok) {
+          const err = (body && body.error) || 'HTTP ' + status;
+          const hint = body && body.hint ? '\n\n' + body.hint : '';
+          alert('Sync failed: ' + err + hint);
+          return;
+        }
+        if (body.action === 'noop') {
+          alert('Already in sync with Dodo — no changes.\n\nReason: ' + (body.reason || 'in_sync'));
+          return;
+        }
+        const changesText = Array.isArray(body.changes) ? body.changes.join('\n  • ') : '(none)';
+        alert(
+          '✅ Sync complete: ' + body.action + '\n\n' +
+          'Changes applied:\n  • ' + changesText + '\n\n' +
+          'Page will reload to reflect the updated entitlement.'
+        );
+        location.reload();
+      })
+      .catch((err) => {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+        alert('Sync error: ' + err.message);
+      });
+  });
+
   // ── Force logout — invalidate every active session for this user.
   //    Doesn't lock the account; the user just has to sign in again.
   document.querySelector('[data-action="force-logout"]').addEventListener('click', function () {
