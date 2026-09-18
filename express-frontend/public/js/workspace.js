@@ -7221,9 +7221,9 @@ class WorkspaceController {
   // startPlanPillLifecycle owns the header plan-status pill. Runs on
   // workspace init: fetches usage/today, paints the pill in one of four
   // states (Pro active / Free with counter / Pro expiring soon / Payment
-  // past due), then re-fetches on tab focus and every 60 seconds. That
-  // covers the two scenarios where subscription state changes silently:
-  // the user just paid in another tab, or their card was just declined.
+  // past due), then re-fetches on tab focus, every 60 seconds, AND on a
+  // BroadcastChannel 'pro-activated' event so a fresh subscription lands
+  // seamlessly — no manual page reload after the Dodo webhook fires.
   startPlanPillLifecycle() {
     if (this._planPillStarted) return;
     this._planPillStarted = true;
@@ -7237,6 +7237,20 @@ class WorkspaceController {
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) this.refreshPlanPill();
     });
+    // Cross-tab broadcast: billing-success.ejs posts { type: 'pro-activated' }
+    // on the 'prooftamil-billing' channel when the merged /billing/me flips
+    // is_premium:true. Any open workspace tab picks that up and does an
+    // immediate plan-pill refresh — no waiting for the 60s tick.
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        this._billingBc = new BroadcastChannel('prooftamil-billing');
+        this._billingBc.addEventListener('message', (evt) => {
+          if (!evt || !evt.data || evt.data.type !== 'pro-activated') return;
+          console.log('[PLAN PILL] Cross-tab pro-activated signal received — refreshing');
+          this.refreshPlanPill();
+        });
+      }
+    } catch (_e) { /* older browser — ignore */ }
   }
 
   async refreshPlanPill() {
@@ -7269,6 +7283,36 @@ class WorkspaceController {
     // branches, past-due still overrides everything, expiry warning still
     // fires when a subscription_end_date is present.
     const effectiveIsPro = usage.is_pro === true || window.USER_IS_PRO === true;
+
+    // Free → Pro promotion. window.USER_IS_PRO is set once at page render
+    // from res.locals.billing.is_premium (attachEntitlements). If the user
+    // just upgraded (in this tab via billing-success poll, or in another
+    // tab via BroadcastChannel), usage.is_pro flips true BEFORE
+    // window.USER_IS_PRO catches up. Promote it here so every _isProUser()
+    // check downstream (word-count cap, quota bar, gatedCreateNewDraft,
+    // export-DOCX gate, etc.) starts returning true immediately — no
+    // manual page reload needed to unlock Pro features.
+    if (usage.is_pro === true && window.USER_IS_PRO !== true) {
+      console.log('[PLAN PILL] ⬆️  Free → Pro transition detected — promoting window.USER_IS_PRO');
+      window.USER_IS_PRO = true;
+      // Show a one-time success toast and clear any lingering free-tier UI.
+      try {
+        this.showNotification('Pro activated! All features unlocked.', 'success');
+        // Hide the free-tier daily-quota bar if visible.
+        const bar = document.getElementById('quota-bar-wrapper');
+        if (bar) bar.classList.add('hidden');
+        // Repaint the word-count badge (it was warning about the 200-word
+        // free cap; now it should switch to the Pro amber/red 4k/8k scheme).
+        if (typeof this.updateWordCount === 'function') this.updateWordCount({ immediate: true });
+      } catch (_e) { /* toast is best-effort */ }
+      // Also dispatch a window event so any other module (docExport, etc.)
+      // that wants to react to activation can do so without hard-coupling.
+      try {
+        window.dispatchEvent(new CustomEvent('pt:pro-activated', {
+          detail: { source: 'planPillRefresh', at: Date.now() },
+        }));
+      } catch (_) {}
+    }
 
     // Decide state — order matters, first match wins.
     // 1. past_due (RED) beats everything: money problem, act now

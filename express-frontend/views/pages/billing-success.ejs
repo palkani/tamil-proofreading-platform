@@ -19,8 +19,22 @@
         Welcome to <strong>ProofTamil Pro</strong>. Your subscription is now active.
       </p>
       <p class="text-sm text-gray-500 mb-8">
-        A receipt is on its way to your inbox. Refresh the workspace if features haven't updated yet.
+        A receipt is on its way to your inbox — everything's unlocked and ready.
       </p>
+      <!-- Notify any open workspace / drafts tab that Pro is active so
+           it can hot-refresh its plan pill and unlock Pro features
+           without a manual reload. workspace.js listens on this channel. -->
+      <script>
+        (function broadcastProActivation() {
+          try {
+            if (typeof BroadcastChannel !== 'undefined') {
+              var bc = new BroadcastChannel('prooftamil-billing');
+              bc.postMessage({ type: 'pro-activated', at: Date.now() });
+              setTimeout(function () { try { bc.close(); } catch (_) {} }, 500);
+            }
+          } catch (_) { /* older browser — ignore */ }
+        })();
+      </script>
 
       <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 text-left mb-8">
         <h2 class="font-semibold text-gray-900 mb-4">What you get with Pro</h2>
@@ -149,6 +163,72 @@
           I paid — check again
         </button>
       </div>
+
+      <!-- Auto-poll the merged /billing/me endpoint every 4 s so the page
+           flips itself to the confirmed state the moment the Dodo webhook
+           lands the entitlement upsert. Runs for up to 5 minutes then
+           stops silently — beyond that the user genuinely has a problem
+           worth logging via the "Contact us" link above.
+
+           Also broadcasts a 'pro-activated' event on BroadcastChannel so
+           any open workspace tab can hot-refresh its plan pill and
+           unlock Pro features without a manual reload. -->
+      <p id="auto-poll-status" class="mt-6 text-xs text-gray-400" data-poll-active="true">
+        Checking automatically every few seconds…
+      </p>
+      <script>
+        (function autoPollBillingSuccess() {
+          if (typeof fetch !== 'function') return;
+          var statusEl   = document.getElementById('auto-poll-status');
+          var POLL_MS    = 4000;
+          var MAX_MS     = 5 * 60 * 1000; // 5 minutes total
+          var startedAt  = Date.now();
+          var attempts   = 0;
+
+          function broadcastActivation() {
+            try {
+              if (typeof BroadcastChannel !== 'undefined') {
+                var bc = new BroadcastChannel('prooftamil-billing');
+                bc.postMessage({ type: 'pro-activated', at: Date.now() });
+                setTimeout(function () { try { bc.close(); } catch (_) {} }, 500);
+              }
+            } catch (_) { /* older browser — ignore */ }
+          }
+
+          function poll() {
+            attempts += 1;
+            if (Date.now() - startedAt > MAX_MS) {
+              if (statusEl) {
+                statusEl.textContent = 'Auto-check paused after 5 minutes. Refresh manually or contact us if you paid.';
+                statusEl.setAttribute('data-poll-active', 'false');
+              }
+              return;
+            }
+            fetch('/api/v1/billing/me', { credentials: 'include' })
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (data) {
+                var isPro = !!(data && data.billing && data.billing.is_premium === true);
+                if (isPro) {
+                  if (statusEl) statusEl.textContent = '✓ Payment confirmed — refreshing…';
+                  broadcastActivation();
+                  // Reload so the server-rendered CONFIRMED state paints.
+                  // Small delay lets the "Payment confirmed" hint render first.
+                  setTimeout(function () { window.location.reload(); }, 400);
+                  return;
+                }
+                setTimeout(poll, POLL_MS);
+              })
+              .catch(function () {
+                // Network hiccup — keep trying on schedule.
+                setTimeout(poll, POLL_MS);
+              });
+          }
+
+          // First check after a short delay so Dodo has a moment to land
+          // the webhook (typical latency 1-5s from checkout completion).
+          setTimeout(poll, 3000);
+        })();
+      </script>
     <% } %>
 
     <p class="mt-6 text-sm text-gray-500">
