@@ -133,24 +133,49 @@ function parseEvent(bodyText) {
   }
   const data = raw.data || raw.payload || raw;
   const subscription = data.subscription || data;
-  const customer     = data.customer || subscription.customer || raw.customer || {};
+  // Invoice-shaped events (invoice.paid, invoice.payment_succeeded) —
+  // Dodo (and Stripe-style processors) nest identifiers under data.invoice.
+  // Previously ignored; that's why the Aug 9 renewal for user 106 went
+  // through as a noop and their expires_at never extended.
+  const invoice      = data.invoice || {};
+  const invoiceSub   = invoice.subscription || {};
+  const invoiceCust  = invoice.customer || {};
+  const customer     = data.customer || subscription.customer || invoiceCust || raw.customer || {};
   const payment      = data.payment || data;
 
   return {
     type:                raw.type || raw.event || raw.event_type || null,
     id:                  raw.id || raw.event_id || raw.webhook_id || null,
-    email:               (customer.email || data.customer_email || data.email || subscription.customer_email || '').toLowerCase() || null,
-    product_id:          data.product_id || subscription.product_id || (data.product && data.product.id) || (subscription.product && subscription.product.id) || null,
-    subscription_id:     subscription.id || data.subscription_id || null,
-    customer_id:         customer.id || data.customer_id || subscription.customer_id || null,
-    current_period_end:  toIsoOrNull(subscription.current_period_end || data.current_period_end || subscription.next_billing_at || data.next_billing_at),
+    email:               (customer.email || data.customer_email || data.email ||
+                          subscription.customer_email || invoice.customer_email ||
+                          invoiceCust.email || '').toLowerCase() || null,
+    product_id:          data.product_id || subscription.product_id ||
+                          (data.product && data.product.id) ||
+                          (subscription.product && subscription.product.id) ||
+                          invoice.product_id ||
+                          (invoiceSub && invoiceSub.product_id) ||
+                          (invoice.line_items && invoice.line_items[0] && invoice.line_items[0].product_id) ||
+                          null,
+    subscription_id:     subscription.id || data.subscription_id ||
+                          invoice.subscription_id || invoiceSub.id ||
+                          null,
+    customer_id:         customer.id || data.customer_id || subscription.customer_id ||
+                          invoice.customer_id || invoiceCust.id || null,
+    current_period_end:  toIsoOrNull(
+                          subscription.current_period_end || data.current_period_end ||
+                          subscription.next_billing_at || data.next_billing_at ||
+                          invoice.period_end || invoice.next_billing_at ||
+                          invoiceSub.current_period_end || invoiceSub.next_billing_at
+                        ),
     // Amount in the smallest currency unit (paise for INR, cents for USD)
-    amount_cents:        Number(payment.amount || subscription.amount || data.amount) || null,
-    currency:            (payment.currency || subscription.currency || data.currency || '').toUpperCase() || null,
+    amount_cents:        Number(payment.amount || subscription.amount || data.amount ||
+                                invoice.amount || invoice.amount_paid || invoice.total) || null,
+    currency:            (payment.currency || subscription.currency || data.currency ||
+                          invoice.currency || '').toUpperCase() || null,
     auto_renew:          typeof subscription.cancel_at_period_end !== 'undefined'
                            ? !subscription.cancel_at_period_end
                            : (typeof subscription.auto_renew !== 'undefined' ? !!subscription.auto_renew : true),
-    subscription_status: subscription.status || data.status || null,
+    subscription_status: subscription.status || data.status || invoiceSub.status || null,
     mode:                raw.livemode === false ? 'test' : (raw.mode || (raw.livemode === true ? 'live' : null)),
     // Passthrough of any metadata we attached at checkout-session creation.
     // Reading customer_metadata (Dodo's key) with metadata as fallback.
@@ -178,23 +203,52 @@ function resolveEntitlements(productId) {
  * Which lifecycle bucket does this event fall into? Any active-payment
  * event grants; cancellation / expiration revokes; anything else is a
  * no-op we still 200 back.
+ *
+ * Payment-processor terminology varies between providers (and between
+ * Dodo's own event naming across product surfaces), so we accept every
+ * shape that plausibly signals "a valid charge just landed for this
+ * subscription." Missing even one of these causes a silent renewal
+ * miss — the customer keeps getting charged by Dodo but our
+ * entitlement expires_at never extends. Seen in production 2026-09-18
+ * (user 106 Aug 9 renewal): their Dodo invoice for £10.67 was PAID
+ * but the corresponding webhook was bucketed as 'noop' because we
+ * only listened for payment.succeeded and not invoice.paid.
  */
 function bucketize(eventType) {
   const t = String(eventType || '').toLowerCase();
-  if (t.startsWith('payment.succeeded')     ||
-      t.startsWith('subscription.active')   ||
-      t.startsWith('subscription.created')  ||
-      t.startsWith('subscription.renewed')  ||
-      t.startsWith('subscription.updated')  ||
+
+  // ---- Activate: any signal that a valid payment just happened ----
+  if (t.startsWith('payment.succeeded')                  ||
+      t.startsWith('payment.processed')                  ||
+      t.startsWith('payment.captured')                   ||
+      t.startsWith('payment.completed')                  ||
+      t.startsWith('charge.succeeded')                   ||
+      // Invoice-shaped renewals (Dodo/Stripe-style processors)
+      t.startsWith('invoice.paid')                       ||
+      t.startsWith('invoice.payment_succeeded')          ||
+      t.startsWith('invoice.payment_captured')           ||
+      t.startsWith('invoice.settled')                    ||
+      // Subscription lifecycle
+      t.startsWith('subscription.active')                ||
+      t.startsWith('subscription.created')               ||
+      t.startsWith('subscription.renewed')               ||
+      t.startsWith('subscription.renewal_succeeded')     ||
+      t.startsWith('subscription.charged')               ||
+      t.startsWith('subscription.billing_cycle')         ||  // billing_cycle_started, billing_cycle_completed
+      t.startsWith('subscription.updated')               ||
       t.startsWith('subscription.resumed')) {
     return 'activate';
   }
+
   // Payment failures = grace period, NOT immediate revocation. Kept
   // in its own bucket so the route can email the customer to update
   // their card while premium remains active during Dodo's retry
   // window. Only subscription.failed / expired / cancelled actually
   // deactivate.
-  if (t.startsWith('payment.failed')) {
+  if (t.startsWith('payment.failed')            ||
+      t.startsWith('charge.failed')             ||
+      t.startsWith('invoice.payment_failed')    ||
+      t.startsWith('invoice.uncollectible')) {
     return 'payment_failed';
   }
   if (t.startsWith('subscription.cancelled') ||
