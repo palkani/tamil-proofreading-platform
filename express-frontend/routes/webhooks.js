@@ -130,8 +130,26 @@ router.post('/dodo', express.raw({ type: '*/*', limit: '1mb' }), async (req, res
   // --- 5. Route by lifecycle bucket ---------------------------------
   const bucket = bucketize(event.type);
   if (bucket === 'noop') {
-    console.log('[DODO-WEBHOOK] no-op event type:', event.type);
-    if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: 'noop' });
+    // Elevate to WARN when the event carries a subscription_id + amount
+    // — that shape is almost certainly a payment / renewal we don't
+    // have a mapping for yet. Missing a real renewal is what caused
+    // user 106's Aug 9 recurring charge to silently drop off. Keep
+    // the full raw payload in the earlier "received" log so we can
+    // build the correct bucketize() rule the moment we see the shape.
+    const looksLikeMissedRenewal = !!(event.subscription_id && event.amount_cents);
+    if (looksLikeMissedRenewal) {
+      console.warn('[DODO-WEBHOOK] ⚠️  POSSIBLE MISSED RENEWAL — noop for event with subscription_id + amount', {
+        type:            event.type,
+        subscription_id: event.subscription_id,
+        email:           event.email,
+        amount_cents:    event.amount_cents,
+        currency:        event.currency,
+        hint:            'If this repeats, add ' + JSON.stringify(event.type) + ' to bucketize()\'s activate list.',
+      });
+    } else {
+      console.log('[DODO-WEBHOOK] no-op event type:', event.type);
+    }
+    if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: looksLikeMissedRenewal ? 'noop_possible_missed_renewal' : 'noop' });
     return res.status(200).send('ok');
   }
 
@@ -154,6 +172,25 @@ router.post('/dodo', express.raw({ type: '*/*', limit: '1mb' }), async (req, res
     const existing = await findFullSubscriptionByEmail(event.email);
     const isFirstActivation = !existing || existing.payment_status !== 'active' || !existing.is_premium;
 
+    // Preserve the customer's existing plan when the renewal event
+    // doesn't identify a product. invoice.paid / subscription.charged
+    // events often reference only the subscription_id, not a product_id.
+    // Falling back to FULL_PRO_FALLBACK here would silently upgrade a
+    // Lite subscriber to full Pro on every renewal — a subtle billing/
+    // entitlement drift. When the event is un-mapped and we already
+    // have a plan for this customer, keep theirs.
+    const useExistingPlan = !event.product_id && existing && existing.plan_code;
+    const planCode    = useExistingPlan ? existing.plan_code    : ents.plan_code;
+    const planLabel   = useExistingPlan ? (existing.plan_label || ents.plan_label) : ents.plan_label;
+    const entsList    = useExistingPlan && Array.isArray(existing.entitlements) && existing.entitlements.length
+                          ? existing.entitlements
+                          : ents.entitlements;
+    if (useExistingPlan) {
+      console.log('[DODO-WEBHOOK] renewal event without product_id — preserving existing plan', {
+        email: event.email, existing_plan: existing.plan_code,
+      });
+    }
+
     // Extend expires_at to whatever Dodo says the next billing date is,
     // else default to 32 days out so premium never lapses even if we
     // miss a renewal event.
@@ -161,9 +198,9 @@ router.post('/dodo', express.raw({ type: '*/*', limit: '1mb' }), async (req, res
     const result = await upsertOverride({
       email:                event.email,
       is_premium:           true,
-      entitlements:         ents.entitlements,
-      plan_code:            ents.plan_code,
-      plan_label:           ents.plan_label,
+      entitlements:         entsList,
+      plan_code:            planCode,
+      plan_label:           planLabel,
       expires_at:           expiresAt,
       next_renewal_at:      expiresAt,          // for auto-renew: this is when Dodo will charge again
       payment_status:       'active',
@@ -178,7 +215,7 @@ router.post('/dodo', express.raw({ type: '*/*', limit: '1mb' }), async (req, res
       notes:                `Dodo ${event.type} · event ${svixEventId || '<no-id>'} · product ${event.product_id || '<no-product>'} · mode ${event.mode || 'unknown'}`,
     });
     if (result.ok) {
-      console.log('[DODO-WEBHOOK] ✅ ' + (isFirstActivation ? 'first-time granted' : 'renewed'), { email: event.email, plan: ents.plan_label, expires_at: expiresAt });
+      console.log('[DODO-WEBHOOK] ✅ ' + (isFirstActivation ? 'first-time granted' : 'renewed'), { email: event.email, plan: planLabel, expires_at: expiresAt, event_type: event.type });
       // Fire the appropriate lifecycle email (fire-and-forget).
       safeSendLifecycleEmail(
         isFirstActivation ? lifecycleEmails.welcome : lifecycleEmails.renewalSuccess,
@@ -192,7 +229,7 @@ router.post('/dodo', express.raw({ type: '*/*', limit: '1mb' }), async (req, res
           amount_cents:    event.amount_cents,
         }
       );
-      if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: isFirstActivation ? 'welcomed' : 'renewed', detail: { email: event.email, plan: ents.plan_code } });
+      if (svixEventId) await markEventProcessed(svixEventId, { eventType: event.type, outcome: isFirstActivation ? 'welcomed' : 'renewed', detail: { email: event.email, plan: planCode } });
     } else {
       console.error('[DODO-WEBHOOK] ❌ grant failed', { email: event.email, error: result.error, detail: result.detail });
       // Do NOT mark processed on DB failure — let Dodo retry so we get another chance.
