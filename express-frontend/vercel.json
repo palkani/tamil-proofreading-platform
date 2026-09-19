@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/renewal-reminders",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/dodo-reconcile",
+      "schedule": "30 3 * * *"
     }
   ],
   "env": {

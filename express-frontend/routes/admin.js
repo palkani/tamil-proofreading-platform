@@ -550,6 +550,94 @@ router.post('/api/users/:id/entitlement-override/revoke', requireAdmin, express.
   return res.json({ ok: true });
 });
 
+// ── Sync from Dodo ────────────────────────────────────────────────
+// Admin-triggered on-demand version of the nightly reconciliation cron.
+// Fetches canonical subscription state from Dodo's API for THIS user
+// and repairs any drift (extends expires_at, promotes is_premium, flips
+// auto_renew, or soft/hard cancels as appropriate).
+//
+// Same safety rails as the cron: never demotes on API failure, never
+// shortens expires_at, never overwrites plan_code with a fallback.
+// Returns the reconcile decision so the admin can see what changed.
+//
+// Body: { email }  (matches the shape of /grant/revoke for consistency)
+const dodoApiClient    = require('../lib/dodo-api');
+const { reconcile: reconcileDodo } = require('../lib/dodo-reconcile');
+
+router.post('/api/users/:id/sync-dodo', requireAdmin, express.json(), async (req, res) => {
+  const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+  if (!email) return res.status(400).json({ ok: false, error: 'email_required' });
+
+  if (!dodoApiClient.isConfigured()) {
+    return res.status(500).json({
+      ok: false,
+      error: 'dodo_api_not_configured',
+      hint: 'Set DODO_API_KEY in Vercel environment to enable this action.',
+    });
+  }
+
+  // Fetch the local row so reconcile has both sides. Missing row is
+  // fine — reconcile handles the "grant new from Dodo" case too.
+  const local = await userOverridesDb.findFullSubscriptionByEmail(email);
+  const subId = local && local.dodo_subscription_id;
+  if (!subId) {
+    return res.status(400).json({
+      ok: false,
+      error: 'no_dodo_subscription_id',
+      hint: 'This user has no Dodo subscription linked. Use "Grant Lite" for a manual admin grant.',
+    });
+  }
+
+  const dodoResp = await dodoApiClient.getSubscription(subId);
+  if (!dodoResp.ok) {
+    return res.status(502).json({
+      ok:    false,
+      error: 'dodo_fetch_failed',
+      dodo:  dodoResp,
+    });
+  }
+
+  const decision = reconcileDodo(local, dodoResp.subscription);
+  if (decision.action === 'noop') {
+    logAdminApi({
+      req, method: 'POST',
+      upstreamPath: `/users/${req.params.id}/sync-dodo (noop: ${decision.reason})`,
+      status: 200, durationMs: 0,
+    });
+    return res.json({
+      ok:       true,
+      action:   'noop',
+      reason:   decision.reason,
+      message:  'Already in sync with Dodo — no changes made.',
+      dodo:     dodoResp.subscription,
+    });
+  }
+
+  const writeResult = await userOverridesDb.upsertOverride(decision.patch);
+  if (writeResult && writeResult.error) {
+    return res.status(500).json({
+      ok:     false,
+      error:  writeResult.error,
+      detail: writeResult.detail,
+      decision,
+    });
+  }
+
+  logAdminApi({
+    req, method: 'POST',
+    upstreamPath: `/users/${req.params.id}/sync-dodo (${decision.action}: ${decision.changes.join(', ')})`,
+    status: 200, durationMs: 0,
+  });
+  return res.json({
+    ok:       true,
+    action:   decision.action,
+    reason:   decision.reason,
+    changes:  decision.changes,
+    override: writeResult && writeResult.row,
+    dodo:     dodoResp.subscription,
+  });
+});
+
 // ---------- Impersonation (server-side cookie swap) ----------
 //
 // Old flow: client JS called /admin/api/users/:id/impersonate, got the
