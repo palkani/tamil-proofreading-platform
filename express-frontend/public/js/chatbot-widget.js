@@ -31,7 +31,7 @@
       title: 'ProofTamil Assistant',
       subtitle: 'Ask about our Tamil writing tools',
       greeting:
-        "Hi! I'm ProofBot. I can explain how ProofTamil's proofreader, handwriting OCR, content writer and Tanglish tools work — and answer questions about plans and accounts.",
+        "Hi! I'm ProofBot. I can explain how ProofTamil's proofreader, handwriting OCR and Tanglish tools work — and answer questions about plans and accounts.",
       placeholder: 'Ask a question…',
       send: 'Send message',
       close: 'Close',

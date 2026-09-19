@@ -36,7 +36,8 @@ const FEATURES = {
   PROOFREADING: 'proofreading',   // unlimited grammar/spell checks + no word cap
   OCR:          'ocr',            // 20 handwriting-OCR extractions per month
   EXPORT:       'export',         // DOCX / PDF / TXT download from the workspace
-  AI_WRITER:    'ai_writer',      // AI content writer premium quotas (optional; not gated yet)
+  // AI_WRITER removed 2026-09-19 — feature retired. Existing rows may
+  // still list 'ai_writer' in entitlements but nothing consumes it.
 };
 
 /**

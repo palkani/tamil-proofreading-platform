@@ -309,7 +309,6 @@
     { key: 'proofreading', label: 'Proofreading (unlimited)', note: 'AI grammar/spell checks with no word cap or daily cap' },
     { key: 'ocr',          label: 'Handwriting OCR',          note: '20 conversions per month' },
     { key: 'export',       label: 'Export (DOCX / PDF / TXT)',note: 'Download drafts as formatted documents' },
-    { key: 'ai_writer',    label: 'AI content writer',        note: 'Premium quota for the blog/article generator' },
   ];
   function clientHasFeature(billing, feature) {
     if (!billing || billing.is_premium !== true) return false;
@@ -475,7 +474,7 @@
   // ── Grant Lite — creates/updates the Express-side entitlement override
   //    row so a Dodo-paid customer (or a support-comped user) has the
   //    right entitlement set without the Go backend's "Full Pro"
-  //    premium_override flag turning on OCR/AI Writer they didn't buy.
+  //    premium_override flag turning on OCR they didn't buy.
   document.querySelector('[data-action="grant-lite"]').addEventListener('click', function () {
     if (!recipientEmail) { alert('Load the profile first.'); return; }
 
@@ -505,7 +504,7 @@
     // Grant path — original flow, unchanged in shape.
     const promoCode = prompt(
       'Which lite plan to grant? Enter one of:\n' +
-      '  PROOFPROLITE   — Proofreading only (proofreading + export + ai_writer)\n' +
+      '  PROOFPROLITE   — Proofreading only (proofreading + export)\n' +
       '  OCRPROLITE     — OCR only (ocr)\n' +
       '  PROOFTAMIL-LITE — All Lite features (legacy)\n\n' +
       'Grants for 1 month by default.',
