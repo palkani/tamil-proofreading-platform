@@ -193,27 +193,12 @@ router.get('/tools/handwriting-ocr', (req, res) => {
   });
 });
 
-// AI Content Writer Tool page - accessible to everyone
-router.get('/tools/ai-content-writer', (req, res) => {
-  const user = getCurrentUser(req);
-  const seo = getSeoData('aiContentWriterTool');
-  res.render('pages/ai-content-writer', { 
-    title: 'AI Content Writer - Generate Blogs & Articles in Tamil & English | ProofTamil',
-    seo: seo,
-    user: user
-  });
-});
-
-// AI Content Writer drafts list - requires login
-router.get('/tools/ai-content-writer/drafts', requireAuth, (req, res) => {
-  const user = getCurrentUser(req) || null;
-  const seo = getSeoData('aiContentWriterTool') || getSeoData('home');
-  res.render('pages/ai-content-drafts', {
-    title: 'My AI Content drafts | ProofTamil',
-    seo: seo,
-    user: user
-  });
-});
+// AI Content Writer was removed 2026-09-19 — we now focus solely on
+// Proofreading + OCR. Old bookmarks and inbound links (SEO, social,
+// customer emails) still hit these URLs, so 302 → /workspace so users
+// land on the closest surviving surface instead of a 404.
+router.get('/tools/ai-content-writer', (req, res) => res.redirect(302, '/workspace'));
+router.get('/tools/ai-content-writer/drafts', (req, res) => res.redirect(302, '/drafts'));
 
 // Blog (public) - hosted posts
 router.get('/blog', async (req, res) => {
@@ -580,58 +565,11 @@ router.get('/blog/:slug', async (req, res) => {
   }
 });
 
-// My Blogs (protected) - list current user's posts (draft + published)
-router.get('/my-blogs', requireAuth, async (req, res) => {
-  const user = getCurrentUser(req);
-  // Restrict My Blogs to admin-only as requested.
-  // Only allow the specified admin email (and prooftamil@gmail.com as a safe fallback).
-  const allowed = ['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com', 'contact@prooftamil.com'];
-  if (!user || !user.email || !allowed.includes(String(user.email).toLowerCase())) {
-    return res.redirect(302, '/drafts');
-  }
-  const seo = getSeoData('myBlogs') || getSeoData('home');
-  try {
-    const headers = {};
-    if (req.headers.cookie) headers.cookie = req.headers.cookie;
-    if (req.headers.authorization) headers.authorization = req.headers.authorization;
-
-    const backendRes = await axiosWithPool.get(`${req._backendUrl}/blog/me/posts`, {
-      params: { limit: 200 },
-      headers,
-      withCredentials: true,
-      timeout: 10000,
-      validateStatus: () => true,
-    });
-
-    if (backendRes.status < 200 || backendRes.status >= 300) {
-      const msg = backendRes.data?.error || `HTTP ${backendRes.status}`;
-      return res.render('pages/my-blogs', {
-        title: seo.title,
-        seo,
-        user,
-        posts: [],
-        error: msg,
-      });
-    }
-
-    const posts = backendRes.data?.posts || [];
-    return res.render('pages/my-blogs', {
-      title: seo.title,
-      seo,
-      user,
-      posts,
-      error: null,
-    });
-  } catch (e) {
-    return res.render('pages/my-blogs', {
-      title: seo.title,
-      seo,
-      user,
-      posts: [],
-      error: e.message || 'Failed to load your posts',
-    });
-  }
-});
+// /my-blogs was the AI Content Writer's draft-list; both were removed
+// 2026-09-19 when we refocused on Proofreading + OCR. Redirect any old
+// bookmarks / dashboard links to /drafts, which is the surviving surface
+// for user-owned Tamil documents.
+router.get('/my-blogs', (req, res) => res.redirect(302, '/drafts'));
 
 // Free Tamil Editor landing page - accessible to everyone (SEO)
 router.get('/free-tamil-editor', (req, res) => {
@@ -1168,7 +1106,6 @@ router.get('/sitemap.xml', (req, res) => {
     // /tools/handwriting-ocr is LIVE (2026-08-20) — restored to sitemap.
     // /tools/ocr (printed) is still offline and stays out of the sitemap.
     { url: '/tools/handwriting-ocr',  priority: '0.90', changefreq: 'weekly',  lastmod: '2026-08-24' },
-    { url: '/tools/ai-content-writer',priority: '0.80', changefreq: 'monthly', lastmod: '2026-08-21' },
     { url: '/how-to-use',             priority: '0.80', changefreq: 'monthly', lastmod: '2026-08-21' },
     { url: '/blog',                   priority: '0.80', changefreq: 'weekly',  lastmod: currentDate },
     { url: '/pricing',                priority: '0.75', changefreq: 'monthly', lastmod: '2026-08-21' },

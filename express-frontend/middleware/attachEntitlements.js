@@ -64,8 +64,8 @@ const { findOverrideByEmail } = require('../lib/user-entitlement-overrides-db');
 const PREVIEW_COOKIE = 'preview_tier';
 const PREVIEW_TIERS = {
   free:               { is_premium: false, entitlements: [], plan_code: 'FREE',                       label: 'Free' },
-  full_pro:           { is_premium: true,  entitlements: ['proofreading', 'ocr', 'export', 'ai_writer'], plan_code: 'PRO_MONTHLY',     label: 'Pro (full)' },
-  proofreading_lite:  { is_premium: true,  entitlements: ['proofreading', 'export', 'ai_writer'],       plan_code: 'PRO_PROOFREAD_LITE', label: 'Pro · Proofreading Lite' },
+  full_pro:           { is_premium: true,  entitlements: ['proofreading', 'ocr', 'export'], plan_code: 'PRO_MONTHLY',        label: 'Pro (full)' },
+  proofreading_lite:  { is_premium: true,  entitlements: ['proofreading', 'export'],        plan_code: 'PRO_PROOFREAD_LITE', label: 'Pro · Proofreading Lite' },
   ocr_lite:           { is_premium: true,  entitlements: ['ocr'],                                        plan_code: 'PRO_OCR_LITE',       label: 'Pro · OCR Lite' },
 };
 

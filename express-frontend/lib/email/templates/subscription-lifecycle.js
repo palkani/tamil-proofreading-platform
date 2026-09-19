@@ -191,7 +191,6 @@ function featureLabel(f) {
     proofreading: 'Unlimited proofreading',
     ocr:          'Handwriting OCR',
     export:       'DOCX / PDF export',
-    ai_writer:    'AI content writer',
   };
   return labels[f] || f;
 }

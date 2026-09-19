@@ -141,35 +141,10 @@ const seoConfig = {
     ]
   },
 
-  aiContentWriterTool: {
-    // Title: 53 chars (was 70, over Google's 60-char limit)
-    title: 'AI Tamil Content Writer — Blog Generator | ProofTamil',
-    // Description: 158 chars — concrete output types, register support, free signal
-    description: 'Generate Tamil blog posts, articles, and essays in seconds with AI. Supports formal and spoken Tamil. Free Tamil content writer at ProofTamil.',
-    keywords: 'ai tamil content writer, tamil blog generator, tamil article generator, tamil ai writer, tamil content generation, tamil writing ai, tamil content creator, ai tamil blog, generate tamil content',
-    canonical: BASE_URL + '/tools/ai-content-writer',
-    ogTitle: 'AI Tamil Content Writer — Blog Generator | ProofTamil',
-    ogDescription: 'Generate Tamil blogs, articles, and essays with AI in seconds. Formal and spoken Tamil supported. Free Tamil content writer — start now.',
-    pageType: 'tool',
-    faqItems: [
-      {
-        q: 'Can AI write Tamil blog posts and articles?',
-        a: 'Yes, ProofTamil\'s AI Tamil content writer at prooftamil.com/tools/ai-content-writer generates full Tamil blog posts, essays, articles, and social media captions using AI. Just provide a topic and style preference to get started.'
-      },
-      {
-        q: 'What types of Tamil content can the AI generate?',
-        a: 'ProofTamil\'s AI can generate Tamil blog posts, articles, essays, product descriptions, social media captions, and more — in both formal (இலக்கிய தமிழ்) and spoken (பேச்சு தமிழ்) styles.'
-      },
-      {
-        q: 'Can I use ProofTamil AI to write Tamil content from an English prompt?',
-        a: 'Yes, ProofTamil\'s AI content writer accepts English topic descriptions and generates well-written Tamil content. Type your topic or outline in English and get Tamil output ready to publish.'
-      },
-      {
-        q: 'Is the AI Tamil content writer free?',
-        a: 'Yes, the AI Tamil content writer is free to use at prooftamil.com. Sign up for a free account to save your generated drafts. A Pro plan is available for unlimited generation without daily limits.'
-      }
-    ]
-  },
+  // aiContentWriterTool block removed 2026-09-19 with the writer feature.
+  // Getters into this map that fall through to `home` still work fine;
+  // the /tools/ai-content-writer route now 302s to /workspace so no SEO
+  // page renders under that URL anymore.
 
   blog: {
     // Title: 52 chars — clean, keyword + brand

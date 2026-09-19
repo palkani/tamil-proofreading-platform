@@ -52,7 +52,6 @@ function commonLocals(req, activeTab) {
       { key: 'activity', label: 'Activity', href: '/admin/activity', icon: 'clock' },
       { key: 'issues', label: 'Issues', href: '/admin/issues', icon: 'alert' },
       { key: 'ai-requests', label: 'AI requests', href: '/admin/ai-requests', icon: 'chart' },
-      { key: 'blog-generator', label: 'Blog generator', href: '/admin/blog-generator', icon: 'chart' },
       { key: 'communications', label: 'Communications', href: '/admin/communications', icon: 'mail' },
       { key: 'promo-codes', label: 'Promo codes', href: '/admin/promo-codes', icon: 'tag' },
       { key: 'health', label: 'Entitlement health', href: '/admin/health/entitlements', icon: 'chart' },
@@ -131,12 +130,10 @@ router.get('/ai-requests/user/:id', requireAdmin, (req, res) => {
   });
 });
 
-router.get('/blog-generator', requireAdmin, (req, res) => {
-  res.render('pages/admin/blog-generator', {
-    title: 'Admin · Blog generator',
-    ...commonLocals(req, 'blog-generator'),
-  });
-});
+// /admin/blog-generator removed 2026-09-19 with the rest of the AI
+// Content Writer feature. Old dashboard bookmarks 302 to the users
+// list — the surviving admin surface.
+router.get('/blog-generator', requireAdmin, (req, res) => res.redirect(302, '/admin/users'));
 
 router.get('/communications', requireAdmin, (req, res) => {
   res.render('pages/admin/communications', {

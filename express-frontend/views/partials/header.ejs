@@ -262,11 +262,11 @@
         "description": "Unlimited words per check, unlimited daily AI checks, all correction types, unlimited saved drafts. From USD 12/month or USD 115.20/year (regional pricing applies — INR 999/month or INR 9599/year in India)."
       }
     ],
-    "description": "AI-powered Tamil language platform — checks Tamil grammar, spelling, verb conjugation, and sandhi errors, and generates Tamil blog articles. Free for students, writers, and journalists.",
+    "description": "AI-powered Tamil language platform — checks Tamil grammar, spelling, verb conjugation, and sandhi errors, plus handwritten and printed Tamil OCR. Free for students, writers, and journalists.",
     "featureList": [
       "Tamil grammar and spelling checker",
       "Tanglish phonetic typing (English to Tamil)",
-      "AI Tamil content writer",
+      "Handwritten Tamil OCR (photo to text)",
       "Formal and spoken Tamil style modes",
       "Real-time grammar suggestions",
       "One-click error correction"
@@ -296,7 +296,7 @@
         "name": "What exactly is ProofTamil?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "ProofTamil is an AI-powered Tamil proofreading platform. It checks Tamil grammar, spelling, and style errors in real time, and helps you write blogs, essays, and articles in Tamil and English with the AI Content Writer."
+          "text": "ProofTamil is an AI-powered Tamil proofreading platform. It checks Tamil grammar, spelling, and style errors in real time, and includes handwriting-to-text OCR for scanning printed and handwritten Tamil documents."
         }
       },
       {
@@ -379,12 +379,8 @@
       url: baseUrl + '/tools/handwriting-ocr',
       featureList: ['Handwritten Tamil recognition', 'Photo to text conversion', 'AI handwriting model', 'Free online tool']
     },
-    '/tools/ai-content-writer': {
-      name: 'AI Tamil Content Writer - ProofTamil',
-      description: 'Generate high-quality Tamil blog posts, articles, and essays using AI. Supports formal and spoken Tamil styles.',
-      url: baseUrl + '/tools/ai-content-writer',
-      featureList: ['AI Tamil blog generator', 'Formal and spoken Tamil', 'English to Tamil content', 'Free AI writer']
-    }
+    // /tools/ai-content-writer removed 2026-09-19 — product refocused on
+    // Proofreading + OCR. Route now 302s to /workspace; no schema needed.
   };
   // Key by URL PATH, not the title string — titles drift (em dash vs hyphen) and
   // previously left toolSchema always null, so tool pages shipped no app schema.
