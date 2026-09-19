@@ -169,16 +169,8 @@ const seoConfig = {
     pageType: 'blogPost'
   },
 
-  myBlogs: {
-    title: 'My Blogs - ProofTamil',
-    description: 'Manage your Tamil blog posts and drafts.',
-    keywords: 'my blogs, tamil blog drafts, prooftamil blog manager',
-    canonical: BASE_URL + '/my-blogs',
-    ogTitle: 'My Blogs - ProofTamil',
-    ogDescription: 'Manage your Tamil blog posts and drafts.',
-    pageType: 'myBlogs',
-    noIndex: true
-  },
+  // myBlogs SEO entry removed 2026-09-19 — /my-blogs route now 302s
+  // to /drafts, so no page renders under this canonical anymore.
 
   login: {
     title: 'Login - Tamil Grammar Checker & Proofreading Tool | ProofTamil',

@@ -103,7 +103,7 @@ Security notes:
 CREATE TABLE promo_codes (
   code                 TEXT PRIMARY KEY,          -- e.g. "VIKATAN-Q3" (case-insensitive lookup)
   label                TEXT NOT NULL,             -- customer-visible: "Vikatan Publishing — Q3 pilot"
-  entitlements         JSONB NOT NULL,            -- ["proofreading", "ocr", "export", "ai_writer"] (any subset)
+  entitlements         JSONB NOT NULL,            -- ["proofreading", "ocr", "export"] (any subset)
   plan_code            TEXT NOT NULL,             -- Dodo plan code — usually a "PROMO_*" pattern
   price_cents          INT NOT NULL,              -- 59900 (₹599.00) — the actual price this code activates
   currency             TEXT NOT NULL,             -- 'INR' | 'USD' | 'EUR' | …
@@ -244,7 +244,6 @@ the tool. Currently applied on:
 - `/tools/handwriting-ocr` — Pro plans without `ocr` are blocked.
 
 Not yet applied (add in follow-up when high-value):
-- `/tools/ai-content-writer` — same pattern with `ai_writer`
 - Workspace toolbar's Export button — hide when `!hasFeature('export')`
 - Home page CTA cards for features the current user can't access
 
