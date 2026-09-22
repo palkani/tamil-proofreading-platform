@@ -1,6 +1,19 @@
-# Backend Routing & Load Balancer — Design Proposal
+# Backend Routing & Load Balancer — Design Proposal (ARCHIVED)
 
-**Status:** Draft · **Author:** Backend audit · **Date:** 2026-07-11
+**Status:** ARCHIVED 2026-09-22 · **Author:** Backend audit · **Original date:** 2026-07-11
+
+> **This proposal is no longer relevant.** It was designed to unify TWO
+> Cloud Run regions (`asia-south1` + `us-central1`) behind a single global
+> HTTPS Load Balancer. On 2026-09-22 the US region (`prooftamil-backend-us`)
+> was retired after traffic analysis found 0 real users on it — so we're
+> single-region now, no multi-region LB needed. The frontend already routes
+> all traffic to `https://api.prooftamil.com` (which points at the Mumbai
+> Cloud Run instance's domain mapping). Kept in the repo for historical
+> context in case a future US audience makes multi-region worth revisiting.
+
+---
+
+## Original proposal (now historical)
 
 Replace ad-hoc multi-URL routing with a **single global HTTPS Load Balancer** in front of both Cloud Run regions. Result: one URL, automatic failover, tighter security surface, drops ~500 lines of frontend region-picking code.
 

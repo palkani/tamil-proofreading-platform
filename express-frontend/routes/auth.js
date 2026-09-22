@@ -2,17 +2,23 @@ const express = require('express');
 const axios = require('axios');
 const querystring = require('querystring');
 const router = express.Router();
-const { getRegionalBackendUrl, getPrimaryBackendUrl } = require('../utils/regional-backend');
 
-// Stamp the regional backend URL once per request.
-// All route handlers read req._backendUrl instead of the static constant.
+// Single-region deployment as of 2026-09-22 — the US replica
+// (prooftamil-backend-us) was retired after traffic analysis showed
+// 0 real users on it (all 11 requests in a 7-day window were
+// misconfigured UptimeRobot health checks). All requests now go to
+// the Mumbai backend via https://api.prooftamil.com. See
+// git log for the removal PR.
+const RESOLVED_BACKEND_URL =
+  (process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/+$/, '');
+
 router.use((req, res, next) => {
-  req._backendUrl = getRegionalBackendUrl(req);
+  req._backendUrl = RESOLVED_BACKEND_URL;
   next();
 });
 
 // Module-level fallback (used by getGoogleCallbackUrl which has no req context).
-const BACKEND_URL = getPrimaryBackendUrl();
+const BACKEND_URL = RESOLVED_BACKEND_URL;
 const AUTH_RETRY_PATHS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/supabase-token'];
 const AUTH_RETRY_MAX = 5;
 const AUTH_RETRY_DELAY_MS = 2000;

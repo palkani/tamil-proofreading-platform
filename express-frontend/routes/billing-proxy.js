@@ -52,10 +52,7 @@ const { findOverrideByEmail } = require('../lib/user-entitlement-overrides-db');
 
 function backendBaseUrl() {
   return (
-    process.env.BACKEND_URL_US ||
-    process.env.BACKEND_URL_ASIA ||
-    process.env.BACKEND_URL ||
-    ''
+    process.env.BACKEND_URL || 'https://api.prooftamil.com'
   ).replace(/\/$/, '');
 }
 

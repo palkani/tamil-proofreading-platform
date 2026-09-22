@@ -33,10 +33,7 @@ router.use((req, res, next) => {
 // specific region.
 function backendBase() {
   return (
-    process.env.ADMIN_BACKEND_URL ||
-    process.env.BACKEND_URL_US ||
-    process.env.BACKEND_URL ||
-    'https://api.prooftamil.com'
+    process.env.ADMIN_BACKEND_URL || process.env.BACKEND_URL || 'https://api.prooftamil.com'
   ).replace(/\/$/, '');
 }
 

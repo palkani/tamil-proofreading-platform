@@ -43,7 +43,9 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABAS
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 
 function backendUrl() {
-  return (process.env.BACKEND_URL_US || process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/$/, '');
+  // Single-region as of 2026-09-22 — BACKEND_URL_US fallback removed
+  // when the US replica was retired. See routes/auth.js header.
+  return (process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/$/, '');
 }
 
 /** First day of the current month, 'YYYY-MM-01' (UTC). */

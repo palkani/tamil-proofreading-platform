@@ -166,10 +166,10 @@ function cacheSet(key, billing) {
 // req._backendUrl here does NOT work — attachEntitlements is registered
 // at app-scope, before the router-scope middleware that stamps that field.
 function resolveBackendUrl() {
-  const raw = process.env.BACKEND_URL_US
-    || process.env.BACKEND_URL_ASIA
-    || process.env.BACKEND_URL
-    || '';
+  // Single-region as of 2026-09-22 — the US replica was retired after
+  // traffic analysis found 0 real users on it. BACKEND_URL_US /
+  // BACKEND_URL_ASIA fallbacks removed. See routes/auth.js header.
+  const raw = process.env.BACKEND_URL || 'https://api.prooftamil.com';
   return raw.replace(/\/$/, '');
 }
 

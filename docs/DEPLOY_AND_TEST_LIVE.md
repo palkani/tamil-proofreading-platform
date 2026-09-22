@@ -4,8 +4,7 @@
 
 - **Push to `main`** (or run the workflow manually) triggers the GitHub Actions workflow **Deploy to Cloud Run + Vercel**.
 - **Backend (Go)** is built and deployed to **Google Cloud Run**:
-  - **Asia:** `prooftamil-backend` in `asia-south1` (Mumbai)
-  - **US:** `prooftamil-backend-us` in `us-central1`
+  - `prooftamil-backend` in `asia-south1` (Mumbai) — single-region as of 2026-09-22
 - **Frontend:** **express-frontend** is deployed to **Vercel** (prooftamil.com).
 
 ## Deploy steps
@@ -20,9 +19,8 @@
 
 2. **Watch the workflow:** GitHub → Actions → "Deploy to Cloud Run + Vercel". Wait until it completes (backend build, Cloud Run deploy, Vercel deploy).
 
-3. **Backend URLs** (from the workflow or Cloud Console):
-   - Asia: `https://prooftamil-backend-<hash>-asia-south1.run.app`
-   - US: `https://prooftamil-backend-us-<hash>-us-central1.run.app`
+3. **Backend URL** (from the workflow or Cloud Console):
+   - `https://prooftamil-backend-<hash>-asia-south1.run.app` (or the domain-mapped `https://api.prooftamil.com`)
 
 ## Test live
 
