@@ -28,12 +28,16 @@ const axiosWithPool = axios.create({
   timeout: 30000,
 });
 const { getSeoData } = require('../config/seo');
-const { getRegionalBackendUrl } = require('../utils/regional-backend');
 const fileBlog = require('../utils/fileBlog');
 
-// Stamp the regional backend URL once per request.
+// Single-region backend as of 2026-09-22 (see routes/auth.js header for
+// context on the US-region retirement). Every request goes to the Mumbai
+// Cloud Run instance via https://api.prooftamil.com.
+const RESOLVED_BACKEND_URL =
+  (process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/+$/, '');
+
 router.use((req, res, next) => {
-  req._backendUrl = getRegionalBackendUrl(req);
+  req._backendUrl = RESOLVED_BACKEND_URL;
   next();
 });
 
@@ -985,7 +989,7 @@ router.get('/billing/success', async (req, res) => {
   const sessionId = String(req.query.session_id || '').slice(0, 200);
 
   const backendURL =
-    (process.env.BACKEND_URL_US || process.env.BACKEND_URL || 'https://api.prooftamil.com')
+    (process.env.BACKEND_URL || 'https://api.prooftamil.com')
       .replace(/\/$/, '');
 
   // Signal 1 — checkout_attempt freshness. Dodo's payment_link expires

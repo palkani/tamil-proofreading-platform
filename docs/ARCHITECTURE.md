@@ -8,7 +8,7 @@
 
 ## 1. One-paragraph summary
 
-ProofTamil is an AI-powered Tamil writing platform. A Node/Express+EJS frontend runs on Vercel (`www.prooftamil.com`); a Go/Gin backend runs on Google Cloud Run in two regions (`asia-south1` primary, `us-central1` warm standby); Postgres lives on Supabase; Gemini 2.5 (flash-lite / flash / pro tiers) handles proofreading with per-tier model routing. Free-tier users get flash-lite/flash with a 30/day AI-check quota; Pro users get flash/pro with unlimited checks and DOCX/PDF/TXT export. Anonymous demo works without login. Payments run through Dodo Payments with webhook-driven subscription lifecycle plus a 3-touch email drip for abandoned checkouts.
+ProofTamil is an AI-powered Tamil writing platform. A Node/Express+EJS frontend runs on Vercel (`www.prooftamil.com`); a Go/Gin backend runs on Google Cloud Run in a single region (`asia-south1` / Mumbai) fronted by `api.prooftamil.com`; Postgres lives on Supabase; Gemini 2.5 (flash-lite / flash / pro tiers) handles proofreading with per-tier model routing. Free-tier users get flash-lite/flash with a 30/day AI-check quota; Pro users get flash/pro with unlimited checks and DOCX/PDF/TXT export. Anonymous demo works without login. Payments run through Dodo Payments with webhook-driven subscription lifecycle plus a 3-touch email drip for abandoned checkouts. (Historical note: the US replica `prooftamil-backend-us` in `us-central1` was retired 2026-09-22 after traffic analysis found 0 real users on it.)
 
 ---
 
@@ -21,7 +21,7 @@ ProofTamil is an AI-powered Tamil writing platform. A Node/Express+EJS frontend 
 | **Frontend CSS** | Tailwind CSS 3 (`build:css` on deploy) | `express-frontend/public/css/` |
 | **Client JS** | Vanilla ES6, no framework | `express-frontend/public/js/` |
 | **Backend runtime** | Go 1.23 + Gin | `backend/cmd/server/` |
-| **Backend host** | Google Cloud Run × 2 regions | `prooftamil-backend` / `prooftamil-backend-us` |
+| **Backend host** | Google Cloud Run (single-region) | `prooftamil-backend` (asia-south1) |
 | **Database** | Supabase Postgres via pgBouncer pooler | GORM ORM |
 | **AI** | Google Gemini 2.5 (flash-lite / flash / pro) | REST via `services/llm/gemini.go` |
 | **OAuth** | Supabase Auth (Google identity provider) | Token exchange → app JWT |
@@ -48,24 +48,20 @@ ProofTamil is an AI-powered Tamil writing platform. A Node/Express+EJS frontend 
                             ▼
                 ┌────────────────────────┐
                 │  Express App           │  ── SSR EJS pages + /api/* proxies
-                │  (Vercel serverless)   │      Geo-routes to nearest backend
-                └────┬─────────────┬─────┘
-                     │             │
-     Asia users ─────┘             └───── Americas/EU users
-                     │                    │
-                     ▼                    ▼
-      ┌──────────────────────┐   ┌──────────────────────┐
-      │ Cloud Run            │   │ Cloud Run            │
-      │ prooftamil-backend   │   │ prooftamil-backend-us│
-      │ asia-south1 (Mumbai) │   │ us-central1 (Iowa)   │
-      │ min=1, max=100       │   │ min=1, max=100       │
-      └──────────┬───────────┘   └──────────┬───────────┘
-                 │                          │
-                 └───────────┬──────────────┘
-                             │
-                             ▼
+                │  (Vercel serverless)   │      All backend calls go to Mumbai
+                └───────────┬────────────┘
+                            │
+                            ▼
+              ┌──────────────────────┐
+              │ Cloud Run            │  ── https://api.prooftamil.com
+              │ prooftamil-backend   │
+              │ asia-south1 (Mumbai) │
+              │ min=1, max=100       │
+              └──────────┬───────────┘
+                         │
+                         ▼
               ┌───────────────────────────┐
-              │  Supabase Postgres        │  ── Shared DB, connection pooled
+              │  Supabase Postgres        │  ── Connection pooled
               │  (pgBouncer transaction)  │
               └───────────────────────────┘
 
@@ -73,10 +69,9 @@ External APIs (from Cloud Run):
   ─→ Gemini API (generativelanguage.googleapis.com)
   ─→ Dodo Payments REST + webhook receiver
   ─→ Resend / SendGrid for transactional email
-  ─→ (optional) Self-hosted Tesseract OCR service
 ```
 
-**Region selection** — Vercel's Express layer reads `x-vercel-ip-continent` and picks `BACKEND_URL_ASIA` vs `BACKEND_URL_US`. See `express-frontend/utils/regional-backend.js`. (Note: there's a design proposal in `docs/INFRA_LOAD_BALANCER_DESIGN.md` to replace this with a single GCP Global Load Balancer.)
+**Single-region** — as of 2026-09-22, all traffic goes to the Mumbai instance via `https://api.prooftamil.com`. The US replica (`prooftamil-backend-us` in `us-central1`) was retired after traffic analysis found 0 real users (all 11 requests over 7 days were misconfigured UptimeRobot health checks). Geo-routing code (`express-frontend/utils/regional-backend.js`) removed in the same PR. If a real US audience emerges, the removal PR includes a rollback recipe in `.github/workflows/deploy.yml`.
 
 ---
 

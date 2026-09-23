@@ -15,10 +15,7 @@ const MOCK_MODE = process.env.ENTERPRISE_MOCK_MODE === 'true';
 
 function backendUrl(req) {
   return (
-    req?._backendUrl ||
-    process.env.BACKEND_URL ||
-    process.env.BACKEND_URL_US ||
-    ''
+    req?._backendUrl ||process.env.BACKEND_URL || 'https://api.prooftamil.com'
   ).replace(/\/$/, '');
 }
 

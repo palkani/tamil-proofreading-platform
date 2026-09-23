@@ -50,12 +50,10 @@ const axios = require('axios');
 const { findOverrideByEmail } = require('./user-entitlement-overrides-db');
 
 function backendBaseUrl() {
-  return (
-    process.env.BACKEND_URL_US ||
-    process.env.BACKEND_URL_ASIA ||
-    process.env.BACKEND_URL ||
-    'https://api.prooftamil.com'
-  ).replace(/\/$/, '');
+  // Single-region as of 2026-09-22 — the US replica was retired after
+  // traffic analysis found 0 real users on it. BACKEND_URL_US /
+  // BACKEND_URL_ASIA fallbacks removed. See routes/auth.js header.
+  return (process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/$/, '');
 }
 
 /**

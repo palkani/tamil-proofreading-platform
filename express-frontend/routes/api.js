@@ -32,8 +32,12 @@ const { authenticateJWT } = require('../middleware/auth');
 // docx-export and blog-publish caused drift bugs.
 const { isAdminEmail } = require('../middleware/admin');
 
-// Latency-based regional backend resolver (Asia vs US Cloud Run instances)
-const { getRegionalBackendUrl } = require('../utils/regional-backend');
+// Single-region backend as of 2026-09-22 — the US replica was retired
+// after traffic analysis found 0 real users on it (see routes/auth.js
+// header for context). All requests hit the Mumbai instance via
+// https://api.prooftamil.com.
+const RESOLVED_BACKEND_URL =
+  (process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/+$/, '');
 const { getV2Corrections } = require('../lib/v2-proofread');
 
 // SEO automation service
@@ -66,13 +70,10 @@ const axiosWithPool = axios.create({
 });
 
 // ---------------------------------------------------------------------------
-// Per-request backend URL (latency-based regional routing)
-// ---------------------------------------------------------------------------
-// Stamp req._backendUrl once at the router boundary so every handler below
-// automatically uses the geographically closest Cloud Run instance without
-// any per-handler changes needed.
+// Per-request backend URL — single-region now (see file header).
+// Kept as middleware so handlers keep reading req._backendUrl unchanged.
 router.use((req, res, next) => {
-  req._backendUrl = getRegionalBackendUrl(req);
+  req._backendUrl = RESOLVED_BACKEND_URL;
   next();
 });
 

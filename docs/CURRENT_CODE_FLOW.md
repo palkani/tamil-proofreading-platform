@@ -21,7 +21,7 @@
 ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────────────────────┐
 │ api/v1/suggest.js │    │ api/index.js     │    │ Cloud Run Backend (Go)            │
 │ (Edge function)  │    │ (Express routes) │    │ prooftamil-backend (asia-south1)  │
-│ → backend suggest│    │ OAuth callback   │    │ prooftamil-backend-us (us-central1)│
+│ → backend suggest│    │ OAuth callback   │    │ (single-region as of 2026-09-22)  │
 └──────────────────┘    │ proxy, blog, …   │    └──────────────────────────────────┘
          │              └──────────────────┘                     │
          │                        │                              │
@@ -152,8 +152,7 @@ Suggest flow on backend:
    Rewrite sends this to **api/v1/suggest.js** (Edge).
 
 3. **api/v1/suggest.js**  
-   - Resolves backend by region (bom1 → asia-south1, iad1 → us-central1).  
-   - Calls backend `GET .../api/v1/suggest?q=...&mode=...&limit=...`.  
+   - Calls backend `GET https://api.prooftamil.com/api/v1/suggest?q=...&mode=...&limit=...` (single-region, Mumbai).  
    - On **503**: retries up to 4 times, 1s delay.  
    - If still 503: returns **200** with `{ success: true, suggestions: [], source: 'backend_starting' }`.  
    - Otherwise returns backend response (status and body).
@@ -186,7 +185,7 @@ So the “current flow” for suggest is: **Browser → Vercel Edge (suggest.js)
   1. Checkout, authenticate to GCP, configure Docker for Artifact Registry.  
   2. Go build precheck in `backend`.  
   3. Docker build backend image from `backend/Dockerfile`, push to `asia-south1` (and tag `latest`).  
-  4. Deploy **prooftamil-backend** (Asia) and **prooftamil-backend-us** (US) to Cloud Run (env + secrets from repo / Secret Manager).  
+  4. Deploy **prooftamil-backend** (Mumbai) to Cloud Run — single-region as of 2026-09-22 (env + secrets from repo / Secret Manager).  
   5. Verify backend health (both regions).  
   6. Optional: Python + corpus seed (Tamil Wikipedia).  
   7. Node, install frontend deps in `express-frontend`, build CSS.  
