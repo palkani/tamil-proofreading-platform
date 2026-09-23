@@ -33,8 +33,14 @@ const fileBlog = require('../utils/fileBlog');
 // Single-region backend as of 2026-09-22 (see routes/auth.js header for
 // context on the US-region retirement). Every request goes to the Mumbai
 // Cloud Run instance via https://api.prooftamil.com.
-const RESOLVED_BACKEND_URL =
-  (process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/+$/, '');
+//
+// Handlers append bare paths like "/blog/posts" and "/auth/logout" to
+// req._backendUrl — the backend serves those under /api/v1, so
+// req._backendUrl MUST end in /api/v1.
+const RESOLVED_BACKEND_URL = (() => {
+  const raw = (process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/+$/, '');
+  return raw.endsWith('/api/v1') ? raw : `${raw}/api/v1`;
+})();
 
 router.use((req, res, next) => {
   req._backendUrl = RESOLVED_BACKEND_URL;

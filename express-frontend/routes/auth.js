@@ -9,8 +9,17 @@ const router = express.Router();
 // misconfigured UptimeRobot health checks). All requests now go to
 // the Mumbai backend via https://api.prooftamil.com. See
 // git log for the removal PR.
-const RESOLVED_BACKEND_URL =
-  (process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/+$/, '');
+//
+// Every handler in this file (and every caller of req._backendUrl)
+// appends a bare path like "/auth/login" or "/auth/refresh" — the
+// backend serves those under /api/v1, so req._backendUrl MUST end
+// in /api/v1. Missing this suffix regressed all auth endpoints to
+// 404 after the US-region cleanup dropped the old normalizeApiUrl()
+// helper that used to append it.
+const RESOLVED_BACKEND_URL = (() => {
+  const raw = (process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/+$/, '');
+  return raw.endsWith('/api/v1') ? raw : `${raw}/api/v1`;
+})();
 
 router.use((req, res, next) => {
   req._backendUrl = RESOLVED_BACKEND_URL;

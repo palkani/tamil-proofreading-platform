@@ -36,8 +36,15 @@ const { isAdminEmail } = require('../middleware/admin');
 // after traffic analysis found 0 real users on it (see routes/auth.js
 // header for context). All requests hit the Mumbai instance via
 // https://api.prooftamil.com.
-const RESOLVED_BACKEND_URL =
-  (process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/+$/, '');
+//
+// Every handler in this file appends a bare backend path like "/submit",
+// "/ocr/upload", "/transliterate" or "/blog/posts" to req._backendUrl —
+// the backend serves those under /api/v1, so req._backendUrl MUST end
+// in /api/v1.
+const RESOLVED_BACKEND_URL = (() => {
+  const raw = (process.env.BACKEND_URL || 'https://api.prooftamil.com').replace(/\/+$/, '');
+  return raw.endsWith('/api/v1') ? raw : `${raw}/api/v1`;
+})();
 const { getV2Corrections } = require('../lib/v2-proofread');
 
 // SEO automation service
