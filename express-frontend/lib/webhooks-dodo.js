@@ -21,25 +21,29 @@ const crypto = require('node:crypto');
 // Update as you create new products. When a product ID isn't in this
 // table, the webhook falls back to granting Full Pro (best guess —
 // we know they paid, we just don't know exactly what for).
+// 'ai_writer' removed 2026-09-19 with the rest of the AI Content Writer
+// feature. Existing override rows may still carry it in their entitlements
+// array — the app just doesn't reference it anywhere anymore, so the
+// stale value is harmless. New subscriptions get the trimmed set below.
 const PRODUCT_ENTITLEMENTS = {
   // ProofTamil LITE Monthly Subscription (INR ₹350/mo)
   'pdt_0NmSZ8Clcj8nUjpvixwq2': {
     is_premium:   true,
-    entitlements: ['proofreading', 'export', 'ai_writer'],
+    entitlements: ['proofreading', 'export'],
     plan_code:    'PRO_PROOFREAD_LITE',
     plan_label:   'Pro · Proofreading Lite',
   },
   // ProofTamil PRO Monthly Subscription - INR (₹1000/mo)
   'pdt_0NaBiSUS25WJlwcnZquWu': {
     is_premium:   true,
-    entitlements: ['proofreading', 'ocr', 'export', 'ai_writer'],
+    entitlements: ['proofreading', 'ocr', 'export'],
     plan_code:    'PRO_MONTHLY',
     plan_label:   'Pro',
   },
   // ProofTamil PRO Monthly Subscription ($12/mo USD)
   'pdt_0NZzVU00bGo2E4CcmyLoP': {
     is_premium:   true,
-    entitlements: ['proofreading', 'ocr', 'export', 'ai_writer'],
+    entitlements: ['proofreading', 'ocr', 'export'],
     plan_code:    'PRO_MONTHLY',
     plan_label:   'Pro',
   },
@@ -47,7 +51,7 @@ const PRODUCT_ENTITLEMENTS = {
 
 const FULL_PRO_FALLBACK = {
   is_premium:   true,
-  entitlements: ['proofreading', 'ocr', 'export', 'ai_writer'],
+  entitlements: ['proofreading', 'ocr', 'export'],
   plan_code:    'PRO_MONTHLY',
   plan_label:   'Pro (unmapped product — check product_id)',
 };

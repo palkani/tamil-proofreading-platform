@@ -1,6 +1,6 @@
 # Pricing — ProofTamil (prooftamil.com)
 
-AI-powered Tamil proofreading, handwriting OCR, and content writing platform.
+AI-powered Tamil proofreading and handwriting OCR platform.
 Full pricing page: https://prooftamil.com/pricing
 
 ---
@@ -11,7 +11,6 @@ Full pricing page: https://prooftamil.com/pricing
 - **Proofreading:** Up to 200 words per check
 - **Daily AI checks:** 30 per day
 - **Handwriting OCR:** 2 conversions per day
-- **AI Content Writer:** Limited generations
 - **Tanglish to Tamil:** Unlimited
 - **Free Tamil Editor:** Unlimited
 - **Saved drafts:** Up to 5
@@ -25,7 +24,6 @@ Full pricing page: https://prooftamil.com/pricing
 - **Proofreading:** Unlimited words per check
 - **Daily AI checks:** Unlimited
 - **Handwriting OCR:** Unlimited conversions per day
-- **AI Content Writer:** Unlimited generations
 - **Tanglish to Tamil:** Unlimited
 - **Free Tamil Editor:** Unlimited
 - **Saved drafts:** Unlimited

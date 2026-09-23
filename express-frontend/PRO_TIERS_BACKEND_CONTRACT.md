@@ -34,7 +34,7 @@ New response — add `entitlements: string[]`:
 { "billing": {
     "is_premium": true,
     "plan_code": "PRO_PROOFREAD_LITE_MONTHLY",
-    "entitlements": ["proofreading", "export", "ai_writer"],
+    "entitlements": ["proofreading", "export"],
     "current_period_end": "…"
 } }
 ```
@@ -43,14 +43,14 @@ Mapping — implement on the backend:
 
 | plan_code                                  | entitlements                                             |
 |--------------------------------------------|----------------------------------------------------------|
-| `PRO_MONTHLY` / `PRO_YEARLY`               | `["proofreading", "ocr", "export", "ai_writer"]`         |
-| `PRO_PROOFREAD_LITE_MONTHLY` / `_YEARLY`   | `["proofreading", "export", "ai_writer"]`                |
+| `PRO_MONTHLY` / `PRO_YEARLY`               | `["proofreading", "ocr", "export"]`         |
+| `PRO_PROOFREAD_LITE_MONTHLY` / `_YEARLY`   | `["proofreading", "export"]`                |
 | `PRO_OCR_LITE_MONTHLY` / `_YEARLY`         | `["ocr"]`                                                |
-| any other paid plan (unknown)              | `["proofreading", "ocr", "export", "ai_writer"]` (safe default) |
+| any other paid plan (unknown)              | `["proofreading", "ocr", "export"]` (safe default) |
 | free / no subscription                     | omit the field entirely (or `[]`)                        |
 
 **Backfill for existing subscribers**: run a one-off migration that sets
-`entitlements = ["proofreading", "ocr", "export", "ai_writer"]` on every
+`entitlements = ["proofreading", "ocr", "export"]` on every
 row where `plan_code IN ('PRO_MONTHLY', 'PRO_YEARLY')` and
 `status = 'active'`. This is defence-in-depth — the frontend's BC path
 already returns true for a missing entitlements field, so this backfill

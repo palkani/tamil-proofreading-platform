@@ -18,11 +18,6 @@
           <a href="/tools/handwriting-ocr" class="nav-link <%= active === 'handwritingOcr' ? 'active' : '' %> inline-flex items-center px-2.5 py-1.5 rounded-lg whitespace-nowrap">
             Handwriting to Text
           </a>
-          <% if (['palkani.r@gmail.com', 'prooftamil@gmail.com', 'banu.palkani@gmail.com', 'contact@prooftamil.com'].includes(String(user.email || '').toLowerCase())) { %>
-            <a href="/my-blogs" class="nav-link <%= active === 'myBlogs' ? 'active' : '' %> inline-flex items-center px-2.5 py-1.5 rounded-lg whitespace-nowrap">
-              My Blogs
-            </a>
-          <% } %>
           <% if (user.isAdmin) { %>
             <a href="/admin" class="nav-link <%= active === 'admin' ? 'active' : '' %> inline-flex items-center px-2.5 py-1.5 rounded-lg whitespace-nowrap text-amber-700 font-medium">
               Admin
@@ -157,13 +152,6 @@
         Pro Access
       </a>
       <% } %>
-      <% if (['palkani.r@gmail.com','prooftamil@gmail.com','banu.palkani@gmail.com','contact@prooftamil.com'].includes(String(user.email || '').toLowerCase())) { %>
-      <a href="/my-blogs"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-        <span class="w-4 h-4 flex-shrink-0 text-center text-base leading-none">✍️</span>
-        My Blogs
-      </a>
-      <% } %>
       <% if (user.isAdmin) { %>
       <a href="/admin"
          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors">
@@ -266,15 +254,13 @@
 <div class="promo-stripe" role="region" aria-label="ProofTamil features">
   <!-- Mobile: static centered text (no cut-off) -->
   <div class="promo-stripe-mobile sm:hidden py-2.5 px-4 text-center text-white text-sm font-medium">
-    🎤 Voice to Tamil &nbsp;•&nbsp; ✨ AI Writer &nbsp;•&nbsp; ✓ Proofreading &nbsp;•&nbsp; ✍️ Handwritten Notes into Text
+    🎤 Voice to Tamil &nbsp;•&nbsp; ✓ Proofreading &nbsp;•&nbsp; ✍️ Handwritten Notes into Text
   </div>
   <!-- Desktop: seamless infinite scroll — two identical sets -->
   <div class="promo-stripe-inner hidden sm:block">
     <div class="promo-stripe-track" aria-hidden="true">
       <!-- Set A -->
       <span class="promo-stripe-item">🎤 Voice to Tamil — Speak it, we type it.</span>
-      <span class="promo-stripe-sep">·</span>
-      <span class="promo-stripe-item">✨ AI Content Writer — Blogs, essays &amp; articles in Tamil &amp; English.</span>
       <span class="promo-stripe-sep">·</span>
       <span class="promo-stripe-item">✓ Smart Proofreading — Grammar, spelling &amp; style in one place.</span>
       <span class="promo-stripe-sep">·</span>
@@ -284,8 +270,6 @@
       <span class="promo-stripe-sep">·</span>
       <!-- Set B (exact duplicate for seamless loop) -->
       <span class="promo-stripe-item">🎤 Voice to Tamil — Speak it, we type it.</span>
-      <span class="promo-stripe-sep">·</span>
-      <span class="promo-stripe-item">✨ AI Content Writer — Blogs, essays &amp; articles in Tamil &amp; English.</span>
       <span class="promo-stripe-sep">·</span>
       <span class="promo-stripe-item">✓ Smart Proofreading — Grammar, spelling &amp; style in one place.</span>
       <span class="promo-stripe-sep">·</span>
