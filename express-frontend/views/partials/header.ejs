@@ -569,6 +569,10 @@
   </style>
 </head>
 <body class="bg-gray-50">
+  <!-- Shutdown-mode banner. Rendered on every page when SHUTDOWN_MODE=true
+       (via middleware/shutdownGuard.js which sets res.locals.shutdownMode).
+       Silent when the flag is off, so this include is safe in normal mode. -->
+  <%- include('shutdown-banner') %>
   <!-- Impersonation banner. Rendered via inline JS that reads the
        admin_original_token cookie (set by the admin console when
        impersonation begins). If the cookie is absent, nothing renders.

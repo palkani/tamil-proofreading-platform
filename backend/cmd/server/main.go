@@ -397,6 +397,17 @@ func main() {
 	// Security headers
 	r.Use(middleware.SecurityHeaders())
 
+	// Shutdown-mode kill switch (env SHUTDOWN_MODE=true). When engaged,
+	// every AI/OCR/proofread endpoint returns 503 before any handler
+	// runs — the definitive "no Gemini spend" boundary on the backend.
+	// Allow-list (drafts read, existing-user auth, admin, health,
+	// billing read) lives in middleware.shutdownAllows. When the env
+	// flag is unset, this is a zero-alloc identity middleware.
+	if cfg.ShutdownMode {
+		log.Println("[SHUTDOWN] SHUTDOWN_MODE=true — AI/OCR/proofread endpoints will return 503; drafts and existing-user auth remain open.")
+	}
+	r.Use(middleware.ShutdownMiddleware(cfg.ShutdownMode))
+
 	// Health check endpoint
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
