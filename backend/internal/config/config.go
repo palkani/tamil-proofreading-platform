@@ -67,6 +67,12 @@ type Config struct {
 	RunMigrations bool
 	// RunDBArchitectureMigrations: run ProofTamil DB architecture (phonetic_variants, RPCs, data) at startup. Default false. Run from local only via: go run ./cmd/migrate (never set in Cloud Run/workflow).
 	RunDBArchitectureMigrations bool
+	// ShutdownMode, when true, engages middleware.ShutdownMiddleware:
+	// every AI/OCR/proofread endpoint returns 503; only drafts reads,
+	// existing-user auth, and admin endpoints keep working. See the
+	// middleware header for the full allow-list. Set SHUTDOWN_MODE=true
+	// in the Cloud Run env when winding the product down.
+	ShutdownMode bool
 }
 
 func Load() *Config {
@@ -188,6 +194,7 @@ func Load() *Config {
 		SupabaseJWTSecret:      strings.TrimSpace(getEnv("SUPABASE_JWT_SECRET", "")),
 		RunMigrations:              parseRunMigrations(getEnv("RUN_MIGRATIONS", "true")),
 		RunDBArchitectureMigrations: parseRunMigrations(getEnv("RUN_DB_ARCHITECTURE_MIGRATIONS", "false")),
+		ShutdownMode:               strings.ToLower(strings.TrimSpace(getEnv("SHUTDOWN_MODE", "false"))) == "true",
 	}
 }
 

@@ -28,6 +28,7 @@ const compression = require('compression');
 const { getSeoData } = require('./config/seo');
 const { attachUser } = require('./middleware/auth');
 const { attachEntitlements } = require('./middleware/attachEntitlements');
+const shutdownGuard = require('./middleware/shutdownGuard');
 const authRoutes = require('./routes/auth');
 const indexRouter = require('./routes/index');
 const apiRouter = require('./routes/api');
@@ -163,6 +164,17 @@ function createApp() {
   app.use(cookieParser());
   // attachUser must run for /workspace so requireAuth works and draft links don't loop.
   app.use((req, res, next) => attachUser(req, res, next));
+
+  // Shutdown-mode kill switch. When SHUTDOWN_MODE=true, blocks every
+  // AI/OCR/proofread endpoint with 503, blocks POST /auth/register +
+  // /auth/social, redirects /workspace and /tools/* to /drafts, and
+  // exposes res.locals.shutdownMode so partials/shutdown-banner.ejs
+  // renders on every page. No-op when the env var is unset.
+  //
+  // Placed AFTER attachUser so redirect targets like /drafts still see
+  // req.user, and BEFORE the routers so a blocked endpoint never
+  // reaches its handler (and never hits Gemini even by accident).
+  app.use(shutdownGuard);
 
   // attachEntitlements — makes hasFeature() available inside EJS
   // templates so nav bar and CTAs can hide features the user's plan
