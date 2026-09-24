@@ -532,6 +532,17 @@ func main() {
 			protected.POST("/transliterate/accept", h.TransliterateAccept)
 		}
 
+		// Internal service-to-service endpoints — authenticated via a
+		// shared X-Job-Secret header rather than a user JWT. Only the
+		// Express layer calls these (Cloud Run → Cloud Run) to stream
+		// per-Gemini-call observability into ai_requests so the admin
+		// dashboard sees every call.
+		internal := v1.Group("/internal")
+		internal.Use(middleware.InternalJobSecretMiddleware(cfg.ExpressInternalToken))
+		{
+			internal.POST("/ai-log", h.LogAIRequestFromExpress)
+		}
+
 		// Admin routes — 60 requests/minute per admin user. Enough headroom
 		// for interactive UI browsing (list refreshes, autocomplete) but
 		// stops any single admin session from being a runaway load source

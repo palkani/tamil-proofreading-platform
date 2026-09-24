@@ -35,6 +35,15 @@ const { authenticateJWT } = require('../middleware/auth');
 // abuse from behind a login.
 const geminiDailyRateLimit = require('../middleware/geminiDailyRateLimit');
 
+// Per-request Gemini observability. Wraps every Gemini-billed route so
+// one ai_requests row lands via /api/v1/internal/ai-log after the response
+// finishes. See the middleware header for how handlers cooperate by
+// accumulating req.aiUsage.{input,output}Tokens from Gemini's own
+// usageMetadata. This is what makes the admin dashboard show a
+// complete picture of Gemini spend (previously the Express-side calls
+// were invisible to it).
+const aiRequestLogger = require('../middleware/aiRequestLogger');
+
 // Single source of truth for the operator/admin email allowlist. Reads
 // ADMIN_ALLOWED_EMAILS env var (mirrored with the backend's Go-side
 // billing.AdminEmails list). Kept here so every Express-side "is this
@@ -85,6 +94,20 @@ const axiosWithPool = axios.create({
   timeout: 60000,           // Default 60 second timeout
   maxRedirects: 5,
 });
+
+// Accumulate one Gemini call's token usage on the request. Called by
+// each Gemini call site right after the axios response is available;
+// aiRequestLogger reads req.aiUsage at res.on('finish') and posts the
+// totals to /api/v1/internal/ai-log. Safe to call even when
+// req.aiUsage is unset (route not wrapped in the logger); a no-op then.
+function recordGeminiUsage(req, response) {
+  if (!req || !req.aiUsage) return;
+  const u = response && response.data && response.data.usageMetadata;
+  if (!u) return;
+  req.aiUsage.inputTokens  += Number(u.promptTokenCount     || 0);
+  req.aiUsage.outputTokens += Number(u.candidatesTokenCount || 0);
+  req.aiUsage.calls        += 1;
+}
 
 // ---------------------------------------------------------------------------
 // Per-request backend URL — single-region now (see file header).
@@ -287,7 +310,7 @@ function splitIntoSentences(text) {
 // Proxy to Gemini AI integration with improved accuracy via chunking.
 // Per-IP rate-limited (see llmAnonRateLimit import) — anonymous by design
 // (homepage demo) but the ceiling stops curl-loop abuse.
-router.post('/gemini/analyze', authenticateJWT, geminiDailyRateLimit(500), llmAnonRateLimit, async (req, res) => {
+router.post('/gemini/analyze', authenticateJWT, geminiDailyRateLimit(500), llmAnonRateLimit, aiRequestLogger(), async (req, res) => {
   try {
     const { text } = req.body;
     
@@ -406,6 +429,7 @@ router.post('/gemini/analyze', authenticateJWT, geminiDailyRateLimit(500), llmAn
             payload,
             { headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, timeout: 10000 }
           );
+          recordGeminiUsage(req, response);
           if (response.status === 429) {
             keyRotator.markRateLimited(keyIndex);
             if (attempt === 0) {
@@ -490,7 +514,7 @@ const MAX_CORRECTIONS_TEXT_CHARS = 200000;
 // Large payloads (e.g. 200k+ words) supported via chunking; body limit raised via app-level 50mb.
 // Per-IP rate-limited (llmAnonRateLimit) so a curl loop can't drain the
 // Gemini key pool. Anonymous by design — homepage try-it-now needs it.
-router.post('/corrections', authenticateJWT, geminiDailyRateLimit(500), llmAnonRateLimit, async (req, res) => {
+router.post('/corrections', authenticateJWT, geminiDailyRateLimit(500), llmAnonRateLimit, aiRequestLogger(), async (req, res) => {
   // In-flight deduplication state — declared outside try so catch can clean up.
   let _inFlightKey = null;
   let _resolveInFlight = null;
@@ -862,6 +886,7 @@ EXAMPLES of CORRECT space-error flagging:
               payload,
               { headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, timeout: 30000 }
             );
+            recordGeminiUsage(req, response);
             if (response.status === 429) {
               keyRotator.markRateLimited(keyIndex);
               if (attempt === 0) {
@@ -959,7 +984,7 @@ EXAMPLES of CORRECT space-error flagging:
 // Frontend receives `event: correction` for each item and `event: done` at the end.
 // Client disconnect aborts all in-flight Gemini calls immediately.
 // Per-IP rate-limited (llmAnonRateLimit) — same reason as /corrections.
-router.post('/corrections/stream', authenticateJWT, geminiDailyRateLimit(500), llmAnonRateLimit, async (req, res) => {
+router.post('/corrections/stream', authenticateJWT, geminiDailyRateLimit(500), llmAnonRateLimit, aiRequestLogger(), async (req, res) => {
   // Server-Sent Events headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -1455,6 +1480,7 @@ Common improvement categories to flag:
             payload,
             { headers: { 'Content-Type': 'application/json', 'x-goog-api-key': keyInfo.key }, timeout: 30000 }
           );
+          recordGeminiUsage(req, response);
           if (abort.signal.aborted) return;
           if (response.status === 429) {
             keyRotator.markRateLimited(keyInfo.index);
@@ -1541,7 +1567,7 @@ Common improvement categories to flag:
 // English to Tamil Translation with Gemini AI
 // Pure translation only: returns translated Tamil text (no proofreading pass after).
 // Per-IP rate-limited — used by both homepage anonymous and workspace authed.
-router.post('/gemini/translate', authenticateJWT, geminiDailyRateLimit(500), llmAnonRateLimit, async (req, res) => {
+router.post('/gemini/translate', authenticateJWT, geminiDailyRateLimit(500), llmAnonRateLimit, aiRequestLogger(), async (req, res) => {
   try {
     const { text } = req.body;
     
@@ -1609,6 +1635,7 @@ RULES:
         timeout: 30000
       }
     );
+    recordGeminiUsage(req, response);
 
     const aiText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
     
@@ -1643,7 +1670,7 @@ RULES:
 // Body: { text: string, tone?: 'formal'|'casual'|'simple' }
 // Returns: { rewrites: string[] } — up to 3 Tamil rewrites of the input.
 // Per-IP rate-limited — anonymous by design (workspace toolbar).
-router.post('/rewrite', authenticateJWT, geminiDailyRateLimit(500), llmAnonRateLimit, async (req, res) => {
+router.post('/rewrite', authenticateJWT, geminiDailyRateLimit(500), llmAnonRateLimit, aiRequestLogger(), async (req, res) => {
   try {
     const { text, tone = 'formal' } = req.body;
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
@@ -1695,6 +1722,7 @@ RULES:
         timeout: 25000
       }
     );
+    recordGeminiUsage(req, response);
 
     const raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
     let rewrites;
@@ -2377,7 +2405,7 @@ router.get('/handwriting-ocr/usage', async (req, res) => {
   }
 });
 
-router.post('/handwriting-ocr/extract-words', ocrMonthlyLimit(), uploadHandwriting.single('file'), async (req, res) => {
+router.post('/handwriting-ocr/extract-words', ocrMonthlyLimit(), uploadHandwriting.single('file'), aiRequestLogger(), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded. Please select an image file.' });
   }
@@ -2497,6 +2525,7 @@ Output ONLY the raw JSON — no markdown, no preamble.`
         timeout: 45000
       }
     );
+    recordGeminiUsage(req, response);
 
     // Strip markdown code fences as a safety net (defensive)
     let raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
@@ -3198,7 +3227,7 @@ function consumeContentWriterQuota(req, meta) {
 }
 
 // Generate content endpoint
-router.post('/ai-content-writer/generate-content', authenticateJWT, geminiDailyRateLimit(500), async (req, res) => {
+router.post('/ai-content-writer/generate-content', authenticateJWT, geminiDailyRateLimit(500), aiRequestLogger(), async (req, res) => {
   try {
     if (ENABLE_PROXY_LOGS) {
       console.log('[AI-CONTENT-WRITER] POST /generate-content');
@@ -3289,7 +3318,7 @@ router.get('/ai-content-writer/quota', async (req, res) => {
 });
 
 // Render a blog template for preview/publishing (deterministic, no AI)
-router.post('/ai-content-writer/render-blog-template', authenticateJWT, geminiDailyRateLimit(500), async (req, res) => {
+router.post('/ai-content-writer/render-blog-template', authenticateJWT, geminiDailyRateLimit(500), aiRequestLogger(), async (req, res) => {
   try {
     if (!contentWriterService || typeof contentWriterService.renderBlogTemplate !== 'function') {
       return res.status(503).json({
@@ -3355,7 +3384,7 @@ router.post('/seo/extract-keywords', (req, res) => {
 // Generate social variants (LinkedIn/Facebook/Instagram Reels) - copy/export only.
 // Auth-required: previously unauthenticated, so any curl-loop could drain
 // the Gemini key pool. Sibling of /generate-content which is freemium-gated.
-router.post('/ai-content-writer/social-variants', authenticateJWT, geminiDailyRateLimit(500), async (req, res) => {
+router.post('/ai-content-writer/social-variants', authenticateJWT, geminiDailyRateLimit(500), aiRequestLogger(), async (req, res) => {
   try {
     if (!contentWriterService || typeof contentWriterService.generateSocialVariants !== 'function') {
       return res.status(503).json({
@@ -3398,7 +3427,7 @@ router.post('/event-name-suggester/suggest', authenticateJWT, async (req, res) =
 // Improve content endpoint. Auth-required: sibling of /generate-content
 // which is freemium-gated. Previously unauthenticated, so any curl-loop
 // could drain the Gemini key pool.
-router.post('/ai-content-writer/improve-content', authenticateJWT, geminiDailyRateLimit(500), async (req, res) => {
+router.post('/ai-content-writer/improve-content', authenticateJWT, geminiDailyRateLimit(500), aiRequestLogger(), async (req, res) => {
   try {
     if (ENABLE_PROXY_LOGS) {
       console.log('[AI-CONTENT-WRITER] POST /improve-content');
@@ -3425,7 +3454,7 @@ router.post('/ai-content-writer/improve-content', authenticateJWT, geminiDailyRa
 // Translate content endpoint. Auth-required: sibling of /generate-content
 // which is freemium-gated. Previously unauthenticated, so any curl-loop
 // could drain the Gemini key pool.
-router.post('/ai-content-writer/translate', authenticateJWT, geminiDailyRateLimit(500), async (req, res) => {
+router.post('/ai-content-writer/translate', authenticateJWT, geminiDailyRateLimit(500), aiRequestLogger(), async (req, res) => {
   try {
     if (ENABLE_PROXY_LOGS) {
       console.log('[AI-CONTENT-WRITER] POST /translate');

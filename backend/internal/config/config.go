@@ -63,6 +63,12 @@ type Config struct {
 	// Supabase Auth (Google sign-in via Supabase; existing users matched by email)
 	SupabaseURL      string
 	SupabaseJWTSecret string
+	// ExpressInternalToken is the shared secret the Express layer sends
+	// on `X-Job-Secret` when POSTing to /api/v1/internal/ai-log (and any
+	// future internal service-to-service endpoints). Not a user JWT — must
+	// stay off any user-facing surface. Set in Cloud Run env; matched in
+	// Vercel env under the same name.
+	ExpressInternalToken string
 	// RunMigrations: run AutoMigrate and custom migrations at startup. Default true. Set RUN_MIGRATIONS=false to skip (e.g. to reduce cold-start time after first deploy).
 	RunMigrations bool
 	// RunDBArchitectureMigrations: run ProofTamil DB architecture (phonetic_variants, RPCs, data) at startup. Default false. Run from local only via: go run ./cmd/migrate (never set in Cloud Run/workflow).
@@ -186,6 +192,7 @@ func Load() *Config {
 		SeedCorpusMinCount:  getEnvAsInt("SEED_CORPUS_MIN_COUNT", 1),
 		SupabaseURL:         strings.TrimRight(getEnv("SUPABASE_URL", ""), "/"),
 		SupabaseJWTSecret:      strings.TrimSpace(getEnv("SUPABASE_JWT_SECRET", "")),
+		ExpressInternalToken:   strings.TrimSpace(getEnv("EXPRESS_INTERNAL_TOKEN", "")),
 		RunMigrations:              parseRunMigrations(getEnv("RUN_MIGRATIONS", "true")),
 		RunDBArchitectureMigrations: parseRunMigrations(getEnv("RUN_DB_ARCHITECTURE_MIGRATIONS", "false")),
 	}
